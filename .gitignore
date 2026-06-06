@@ -1,0 +1,12 @@
+# Ignore local SQLite database
+database.sqlite
+
+# Ignore uploads directory content (uploaded signatures/logos)
+/uploads/*
+!/uploads/.gitkeep
+
+# Ignore scratch files and logs
+/scratch/
+*.log
+.vscode/
+.idea/
