@@ -28,13 +28,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $start_date = $_POST['start_date'] ?: null;
     $end_date = $_POST['end_date'] ?: null;
     $has_internal = isset($_POST['has_internal']) ? (int)$_POST['has_internal'] : 0;
+    $result_system = sanitize($_POST['result_system'] ?? 'gpa');
     
     if (empty($name)) {
         $error = 'Exam name is required';
     } else {
         try {
-            $stmt = $db->prepare("INSERT INTO exams (name, type, academic_year_id, start_date, end_date, is_published, is_locked, school_id, has_internal) VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?)");
-            $stmt->execute([$name, $type, $academicYear['id'], $start_date, $end_date, $school_id, $has_internal]);
+            $stmt = $db->prepare("INSERT INTO exams (name, type, academic_year_id, start_date, end_date, is_published, is_locked, school_id, has_internal, result_system) VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, ?)");
+            $stmt->execute([$name, $type, $academicYear['id'], $start_date, $end_date, $school_id, $has_internal, $result_system]);
             $new_id = $db->lastInsertId();
             
             Auth::logActivity(Auth::getUserId(), 'Create Exam', 'exams', $new_id);
@@ -87,6 +88,14 @@ ob_start();
                     <option value="final">Final Exam</option>
                     <option value="unit">Unit Test / Class Test</option>
                     <option value="practical">Practical / Assessment Only</option>
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label for="result_system" class="form-label">Result System (for Unit Tests or General)</label>
+                <select class="form-select" id="result_system" name="result_system">
+                    <option value="gpa" selected>Grading System (GPA / Grades)</option>
+                    <option value="percentage">Marksheet System (Marks / Percentage)</option>
                 </select>
             </div>
             

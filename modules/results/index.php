@@ -51,13 +51,33 @@ if ($class_id) {
     $sections = $stmt->fetchAll();
 }
 
+// Find the currently selected exam
+$selected_exam = null;
+if ($exam_id) {
+    foreach ($exams as $e) {
+        if ($e['id'] == $exam_id) {
+            $selected_exam = $e;
+            break;
+        }
+    }
+}
+
+$is_gpa_format = true;
+if ($selected_exam) {
+    if ($selected_exam['type'] === 'unit') {
+        $is_gpa_format = (($selected_exam['result_system'] ?? 'gpa') === 'gpa');
+    } else {
+        $is_gpa_format = ($selected_class && $selected_class['grading_type'] === 'gpa');
+    }
+}
+
 // Fetch students for results list
 $students = [];
 if ($class_id && $exam_id) {
     $query = "
         SELECT s.id, s.student_id, s.first_name_en, s.last_name_en, s.roll_number,
                (SELECT SUM(theory_obtained + practical_obtained) FROM marks WHERE student_id = s.id AND exam_id = ?) as total_obtained,
-               (SELECT COUNT(id) FROM marks WHERE student_id = s.id AND exam_id = ? AND remarks = 'NG') as failed_subjects_count
+               (SELECT COUNT(id) FROM marks WHERE student_id = s.id AND exam_id = ? AND (remarks = 'NG' OR remarks = 'Fail')) as failed_subjects_count
         FROM students s
         WHERE s.class_id = ? AND s.status = 'active'
     ";
@@ -178,9 +198,9 @@ ob_start();
                                 <?php if ($student['total_obtained'] === null): ?>
                                     <span class="badge bg-secondary">No Marks</span>
                                 <?php elseif ($student['failed_subjects_count'] > 0): ?>
-                                    <span class="badge bg-danger"><?= ($selected_class && $selected_class['grading_type'] === 'gpa') ? 'Not Graded' : 'Failed' ?> (<?= $student['failed_subjects_count'] ?> Sub)</span>
+                                    <span class="badge bg-danger"><?= $is_gpa_format ? 'Not Graded' : 'Failed' ?> (<?= $student['failed_subjects_count'] ?> Sub)</span>
                                 <?php else: ?>
-                                    <span class="badge bg-success"><?= ($selected_class && $selected_class['grading_type'] === 'gpa') ? 'Graded' : 'Passed' ?></span>
+                                    <span class="badge bg-success"><?= $is_gpa_format ? 'Graded' : 'Passed' ?></span>
                                 <?php endif; ?>
                             </td>
                             <td class="text-end">

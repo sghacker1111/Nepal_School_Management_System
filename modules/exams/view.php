@@ -103,11 +103,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['map_subject']) && Aut
         $subject_id = (int)$_POST['subject_id'];
         $theory_full = (int)$_POST['theory_full'];
         $theory_pass = (int)$_POST['theory_pass'];
-        $practical_full = $exam['has_internal'] ? (int)($_POST['practical_full'] ?? 0) : 0;
-        $practical_pass = $exam['has_internal'] ? (int)($_POST['practical_pass'] ?? 0) : 0;
-        $credit_hours = $_POST['credit_hours'] !== '' ? (float)$_POST['credit_hours'] : null;
-        $internal_credit_hours = $_POST['internal_credit_hours'] !== '' ? (float)$_POST['internal_credit_hours'] : null;
-        $external_credit_hours = $_POST['external_credit_hours'] !== '' ? (float)$_POST['external_credit_hours'] : null;
+        $practical_full = ($exam['type'] === 'unit') ? 0 : ($exam['has_internal'] ? (int)($_POST['practical_full'] ?? 0) : 0);
+        $practical_pass = ($exam['type'] === 'unit') ? 0 : ($exam['has_internal'] ? (int)($_POST['practical_pass'] ?? 0) : 0);
+        $credit_hours = ($exam['type'] === 'unit' || $_POST['credit_hours'] === '') ? null : (float)$_POST['credit_hours'];
+        $internal_credit_hours = ($exam['type'] === 'unit' || $_POST['internal_credit_hours'] === '') ? null : (float)$_POST['internal_credit_hours'];
+        $external_credit_hours = ($exam['type'] === 'unit' || $_POST['external_credit_hours'] === '') ? null : (float)$_POST['external_credit_hours'];
         $form_edit_id = (int)($_POST['edit_mapping_id'] ?? 0);
         
         if (empty($class_id) || empty($subject_id)) {
@@ -202,7 +202,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['initialize_defaults']
                         $practical_full = 0;
                         $practical_pass = 0;
                         
-                        if ($exam['has_internal']) {
+                        if ($exam['type'] !== 'unit' && $exam['has_internal']) {
                             if ($is_class_4_8) {
                                 $theory_full = 50;
                                 $theory_pass = 17.5;
@@ -366,6 +366,23 @@ ob_start();
                         </select>
                     </div>
 
+                    <?php if ($exam['type'] === 'unit'): ?>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label text-success font-weight-bold">Full Marks *</label>
+                            <input type="number" name="theory_full" class="form-control" value="<?= $edit_mapping ? $edit_mapping['theory_full'] : 100 ?>" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label text-success font-weight-bold">Pass Marks *</label>
+                            <input type="number" name="theory_pass" class="form-control" value="<?= $edit_mapping ? $edit_mapping['theory_pass'] : 40 ?>" required>
+                        </div>
+                    </div>
+                    <input type="hidden" name="practical_full" value="0">
+                    <input type="hidden" name="practical_pass" value="0">
+                    <input type="hidden" name="credit_hours" value="">
+                    <input type="hidden" name="internal_credit_hours" value="">
+                    <input type="hidden" name="external_credit_hours" value="">
+                    <?php else: ?>
                     <div class="mb-3">
                         <label for="credit_hours" class="form-label text-info font-weight-bold">Total Credit Hours</label>
                         <input type="number" step="any" name="credit_hours" id="credit_hours" class="form-control" placeholder="Default subject credit hours" value="<?= $edit_mapping ? sanitize($edit_mapping['credit_hours'] ?? '') : '' ?>">
@@ -411,6 +428,7 @@ ob_start();
                     </div>
                     <input type="hidden" name="practical_full" value="0">
                     <input type="hidden" name="practical_pass" value="0">
+                    <?php endif; ?>
                     <?php endif; ?>
                     
                     <button type="submit" class="btn btn-primary w-100">
@@ -529,10 +547,15 @@ ob_start();
                                 <thead class="table-light">
                                     <tr>
                                         <th>Subject</th>
+                                        <?php if ($exam['type'] === 'unit'): ?>
+                                        <th class="text-center">Full Marks</th>
+                                        <th class="text-center">Pass Marks</th>
+                                        <?php else: ?>
                                         <th class="text-center">Credit Hours</th>
                                         <th class="text-center">Theory (Full/Pass)</th>
                                         <th class="text-center">Practical (Full/Pass)</th>
                                         <th class="text-center">Total Full Marks</th>
+                                        <?php endif; ?>
                                         <?php if (Auth::hasRole(['super_admin', 'school_admin', 'exam_officer']) && !$exam['is_locked']): ?>
                                         <th class="text-end">Action</th>
                                         <?php endif; ?>
@@ -545,6 +568,14 @@ ob_start();
                                             <strong><?= sanitize($m['subject_name']) ?></strong> 
                                             <span class="text-muted font-monospace small">(<?= sanitize($m['subject_code']) ?>)</span>
                                         </td>
+                                        <?php if ($exam['type'] === 'unit'): ?>
+                                        <td class="text-center font-monospace text-success">
+                                            <strong><?= $m['theory_full'] ?></strong>
+                                        </td>
+                                        <td class="text-center font-monospace text-danger">
+                                            <strong><?= $m['theory_pass'] ?></strong>
+                                        </td>
+                                        <?php else: ?>
                                         <td class="text-center font-monospace">
                                             <?= sanitize($m['credit_hours'] ?? $m['default_credit'] ?? 'N/A') ?><br>
                                             <small class="text-muted">
@@ -560,6 +591,7 @@ ob_start();
                                         <td class="text-center font-monospace">
                                             <strong><?= $m['theory_full'] + $m['practical_full'] ?></strong>
                                         </td>
+                                        <?php endif; ?>
                                         <?php if (Auth::hasRole(['super_admin', 'school_admin', 'exam_officer']) && !$exam['is_locked']): ?>
                                         <td class="text-end">
                                             <div class="btn-group btn-group-sm">

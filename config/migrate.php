@@ -142,6 +142,15 @@ try {
         echo "<li>Column `internal_breakdown` already exists or not added: " . $e->getMessage() . " (Safe to ignore).</li>";
     }
 
+    // 7. Alter exams table - Add result_system if not exists
+    try {
+        $db->exec("ALTER TABLE exams ADD COLUMN result_system VARCHAR(50) DEFAULT 'gpa'");
+        echo "<li>Added column `result_system` to `exams` table.</li>";
+    } catch (PDOException $e) {
+        // Suppress error if column already exists
+        echo "<li>Column `result_system` already exists or not added: " . $e->getMessage() . " (Safe to ignore).</li>";
+    }
+
     echo "</ul>";
     echo "<h3 style='color:green;'>Migration completed successfully!</h3>";
     echo "<p><a href='" . APP_URL . "/index.php'>Go to Dashboard</a></p>";

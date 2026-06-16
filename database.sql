@@ -189,6 +189,7 @@ CREATE TABLE `exams` (
   `end_date` date DEFAULT NULL,
   `is_published` tinyint(1) DEFAULT 0,
   `is_locked` tinyint(1) DEFAULT 0,
+  `result_system` enum('gpa','percentage') DEFAULT 'gpa',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

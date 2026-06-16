@@ -179,7 +179,8 @@ CREATE TABLE `exams` (
   `start_date` date DEFAULT NULL,
   `end_date` date DEFAULT NULL,
   `is_published` INTEGER DEFAULT 0,
-  `is_locked` INTEGER DEFAULT 0
+  `is_locked` INTEGER DEFAULT 0,
+  `result_system` VARCHAR(50) DEFAULT 'gpa'
 ) ;
 
 CREATE TABLE `exam_subjects` (

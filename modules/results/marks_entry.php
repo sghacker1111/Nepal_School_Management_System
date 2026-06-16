@@ -29,7 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_marks'])) {
     
     // Fetch exam details to verify lock status
     $school_id = Auth::getSchoolId();
-    $stmt = $db->prepare("SELECT is_locked, has_internal FROM exams WHERE id = ? AND school_id = ?");
+    $stmt = $db->prepare("SELECT is_locked, type, result_system, has_internal FROM exams WHERE id = ? AND school_id = ?");
     $stmt->execute([$exam_id_post, $school_id]);
     $exam = $stmt->fetch();
     
@@ -116,7 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_marks'])) {
                         
                         // Check if empty
                         $is_empty = false;
-                        if ($classType === '1-3') {
+                        if ($classType === '1-3' || $exam['type'] === 'unit') {
                             $theory_val = $fields['theory'] ?? '';
                             if ($theory_val === '') $is_empty = true;
                         } else {
@@ -135,7 +135,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_marks'])) {
                             $gp = null;
                             $remarks = null;
                         } else {
-                            if ($classType === '1-3') {
+                            if ($exam['type'] === 'unit') {
+                                $theory_obtained = (float)$theory_val;
+                                $practical_obtained = 0.0;
+                                $internal_breakdown = null;
+                                
+                                $theory_full = (float)$es_row['theory_full'];
+                                $theory_pass = (float)$es_row['theory_pass'];
+                                $pct = $theory_full > 0 ? ($theory_obtained / $theory_full) * 100 : 0.0;
+                                
+                                $is_fail = ($theory_obtained < $theory_pass);
+                                if (($exam['result_system'] ?? 'gpa') === 'percentage') {
+                                    $gp = 0.0;
+                                    $grade = '';
+                                    $remarks = $is_fail ? 'Fail' : 'Pass';
+                                } else {
+                                    if ($is_fail) {
+                                        $gp = 0.0;
+                                        $grade = 'NG';
+                                        $remarks = 'NG';
+                                    } else {
+                                        $gp = calculateGPA($pct);
+                                        $grade = calculateGrade($pct);
+                                        $remarks = 'Pass';
+                                    }
+                                }
+                            } elseif ($classType === '1-3') {
                                 $theory_obtained = (float)$theory_val;
                                 $practical_obtained = 0.0;
                                 $internal_breakdown = null;
@@ -228,6 +253,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_marks'])) {
 
 // Fetch active exams
 $school_id = Auth::getSchoolId();
+$selected_exam = null;
+if ($exam_id) {
+    $stmt_sel = $db->prepare("SELECT * FROM exams WHERE id = ? AND school_id = ?");
+    $stmt_sel->execute([$exam_id, $school_id]);
+    $selected_exam = $stmt_sel->fetch(PDO::FETCH_ASSOC);
+}
 $stmt = $db->prepare("
     SELECT e.*, y.year_bs 
     FROM exams e 
@@ -488,7 +519,7 @@ ob_start();
                             <th rowspan="2" class="align-middle px-2" style="min-width: 90px; background-color: #34495e;">Attendance</th>
                             
                             <?php foreach ($subjects as $sub): ?>
-                                <?php $colspan = ($classType === '1-3') ? 1 : 4; ?>
+                                <?php $colspan = (($selected_exam && $selected_exam['type'] === 'unit') || $classType === '1-3') ? 1 : 4; ?>
                                 <th colspan="<?= $colspan ?>" class="px-2 small text-uppercase">
                                     <?= sanitize($sub['subject_name']) ?> 
                                     <span class="d-block text-warning small font-monospace"><?= sanitize($sub['subject_code']) ?></span>
@@ -497,7 +528,9 @@ ob_start();
                         </tr>
                         <tr>
                             <?php foreach ($subjects as $sub): ?>
-                                <?php if ($classType === '1-3'): ?>
+                                <?php if ($selected_exam && $selected_exam['type'] === 'unit'): ?>
+                                    <th style="min-width: 100px; font-size: 0.75rem;">Marks (<?= $sub['theory_full'] ?>)</th>
+                                <?php elseif ($classType === '1-3'): ?>
                                     <th style="min-width: 100px; font-size: 0.75rem;">Ach % (100)</th>
                                 <?php else: ?>
                                     <?php $max_prt = ($classType === '4-8') ? 4 : 3; ?>
@@ -540,7 +573,7 @@ ob_start();
                                     }
                                     
                                     if (!$is_selected): 
-                                        $colspan = ($classType === '1-3') ? 1 : 4;
+                                        $colspan = (($selected_exam && $selected_exam['type'] === 'unit') || $classType === '1-3') ? 1 : 4;
                                     ?>
                                         <td colspan="<?= $colspan ?>" style="background-color: #eaeded; color: #a6acaf; font-size: 0.75rem;" class="text-center font-monospace">N/A</td>
                                     <?php else: ?>
@@ -569,7 +602,11 @@ ob_start();
                                             }
                                         }
                                         ?>
-                                        <?php if ($classType === '1-3'): ?>
+                                        <?php if ($selected_exam && $selected_exam['type'] === 'unit'): ?>
+                                            <td>
+                                                <input type="number" step="0.01" min="0" max="<?= $sub['theory_full'] ?>" class="form-control form-control-sm text-center font-monospace" name="marks[<?= $student['id'] ?>][<?= $sub['id'] ?>][theory]" value="<?= $theory_obtained ?>">
+                                            </td>
+                                        <?php elseif ($classType === '1-3'): ?>
                                             <td>
                                                 <input type="number" step="0.01" min="0" max="100" class="form-control form-control-sm text-center font-monospace" name="marks[<?= $student['id'] ?>][<?= $sub['id'] ?>][theory]" value="<?= $theory_obtained ?>">
                                             </td>

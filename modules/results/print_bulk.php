@@ -66,6 +66,9 @@ if ($exam_id && $class_id) {
     if (!$exam) {
         die("Unauthorized access to exam data.");
     }
+    if (!isset($_GET['system']) && !empty($exam['result_system'])) {
+        $grading_system = $exam['result_system'];
+    }
     $chk_class = $db->prepare("SELECT id FROM classes WHERE id = ? AND school_id = ? AND is_active = 1");
     $chk_class->execute([$class_id, $school_id]);
     if (!$chk_class->fetch()) {
@@ -242,7 +245,33 @@ ob_start();
 
                 $marks_elaborated = [];
                 foreach ($marks as $mark) {
-                    if ($classType === '1-3') {
+                    if ($exam['type'] === 'unit') {
+                        $ch = (float)($mark['exam_credit_hours'] ?? $mark['default_credit_hours'] ?? 4);
+                        $gp = (float)$mark['grade_point'];
+                        $grade = $mark['grade'] ?: '';
+                        $remarks = $mark['remarks'] ?: '';
+                        
+                        $is_fail = ($remarks === 'NG' || $remarks === 'Fail' || $grade === 'NG');
+                        if ($is_fail) {
+                            $has_failed_subject = true;
+                        }
+                        
+                        $total_credit_hours += $ch;
+                        $weighted_gp_sum += ($gp * $ch);
+                        
+                        $marks_elaborated[] = [
+                            'subject_code' => $mark['subject_code'],
+                            'subject_name' => $mark['subject_name'],
+                            'subject_name_np' => $mark['subject_name_np'],
+                            'credit_hours' => $ch,
+                            'theory_obtained' => $mark['theory_obtained'] !== null ? (float)$mark['theory_obtained'] : 0.0,
+                            'theory_full' => (float)$mark['theory_full'],
+                            'theory_pass' => (float)$mark['theory_pass'],
+                            'grade' => $grade,
+                            'grade_point' => $gp,
+                            'remarks' => $remarks
+                        ];
+                    } elseif ($classType === '1-3') {
                         $ch = (float)($mark['exam_credit_hours'] ?? $mark['default_credit_hours'] ?? 4);
                         $gp = (float)$mark['grade_point'];
                         $grade = $mark['grade'] ?: 'NG';
@@ -333,16 +362,38 @@ ob_start();
                     }
                 }
 
-                $average_gpa = $total_credit_hours > 0 ? round($weighted_gp_sum / $total_credit_hours, 2) : 0.00;
+                $grand_full = 0;
+                $grand_obtained = 0;
+                if ($exam['type'] === 'unit') {
+                    foreach ($marks_elaborated as $m) {
+                        $grand_full += $m['theory_full'];
+                        $grand_obtained += $m['theory_obtained'];
+                    }
+                    $average_gpa = $grand_full > 0 ? round(($grand_obtained / $grand_full) * 100, 2) : 0.00;
+                } else {
+                    $average_gpa = $total_credit_hours > 0 ? round($weighted_gp_sum / $total_credit_hours, 2) : 0.00;
+                }
 
                 if ($has_failed_subject) {
-                    $final_gpa_text = 'NG';
-                    $final_grade = 'NG';
-                    $remarks_summary = ($student['grading_type'] === 'percentage') ? 'Failed' : 'Not Graded';
+                    if ($grading_system === 'percentage') {
+                        $final_gpa_text = number_format($average_gpa, 2) . '%';
+                        $final_grade = 'F';
+                        $remarks_summary = 'Failed';
+                    } else {
+                        $final_gpa_text = 'NG';
+                        $final_grade = 'NG';
+                        $remarks_summary = 'Not Graded';
+                    }
                 } else {
-                    $final_gpa_text = number_format($average_gpa, 2);
-                    $final_grade = calculateSubjectFinalGrade($average_gpa);
-                    $remarks_summary = ($student['grading_type'] === 'percentage') ? 'Passed' : 'Graded';
+                    if ($grading_system === 'percentage') {
+                        $final_gpa_text = number_format($average_gpa, 2) . '%';
+                        $final_grade = getPercentageDivision($average_gpa, false);
+                        $remarks_summary = 'Passed';
+                    } else {
+                        $final_gpa_text = number_format($average_gpa, 2);
+                        $final_grade = calculateSubjectFinalGrade($average_gpa);
+                        $remarks_summary = 'Graded';
+                    }
                 }
             ?>
             
@@ -418,7 +469,90 @@ ob_start();
                 </div>
 
                 <!-- Marks Table -->
-                <?php if ($grading_system === 'percentage'): ?>
+                <?php if ($exam['type'] === 'unit'): ?>
+                    <?php if ($grading_system === 'percentage'): ?>
+                    <!-- Unit Test Marksheet Layout -->
+                    <table class="table table-bordered align-middle mb-4" style="border: 2px solid #333; font-size: 0.85rem;">
+                        <thead>
+                            <tr class="table-light" style="border-bottom: 2px solid #333;">
+                                <th width="60" class="text-center" style="font-weight: 700;">S.N.</th>
+                                <th class="text-center" style="font-weight: 700;">Subject</th>
+                                <th width="120" class="text-center" style="font-weight: 700;">Full Marks</th>
+                                <th width="120" class="text-center" style="font-weight: 700;">Pass Marks</th>
+                                <th width="140" class="text-center" style="font-weight: 700;">Obtained Marks</th>
+                                <th width="120" class="text-center" style="font-weight: 700;">Percentage</th>
+                                <th width="140" class="text-center" style="font-weight: 700;">Remarks</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php 
+                            $sn = 0;
+                            foreach ($marks_elaborated as $m): 
+                                $sn++;
+                                $sub_pct = $m['theory_full'] > 0 ? ($m['theory_obtained'] / $m['theory_full']) * 100 : 0;
+                                $is_sub_fail = ($m['remarks'] === 'Fail' || $m['remarks'] === 'NG');
+                            ?>
+                            <tr>
+                                <td class="text-center font-monospace"><?= $sn ?></td>
+                                <td><strong><?= sanitize($m['subject_name']) ?></strong></td>
+                                <td class="text-center font-monospace"><?= $m['theory_full'] ?></td>
+                                <td class="text-center font-monospace"><?= $m['theory_pass'] ?></td>
+                                <td class="text-center font-monospace fw-bold"><?= $m['theory_obtained'] ?></td>
+                                <td class="text-center font-monospace"><?= round($sub_pct, 1) ?>%</td>
+                                <td class="text-center fw-bold <?= $is_sub_fail ? 'text-danger' : 'text-success' ?>"><?= $is_sub_fail ? 'Fail' : 'Pass' ?></td>
+                            </tr>
+                            <?php endforeach; ?>
+                            
+                            <tr class="table-light fw-bold" style="border-top: 2px solid #333;">
+                                <td colspan="2" class="text-end">Total Summary:</td>
+                                <td class="text-center font-monospace"><?= $grand_full ?></td>
+                                <td></td>
+                                <td class="text-center font-monospace text-primary"><?= $grand_obtained ?></td>
+                                <td class="text-center font-monospace"><?= number_format($average_gpa, 2) ?>%</td>
+                                <td class="text-center text-uppercase"><?= $remarks_summary ?></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <?php else: ?>
+                    <!-- Unit Test Grading Layout -->
+                    <table class="table table-bordered align-middle mb-4" style="border: 2px solid #333; font-size: 0.85rem;">
+                        <thead>
+                            <tr class="table-light" style="border-bottom: 2px solid #333;">
+                                <th width="60" class="text-center" style="font-weight: 700;">S.N.</th>
+                                <th class="text-center" style="font-weight: 700;">Subject</th>
+                                <th width="120" class="text-center" style="font-weight: 700;">Full Marks</th>
+                                <th width="120" class="text-center" style="font-weight: 700;">Grade</th>
+                                <th width="120" class="text-center" style="font-weight: 700;">Grade Point</th>
+                                <th width="150" class="text-center" style="font-weight: 700;">Remarks</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php 
+                            $sn = 0;
+                            foreach ($marks_elaborated as $m): 
+                                $sn++;
+                            ?>
+                            <tr>
+                                <td class="text-center font-monospace"><?= $sn ?></td>
+                                <td><strong><?= sanitize($m['subject_name']) ?></strong></td>
+                                <td class="text-center font-monospace"><?= $m['theory_full'] ?></td>
+                                <td class="text-center font-monospace fw-bold"><?= $m['grade'] ?: '-' ?></td>
+                                <td class="text-center font-monospace fw-bold"><?= number_format($m['grade_point'], 2) ?></td>
+                                <td class="text-center small"><?= $m['remarks'] ?></td>
+                            </tr>
+                            <?php endforeach; ?>
+                            
+                            <tr class="table-light fw-bold" style="border-top: 2px solid #333;">
+                                <td colspan="2" class="text-end">Total Summary:</td>
+                                <td class="text-center font-monospace"><?= $grand_full ?></td>
+                                <td class="text-center font-monospace"><?= $final_grade ?></td>
+                                <td class="text-center font-monospace text-primary"><?= $final_gpa_text ?></td>
+                                <td class="text-center"><?= $remarks_summary ?></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <?php endif; ?>
+                <?php elseif ($grading_system === 'percentage'): ?>
                 <table class="table table-bordered align-middle mb-4" style="border: 2px solid #333; font-size: 0.85rem;">
                     <thead>
                         <tr class="table-light" style="border-bottom: 2px solid #333;">
@@ -693,7 +827,15 @@ ob_start();
                     <div class="col-4 text-end">
                         <div class="border p-2 bg-light text-center shadow-sm rounded">
                             <span class="d-block text-uppercase fw-bold text-muted small" style="font-size: 0.65rem;">Final Result</span>
-                            <h5 class="mb-0 text-primary fw-bold font-monospace" style="font-size: 1.05rem;"><?= $final_gpa_text === 'NG' ? (($student['grading_type'] === 'percentage') ? 'Failed' : 'Not Graded') : (($student['grading_type'] === 'percentage') ? 'Passed' : 'Graded (GPA ' . $final_gpa_text . ')') ?></h5>
+                            <h5 class="mb-0 text-primary fw-bold font-monospace" style="font-size: 1.05rem;">
+                                <?php 
+                                if ($grading_system === 'percentage') {
+                                    echo ($remarks_summary === 'Failed') ? 'Failed' : 'Passed (' . $final_gpa_text . ')';
+                                } else {
+                                    echo ($final_gpa_text === 'NG') ? 'Not Graded' : 'Graded (GPA ' . $final_gpa_text . ')';
+                                }
+                                ?>
+                            </h5>
                         </div>
                     </div>
                 </div>

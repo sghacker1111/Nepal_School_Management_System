@@ -160,7 +160,7 @@ if ($exam_id && $class_id) {
                 $grade = $m['grade'] ?: 'NG';
                 $remarks = $m['remarks'];
 
-                if ($remarks === 'NG' || $grade === 'NG') {
+                if ($remarks === 'NG' || $remarks === 'Fail' || $grade === 'NG') {
                     $has_ng = true;
                 }
 
@@ -183,10 +183,23 @@ if ($exam_id && $class_id) {
             }
         }
 
-        $gpa = $total_credit_hours > 0 ? round($total_weighted_gp / $total_credit_hours, 2) : 0.00;
-        $status = ($has_ng || $subjects_count < $expected_subjects_count) ? 'Fail/NG' : 'Pass';
-        if ($status === 'Fail/NG') {
-            $gpa = 0.00; // Force 0.00 GPA for failed/NG candidates
+        if ($exam['type'] === 'unit' && ($exam['result_system'] ?? 'gpa') === 'percentage') {
+            $total_full_marks = 0;
+            foreach ($subjects as $sub) {
+                $sub_id = $sub['subject_id'];
+                if (isset($row_subs[$sub_id]) && $row_subs[$sub_id] !== 'N/A') {
+                    $total_full_marks += (float)$sub['theory_full'];
+                }
+            }
+            $pct = $total_full_marks > 0 ? round(($total_obtained / $total_full_marks) * 100, 2) : 0.00;
+            $gpa = $pct;
+            $status = ($has_ng || $subjects_count < $expected_subjects_count) ? 'Fail' : 'Pass';
+        } else {
+            $gpa = $total_credit_hours > 0 ? round($total_weighted_gp / $total_credit_hours, 2) : 0.00;
+            $status = ($has_ng || $subjects_count < $expected_subjects_count) ? 'Fail/NG' : 'Pass';
+            if ($status === 'Fail/NG') {
+                $gpa = 0.00; // Force 0.00 GPA for failed/NG candidates
+            }
         }
 
         $ledger_data[] = [
@@ -319,13 +332,21 @@ ob_start();
                         <th rowspan="2" class="align-middle">Roll No.</th>
                         <th rowspan="2" class="align-middle text-start" style="min-width: 150px;">Student Name</th>
                         <?php foreach ($subjects as $sub): ?>
-                        <?php $ch = $sub['exam_credit_hours'] ?? $sub['class_credit_hours'] ?? $sub['default_credit_hours'] ?? 4; ?>
-                        <th colspan="3" class="small"><?= sanitize($sub['subject_name']) ?> <br><small class="text-muted">(<?= $ch ?> CH)</small></th>
+                        <th colspan="<?= $exam['type'] === 'unit' ? 1 : 3 ?>" rowspan="<?= $exam['type'] === 'unit' ? 2 : 1 ?>" class="small align-middle">
+                            <?= sanitize($sub['subject_name']) ?>
+                            <?php if ($exam['type'] !== 'unit'): ?>
+                                <?php $ch = $sub['exam_credit_hours'] ?? $sub['class_credit_hours'] ?? $sub['default_credit_hours'] ?? 4; ?>
+                                <br><small class="text-muted">(<?= $ch ?> CH)</small>
+                            <?php else: ?>
+                                <br><small class="text-muted">(FM: <?= $sub['theory_full'] ?>)</small>
+                            <?php endif; ?>
+                        </th>
                         <?php endforeach; ?>
                         <th rowspan="2" class="align-middle">Total Obtained</th>
-                        <th rowspan="2" class="align-middle">GPA</th>
+                        <th rowspan="2" class="align-middle"><?= ($exam['result_system'] ?? 'gpa') === 'percentage' ? 'Percentage' : 'GPA' ?></th>
                         <th rowspan="2" class="align-middle">Result</th>
                     </tr>
+                    <?php if ($exam['type'] !== 'unit'): ?>
                     <tr>
                         <?php foreach ($subjects as $sub): ?>
                         <th style="font-size: 0.7rem;">TH</th>
@@ -333,6 +354,7 @@ ob_start();
                         <th style="font-size: 0.7rem;">GD</th>
                         <?php endforeach; ?>
                     </tr>
+                    <?php endif; ?>
                 </thead>
                 <tbody id="ledgerBody">
                     <?php foreach ($ledger_data as $row): ?>
@@ -345,21 +367,35 @@ ob_start();
                             $sm = $row['subjects'][$sub['subject_id']] ?? null; 
                             if ($sm === 'N/A'):
                             ?>
-                            <td colspan="3" class="bg-secondary-subtle text-muted">-</td>
+                            <td colspan="<?= $exam['type'] === 'unit' ? 1 : 3 ?>" class="bg-secondary-subtle text-muted">-</td>
                             <?php elseif ($sm): ?>
-                            <td><?= $sm['theory'] ?></td>
-                            <td><?= $sub['practical_full'] > 0 ? $sm['practical'] : '-' ?></td>
-                            <td class="fw-bold <?= $sm['grade'] === 'NG' ? 'text-danger' : 'text-primary' ?>"><?= $sm['grade'] ?></td>
+                                <?php if ($exam['type'] === 'unit'): ?>
+                                    <?php if (($exam['result_system'] ?? 'gpa') === 'percentage'): ?>
+                                        <td><?= $sm['theory'] ?></td>
+                                    <?php else: ?>
+                                        <td class="fw-bold <?= $sm['grade'] === 'NG' ? 'text-danger' : 'text-primary' ?>"><?= $sm['grade'] ?></td>
+                                    <?php endif; ?>
+                                <?php else: ?>
+                                    <td><?= $sm['theory'] ?></td>
+                                    <td><?= $sub['practical_full'] > 0 ? $sm['practical'] : '-' ?></td>
+                                    <td class="fw-bold <?= $sm['grade'] === 'NG' ? 'text-danger' : 'text-primary' ?>"><?= $sm['grade'] ?></td>
+                                <?php endif; ?>
                             <?php else: ?>
-                            <td colspan="3" class="text-muted small">Absent</td>
+                            <td colspan="<?= $exam['type'] === 'unit' ? 1 : 3 ?>" class="text-muted small">Absent</td>
                             <?php endif; ?>
                         <?php endforeach; ?>
 
                         <td><?= $row['total_marks'] ?></td>
-                        <td class="fw-bold text-success font-monospace"><?= number_format($row['gpa'], 2) ?></td>
+                        <td class="fw-bold text-success font-monospace">
+                            <?php if (($exam['result_system'] ?? 'gpa') === 'percentage'): ?>
+                                <?= number_format($row['gpa'], 2) ?>%
+                            <?php else: ?>
+                                <?= number_format($row['gpa'], 2) ?>
+                            <?php endif; ?>
+                        </td>
                         <td>
                             <span class="badge bg-<?= $row['status'] === 'Pass' ? 'success' : 'danger' ?>">
-                                <?= ($selected_class && $selected_class['grading_type'] === 'gpa') ? ($row['status'] === 'Pass' ? 'Graded' : 'Not Graded') : $row['status'] ?>
+                                <?= (($exam['result_system'] ?? 'gpa') === 'gpa') ? ($row['status'] === 'Pass' ? 'Graded' : 'Not Graded') : ($row['status'] === 'Pass' ? 'Passed' : 'Failed') ?>
                             </span>
                         </td>
                     </tr>

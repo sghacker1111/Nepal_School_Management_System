@@ -34,13 +34,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $start_date = $_POST['start_date'] ?: null;
     $end_date = $_POST['end_date'] ?: null;
     $has_internal = isset($_POST['has_internal']) ? (int)$_POST['has_internal'] : 0;
+    $result_system = sanitize($_POST['result_system'] ?? 'gpa');
     
     if (empty($name)) {
         $error = 'Exam name is required';
     } else {
         try {
-            $stmt = $db->prepare("UPDATE exams SET name = ?, type = ?, start_date = ?, end_date = ?, has_internal = ? WHERE id = ? AND school_id = ?");
-            $stmt->execute([$name, $type, $start_date, $end_date, $has_internal, $exam_id, $school_id]);
+            $stmt = $db->prepare("UPDATE exams SET name = ?, type = ?, start_date = ?, end_date = ?, has_internal = ?, result_system = ? WHERE id = ? AND school_id = ?");
+            $stmt->execute([$name, $type, $start_date, $end_date, $has_internal, $result_system, $exam_id, $school_id]);
             
             Auth::logActivity(Auth::getUserId(), 'Edit Exam Details', 'exams', $exam_id);
             redirect(APP_URL . '/modules/exams/index.php', 'Exam details updated successfully.');
@@ -87,6 +88,14 @@ ob_start();
                     <option value="final" <?= $exam['type'] === 'final' ? 'selected' : '' ?>>Final Exam</option>
                     <option value="unit" <?= $exam['type'] === 'unit' ? 'selected' : '' ?>>Unit Test / Class Test</option>
                     <option value="practical" <?= $exam['type'] === 'practical' ? 'selected' : '' ?>>Practical / Assessment Only</option>
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label for="result_system" class="form-label font-weight-bold">Result System (for Unit Tests or General)</label>
+                <select class="form-select" id="result_system" name="result_system">
+                    <option value="gpa" <?= ($exam['result_system'] ?? 'gpa') === 'gpa' ? 'selected' : '' ?>>Grading System (GPA / Grades)</option>
+                    <option value="percentage" <?= ($exam['result_system'] ?? 'gpa') === 'percentage' ? 'selected' : '' ?>>Marksheet System (Marks / Percentage)</option>
                 </select>
             </div>
             
