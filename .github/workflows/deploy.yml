@@ -21,4 +21,4 @@ jobs:
         server: ${{ secrets.FTP_SERVER }}
         username: ${{ secrets.FTP_USERNAME }}
         password: ${{ secrets.FTP_PASSWORD }}
-        server-dir: htdocs/ # Default folder for InfinityFree is htdocs/
+        server-dir: school.my-board.org/htdocs/ # Subdomain folder for school.my-board.org
