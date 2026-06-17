@@ -120,14 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <a href="#" class="text-decoration-none small">Forgot Password?</a>
                 </div>
             </form>
-            
-            <div class="mt-4 p-3 bg-light rounded">
-                <small class="text-muted">
-                    <strong>Demo Credentials:</strong><br>
-                    Username: admin<br>
-                    Password: admin123
-                </small>
-            </div>
+            <!-- Demo credentials section removed -->
         </div>
     </div>
     
