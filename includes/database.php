@@ -153,6 +153,31 @@ class Database {
             // Suppress error if column already exists
         }
 
+        // Alter schools table - Add principal_name, principal_mobile, technical_person if they don't exist
+        $school_cols = [
+            'principal_name' => 'VARCHAR(100) DEFAULT NULL',
+            'principal_mobile' => 'VARCHAR(20) DEFAULT NULL',
+            'technical_person' => 'VARCHAR(100) DEFAULT NULL'
+        ];
+        foreach ($school_cols as $col => $col_def) {
+            try {
+                $has_col = false;
+                $cols = $this->conn->query("PRAGMA table_info(`schools`)")->fetchAll(PDO::FETCH_ASSOC);
+                foreach ($cols as $c) {
+                    if ($c['name'] === $col) {
+                        $has_col = true;
+                        break;
+                    }
+                }
+                if (!$has_col) {
+                    $this->conn->exec("ALTER TABLE `schools` ADD COLUMN `$col` $col_def");
+                }
+            } catch (PDOException $e) {
+                // Suppress error
+            }
+        }
+
+
         // B. migrate_multi_tenant.php logic
         // 1. Ensure 'schools' table exists and contains the default school
         $stmt = $this->conn->query("SELECT COUNT(*) FROM schools WHERE id = 1");

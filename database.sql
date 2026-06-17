@@ -21,6 +21,9 @@ CREATE TABLE `schools` (
   `principal_signature` varchar(255) DEFAULT NULL,
   `exam_coordinator_signature` varchar(255) DEFAULT NULL,
   `academic_year_current` varchar(20) DEFAULT '2081/2025',
+  `principal_name` varchar(100) DEFAULT NULL,
+  `principal_mobile` varchar(20) DEFAULT NULL,
+  `technical_person` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
