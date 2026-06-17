@@ -23,7 +23,10 @@ CREATE TABLE `schools` (
   `academic_year_current` varchar(20) DEFAULT '2081/2025',
   `principal_name` varchar(100) DEFAULT NULL,
   `principal_mobile` varchar(20) DEFAULT NULL,
-  `technical_person` varchar(100) DEFAULT NULL
+  `technical_person` varchar(100) DEFAULT NULL,
+  `class_teacher_signature` varchar(255) DEFAULT NULL,
+  `routine_periods_per_day` INTEGER DEFAULT 8,
+  `routine_include_sunday` INTEGER DEFAULT 0
 ) ;
 
 INSERT INTO `schools` (`name_en`, `name_np`, `emis_code`) VALUES 
@@ -39,6 +42,7 @@ CREATE TABLE `users` (
   `phone` varchar(20) DEFAULT NULL,
   `status` INTEGER DEFAULT 1,
   `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
+  `signature` varchar(255) DEFAULT NULL,
   UNIQUE(`username`)
 ) ;
 
@@ -74,7 +78,11 @@ CREATE TABLE `classes` (
   `name` varchar(50) NOT NULL, -- e.g., Class 10
   `name_np` varchar(50) DEFAULT NULL,
   `level` VARCHAR(50) DEFAULT 'Basic',
-  `grading_type` VARCHAR(50) DEFAULT 'gpa'
+  `grading_type` VARCHAR(50) DEFAULT 'gpa',
+  `class_teacher_name` VARCHAR(100) DEFAULT NULL,
+  `class_teacher_signature` VARCHAR(255) DEFAULT NULL,
+  `is_active` INTEGER DEFAULT 1,
+  `is_grading_teaching` INTEGER DEFAULT 0
 ) ;
 
 INSERT INTO `classes` (`name`, `name_np`, `level`, `grading_type`) VALUES 
@@ -165,6 +173,8 @@ CREATE TABLE `students` (
   `status` VARCHAR(50) DEFAULT 'active',
   `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp DEFAULT CURRENT_TIMESTAMP ,
+  `optional_subject_i` INTEGER DEFAULT NULL,
+  `optional_subject_ii` INTEGER DEFAULT NULL,
   FOREIGN KEY (`academic_year_id`) REFERENCES `academic_years`(`id`),
   FOREIGN KEY (`class_id`) REFERENCES `classes`(`id`),
   FOREIGN KEY (`section_id`) REFERENCES `sections`(`id`)
@@ -183,7 +193,8 @@ CREATE TABLE `exams` (
   `end_date` date DEFAULT NULL,
   `is_published` INTEGER DEFAULT 0,
   `is_locked` INTEGER DEFAULT 0,
-  `result_system` VARCHAR(50) DEFAULT 'gpa'
+  `result_system` VARCHAR(50) DEFAULT 'gpa',
+  `has_internal` INTEGER DEFAULT 0
 ) ;
 
 CREATE TABLE `exam_subjects` (
@@ -195,6 +206,9 @@ CREATE TABLE `exam_subjects` (
   `theory_pass` INTEGER DEFAULT 30,
   `practical_full` INTEGER DEFAULT 25,
   `practical_pass` INTEGER DEFAULT 10,
+  `credit_hours` INTEGER DEFAULT NULL,
+  `internal_credit_hours` DECIMAL(4,2) DEFAULT NULL,
+  `external_credit_hours` DECIMAL(4,2) DEFAULT NULL,
   FOREIGN KEY (`exam_id`) REFERENCES `exams`(`id`),
   FOREIGN KEY (`subject_id`) REFERENCES `subjects`(`id`)
 ) ;
@@ -243,5 +257,41 @@ CREATE TABLE `attendances` (
   `remarks` varchar(255) DEFAULT NULL,
   UNIQUE(`student_id`, `date_ad`)
 ) ;
+
+CREATE TABLE IF NOT EXISTS `exam_student_attendance` (
+  `id` INTEGER PRIMARY KEY AUTOINCREMENT,
+  `exam_id` INTEGER NOT NULL,
+  `student_id` INTEGER NOT NULL,
+  `present_days` INTEGER DEFAULT 0,
+  FOREIGN KEY (`exam_id`) REFERENCES `exams`(`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`student_id`) REFERENCES `students`(`id`) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS `class_routines` (
+  `id` INTEGER PRIMARY KEY AUTOINCREMENT,
+  `class_id` INTEGER NOT NULL,
+  `day_of_week` INTEGER NOT NULL, -- 0 (Sunday) to 6 (Saturday)
+  `period_number` INTEGER NOT NULL,
+  `subject_id` INTEGER DEFAULT NULL,
+  `teacher_id` INTEGER DEFAULT NULL,
+  `school_id` INTEGER DEFAULT 1,
+  FOREIGN KEY (`class_id`) REFERENCES `classes`(`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`subject_id`) REFERENCES `subjects`(`id`) ON DELETE SET NULL,
+  FOREIGN KEY (`teacher_id`) REFERENCES `users`(`id`) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS `class_routines_history` (
+  `id` INTEGER PRIMARY KEY AUTOINCREMENT,
+  `version_id` INTEGER DEFAULT NULL,
+  `class_id` INTEGER NOT NULL,
+  `day_of_week` INTEGER NOT NULL,
+  `period_number` INTEGER NOT NULL,
+  `subject_id` INTEGER DEFAULT NULL,
+  `teacher_id` INTEGER DEFAULT NULL,
+  `school_id` INTEGER DEFAULT 1,
+  `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
+  `changed_by_user_id` INTEGER DEFAULT NULL
+);
+
 
 

@@ -80,39 +80,59 @@ class Database {
     private function checkAndRunMigrations() {
         $run_migrations = false;
         
-        // 1. Check if class_subjects table exists
-        $has_class_subjects = $this->conn->query("SELECT name FROM sqlite_master WHERE type='table' AND name='class_subjects'")->fetch();
-        if (!$has_class_subjects) {
-            $run_migrations = true;
-        }
+        // List of checks: [table, column] or [table, null] to check table existence
+        $checks = [
+            ['class_subjects', null],
+            ['teacher_details', null],
+            ['questions', null],
+            ['exam_student_attendance', null],
+            ['class_routines', null],
+            ['class_routines_history', null],
+            ['exams', 'result_system'],
+            ['exams', 'has_internal'],
+            ['schools', 'principal_name'],
+            ['schools', 'class_teacher_signature'],
+            ['schools', 'routine_periods_per_day'],
+            ['users', 'signature'],
+            ['classes', 'is_active'],
+            ['classes', 'class_teacher_name'],
+            ['students', 'optional_subject_i'],
+            ['exam_subjects', 'credit_hours'],
+            ['questions', 'answer']
+        ];
         
-        // 2. Check if exams.result_system column exists
-        if (!$run_migrations) {
-            $cols = $this->conn->query("PRAGMA table_info(`exams`)")->fetchAll(PDO::FETCH_ASSOC);
-            $has_result_system = false;
-            foreach ($cols as $col) {
-                if ($col['name'] === 'result_system') {
-                    $has_result_system = true;
+        foreach ($checks as $check) {
+            $table = $check[0];
+            $col = $check[1];
+            
+            if ($col === null) {
+                // Check if table exists
+                $exists = $this->conn->query("SELECT name FROM sqlite_master WHERE type='table' AND name='$table'")->fetch();
+                if (!$exists) {
+                    $run_migrations = true;
                     break;
                 }
-            }
-            if (!$has_result_system) {
-                $run_migrations = true;
-            }
-        }
-        
-        // 3. Check if schools.principal_name column exists
-        if (!$run_migrations) {
-            $cols = $this->conn->query("PRAGMA table_info(`schools`)")->fetchAll(PDO::FETCH_ASSOC);
-            $has_principal_name = false;
-            foreach ($cols as $col) {
-                if ($col['name'] === 'principal_name') {
-                    $has_principal_name = true;
+            } else {
+                // Check if column exists in table
+                // First check if table itself exists
+                $table_exists = $this->conn->query("SELECT name FROM sqlite_master WHERE type='table' AND name='$table'")->fetch();
+                if (!$table_exists) {
+                    $run_migrations = true;
                     break;
                 }
-            }
-            if (!$has_principal_name) {
-                $run_migrations = true;
+                
+                $cols = $this->conn->query("PRAGMA table_info(`$table`)")->fetchAll(PDO::FETCH_ASSOC);
+                $has_col = false;
+                foreach ($cols as $c) {
+                    if ($c['name'] === $col) {
+                        $has_col = true;
+                        break;
+                    }
+                }
+                if (!$has_col) {
+                    $run_migrations = true;
+                    break;
+                }
             }
         }
         
@@ -125,7 +145,160 @@ class Database {
      * Run all migrations silently
      */
     private function runAllMigrations() {
-        // A. migrate.php logic
+        // A. Create tables if they don't exist
+        
+        // 1. class_subjects
+        $sql = "CREATE TABLE IF NOT EXISTS class_subjects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            class_id INTEGER NOT NULL,
+            subject_id INTEGER NOT NULL,
+            credit_hours INTEGER DEFAULT 4,
+            teacher_id INTEGER DEFAULT NULL,
+            FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE,
+            FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE,
+            FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE SET NULL
+        )";
+        $this->conn->exec($sql);
+
+        // 2. teacher_details
+        $sql = "CREATE TABLE IF NOT EXISTS teacher_details (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL UNIQUE,
+            join_date DATE DEFAULT NULL,
+            perm_issue_date DATE DEFAULT NULL,
+            temp_issue_date DATE DEFAULT NULL,
+            cit_no VARCHAR(50) DEFAULT NULL,
+            family_details TEXT DEFAULT NULL,
+            dob DATE DEFAULT NULL,
+            bank_name VARCHAR(100) DEFAULT NULL,
+            bank_account VARCHAR(50) DEFAULT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )";
+        $this->conn->exec($sql);
+
+        // 3. questions
+        $sql = "CREATE TABLE IF NOT EXISTS questions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            class_id INTEGER NOT NULL,
+            subject_id INTEGER NOT NULL,
+            chapter VARCHAR(100) NOT NULL,
+            type VARCHAR(20) NOT NULL, -- MCQ, Short, Long
+            question_text TEXT NOT NULL,
+            options TEXT DEFAULT NULL, -- JSON array
+            correct_option VARCHAR(5) DEFAULT NULL,
+            marks INTEGER DEFAULT 1,
+            FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE,
+            FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE
+        )";
+        $this->conn->exec($sql);
+
+        // 4. exam_student_attendance
+        $sql = "CREATE TABLE IF NOT EXISTS exam_student_attendance (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            exam_id INTEGER NOT NULL,
+            student_id INTEGER NOT NULL,
+            present_days INTEGER DEFAULT 0,
+            FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE,
+            FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE
+        )";
+        $this->conn->exec($sql);
+
+        // 5. class_routines
+        $sql = "CREATE TABLE IF NOT EXISTS class_routines (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            class_id INTEGER NOT NULL,
+            day_of_week INTEGER NOT NULL,
+            period_number INTEGER NOT NULL,
+            subject_id INTEGER DEFAULT NULL,
+            teacher_id INTEGER DEFAULT NULL,
+            school_id INTEGER DEFAULT 1,
+            FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE,
+            FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE SET NULL,
+            FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE SET NULL
+        )";
+        $this->conn->exec($sql);
+
+        // 6. class_routines_history
+        $sql = "CREATE TABLE IF NOT EXISTS class_routines_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            version_id INTEGER DEFAULT NULL,
+            class_id INTEGER NOT NULL,
+            day_of_week INTEGER NOT NULL,
+            period_number INTEGER NOT NULL,
+            subject_id INTEGER DEFAULT NULL,
+            teacher_id INTEGER DEFAULT NULL,
+            school_id INTEGER DEFAULT 1,
+            created_at timestamp DEFAULT CURRENT_TIMESTAMP,
+            changed_by_user_id INTEGER DEFAULT NULL
+        )";
+        $this->conn->exec($sql);
+
+        // B. Alter tables - Add columns dynamically
+        
+        $alters = [
+            'marks' => [
+                'internal_breakdown' => 'TEXT DEFAULT NULL'
+            ],
+            'exams' => [
+                'result_system' => "VARCHAR(50) DEFAULT 'gpa'",
+                'has_internal' => 'INTEGER DEFAULT 0'
+            ],
+            'schools' => [
+                'principal_name' => 'VARCHAR(100) DEFAULT NULL',
+                'principal_mobile' => 'VARCHAR(20) DEFAULT NULL',
+                'technical_person' => 'VARCHAR(100) DEFAULT NULL',
+                'class_teacher_signature' => 'VARCHAR(255) DEFAULT NULL',
+                'routine_periods_per_day' => 'INTEGER DEFAULT 8',
+                'routine_include_sunday' => 'INTEGER DEFAULT 0'
+            ],
+            'users' => [
+                'signature' => 'VARCHAR(255) DEFAULT NULL'
+            ],
+            'classes' => [
+                'class_teacher_name' => 'VARCHAR(100) DEFAULT NULL',
+                'class_teacher_signature' => 'VARCHAR(255) DEFAULT NULL',
+                'is_active' => 'INTEGER DEFAULT 1',
+                'is_grading_teaching' => 'INTEGER DEFAULT 0'
+            ],
+            'students' => [
+                'optional_subject_i' => 'INTEGER DEFAULT NULL',
+                'optional_subject_ii' => 'INTEGER DEFAULT NULL'
+            ],
+            'exam_subjects' => [
+                'credit_hours' => 'INTEGER DEFAULT NULL',
+                'internal_credit_hours' => 'DECIMAL(4,2) DEFAULT NULL',
+                'external_credit_hours' => 'DECIMAL(4,2) DEFAULT NULL'
+            ],
+            'questions' => [
+                'answer' => 'TEXT DEFAULT NULL',
+                'question_text_np' => 'TEXT DEFAULT NULL',
+                'answer_np' => 'TEXT DEFAULT NULL',
+                'options_np' => 'TEXT DEFAULT NULL',
+                'school_id' => 'INTEGER DEFAULT 1'
+            ]
+        ];
+
+        foreach ($alters as $table => $cols) {
+            foreach ($cols as $col => $col_def) {
+                try {
+                    $has_col = false;
+                    $cols_info = $this->conn->query("PRAGMA table_info(`$table`)")->fetchAll(PDO::FETCH_ASSOC);
+                    foreach ($cols_info as $c) {
+                        if ($c['name'] === $col) {
+                            $has_col = true;
+                            break;
+                        }
+                    }
+                    if (!$has_col) {
+                        $this->conn->exec("ALTER TABLE `$table` ADD COLUMN `$col` $col_def");
+                    }
+                } catch (PDOException $e) {
+                    // Suppress error if column already exists
+                }
+            }
+        }
+
+        // C. migrate.php inserts
         // 1. Insert Class 11 and Class 12 if they don't exist
         $stmt = $this->conn->prepare("SELECT COUNT(*) FROM classes WHERE name = ?");
         
@@ -146,90 +319,7 @@ class Database {
             $this->conn->prepare("INSERT INTO academic_years (year_bs, year_ad, is_active) VALUES ('2083', '2026', 0)")->execute();
         }
 
-        // 3. Create class_subjects table
-        $sql = "CREATE TABLE IF NOT EXISTS class_subjects (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            class_id INTEGER NOT NULL,
-            subject_id INTEGER NOT NULL,
-            credit_hours INTEGER DEFAULT 4,
-            teacher_id INTEGER DEFAULT NULL,
-            FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE,
-            FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE,
-            FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE SET NULL
-        )";
-        $this->conn->exec($sql);
-
-        // 4. Create teacher_details table
-        $sql = "CREATE TABLE IF NOT EXISTS teacher_details (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL UNIQUE,
-            join_date DATE DEFAULT NULL,
-            perm_issue_date DATE DEFAULT NULL,
-            temp_issue_date DATE DEFAULT NULL,
-            cit_no VARCHAR(50) DEFAULT NULL,
-            family_details TEXT DEFAULT NULL,
-            dob DATE DEFAULT NULL,
-            bank_name VARCHAR(100) DEFAULT NULL,
-            bank_account VARCHAR(50) DEFAULT NULL,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        )";
-        $this->conn->exec($sql);
-
-        // 5. Create questions table
-        $sql = "CREATE TABLE IF NOT EXISTS questions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            class_id INTEGER NOT NULL,
-            subject_id INTEGER NOT NULL,
-            chapter VARCHAR(100) NOT NULL,
-            type VARCHAR(20) NOT NULL, -- MCQ, Short, Long
-            question_text TEXT NOT NULL,
-            options TEXT DEFAULT NULL, -- JSON array
-            correct_option VARCHAR(5) DEFAULT NULL,
-            marks INTEGER DEFAULT 1,
-            FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE,
-            FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE
-        )";
-        $this->conn->exec($sql);
-
-        // 6. Alter marks table - Add internal_breakdown if not exists
-        try {
-            $this->conn->exec("ALTER TABLE marks ADD COLUMN internal_breakdown TEXT DEFAULT NULL");
-        } catch (PDOException $e) {
-            // Suppress error if column already exists
-        }
-
-        // 7. Alter exams table - Add result_system if not exists
-        try {
-            $this->conn->exec("ALTER TABLE exams ADD COLUMN result_system VARCHAR(50) DEFAULT 'gpa'");
-        } catch (PDOException $e) {
-            // Suppress error if column already exists
-        }
-
-        // Alter schools table - Add principal_name, principal_mobile, technical_person if they don't exist
-        $school_cols = [
-            'principal_name' => 'VARCHAR(100) DEFAULT NULL',
-            'principal_mobile' => 'VARCHAR(20) DEFAULT NULL',
-            'technical_person' => 'VARCHAR(100) DEFAULT NULL'
-        ];
-        foreach ($school_cols as $col => $col_def) {
-            try {
-                $has_col = false;
-                $cols = $this->conn->query("PRAGMA table_info(`schools`)")->fetchAll(PDO::FETCH_ASSOC);
-                foreach ($cols as $c) {
-                    if ($c['name'] === $col) {
-                        $has_col = true;
-                        break;
-                    }
-                }
-                if (!$has_col) {
-                    $this->conn->exec("ALTER TABLE `schools` ADD COLUMN `$col` $col_def");
-                }
-            } catch (PDOException $e) {
-                // Suppress error
-            }
-        }
-
-        // B. migrate_multi_tenant.php logic
+        // D. migrate_multi_tenant.php logic
         // 1. Ensure 'schools' table exists and contains the default school
         $stmt = $this->conn->query("SELECT COUNT(*) FROM schools WHERE id = 1");
         if ($stmt->fetchColumn() == 0) {
@@ -246,29 +336,38 @@ class Database {
             'exams',
             'academic_years',
             'questions',
-            'class_subjects'
+            'class_subjects',
+            'class_routines',
+            'class_routines_history'
         ];
 
         foreach ($tables as $table) {
-            // Check if school_id already exists in table
-            $has_column = false;
-            $cols = $this->conn->query("PRAGMA table_info(`$table`)")->fetchAll(PDO::FETCH_ASSOC);
-            foreach ($cols as $col) {
-                if ($col['name'] === 'school_id') {
-                    $has_column = true;
-                    break;
+            try {
+                $has_column = false;
+                $cols = $this->conn->query("PRAGMA table_info(`$table`)")->fetchAll(PDO::FETCH_ASSOC);
+                foreach ($cols as $col) {
+                    if ($col['name'] === 'school_id') {
+                        $has_column = true;
+                        break;
+                    }
                 }
-            }
 
-            if (!$has_column) {
-                $this->conn->exec("ALTER TABLE `$table` ADD COLUMN school_id INTEGER DEFAULT 1");
+                if (!$has_column) {
+                    $this->conn->exec("ALTER TABLE `$table` ADD COLUMN school_id INTEGER DEFAULT 1");
+                }
+            } catch (PDOException $e) {
+                // Suppress if table doesn't exist
             }
         }
 
         // 3. Make sure all existing data is updated to school_id = 1
         foreach ($tables as $table) {
-            if ($table !== 'users') {
-                $this->conn->exec("UPDATE `$table` SET school_id = 1 WHERE school_id IS NULL OR school_id = 0");
+            try {
+                if ($table !== 'users') {
+                    $this->conn->exec("UPDATE `$table` SET school_id = 1 WHERE school_id IS NULL OR school_id = 0");
+                }
+            } catch (PDOException $e) {
+                // Suppress if table doesn't exist
             }
         }
 

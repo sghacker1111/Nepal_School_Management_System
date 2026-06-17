@@ -24,6 +24,9 @@ CREATE TABLE `schools` (
   `principal_name` varchar(100) DEFAULT NULL,
   `principal_mobile` varchar(20) DEFAULT NULL,
   `technical_person` varchar(100) DEFAULT NULL,
+  `class_teacher_signature` varchar(255) DEFAULT NULL,
+  `routine_periods_per_day` int(11) DEFAULT 8,
+  `routine_include_sunday` tinyint(1) DEFAULT 0,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -40,6 +43,7 @@ CREATE TABLE `users` (
   `phone` varchar(20) DEFAULT NULL,
   `status` tinyint(1) DEFAULT 1,
   `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
+  `signature` varchar(255) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `username` (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -79,6 +83,10 @@ CREATE TABLE `classes` (
   `name_np` varchar(50) DEFAULT NULL,
   `level` enum('ECD','Basic','Secondary') DEFAULT 'Basic',
   `grading_type` enum('percentage','gpa') DEFAULT 'gpa',
+  `class_teacher_name` varchar(100) DEFAULT NULL,
+  `class_teacher_signature` varchar(255) DEFAULT NULL,
+  `is_active` tinyint(1) DEFAULT 1,
+  `is_grading_teaching` tinyint(1) DEFAULT 0,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -172,7 +180,8 @@ CREATE TABLE `students` (
   `status` enum('active','transferred','dropout','passed') DEFAULT 'active',
   `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  
+  `optional_subject_i` int(11) DEFAULT NULL,
+  `optional_subject_ii` int(11) DEFAULT NULL,
   PRIMARY KEY (`id`),
   FOREIGN KEY (`academic_year_id`) REFERENCES `academic_years`(`id`),
   FOREIGN KEY (`class_id`) REFERENCES `classes`(`id`),
@@ -193,6 +202,7 @@ CREATE TABLE `exams` (
   `is_published` tinyint(1) DEFAULT 0,
   `is_locked` tinyint(1) DEFAULT 0,
   `result_system` enum('gpa','percentage') DEFAULT 'gpa',
+  `has_internal` tinyint(1) DEFAULT 0,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -205,6 +215,9 @@ CREATE TABLE `exam_subjects` (
   `theory_pass` int(11) DEFAULT 30,
   `practical_full` int(11) DEFAULT 25,
   `practical_pass` int(11) DEFAULT 10,
+  `credit_hours` int(11) DEFAULT NULL,
+  `internal_credit_hours` decimal(4,2) DEFAULT NULL,
+  `external_credit_hours` decimal(4,2) DEFAULT NULL,
   PRIMARY KEY (`id`),
   FOREIGN KEY (`exam_id`) REFERENCES `exams`(`id`),
   FOREIGN KEY (`subject_id`) REFERENCES `subjects`(`id`)
@@ -258,4 +271,43 @@ CREATE TABLE `attendances` (
   UNIQUE KEY `daily_attendance` (`student_id`, `date_ad`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS `exam_student_attendance` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `exam_id` int(11) NOT NULL,
+  `student_id` int(11) NOT NULL,
+  `present_days` int(11) DEFAULT 0,
+  PRIMARY KEY (`id`),
+  FOREIGN KEY (`exam_id`) REFERENCES `exams`(`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`student_id`) REFERENCES `students`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `class_routines` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `class_id` int(11) NOT NULL,
+  `day_of_week` int(11) NOT NULL,
+  `period_number` int(11) NOT NULL,
+  `subject_id` int(11) DEFAULT NULL,
+  `teacher_id` int(11) DEFAULT NULL,
+  `school_id` int(11) DEFAULT 1,
+  PRIMARY KEY (`id`),
+  FOREIGN KEY (`class_id`) REFERENCES `classes`(`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`subject_id`) REFERENCES `subjects`(`id`) ON DELETE SET NULL,
+  FOREIGN KEY (`teacher_id`) REFERENCES `users`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `class_routines_history` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `version_id` int(11) DEFAULT NULL,
+  `class_id` int(11) NOT NULL,
+  `day_of_week` int(11) NOT NULL,
+  `period_number` int(11) NOT NULL,
+  `subject_id` int(11) DEFAULT NULL,
+  `teacher_id` int(11) DEFAULT NULL,
+  `school_id` int(11) DEFAULT 1,
+  `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
+  `changed_by_user_id` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 COMMIT;
+
