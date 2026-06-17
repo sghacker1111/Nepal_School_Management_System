@@ -52,6 +52,9 @@ class Database {
                 if (!$table_exists) {
                     $this->initializeSqliteDatabase();
                 }
+                
+                // Run silent migrations if any schema modifications are pending
+                $this->checkAndRunMigrations();
             } catch (PDOException $sqlite_err) {
                 die("Database connection failed: (MySQL) " . (!empty($mysql_err) ? $mysql_err : 'forced') . " | (SQLite fallback) " . $sqlite_err->getMessage());
             }
@@ -59,10 +62,9 @@ class Database {
     }
     
     /**
-     * Auto-initialize the SQLite database using database_sqlite.sql and apply all migrations
+     * Auto-initialize the SQLite database using database_sqlite.sql
      */
     private function initializeSqliteDatabase() {
-        // 1. Run schema from database_sqlite.sql
         $sql_file = dirname(__DIR__) . '/database_sqlite.sql';
         if (file_exists($sql_file)) {
             $sql = file_get_contents($sql_file);
@@ -70,9 +72,59 @@ class Database {
         } else {
             throw new Exception("SQLite schema file not found at: " . $sql_file);
         }
+    }
 
-        // 2. Run migrations silently
+    /**
+     * Check if database schema has all current columns/tables, if not, execute migrations.
+     */
+    private function checkAndRunMigrations() {
+        $run_migrations = false;
         
+        // 1. Check if class_subjects table exists
+        $has_class_subjects = $this->conn->query("SELECT name FROM sqlite_master WHERE type='table' AND name='class_subjects'")->fetch();
+        if (!$has_class_subjects) {
+            $run_migrations = true;
+        }
+        
+        // 2. Check if exams.result_system column exists
+        if (!$run_migrations) {
+            $cols = $this->conn->query("PRAGMA table_info(`exams`)")->fetchAll(PDO::FETCH_ASSOC);
+            $has_result_system = false;
+            foreach ($cols as $col) {
+                if ($col['name'] === 'result_system') {
+                    $has_result_system = true;
+                    break;
+                }
+            }
+            if (!$has_result_system) {
+                $run_migrations = true;
+            }
+        }
+        
+        // 3. Check if schools.principal_name column exists
+        if (!$run_migrations) {
+            $cols = $this->conn->query("PRAGMA table_info(`schools`)")->fetchAll(PDO::FETCH_ASSOC);
+            $has_principal_name = false;
+            foreach ($cols as $col) {
+                if ($col['name'] === 'principal_name') {
+                    $has_principal_name = true;
+                    break;
+                }
+            }
+            if (!$has_principal_name) {
+                $run_migrations = true;
+            }
+        }
+        
+        if ($run_migrations) {
+            $this->runAllMigrations();
+        }
+    }
+
+    /**
+     * Run all migrations silently
+     */
+    private function runAllMigrations() {
         // A. migrate.php logic
         // 1. Insert Class 11 and Class 12 if they don't exist
         $stmt = $this->conn->prepare("SELECT COUNT(*) FROM classes WHERE name = ?");
@@ -176,7 +228,6 @@ class Database {
                 // Suppress error
             }
         }
-
 
         // B. migrate_multi_tenant.php logic
         // 1. Ensure 'schools' table exists and contains the default school
