@@ -578,23 +578,25 @@ $(document).ready(function() {
     document.getElementById('modalClass').addEventListener('change', () => updateChaptersDropdown());
     document.getElementById('modalSubject').addEventListener('change', () => updateChaptersDropdown());
     
-    // Initialize TinyMCE editors
-    tinymce.init({
-        selector: '#modalQuestionText, #modalQuestionTextNp, #modalAnswer, #modalAnswerNp',
-        height: 350,
-        plugins: 'advlist autolink lists link image charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime media table wordcount',
-        toolbar: 'undo redo | blocks fontfamily fontsize | bold italic underline forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | table | fullscreen code',
-        branding: false,
-        promotion: false,
-        setup: function (editor) {
-            editor.on('change keyup', function () {
-                editor.save(); // Automatically sync back to textareas on change
-                if (window.MathJax && window.MathJax.typesetPromise) {
-                    window.MathJax.typesetPromise();
-                }
-            });
-        }
-    });
+    // Initialize TinyMCE editors if loaded
+    if (window.tinymce) {
+        tinymce.init({
+            selector: '#modalQuestionText, #modalQuestionTextNp, #modalAnswer, #modalAnswerNp',
+            height: 350,
+            plugins: 'advlist autolink lists link image charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime media table wordcount',
+            toolbar: 'undo redo | blocks fontfamily fontsize | bold italic underline forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | table | fullscreen code',
+            branding: false,
+            promotion: false,
+            setup: function (editor) {
+                editor.on('change keyup', function () {
+                    editor.save(); // Automatically sync back to textareas on change
+                    if (window.MathJax && window.MathJax.typesetPromise) {
+                        window.MathJax.typesetPromise();
+                    }
+                });
+            }
+        });
+    }
 });
 
 function showAddForm() {
@@ -611,11 +613,27 @@ function showAddForm() {
     document.getElementById('modalType').value = 'MCQ';
     document.getElementById('modalMarks').value = '1';
     
-    // Clear editors
-    if (tinymce.get('modalQuestionText')) tinymce.get('modalQuestionText').setContent('');
-    if (tinymce.get('modalQuestionTextNp')) tinymce.get('modalQuestionTextNp').setContent('');
-    if (tinymce.get('modalAnswer')) tinymce.get('modalAnswer').setContent('');
-    if (tinymce.get('modalAnswerNp')) tinymce.get('modalAnswerNp').setContent('');
+    // Clear editors safely
+    if (window.tinymce && tinymce.get('modalQuestionText')) {
+        tinymce.get('modalQuestionText').setContent('');
+    } else {
+        document.getElementById('modalQuestionText').value = '';
+    }
+    if (window.tinymce && tinymce.get('modalQuestionTextNp')) {
+        tinymce.get('modalQuestionTextNp').setContent('');
+    } else {
+        document.getElementById('modalQuestionTextNp').value = '';
+    }
+    if (window.tinymce && tinymce.get('modalAnswer')) {
+        tinymce.get('modalAnswer').setContent('');
+    } else {
+        document.getElementById('modalAnswer').value = '';
+    }
+    if (window.tinymce && tinymce.get('modalAnswerNp')) {
+        tinymce.get('modalAnswerNp').setContent('');
+    } else {
+        document.getElementById('modalAnswerNp').value = '';
+    }
     
     document.getElementById('modalOptA').value = '';
     document.getElementById('modalOptANp').value = '';
@@ -647,26 +665,26 @@ function editQuestion(q) {
     document.getElementById('modalType').value = q.type;
     document.getElementById('modalMarks').value = q.marks;
     
-    // Populate editors
-    if (tinymce.get('modalQuestionText')) {
+    // Populate editors safely
+    if (window.tinymce && tinymce.get('modalQuestionText')) {
         tinymce.get('modalQuestionText').setContent(q.question_text || '');
     } else {
         document.getElementById('modalQuestionText').value = q.question_text || '';
     }
     
-    if (tinymce.get('modalQuestionTextNp')) {
+    if (window.tinymce && tinymce.get('modalQuestionTextNp')) {
         tinymce.get('modalQuestionTextNp').setContent(q.question_text_np || '');
     } else {
         document.getElementById('modalQuestionTextNp').value = q.question_text_np || '';
     }
     
-    if (tinymce.get('modalAnswer')) {
+    if (window.tinymce && tinymce.get('modalAnswer')) {
         tinymce.get('modalAnswer').setContent(q.answer || '');
     } else {
         document.getElementById('modalAnswer').value = q.answer || '';
     }
     
-    if (tinymce.get('modalAnswerNp')) {
+    if (window.tinymce && tinymce.get('modalAnswerNp')) {
         tinymce.get('modalAnswerNp').setContent(q.answer_np || '');
     } else {
         document.getElementById('modalAnswerNp').value = q.answer_np || '';
