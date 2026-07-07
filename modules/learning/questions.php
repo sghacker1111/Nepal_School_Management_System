@@ -264,6 +264,9 @@ $activePage = 'questions';
 ob_start();
 ?>
 
+<!-- TinyMCE CDN for MS Word formatting and Full-screen editor -->
+<script src="https://cdn.jsdelivr.net/npm/tinymce@6/tinymce.min.js" referrerpolicy="origin"></script>
+
 <!-- MathJax for LaTeX Equation Rendering -->
 <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 
@@ -274,7 +277,7 @@ ob_start();
             <i class="fas fa-arrow-left"></i> Back to Portal
         </a>
         <?php if ($is_admin || $permission_status === 'approved'): ?>
-        <button class="btn btn-primary" onclick="showAddModal()">
+        <button class="btn btn-primary" onclick="showAddForm()">
             <i class="fas fa-plus"></i> Add Question
         </button>
         <?php endif; ?>
@@ -306,6 +309,7 @@ ob_start();
 <div class="alert alert-success"><i class="fas fa-check-circle"></i> <?= sanitize($success) ?></div>
 <?php endif; ?>
 
+<div id="questionsListSection">
 <!-- Filters -->
 <div class="card mb-4">
     <div class="card-body">
@@ -425,21 +429,19 @@ ob_start();
             </table>
         </div>
     </div>
-</div>
+</div> <!-- End #questionsListSection -->
 
-<!-- Add/Edit Question Modal -->
-<div class="modal fade" id="questionModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <form method="POST" action="" class="needs-validation" novalidate>
-            <input type="hidden" name="action" id="modalAction" value="add">
-            <input type="hidden" name="question_id" id="modalQuestionId">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="modalTitle">Add New Question</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body p-4">
-                    <div class="row g-3">
+<!-- Add/Edit Question Full-Page Form -->
+<div id="questionsFormSection" class="card border-0 shadow-sm p-4 mt-2" style="display:none; min-height: 80vh; background: #ffffff; border-radius: 16px;">
+    <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
+        <h3 class="text-primary mb-0 fw-bold" id="formTitle">Add New Question</h3>
+        <button type="button" class="btn btn-outline-secondary" onclick="hideForm()"><i class="fas fa-times"></i> Cancel & Return</button>
+    </div>
+    
+    <form method="POST" action="" class="needs-validation" onsubmit="tinymce.triggerSave()" novalidate>
+        <input type="hidden" name="action" id="modalAction" value="add">
+        <input type="hidden" name="question_id" id="modalQuestionId">
+        <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label">Class *</label>
                             <select name="class_id" id="modalClass" class="form-select" required>
@@ -558,28 +560,153 @@ ob_start();
                         </div>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                    <button type="submit" class="btn btn-primary">Save Question</button>
-                </div>
+            </div>
+            
+            <div class="mt-4 pt-3 border-top d-flex justify-content-end gap-2">
+                <button type="button" class="btn btn-secondary px-4 btn-lg" onclick="hideForm()">Cancel & Close</button>
+                <button type="submit" class="btn btn-primary px-5 btn-lg shadow-sm"><i class="fas fa-save"></i> Save Question</button>
             </div>
         </form>
-    </div>
 </div>
 
-<script>
 const classesMap = <?= json_encode(array_column($classes, 'name', 'id')) ?>;
 const subjectsMap = <?= json_encode(array_column($subjects, 'name_en', 'id')) ?>;
 const cdcCurriculum = <?= json_encode(require __DIR__ . '/../../config/cdc_curriculum.php') ?>;
 
-let questionModalObj;
-
 $(document).ready(function() {
-    questionModalObj = new bootstrap.Modal(document.getElementById('questionModal'));
-    
     document.getElementById('modalClass').addEventListener('change', () => updateChaptersDropdown());
     document.getElementById('modalSubject').addEventListener('change', () => updateChaptersDropdown());
+    
+    // Initialize TinyMCE editors
+    tinymce.init({
+        selector: '#modalQuestionText, #modalQuestionTextNp, #modalAnswer, #modalAnswerNp',
+        height: 350,
+        plugins: 'advlist autolink lists link image charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime media table wordcount',
+        toolbar: 'undo redo | blocks fontfamily fontsize | bold italic underline forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | table | fullscreen code',
+        branding: false,
+        promotion: false,
+        setup: function (editor) {
+            editor.on('change keyup', function () {
+                editor.save(); // Automatically sync back to textareas on change
+                if (window.MathJax && window.MathJax.typesetPromise) {
+                    window.MathJax.typesetPromise();
+                }
+            });
+        }
+    });
 });
+
+function showAddForm() {
+    document.getElementById('questionsListSection').style.display = 'none';
+    document.getElementById('questionsFormSection').style.display = 'block';
+    
+    document.getElementById('modalAction').value = 'add';
+    document.getElementById('modalQuestionId').value = '';
+    document.getElementById('formTitle').innerText = 'Add New Question';
+    
+    document.getElementById('modalClass').value = '';
+    document.getElementById('modalSubject').value = '';
+    document.getElementById('modalChapter').value = '';
+    document.getElementById('modalType').value = 'MCQ';
+    document.getElementById('modalMarks').value = '1';
+    
+    // Clear editors
+    if (tinymce.get('modalQuestionText')) tinymce.get('modalQuestionText').setContent('');
+    if (tinymce.get('modalQuestionTextNp')) tinymce.get('modalQuestionTextNp').setContent('');
+    if (tinymce.get('modalAnswer')) tinymce.get('modalAnswer').setContent('');
+    if (tinymce.get('modalAnswerNp')) tinymce.get('modalAnswerNp').setContent('');
+    
+    document.getElementById('modalOptA').value = '';
+    document.getElementById('modalOptANp').value = '';
+    document.getElementById('modalOptB').value = '';
+    document.getElementById('modalOptBNp').value = '';
+    document.getElementById('modalOptC').value = '';
+    document.getElementById('modalOptCNp').value = '';
+    document.getElementById('modalOptD').value = '';
+    document.getElementById('modalOptDNp').value = '';
+    document.getElementById('modalCorrect').value = 'A';
+    
+    updateChaptersDropdown('');
+    toggleMCQFields();
+    
+    // Scroll to top
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function editQuestion(q) {
+    document.getElementById('questionsListSection').style.display = 'none';
+    document.getElementById('questionsFormSection').style.display = 'block';
+    
+    document.getElementById('modalAction').value = 'edit';
+    document.getElementById('modalQuestionId').value = q.id;
+    document.getElementById('formTitle').innerText = 'Edit Question Details';
+    
+    document.getElementById('modalClass').value = q.class_id;
+    document.getElementById('modalSubject').value = q.subject_id;
+    document.getElementById('modalType').value = q.type;
+    document.getElementById('modalMarks').value = q.marks;
+    
+    // Populate editors
+    if (tinymce.get('modalQuestionText')) {
+        tinymce.get('modalQuestionText').setContent(q.question_text || '');
+    } else {
+        document.getElementById('modalQuestionText').value = q.question_text || '';
+    }
+    
+    if (tinymce.get('modalQuestionTextNp')) {
+        tinymce.get('modalQuestionTextNp').setContent(q.question_text_np || '');
+    } else {
+        document.getElementById('modalQuestionTextNp').value = q.question_text_np || '';
+    }
+    
+    if (tinymce.get('modalAnswer')) {
+        tinymce.get('modalAnswer').setContent(q.answer || '');
+    } else {
+        document.getElementById('modalAnswer').value = q.answer || '';
+    }
+    
+    if (tinymce.get('modalAnswerNp')) {
+        tinymce.get('modalAnswerNp').setContent(q.answer_np || '');
+    } else {
+        document.getElementById('modalAnswerNp').value = q.answer_np || '';
+    }
+    
+    if (q.type === 'MCQ') {
+        const opts = JSON.parse(q.options || '{}');
+        document.getElementById('modalOptA').value = opts.A || '';
+        document.getElementById('modalOptB').value = opts.B || '';
+        document.getElementById('modalOptC').value = opts.C || '';
+        document.getElementById('modalOptD').value = opts.D || '';
+        
+        const optsNp = JSON.parse(q.options_np || '{}');
+        document.getElementById('modalOptANp').value = optsNp.A || '';
+        document.getElementById('modalOptBNp').value = optsNp.B || '';
+        document.getElementById('modalOptCNp').value = optsNp.C || '';
+        document.getElementById('modalOptDNp').value = optsNp.D || '';
+        
+        document.getElementById('modalCorrect').value = q.correct_option || 'A';
+    } else {
+        document.getElementById('modalOptA').value = '';
+        document.getElementById('modalOptANp').value = '';
+        document.getElementById('modalOptB').value = '';
+        document.getElementById('modalOptBNp').value = '';
+        document.getElementById('modalOptC').value = '';
+        document.getElementById('modalOptCNp').value = '';
+        document.getElementById('modalOptD').value = '';
+        document.getElementById('modalOptDNp').value = '';
+    }
+    
+    updateChaptersDropdown(q.chapter);
+    toggleMCQFields();
+    
+    // Scroll to top
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function hideForm() {
+    document.getElementById('questionsListSection').style.display = 'block';
+    document.getElementById('questionsFormSection').style.display = 'none';
+}
 
 function updateChaptersDropdown(selectedChapterValue = '') {
     const classId = document.getElementById('modalClass').value;
@@ -592,7 +719,6 @@ function updateChaptersDropdown(selectedChapterValue = '') {
     const customInput = document.getElementById('modalChapterCustom');
     const hiddenInput = document.getElementById('modalChapter');
     
-    // Clear options
     select.innerHTML = '';
     
     let chapters = [];
@@ -601,7 +727,6 @@ function updateChaptersDropdown(selectedChapterValue = '') {
     }
     
     if (chapters.length > 0) {
-        // Add options
         chapters.forEach(ch => {
             const opt = document.createElement('option');
             opt.value = ch;
@@ -609,13 +734,11 @@ function updateChaptersDropdown(selectedChapterValue = '') {
             select.appendChild(opt);
         });
         
-        // Add custom option
         const optCustom = document.createElement('option');
         optCustom.value = '__custom__';
         optCustom.textContent = 'Other / Custom Chapter';
         select.appendChild(optCustom);
         
-        // Set selected value
         if (selectedChapterValue) {
             if (chapters.includes(selectedChapterValue)) {
                 select.value = selectedChapterValue;
@@ -628,12 +751,10 @@ function updateChaptersDropdown(selectedChapterValue = '') {
                 hiddenInput.value = selectedChapterValue;
             }
         } else {
-            // default to first chapter
             hiddenInput.value = select.value;
             customInput.style.display = 'none';
         }
     } else {
-        // No preloaded chapters, force custom text input
         const optCustom = document.createElement('option');
         optCustom.value = '__custom__';
         optCustom.textContent = 'Type Custom Chapter';
@@ -665,78 +786,7 @@ function updateChapterHidden() {
     const hiddenInput = document.getElementById('modalChapter');
     hiddenInput.value = customInput.value;
 }
-function showAddModal() {
-    document.getElementById('modalAction').value = 'add';
-    document.getElementById('modalQuestionId').value = '';
-    document.getElementById('modalTitle').innerText = 'Add New Question';
-    document.getElementById('modalClass').value = '';
-    document.getElementById('modalSubject').value = '';
-    document.getElementById('modalChapter').value = '';
-    document.getElementById('modalType').value = 'MCQ';
-    document.getElementById('modalMarks').value = '1';
-    document.getElementById('modalQuestionText').value = '';
-    document.getElementById('modalQuestionTextNp').value = '';
-    document.getElementById('modalAnswer').value = '';
-    document.getElementById('modalAnswerNp').value = '';
-    
-    document.getElementById('modalOptA').value = '';
-    document.getElementById('modalOptANp').value = '';
-    document.getElementById('modalOptB').value = '';
-    document.getElementById('modalOptBNp').value = '';
-    document.getElementById('modalOptC').value = '';
-    document.getElementById('modalOptCNp').value = '';
-    document.getElementById('modalOptD').value = '';
-    document.getElementById('modalOptDNp').value = '';
-    document.getElementById('modalCorrect').value = 'A';
-    
-    updateChaptersDropdown('');
-    toggleMCQFields();
-    questionModalObj.show();
-}
 
-function editQuestion(q) {
-    document.getElementById('modalAction').value = 'edit';
-    document.getElementById('modalQuestionId').value = q.id;
-    document.getElementById('modalTitle').innerText = 'Edit Question Details';
-    document.getElementById('modalClass').value = q.class_id;
-    document.getElementById('modalSubject').value = q.subject_id;
-    document.getElementById('modalChapter').value = q.chapter;
-    document.getElementById('modalType').value = q.type;
-    document.getElementById('modalMarks').value = q.marks;
-    document.getElementById('modalQuestionText').value = q.question_text;
-    document.getElementById('modalQuestionTextNp').value = q.question_text_np || '';
-    document.getElementById('modalAnswer').value = q.answer || '';
-    document.getElementById('modalAnswerNp').value = q.answer_np || '';
-    
-    if (q.type === 'MCQ') {
-        const opts = JSON.parse(q.options || '{}');
-        document.getElementById('modalOptA').value = opts.A || '';
-        document.getElementById('modalOptB').value = opts.B || '';
-        document.getElementById('modalOptC').value = opts.C || '';
-        document.getElementById('modalOptD').value = opts.D || '';
-        
-        const optsNp = JSON.parse(q.options_np || '{}');
-        document.getElementById('modalOptANp').value = optsNp.A || '';
-        document.getElementById('modalOptBNp').value = optsNp.B || '';
-        document.getElementById('modalOptCNp').value = optsNp.C || '';
-        document.getElementById('modalOptDNp').value = optsNp.D || '';
-        
-        document.getElementById('modalCorrect').value = q.correct_option || 'A';
-    } else {
-        document.getElementById('modalOptA').value = '';
-        document.getElementById('modalOptANp').value = '';
-        document.getElementById('modalOptB').value = '';
-        document.getElementById('modalOptBNp').value = '';
-        document.getElementById('modalOptC').value = '';
-        document.getElementById('modalOptCNp').value = '';
-        document.getElementById('modalOptD').value = '';
-        document.getElementById('modalOptDNp').value = '';
-    }
-    
-    updateChaptersDropdown(q.chapter);
-    toggleMCQFields();
-    questionModalObj.show();
-}
 function toggleMCQFields() {
     const type = document.getElementById('modalType').value;
     const mcqDiv = document.getElementById('mcqDetails');

@@ -178,6 +178,9 @@ ob_start();
 }
 </style>
 
+<!-- TinyMCE CDN for MS Word formatting and Full-screen editor -->
+<script src="https://cdn.jsdelivr.net/npm/tinymce@6/tinymce.min.js" referrerpolicy="origin"></script>
+
 <!-- MathJax for rendering equations -->
 <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 
@@ -373,7 +376,7 @@ ob_start();
 <?php if ($is_admin): ?>
 <div class="modal fade" id="noteModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg">
-        <form method="POST" action="">
+        <form method="POST" action="" onsubmit="tinymce.triggerSave()">
             <input type="hidden" name="action_note" id="modalActionNote" value="add">
             <input type="hidden" name="note_id" id="modalNoteId">
             <div class="modal-content">
@@ -422,6 +425,24 @@ ob_start();
 let noteModalObj;
 $(document).ready(function() {
     noteModalObj = new bootstrap.Modal(document.getElementById('noteModal'));
+    
+    // Initialize TinyMCE on note content
+    tinymce.init({
+        selector: '#modalNoteContent',
+        height: 350,
+        plugins: 'advlist autolink lists link image charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime media table wordcount',
+        toolbar: 'undo redo | blocks fontfamily fontsize | bold italic underline forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | table | fullscreen code',
+        branding: false,
+        promotion: false,
+        setup: function (editor) {
+            editor.on('change keyup', function () {
+                editor.save();
+                if (window.MathJax && window.MathJax.typesetPromise) {
+                    window.MathJax.typesetPromise();
+                }
+            });
+        }
+    });
 });
 
 function showAddNoteModal() {
@@ -429,13 +450,17 @@ function showAddNoteModal() {
     document.getElementById('modalNoteId').value = '';
     document.getElementById('modalNoteTitle').innerText = 'Add Study Note';
     
-    // Auto-prefill based on active sidebar configuration if loaded
     document.getElementById('modalNoteClassLevel').value = '<?= $selected_class ? $selected_class['level'] : '' ?>';
     document.getElementById('modalNoteSubjectName').value = '<?= $selected_subject ? $selected_subject['name_en'] : '' ?>';
     document.getElementById('modalNoteChapter').value = '<?= sanitize($selected_chapter) ?>';
     document.getElementById('modalNoteTopic').value = '';
     document.getElementById('modalNoteTitleInput').value = '';
-    document.getElementById('modalNoteContent').value = '';
+    
+    if (tinymce.get('modalNoteContent')) {
+        tinymce.get('modalNoteContent').setContent('');
+    } else {
+        document.getElementById('modalNoteContent').value = '';
+    }
     
     noteModalObj.show();
 }
@@ -450,7 +475,12 @@ function editNote(note) {
     document.getElementById('modalNoteChapter').value = note.chapter;
     document.getElementById('modalNoteTopic').value = note.topic;
     document.getElementById('modalNoteTitleInput').value = note.title;
-    document.getElementById('modalNoteContent').value = note.content;
+    
+    if (tinymce.get('modalNoteContent')) {
+        tinymce.get('modalNoteContent').setContent(note.content || '');
+    } else {
+        document.getElementById('modalNoteContent').value = note.content || '';
+    }
     
     noteModalObj.show();
 }
