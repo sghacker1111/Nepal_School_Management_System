@@ -429,6 +429,7 @@ ob_start();
             </table>
         </div>
     </div>
+</div> <!-- End card -->
 </div> <!-- End #questionsListSection -->
 
 <!-- Add/Edit Question Full-Page Form -->
@@ -559,8 +560,6 @@ ob_start();
                             </div>
                         </div>
                     </div>
-                </div>
-            </div>
             
             <div class="mt-4 pt-3 border-top d-flex justify-content-end gap-2">
                 <button type="button" class="btn btn-secondary px-4 btn-lg" onclick="hideForm()">Cancel & Close</button>
