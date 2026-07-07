@@ -261,7 +261,7 @@
                         </li>
                         <li class="nav-item">
                             <a class="nav-link <?= ($activePage ?? '') == 'learning' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/index.php">
-                                <i class="fas fa-laptop-code"></i> Learning Portal
+                                <i class="fas fa-book-open"></i> Learning Hub
                             </a>
                         </li>
                         <?php endif; ?>
@@ -329,7 +329,7 @@
                         </li>
                         <li class="nav-item">
                             <a class="nav-link <?= ($activePage ?? '') == 'learning' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/index.php">
-                                <i class="fas fa-laptop-code"></i> Learning
+                                <i class="fas fa-book-open"></i> Learning Hub
                             </a>
                         </li>
                         <?php endif; ?>

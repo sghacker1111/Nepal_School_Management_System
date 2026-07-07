@@ -1,6 +1,6 @@
 <?php
 /**
- * Multi-Subject Learning Portal - Lessons & Quizzes
+ * Learning Hub - Notes & Practice Q&As
  */
 require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../includes/database.php';
@@ -10,17 +10,72 @@ require_once __DIR__ . '/../../includes/functions.php';
 Auth::requireLogin();
 
 $db = getDB();
-
 $school_id = Auth::getSchoolId();
+$is_admin = (Auth::getRole() === 'super_admin');
+$success = '';
+$error = '';
 
-// Fetch active class list
+// 1. Fetch school details and permission status
+$permission_status = 'none';
+if ($school_id) {
+    $stmt = $db->prepare("SELECT learning_hub_permission_status FROM schools WHERE id = ?");
+    $stmt->execute([$school_id]);
+    $permission_status = $stmt->fetchColumn() ?: 'none';
+}
+
+// Handle request access action for school users
+if (!$is_admin && isset($_GET['action']) && $_GET['action'] === 'request_hub_permission') {
+    $stmt = $db->prepare("UPDATE schools SET learning_hub_permission_status = 'requested' WHERE id = ?");
+    $stmt->execute([$school_id]);
+    Auth::logActivity(Auth::getUserId(), 'Request Learning Hub Access', 'schools', $school_id);
+    redirect(APP_URL . '/modules/learning/index.php', 'Your request for access has been submitted.');
+}
+
+// 2. Handle Admin Note CRUD
+if ($is_admin) {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_note'])) {
+        $action_note = $_POST['action_note'];
+        $class_level = sanitize($_POST['class_level'] ?? '');
+        $subject_name = sanitize($_POST['subject_name'] ?? '');
+        $chapter = sanitize($_POST['chapter'] ?? '');
+        $topic = sanitize($_POST['topic'] ?? '');
+        $title = sanitize($_POST['title'] ?? '');
+        $content = $_POST['content'] ?? '';
+        
+        if ($action_note === 'add') {
+            $stmt = $db->prepare("
+                INSERT INTO learning_notes (class_level, subject_name, chapter, topic, title, content)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ");
+            $stmt->execute([$class_level, $subject_name, $chapter, $topic, $title, $content]);
+            $success = "Learning note added successfully!";
+        } elseif ($action_note === 'edit') {
+            $note_id = (int)$_POST['note_id'];
+            $stmt = $db->prepare("
+                UPDATE learning_notes 
+                SET class_level = ?, subject_name = ?, chapter = ?, topic = ?, title = ?, content = ?
+                WHERE id = ?
+            ");
+            $stmt->execute([$class_level, $subject_name, $chapter, $topic, $title, $content, $note_id]);
+            $success = "Learning note updated successfully!";
+        }
+    }
+    
+    if (isset($_GET['delete_note'])) {
+        $note_id = (int)$_GET['delete_note'];
+        $stmt = $db->prepare("DELETE FROM learning_notes WHERE id = ?");
+        $stmt->execute([$note_id]);
+        $success = "Learning note deleted successfully!";
+    }
+}
+
+// 3. Classes and subjects configuration based on active school context
 $classes_stmt = $db->prepare("SELECT * FROM classes WHERE school_id = ? AND is_active = 1 ORDER BY level, name");
 $classes_stmt->execute([$school_id]);
 $classes = $classes_stmt->fetchAll();
 
-$class_id = $_GET['class'] ?? ($classes[0]['id'] ?? '');
+$class_id = $_GET['class_id'] ?? ($classes[0]['id'] ?? '');
 
-// Fetch details for selected class
 $selected_class = null;
 if ($class_id) {
     $stmt = $db->prepare("SELECT * FROM classes WHERE id = ? AND school_id = ? AND is_active = 1");
@@ -28,23 +83,20 @@ if ($class_id) {
     $selected_class = $stmt->fetch();
 }
 
-// Fetch subjects mapped to selected class
-$class_subjects = [];
+$subjects = [];
 if ($class_id) {
     $stmt = $db->prepare("
-        SELECT cs.*, s.name_en as subject_name, s.code as subject_code
-        FROM class_subjects cs
-        JOIN subjects s ON cs.subject_id = s.id
+        SELECT s.* FROM subjects s 
+        JOIN class_subjects cs ON cs.subject_id = s.id 
         WHERE cs.class_id = ? AND cs.school_id = ?
         ORDER BY s.name_en
     ");
     $stmt->execute([$class_id, $school_id]);
-    $class_subjects = $stmt->fetchAll();
+    $subjects = $stmt->fetchAll();
 }
 
-$subject_id = $_GET['subject'] ?? ($class_subjects[0]['subject_id'] ?? '');
+$subject_id = $_GET['subject_id'] ?? ($subjects[0]['id'] ?? '');
 
-// Fetch active subject details
 $selected_subject = null;
 if ($subject_id) {
     $stmt = $db->prepare("SELECT * FROM subjects WHERE id = ? AND school_id = ?");
@@ -52,397 +104,358 @@ if ($subject_id) {
     $selected_subject = $stmt->fetch();
 }
 
-// Load CDC curriculum dynamically from config catalog
+// Load dynamic chapters based on CDC curriculum mapping
 $curriculum = require __DIR__ . '/../../config/cdc_curriculum.php';
-$subject_key = $selected_subject ? $selected_subject['name_en'] : '';
-$class_key = $selected_class ? $selected_class['name'] : '';
+$sub_name = $selected_subject ? $selected_subject['name_en'] : '';
+$class_lvl_name = $selected_class ? $selected_class['name'] : '';
+$chapters = $curriculum[$sub_name][$class_lvl_name] ?? [];
 
-$chapters = [];
-if (isset($curriculum[$subject_key][$class_key])) {
-    $chapters_list = $curriculum[$subject_key][$class_key];
-    foreach ($chapters_list as $index => $chap_title) {
-        $num = $index + 1;
-        $chapters[$num] = [
-            'title' => $chap_title,
-            'desc' => "This unit covers " . sanitize($chap_title) . " according to the official Curriculum Development Center (CDC) Nepal standards for " . sanitize($class_key) . " " . sanitize($subject_key) . ".",
-            'key_points' => [
-                "Understand the core concepts of " . sanitize($chap_title) . ".",
-                "Review practice questions based on CDC specification grids.",
-                "Solve exercises and tasks in the textbook."
-            ],
-            'q_text' => "What is the primary topic of " . sanitize($chap_title) . "?",
-            'opts' => [
-                'A' => "Understanding " . sanitize($chap_title),
-                'B' => "Ignoring it",
-                'C' => "Studying irrelevant topics",
-                'D' => "None of the above"
-            ],
-            'correct' => 'A'
-        ];
-    }
-}
+$selected_chapter = $_GET['chapter'] ?? ($chapters[0] ?? '');
 
-// Fallback dynamic chapters if subject not in dict
-if (empty($chapters)) {
-    $chapters = [
-        1 => [
-            'title' => 'Unit 1: Fundamentals of ' . ($selected_subject ? sanitize($selected_subject['name_en']) : 'Subject'),
-            'desc' => 'This unit introduces the basic foundations, core terms, and curriculum expectations of ' . ($selected_subject ? sanitize($selected_subject['name_en']) : 'Subject') . '.',
-            'key_points' => [
-                'Understand foundational vocabulary.',
-                'Review key achievements and figures.',
-                'Attempt exercises at the end of each session.'
-            ],
-            'q_text' => 'What is the first step in mastering a new academic subject?',
-            'opts' => ['A'=>'Skipping basic theory', 'B'=>'Understanding basic terminologies', 'C'=>'Taking final exams directly', 'D'=>'None of the above'],
-            'correct' => 'B'
-        ],
-        2 => [
-            'title' => 'Unit 2: Applied Concepts',
-            'desc' => 'This unit focuses on applying theories learned in Unit 1 to practical problem solving and real-world scenarios.',
-            'key_points' => [
-                'Learn to relate theories to daily observations.',
-                'Conduct practical exercises.',
-                'Collaborate with classmates on project assignments.'
-            ],
-            'q_text' => 'Which learning technique improves long-term memory retrieval?',
-            'opts' => ['A'=>'Cramming the night before', 'B'=>'Practical application & self-testing', 'C'=>'Avoiding notes revision', 'D'=>'Reading passively'],
-            'correct' => 'B'
-        ]
-    ];
-}
+// 4. Fetch Notes and Q&As matching selection
+$notes = [];
+$questions = [];
 
-// Fetch matching questions from database for active chapter
-$active_chapter_num = isset($_GET['chapter']) ? (int)$_GET['chapter'] : 1;
-$active_chapter = $chapters[$active_chapter_num] ?? ($chapters[1] ?? null);
-$db_questions = [];
-
-// Fetch all questions for the selected Class & Subject from Question Bank
-$all_subject_questions = [];
-if ($class_id && $subject_id) {
+if ($class_id && $subject_id && $selected_chapter && ($is_admin || $permission_status === 'approved')) {
+    // Fetch Notes
+    $class_lvl = $selected_class ? $selected_class['level'] : '';
     $stmt = $db->prepare("
-        SELECT * FROM questions 
-        WHERE school_id = ? AND class_id = ? AND subject_id = ?
-        ORDER BY chapter ASC, id ASC
+        SELECT * FROM learning_notes 
+        WHERE class_level = ? AND subject_name = ? AND chapter = ? 
+        ORDER BY id DESC
     ");
-    $stmt->execute([$school_id, $class_id, $subject_id]);
-    $all_subject_questions = $stmt->fetchAll();
-}
+    $stmt->execute([$class_lvl, $sub_name, $selected_chapter]);
+    $notes = $stmt->fetchAll();
 
-if ($class_id && $subject_id && $active_chapter) {
-    // Attempt to parse chapter shortname (e.g. Algebra or Number System) from title
-    $chap_title = $active_chapter['title'];
-    $short_name = trim(explode('(', $chap_title)[0]);
-    $short_name = trim(explode(':', $short_name)[0]);
-    
+    // Fetch Q&As from Question Bank (both Universal and school-specific)
     $stmt = $db->prepare("
-        SELECT * FROM questions 
-        WHERE school_id = ? AND class_id = ? AND subject_id = ? AND (chapter LIKE ? OR chapter LIKE ?)
+        SELECT q.* FROM questions q
+        LEFT JOIN classes c ON q.class_id = c.id
+        LEFT JOIN subjects s ON q.subject_id = s.id
+        WHERE q.chapter = ? AND (
+            (q.school_id = ? AND q.class_id = ? AND q.subject_id = ?)
+            OR
+            (q.school_id = 0 AND c.level = ? AND (s.code = ? OR s.name_en = ?))
+        )
+        ORDER BY q.id DESC
     ");
-    $stmt->execute([$school_id, $class_id, $subject_id, "%" . $short_name . "%", "%" . $active_chapter_num . "%"]);
-    $db_questions = $stmt->fetchAll();
+    $stmt->execute([
+        $selected_chapter, 
+        $school_id, 
+        $class_id, 
+        $subject_id, 
+        $class_lvl, 
+        $selected_subject ? $selected_subject['code'] : '', 
+        $sub_name
+    ]);
+    $questions = $stmt->fetchAll();
 }
 
-$pageTitle = 'Learning Portal';
+$pageTitle = 'Learning Hub';
 $activePage = 'learning';
 
 ob_start();
 ?>
+<style>
+.learning-card {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 16px;
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    transition: transform 0.2s ease;
+}
+.chapter-badge {
+    background: linear-gradient(135deg, #3498db, #2980b9);
+    color: white;
+}
+.note-item {
+    border-left: 4px solid #2ecc71;
+    background-color: #fdfdfd;
+}
+.qa-item {
+    border-left: 4px solid #e67e22;
+    background-color: #fffaf0;
+}
+</style>
+
+<!-- MathJax for rendering equations -->
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2><i class="fas fa-laptop-code text-primary"></i> Learning Portal</h2>
-    <?php if (Auth::hasRole(['super_admin', 'school_admin', 'teacher', 'exam_officer'])): ?>
-    <div class="d-flex gap-2">
-        <a href="<?= APP_URL ?>/modules/learning/questions.php" class="btn btn-outline-primary">
-            <i class="fas fa-database"></i> Question Bank
-        </a>
-        <a href="<?= APP_URL ?>/modules/learning/question_grid.php" class="btn btn-outline-success">
-            <i class="fas fa-file-alt"></i> Paper Generator
+    <h2><i class="fas fa-book-open text-primary"></i> Learning Hub</h2>
+    <div>
+        <?php if ($is_admin): ?>
+        <button class="btn btn-primary" onclick="showAddNoteModal()">
+            <i class="fas fa-plus"></i> Add Study Note
+        </button>
+        <?php endif; ?>
+        <a href="<?= APP_URL ?>/index.php" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Dashboard
         </a>
     </div>
-    <?php endif; ?>
 </div>
 
-<!-- Filters Panel -->
-<div class="card mb-4 border-0 shadow-sm">
-    <div class="card-body bg-light rounded">
-        <form method="GET" action="" class="row g-3">
-            <div class="col-md-5">
-                <label class="form-label font-weight-bold text-secondary">Step 1: Select Class Level</label>
-                <select name="class" class="form-select" onchange="this.form.submit()">
-                    <option value="">Select Class</option>
+<?php if ($success): ?>
+<div class="alert alert-success"><i class="fas fa-check-circle"></i> <?= sanitize($success) ?></div>
+<?php endif; ?>
+
+<!-- Filtering Panel -->
+<div class="card learning-card mb-4">
+    <div class="card-body p-4">
+        <form method="GET" id="hubFilterForm" action="" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label fw-bold">Class</label>
+                <select name="class_id" class="form-select" onchange="document.getElementById('hubFilterForm').submit();" required>
+                    <option value="">Choose Class</option>
                     <?php foreach ($classes as $c): ?>
                     <option value="<?= $c['id'] ?>" <?= $class_id == $c['id'] ? 'selected' : '' ?>><?= sanitize($c['name']) ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
             
-            <div class="col-md-5">
-                <label class="form-label font-weight-bold text-secondary">Step 2: Select Course Subject</label>
-                <select name="subject" class="form-select" onchange="this.form.submit()">
-                    <?php if (empty($class_subjects)): ?>
-                        <option value="">No Subjects Mapped to Class</option>
-                    <?php else: ?>
-                        <?php foreach ($class_subjects as $cs): ?>
-                        <option value="<?= $cs['subject_id'] ?>" <?= $subject_id == $cs['subject_id'] ? 'selected' : '' ?>><?= sanitize($cs['subject_name']) ?></option>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
+            <div class="col-md-3">
+                <label class="form-label fw-bold">Subject</label>
+                <select name="subject_id" class="form-select" onchange="document.getElementById('hubFilterForm').submit();" required>
+                    <option value="">Choose Subject</option>
+                    <?php foreach ($subjects as $s): ?>
+                    <option value="<?= $s['id'] ?>" <?= $subject_id == $s['id'] ? 'selected' : '' ?>><?= sanitize($s['name_en']) ?></option>
+                    <?php endforeach; ?>
                 </select>
             </div>
-            
-            <div class="col-md-2 d-flex align-items-end">
-                <button type="submit" class="btn btn-primary w-100">
-                    <i class="fas fa-book-reader"></i> Browse Notes
-                </button>
+
+            <div class="col-md-6">
+                <label class="form-label fw-bold">Chapter / Unit</label>
+                <select name="chapter" class="form-select" onchange="document.getElementById('hubFilterForm').submit();">
+                    <option value="">Choose Chapter</option>
+                    <?php foreach ($chapters as $ch): ?>
+                    <option value="<?= $ch ?>" <?= $selected_chapter === $ch ? 'selected' : '' ?>><?= sanitize($ch) ?></option>
+                    <?php endforeach; ?>
+                </select>
             </div>
         </form>
     </div>
 </div>
 
-<?php if ($selected_class && $selected_subject): ?>
-<div class="row">
-    <!-- Chapters Sidebar List -->
-    <div class="col-md-4 mb-4">
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-primary bg-opacity-10 text-primary py-3">
-                <h5 class="mb-0 font-weight-bold"><i class="fas fa-list-ol"></i> Curriculum Chapters</h5>
-            </div>
-            <div class="list-group list-group-flush">
-                <?php foreach ($chapters as $num => $chap): ?>
-                <a href="<?= APP_URL ?>/modules/learning/index.php?class=<?= $class_id ?>&subject=<?= $subject_id ?>&chapter=<?= $num ?>" 
-                   class="list-group-item list-group-item-action <?= $active_chapter_num == $num ? 'active' : '' ?>">
-                    <?= sanitize($chap['title']) ?>
+<!-- Main Learning Content Area -->
+<?php if (!$is_admin && $permission_status !== 'approved'): ?>
+    <!-- Gated Access Warning Banner -->
+    <div class="card learning-card border-0 py-5 text-center shadow-lg">
+        <div class="card-body">
+            <i class="fas fa-lock fa-4x text-warning mb-3"></i>
+            <h4 class="fw-bold">Access Restricted to Learning Hub</h4>
+            <p class="text-muted mx-auto" style="max-width: 600px;">
+                School teachers and students are not directly allowed to read study notes and question answers. 
+                Please request permission from the system administrator to unlock the materials for your school.
+            </p>
+            
+            <?php if ($permission_status === 'none'): ?>
+                <a href="?action=request_hub_permission" class="btn btn-warning btn-lg fw-bold shadow-sm px-5 mt-3">
+                    <i class="fas fa-paper-plane"></i> Request Access to Notes & Q&As
                 </a>
-                <?php endforeach; ?>
-            </div>
+            <?php elseif ($permission_status === 'requested'): ?>
+                <div class="badge bg-info p-3 fs-6 rounded shadow-sm mt-3 animate-pulse">
+                    <i class="fas fa-clock"></i> Access Request is Pending Administrator Approval
+                </div>
+            <?php endif; ?>
         </div>
     </div>
-
-    <!-- Chapter Content & Quizzes -->
-    <div class="col-md-8 mb-4">
-        <?php if ($active_chapter): ?>
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-primary text-white py-3">
-                <h5 class="mb-0"><?= sanitize($active_chapter['title']) ?></h5>
-            </div>
-            <div class="card-body p-4">
-                <!-- Course Notes Section -->
-                <h5 class="text-primary border-bottom pb-2 font-weight-bold"><i class="fas fa-file-alt"></i> Curriculum Course Notes</h5>
-                <p class="mt-3"><?= sanitize($active_chapter['desc']) ?></p>
-                
-                <div class="bg-light p-3 rounded mb-4 mt-3 border-start border-primary border-3">
-                    <h6 class="fw-bold"><i class="fas fa-lightbulb text-warning"></i> Key Learning Pillars:</h6>
-                    <ul class="mb-0 mt-2">
-                        <?php foreach ($active_chapter['key_points'] as $kp): ?>
-                        <li><?= sanitize($kp) ?></li>
-                        <?php endforeach; ?>
-                    </ul>
-                </div>
-                
-                <!-- Practice Quiz Section -->
-                <h5 class="text-success border-bottom pb-2 mb-3 mt-5 font-weight-bold"><i class="fas fa-question-circle"></i> Quick Practice Quiz</h5>
-                <div class="quiz-container p-3 border rounded" id="quiz-chapter">
-                    <p class="fw-bold"><?= sanitize($active_chapter['q_text']) ?></p>
-                    <div class="options-container mt-2">
-                        <?php foreach ($active_chapter['opts'] as $key => $val): ?>
-                        <div class="form-check mb-2">
-                            <input class="form-check-input" type="radio" name="q_ans" id="opt_<?= $key ?>" value="<?= $key === $active_chapter['correct'] ? 'correct' : 'incorrect' ?>">
-                            <label class="form-check-label" for="opt_<?= $key ?>">
-                                <strong><?= $key ?>)</strong> <?= sanitize($val) ?>
-                            </label>
-                        </div>
-                        <?php endforeach; ?>
+<?php else: ?>
+    <!-- Access Approved or Admin -->
+    <?php if ($class_id && $subject_id && $selected_chapter): ?>
+        <div class="row g-4">
+            <!-- 1. Notes Section -->
+            <div class="col-lg-6">
+                <div class="card learning-card h-100">
+                    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0 text-success fw-bold"><i class="fas fa-sticky-note"></i> Study Notes</h5>
+                        <span class="badge bg-success"><?= count($notes) ?> Notes Available</span>
                     </div>
-                    <button onclick="checkQuizAnswer('quiz-chapter')" class="btn btn-success mt-3">
-                        Submit Answer
-                    </button>
-                    <div class="result-message alert mt-3" style="display:none;"></div>
-                </div>
-
-                <!-- Database Questions (If any added to Question Bank) -->
-                <?php if (count($db_questions) > 0): ?>
-                    <h5 class="text-info border-bottom pb-2 mb-3 mt-5 font-weight-bold"><i class="fas fa-cubes"></i> Additional Practice Questions</h5>
-                    <div class="row g-3">
-                        <?php 
-                        $db_q_count = 0;
-                        foreach ($db_questions as $dq): 
-                            $db_q_count++;
-                        ?>
-                        <div class="col-12">
-                            <div class="border rounded p-3 bg-white hover-shadow-sm">
-                                <div class="d-flex justify-content-between mb-2">
-                                    <span class="badge bg-info text-dark"><?= $dq['type'] ?></span>
-                                    <span class="text-muted small">Marks: <?= $dq['marks'] ?></span>
-                                </div>
-                                <div class="mb-2">
-                                    <p class="fw-bold mb-1">Q<?= $db_q_count ?>: <?= sanitize($dq['question_text']) ?></p>
-                                    <?php if (!empty($dq['question_text_np'])): ?>
-                                    <p class="text-muted mb-0 font-italic" style="font-family: inherit;">नेपाली: <?= sanitize($dq['question_text_np']) ?></p>
-                                    <?php endif; ?>
-                                </div>
-                                
-                                <?php if ($dq['type'] === 'MCQ' && $dq['options']): ?>
-                                    <?php 
-                                    $opts_en = json_decode($dq['options'], true); 
-                                    $opts_np = !empty($dq['options_np']) ? json_decode($dq['options_np'], true) : [];
-                                    ?>
-                                    <div class="quiz-container p-2 bg-light rounded" id="quiz-db-<?= $dq['id'] ?>">
-                                        <div class="row g-2 ps-2 mt-1">
-                                            <?php foreach ($opts_en as $k => $v): 
-                                                $val_np = $opts_np[$k] ?? '';
-                                            ?>
-                                            <div class="col-md-6 mb-2">
-                                                <div class="form-check">
-                                                    <input class="form-check-input" type="radio" name="dq_ans_<?= $dq['id'] ?>" id="opt_dq_<?= $dq['id'] ?>_<?= $k ?>" value="<?= $k === $dq['correct_option'] ? 'correct' : 'incorrect' ?>">
-                                                    <label class="form-check-label" for="opt_dq_<?= $dq['id'] ?>_<?= $k ?>">
-                                                        <strong><?= $k ?>)</strong> <?= sanitize($v) ?>
-                                                        <?php if (!empty($val_np)): ?>
-                                                        <br><span class="text-muted small">नेपाली: <?= sanitize($val_np) ?></span>
-                                                        <?php endif; ?>
-                                                    </label>
-                                                </div>
-                                            </div>
-                                            <?php endforeach; ?>
+                    <div class="card-body p-4" style="max-height: 60vh; overflow-y: auto;">
+                        <?php if (count($notes) > 0): ?>
+                            <?php foreach ($notes as $note): ?>
+                            <div class="card note-item mb-3 shadow-sm border-0">
+                                <div class="card-body p-3">
+                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                        <h6 class="fw-bold text-success mb-1"><?= sanitize($note['title']) ?></h6>
+                                        <?php if ($is_admin): ?>
+                                        <div>
+                                            <button class="btn btn-xs btn-outline-warning py-0 px-1" onclick="editNote(<?= htmlspecialchars(json_encode($note)) ?>)" title="Edit"><i class="fas fa-edit fa-xs"></i></button>
+                                            <a href="?class_id=<?= $class_id ?>&subject_id=<?= $subject_id ?>&chapter=<?= urlencode($selected_chapter) ?>&delete_note=<?= $note['id'] ?>" class="btn btn-xs btn-outline-danger py-0 px-1" title="Delete" onclick="return confirm('Are you sure you want to delete this study note?')"><i class="fas fa-trash fa-xs"></i></a>
                                         </div>
-                                        <button onclick="checkQuizAnswer('quiz-db-<?= $dq['id'] ?>')" class="btn btn-sm btn-outline-info mt-2">
-                                            Verify Option
-                                        </button>
-                                        <div class="result-message alert mt-2" style="display:none; padding: 0.5rem 1rem;"></div>
+                                        <?php endif; ?>
                                     </div>
-                                <?php elseif ($dq['answer'] || $dq['answer_np']): ?>
-                                    <div class="mt-2">
-                                        <button class="btn btn-sm btn-outline-secondary" onclick="toggleAnswerVisibility(<?= $dq['id'] ?>)">
-                                            Show/Hide Model Answer
-                                        </button>
-                                        <div id="ans-box-<?= $dq['id'] ?>" class="p-3 bg-light rounded mt-2 border-start border-secondary border-3" style="display: none;">
-                                            <?php if ($dq['answer']): ?>
-                                            <p class="mb-1 text-dark"><strong>Answer (EN):</strong> <?= nl2br(sanitize($dq['answer'])) ?></p>
-                                            <?php endif; ?>
-                                            <?php if ($dq['answer_np']): ?>
-                                            <p class="mb-0 text-secondary border-top pt-2 mt-2"><strong>उत्तर (नेपाली):</strong> <?= nl2br(sanitize($dq['answer_np'])) ?></p>
-                                            <?php endif; ?>
-                                        </div>
-                                    </div>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                        <?php endforeach; ?>
-                    </div>
-                <?php endif; ?>
-
-            </div>
-        </div>
-        <?php endif; ?>
-
-        <!-- All Class/Subject Questions Panel -->
-        <div class="card border-0 shadow-sm mt-4">
-            <div class="card-header bg-dark text-white py-3">
-                <h5 class="mb-0"><i class="fas fa-database text-warning"></i> Question Bank for this Subject</h5>
-            </div>
-            <div class="card-body p-4">
-                <?php if (count($all_subject_questions) > 0): ?>
-                    <?php 
-                    // Group by chapter
-                    $grouped_qs = [];
-                    foreach ($all_subject_questions as $q) {
-                        $grouped_qs[$q['chapter']][] = $q;
-                    }
-                    ?>
-                    <?php foreach ($grouped_qs as $chap_name => $qs): ?>
-                    <div class="mb-4">
-                        <h6 class="text-secondary bg-light p-2 rounded mb-3 border-start border-secondary border-3 fw-bold">
-                            <i class="fas fa-folder-open me-2"></i> <?= sanitize($chap_name) ?>
-                        </h6>
-                        <div class="row g-3">
-                            <?php 
-                            $count = 0;
-                            foreach ($qs as $q): 
-                                $count++;
-                            ?>
-                            <div class="col-12">
-                                <div class="border rounded p-3 bg-white hover-shadow-sm">
-                                    <div class="d-flex justify-content-between mb-2">
-                                        <span class="badge bg-secondary"><?= sanitize($q['type']) ?></span>
-                                        <span class="text-muted small">Marks: <?= $q['marks'] ?></span>
-                                    </div>
-                                    <p class="fw-bold mb-2"><?= $count ?>. <?= sanitize($q['question_text']) ?></p>
-                                    <?php if ($q['type'] === 'MCQ' && $q['options']): ?>
-                                        <?php $opts = json_decode($q['options'], true); ?>
-                                        <div class="row g-2 ps-2" style="font-size: 0.9rem;">
-                                            <?php foreach ($opts as $k => $v): ?>
-                                            <div class="col-md-6 text-dark"><strong><?= $k ?>)</strong> <?= sanitize($v) ?></div>
-                                            <?php endforeach; ?>
-                                        </div>
-                                        <div class="mt-2 small text-success fw-bold"><i class="fas fa-check-circle"></i> Correct Option: <?= sanitize($q['correct_option'] ?? 'N/A') ?></div>
-                                    <?php elseif ($q['answer']): ?>
-                                        <div class="mt-2 p-2 bg-light rounded text-dark small" style="font-family: inherit;">
-                                            <strong>Answer Guide / Text:</strong><br>
-                                            <?= nl2br(sanitize($q['answer'])) ?>
-                                        </div>
-                                    <?php endif; ?>
+                                    <div class="text-muted small mb-2"><i class="fas fa-tag"></i> Topic: <?= sanitize($note['topic']) ?></div>
+                                    <div style="font-size:0.9rem; line-height: 1.6;" class="mathjax-render text-dark"><?= nl2br($note['content']) ?></div>
                                 </div>
                             </div>
                             <?php endforeach; ?>
-                        </div>
+                        <?php else: ?>
+                            <div class="text-center py-5 text-muted">
+                                <i class="fas fa-folder-open fa-3x mb-2 text-muted"></i>
+                                <p class="mb-0">No study notes added for this chapter yet.</p>
+                            </div>
+                        <?php endif; ?>
                     </div>
-                    <?php endforeach; ?>
-                <?php else: ?>
-                    <div class="text-center py-4 text-muted">
-                        <i class="fas fa-exclamation-triangle fa-2x mb-2 text-warning"></i>
-                        <p class="mb-0 small">No extra questions found in the School Question Bank for this class & subject.</p>
+                </div>
+            </div>
+            
+            <!-- 2. Q&A Practice Questions -->
+            <div class="col-lg-6">
+                <div class="card learning-card h-100">
+                    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0 text-orange fw-bold" style="color: #e67e22;"><i class="fas fa-question-circle"></i> Questions & Answers</h5>
+                        <span class="badge bg-warning text-dark"><?= count($questions) ?> Q&As</span>
                     </div>
-                <?php endif; ?>
+                    <div class="card-body p-4" style="max-height: 60vh; overflow-y: auto;">
+                        <?php if (count($questions) > 0): ?>
+                            <?php foreach ($questions as $q): ?>
+                            <div class="card qa-item mb-3 shadow-sm border-0">
+                                <div class="card-body p-3">
+                                    <span class="badge bg-secondary mb-2"><?= sanitize($q['type']) ?> (<?= $q['marks'] ?> Marks)</span>
+                                    
+                                    <div class="fw-bold mb-2">Q. <span class="mathjax-render"><?= $q['question_text'] ?></span></div>
+                                    <?php if ($q['question_text_np']): ?>
+                                    <div class="text-muted mb-2 font-nepali">Q. <span class="mathjax-render"><?= $q['question_text_np'] ?></span></div>
+                                    <?php endif; ?>
+
+                                    <!-- MCQ Options -->
+                                    <?php if ($q['type'] === 'MCQ' && $q['options']): 
+                                        $opts = json_decode($q['options'], true);
+                                    ?>
+                                        <div class="row g-2 mb-3 bg-white p-2 rounded border border-light">
+                                            <div class="col-6">A: <span class="mathjax-render"><?= sanitize($opts['A'] ?? '') ?></span></div>
+                                            <div class="col-6">B: <span class="mathjax-render"><?= sanitize($opts['B'] ?? '') ?></span></div>
+                                            <div class="col-6">C: <span class="mathjax-render"><?= sanitize($opts['C'] ?? '') ?></span></div>
+                                            <div class="col-6">D: <span class="mathjax-render"><?= sanitize($opts['D'] ?? '') ?></span></div>
+                                        </div>
+                                    <?php endif; ?>
+
+                                    <div class="bg-white p-2 rounded border border-light">
+                                        <strong class="text-success"><i class="fas fa-check-circle"></i> Expected Answer / Key:</strong>
+                                        <div class="mt-1 mathjax-render">
+                                            <?php 
+                                            if ($q['type'] === 'MCQ') {
+                                                echo 'Correct Option: <strong>' . sanitize($q['correct_option']) . '</strong>';
+                                            } else {
+                                                echo !empty($q['answer']) ? nl2br($q['answer']) : 'No answer guide supplied.';
+                                                if ($q['answer_np']) {
+                                                    echo '<hr class="my-1"><span class="text-muted font-nepali">' . nl2br($q['answer_np']) . '</span>';
+                                                }
+                                            }
+                                            ?>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <div class="text-center py-5 text-muted">
+                                <i class="fas fa-lightbulb fa-3x mb-2 text-muted"></i>
+                                <p class="mb-0">No Q&A items mapped to this chapter in the bank.</p>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
-</div>
-<?php else: ?>
-<div class="card text-center py-5">
-    <div class="card-body">
-        <i class="fas fa-book-open fa-3x text-muted mb-3"></i>
-        <h5>Please select a Class Level and Course Subject to browse notes and interactive learning portals.</h5>
-    </div>
-</div>
+    <?php else: ?>
+        <div class="card learning-card text-center py-5">
+            <div class="card-body">
+                <i class="fas fa-hand-pointer fa-4x text-muted mb-3"></i>
+                <h5 class="text-dark">Select Class, Subject & Chapter</h5>
+                <p class="text-muted">Use the configuration panel above to select your topic and load study notes and Q&As.</p>
+            </div>
+        </div>
+    <?php endif; ?>
 <?php endif; ?>
 
+<!-- Admin Note CRUD Modal -->
+<?php if ($is_admin): ?>
+<div class="modal fade" id="noteModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <form method="POST" action="">
+            <input type="hidden" name="action_note" id="modalActionNote" value="add">
+            <input type="hidden" name="note_id" id="modalNoteId">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalNoteTitle">Add Study Note</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Class Level (e.g. 1, 2, 3...) *</label>
+                            <input type="text" name="class_level" id="modalNoteClassLevel" class="form-control" required placeholder="e.g. 9">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Subject Name (e.g. Mathematics) *</label>
+                            <input type="text" name="subject_name" id="modalNoteSubjectName" class="form-control" required placeholder="e.g. Mathematics">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Chapter / Unit *</label>
+                            <input type="text" name="chapter" id="modalNoteChapter" class="form-control" required placeholder="e.g. Unit 1: Algebra">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Topic *</label>
+                            <input type="text" name="topic" id="modalNoteTopic" class="form-control" required placeholder="e.g. Quadratic Equations">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Note Title *</label>
+                            <input type="text" name="title" id="modalNoteTitleInput" class="form-control" required placeholder="e.g. Understanding Coefficients & Graphs">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Content Body (HTML & MathJax LaTeX Supported) *</label>
+                            <textarea name="content" id="modalNoteContent" class="form-control" rows="8" required placeholder="Type notes content here..."></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-primary">Save Note</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
-function checkQuizAnswer(quizId) {
-    const container = document.getElementById(quizId);
-    const selected = container.querySelector('input[type="radio"]:checked');
-    const resultBox = container.querySelector('.result-message');
+let noteModalObj;
+$(document).ready(function() {
+    noteModalObj = new bootstrap.Modal(document.getElementById('noteModal'));
+});
+
+function showAddNoteModal() {
+    document.getElementById('modalActionNote').value = 'add';
+    document.getElementById('modalNoteId').value = '';
+    document.getElementById('modalNoteTitle').innerText = 'Add Study Note';
     
-    resultBox.style.display = 'block';
+    // Auto-prefill based on active sidebar configuration if loaded
+    document.getElementById('modalNoteClassLevel').value = '<?= $selected_class ? $selected_class['level'] : '' ?>';
+    document.getElementById('modalNoteSubjectName').value = '<?= $selected_subject ? $selected_subject['name_en'] : '' ?>';
+    document.getElementById('modalNoteChapter').value = '<?= sanitize($selected_chapter) ?>';
+    document.getElementById('modalNoteTopic').value = '';
+    document.getElementById('modalNoteTitleInput').value = '';
+    document.getElementById('modalNoteContent').value = '';
     
-    if (!selected) {
-        resultBox.className = 'result-message alert alert-warning mt-3';
-        resultBox.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Please choose an answer option first!';
-        return;
-    }
-    
-    if (selected.value === 'correct') {
-        resultBox.className = 'result-message alert alert-success mt-3';
-        resultBox.innerHTML = '<i class="fas fa-check-circle"></i> Excellent! That is the correct answer!';
-        Swal.fire({
-            title: 'Correct Answer!',
-            text: 'Well done! Your selection is 100% correct.',
-            icon: 'success',
-            confirmButtonText: 'Great!'
-        });
-    } else {
-        resultBox.className = 'result-message alert alert-danger mt-3';
-        resultBox.innerHTML = '<i class="fas fa-times-circle"></i> Incorrect answer. Review the learning notes above and try again!';
-    }
+    noteModalObj.show();
 }
 
-function toggleAnswerVisibility(id) {
-    const box = document.getElementById('ans-box-' + id);
-    if (box.style.display === 'none') {
-        box.style.display = 'block';
-    } else {
-        box.style.display = 'none';
-    }
+function editNote(note) {
+    document.getElementById('modalActionNote').value = 'edit';
+    document.getElementById('modalNoteId').value = note.id;
+    document.getElementById('modalNoteTitle').innerText = 'Edit Study Note';
+    
+    document.getElementById('modalNoteClassLevel').value = note.class_level;
+    document.getElementById('modalNoteSubjectName').value = note.subject_name;
+    document.getElementById('modalNoteChapter').value = note.chapter;
+    document.getElementById('modalNoteTopic').value = note.topic;
+    document.getElementById('modalNoteTitleInput').value = note.title;
+    document.getElementById('modalNoteContent').value = note.content;
+    
+    noteModalObj.show();
 }
 </script>
+<?php endif; ?>
 
 <?php
 $content = ob_get_clean();

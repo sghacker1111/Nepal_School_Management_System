@@ -175,7 +175,7 @@ ob_start();
             </div>
             <div class="col-md-2">
                 <a href="<?= APP_URL ?>/modules/learning/index.php" class="btn btn-outline-secondary w-100">
-                    <i class="fas fa-laptop-code"></i><br>Math Learning
+                    <i class="fas fa-book-open"></i><br>Learning Hub
                 </a>
             </div>
             <?php else: ?>

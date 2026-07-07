@@ -28,7 +28,8 @@ CREATE TABLE `schools` (
   `routine_periods_per_day` INTEGER DEFAULT 8,
   `routine_include_sunday` INTEGER DEFAULT 0,
   `subscription_type` varchar(50) DEFAULT 'full',
-  `question_permission_status` varchar(20) DEFAULT 'none'
+  `question_permission_status` varchar(20) DEFAULT 'none',
+  `learning_hub_permission_status` varchar(20) DEFAULT 'none'
 ) ;
 
 INSERT INTO `schools` (`name_en`, `name_np`, `emis_code`) VALUES 
@@ -293,6 +294,17 @@ CREATE TABLE IF NOT EXISTS `class_routines_history` (
   `school_id` INTEGER DEFAULT 1,
   `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
   `changed_by_user_id` INTEGER DEFAULT NULL
+);
+
+CREATE TABLE IF NOT EXISTS `learning_notes` (
+  `id` INTEGER PRIMARY KEY AUTOINCREMENT,
+  `class_level` VARCHAR(50) NOT NULL,
+  `subject_name` VARCHAR(100) NOT NULL,
+  `chapter` VARCHAR(255) NOT NULL,
+  `topic` VARCHAR(255) NOT NULL,
+  `title` VARCHAR(255) NOT NULL,
+  `content` TEXT NOT NULL,
+  `created_at` timestamp DEFAULT CURRENT_TIMESTAMP
 );
 
 

@@ -29,6 +29,7 @@ CREATE TABLE `schools` (
   `routine_include_sunday` tinyint(1) DEFAULT 0,
   `subscription_type` varchar(50) DEFAULT 'full',
   `question_permission_status` varchar(20) DEFAULT 'none',
+  `learning_hub_permission_status` varchar(20) DEFAULT 'none',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -308,6 +309,18 @@ CREATE TABLE IF NOT EXISTS `class_routines_history` (
   `school_id` int(11) DEFAULT 1,
   `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
   `changed_by_user_id` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `learning_notes` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `class_level` varchar(50) NOT NULL,
+  `subject_name` varchar(100) NOT NULL,
+  `chapter` varchar(255) NOT NULL,
+  `topic` varchar(255) NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `content` text NOT NULL,
+  `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

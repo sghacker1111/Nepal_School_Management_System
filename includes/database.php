@@ -88,6 +88,7 @@ class Database {
             ['exam_student_attendance', null],
             ['class_routines', null],
             ['class_routines_history', null],
+            ['learning_notes', null],
             ['exams', 'result_system'],
             ['exams', 'has_internal'],
             ['schools', 'principal_name'],
@@ -95,6 +96,7 @@ class Database {
             ['schools', 'routine_periods_per_day'],
             ['schools', 'subscription_type'],
             ['schools', 'question_permission_status'],
+            ['schools', 'learning_hub_permission_status'],
             ['users', 'signature'],
             ['classes', 'is_active'],
             ['classes', 'class_teacher_name'],
@@ -235,6 +237,19 @@ class Database {
         )";
         $this->conn->exec($sql);
 
+        // 7. learning_notes
+        $sql = "CREATE TABLE IF NOT EXISTS learning_notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            class_level VARCHAR(50) NOT NULL,
+            subject_name VARCHAR(100) NOT NULL,
+            chapter VARCHAR(255) NOT NULL,
+            topic VARCHAR(255) NOT NULL,
+            title VARCHAR(255) NOT NULL,
+            content TEXT NOT NULL,
+            created_at timestamp DEFAULT CURRENT_TIMESTAMP
+        )";
+        $this->conn->exec($sql);
+
         // B. Alter tables - Add columns dynamically
         
         $alters = [
@@ -253,7 +268,8 @@ class Database {
                 'routine_periods_per_day' => 'INTEGER DEFAULT 8',
                 'routine_include_sunday' => 'INTEGER DEFAULT 0',
                 'subscription_type' => "VARCHAR(50) DEFAULT 'full'",
-                'question_permission_status' => "VARCHAR(20) DEFAULT 'none'"
+                'question_permission_status' => "VARCHAR(20) DEFAULT 'none'",
+                'learning_hub_permission_status' => "VARCHAR(20) DEFAULT 'none'"
             ],
             'users' => [
                 'signature' => 'VARCHAR(255) DEFAULT NULL'

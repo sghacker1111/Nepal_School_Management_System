@@ -31,6 +31,24 @@ if (isset($_GET['perm_action']) && isset($_GET['school_id'])) {
     }
 }
 
+// Handle Learning Hub Permission Action
+if (isset($_GET['hub_perm_action']) && isset($_GET['school_id'])) {
+    $hub_perm_action = sanitize($_GET['hub_perm_action']);
+    $sch_id = (int)$_GET['school_id'];
+    
+    if ($hub_perm_action === 'approve') {
+        $stmt = $db->prepare("UPDATE schools SET learning_hub_permission_status = 'approved' WHERE id = ?");
+        $stmt->execute([$sch_id]);
+        Auth::logActivity(Auth::getUserId(), 'Approve Learning Hub Access', 'schools', $sch_id);
+        redirect(APP_URL . '/modules/super_admin/schools.php', 'Learning Hub access granted.');
+    } elseif ($hub_perm_action === 'revoke') {
+        $stmt = $db->prepare("UPDATE schools SET learning_hub_permission_status = 'none' WHERE id = ?");
+        $stmt->execute([$sch_id]);
+        Auth::logActivity(Auth::getUserId(), 'Revoke Learning Hub Access', 'schools', $sch_id);
+        redirect(APP_URL . '/modules/super_admin/schools.php', 'Learning Hub access revoked.');
+    }
+}
+
 // Handle Add/Edit School Actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $action = $_POST['action'];
@@ -217,6 +235,7 @@ ob_start();
                         <th>Address</th>
                         <th>Package</th>
                         <th>Question Perm</th>
+                        <th>Learning Hub Perm</th>
                         <th>Current Year</th>
                         <th class="text-end">Actions</th>
                     </tr>
@@ -260,6 +279,21 @@ ob_start();
                                 } else {
                                     echo '<span class="badge bg-secondary">None</span>';
                                     echo ' <a href="?perm_action=approve&school_id=' . $school['id'] . '" class="btn btn-xs btn-outline-success py-0 px-1" style="font-size:0.75rem;" title="Grant Permission"><i class="fas fa-plus"></i> Grant</a>';
+                                }
+                                ?>
+                            </td>
+                            <td>
+                                <?php
+                                $hub_perm = $school['learning_hub_permission_status'] ?? 'none';
+                                if ($hub_perm === 'approved') {
+                                    echo '<span class="badge bg-success">Approved</span>';
+                                    echo ' <a href="?hub_perm_action=revoke&school_id=' . $school['id'] . '" class="btn btn-xs btn-outline-danger" title="Revoke Access" onclick="return confirm(\'Are you sure you want to revoke Learning Hub access for this school?\')"><i class="fas fa-ban"></i></a>';
+                                } elseif ($hub_perm === 'requested') {
+                                    echo '<span class="badge bg-warning text-dark animate-pulse">Requested</span>';
+                                    echo ' <a href="?hub_perm_action=approve&school_id=' . $school['id'] . '" class="btn btn-xs btn-success text-white py-0 px-1" style="font-size:0.75rem;" title="Approve Access"><i class="fas fa-check"></i> Approve</a>';
+                                } else {
+                                    echo '<span class="badge bg-secondary">None</span>';
+                                    echo ' <a href="?hub_perm_action=approve&school_id=' . $school['id'] . '" class="btn btn-xs btn-outline-success py-0 px-1" style="font-size:0.75rem;" title="Grant Access"><i class="fas fa-plus"></i> Grant</a>';
                                 }
                                 ?>
                             </td>
