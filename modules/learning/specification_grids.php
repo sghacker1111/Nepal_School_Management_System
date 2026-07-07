@@ -17,13 +17,32 @@ $error = '';
 $success = '';
 
 // Handle Delete Action
-if (isset($_GET['delete']) && $school_id) {
+if (isset($_GET['delete'])) {
     $delete_id = (int)$_GET['delete'];
     try {
-        $stmt = $db->prepare("DELETE FROM specification_grids WHERE id = ? AND school_id = ?");
-        $stmt->execute([$delete_id, $school_id]);
+        if ($is_admin) {
+            $stmt = $db->prepare("DELETE FROM specification_grids WHERE id = ?");
+            $stmt->execute([$delete_id]);
+        } else {
+            $stmt = $db->prepare("DELETE FROM specification_grids WHERE id = ? AND school_id = ?");
+            $stmt->execute([$delete_id, $school_id]);
+        }
         Auth::logActivity(Auth::getUserId(), 'Delete Specification Grid', 'specification_grids', $delete_id);
         redirect(APP_URL . '/modules/learning/specification_grids.php', 'Specification grid deleted successfully.', 'success');
+    } catch (PDOException $e) {
+        $error = "Database error: " . $e->getMessage();
+    }
+}
+
+// Handle Make Universal Action (Super Admin only)
+if (isset($_GET['make_universal'])) {
+    Auth::requireRole('super_admin');
+    $id = (int)$_GET['make_universal'];
+    try {
+        $stmt = $db->prepare("UPDATE specification_grids SET school_id = 0 WHERE id = ?");
+        $stmt->execute([$id]);
+        Auth::logActivity(Auth::getUserId(), 'Make Grid Universal', 'specification_grids', $id);
+        redirect(APP_URL . '/modules/learning/specification_grids.php', 'Specification grid is now universal for all schools.', 'success');
     } catch (PDOException $e) {
         $error = "Database error: " . $e->getMessage();
     }
@@ -54,7 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $error = "Grid name, Class, and Subject are required.";
     } else {
         try {
-            $grid_school_id = $school_id ?: 0;
+            $grid_school_id = $is_admin ? 0 : $school_id;
             if ($action === 'add') {
                 $stmt = $db->prepare("
                     INSERT INTO specification_grids (school_id, class_id, subject_id, name, config_json)
@@ -66,12 +85,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 redirect(APP_URL . '/modules/learning/specification_grids.php', 'Specification grid created successfully.', 'success');
             } elseif ($action === 'edit') {
                 $grid_id = (int)($_POST['grid_id'] ?? 0);
-                $stmt = $db->prepare("
-                    UPDATE specification_grids 
-                    SET name = ?, class_id = ?, subject_id = ?, config_json = ? 
-                    WHERE id = ? AND school_id = ?
-                ");
-                $stmt->execute([$grid_name, $class_id, $subject_id, $config_json, $grid_id, $grid_school_id]);
+                if ($is_admin) {
+                    $stmt = $db->prepare("
+                        UPDATE specification_grids 
+                        SET name = ?, class_id = ?, subject_id = ?, config_json = ? 
+                        WHERE id = ?
+                    ");
+                    $stmt->execute([$grid_name, $class_id, $subject_id, $config_json, $grid_id]);
+                } else {
+                    $stmt = $db->prepare("
+                        UPDATE specification_grids 
+                        SET name = ?, class_id = ?, subject_id = ?, config_json = ? 
+                        WHERE id = ? AND school_id = ?
+                    ");
+                    $stmt->execute([$grid_name, $class_id, $subject_id, $config_json, $grid_id, $school_id]);
+                }
                 Auth::logActivity(Auth::getUserId(), 'Update Specification Grid', 'specification_grids', $grid_id);
                 redirect(APP_URL . '/modules/learning/specification_grids.php', 'Specification grid updated successfully.', 'success');
             }
@@ -81,16 +109,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     }
 }
 
-// Fetch all saved grids for current school
+// Fetch all saved grids
 $grids = [];
-// Fetch all saved grids for current school
-$grids = [];
-if ($is_admin && !$school_id) {
+if ($is_admin) {
     $stmt = $db->prepare("
-        SELECT sg.*, c.name as class_name, s.name_en as subject_name 
+        SELECT sg.*, c.name as class_name, s.name_en as subject_name, sch.name_en as school_name 
         FROM specification_grids sg
         LEFT JOIN classes c ON sg.class_id = c.id
         LEFT JOIN subjects s ON sg.subject_id = s.id
+        LEFT JOIN schools sch ON sg.school_id = sch.id
         ORDER BY sg.id DESC
     ");
     $stmt->execute();
@@ -101,7 +128,7 @@ if ($is_admin && !$school_id) {
         FROM specification_grids sg
         LEFT JOIN classes c ON sg.class_id = c.id
         LEFT JOIN subjects s ON sg.subject_id = s.id
-        WHERE sg.school_id = ?
+        WHERE sg.school_id = ? OR sg.school_id = 0
         ORDER BY sg.id DESC
     ");
     $stmt->execute([$school_id]);
@@ -165,9 +192,12 @@ ob_start();
                         <tr>
                             <th style="width: 5%;">ID</th>
                             <th style="width: 25%;">Grid Layout Name</th>
-                            <th style="width: 20%;">Class Level</th>
-                            <th style="width: 20%;">Subject</th>
-                            <th style="width: 15%;">Total Weightage</th>
+                            <th style="width: 15%;">Class Level</th>
+                            <th style="width: 15%;">Subject</th>
+                            <?php if ($is_admin): ?>
+                            <th style="width: 15%;">Owner / School</th>
+                            <?php endif; ?>
+                            <th style="width: 10%;">Total Weightage</th>
                             <th class="text-end" style="width: 15%;">Actions</th>
                         </tr>
                     </thead>
@@ -185,6 +215,15 @@ ob_start();
                                 <td><strong><?= sanitize($g['name']) ?></strong></td>
                                 <td><span class="badge bg-secondary"><?= sanitize($g['class_name'] ?: 'Unknown Class') ?></span></td>
                                 <td><span class="badge bg-info text-dark"><?= sanitize($g['subject_name'] ?: 'Unknown Subject') ?></span></td>
+                                <?php if ($is_admin): ?>
+                                <td>
+                                    <?php if ($g['school_id'] == 0): ?>
+                                        <span class="badge bg-success"><i class="fas fa-globe"></i> Universal</span>
+                                    <?php else: ?>
+                                        <span class="badge bg-warning text-dark" title="<?= sanitize($g['school_name'] ?? 'School') ?>"><i class="fas fa-school"></i> <?= sanitize(explode(' ', $g['school_name'] ?? 'School')[0]) ?>...</span>
+                                    <?php endif; ?>
+                                </td>
+                                <?php endif; ?>
                                 <td><span class="badge bg-primary fs-6"><?= $total_marks ?> Marks</span></td>
                                 <td class="text-end">
                                     <a href="<?= APP_URL ?>/modules/learning/paper_generator.php?class_id=<?= $g['class_id'] ?>&subject_id=<?= $g['subject_id'] ?>&generation_mode=auto" class="btn btn-sm btn-outline-success" title="Generate Paper using this Grid">
@@ -197,6 +236,11 @@ ob_start();
                                     <a href="?delete=<?= $g['id'] ?>" class="btn btn-sm btn-outline-danger" title="Delete" onclick="return confirm('Are you sure you want to delete this specification grid layout?');">
                                         <i class="fas fa-trash"></i>
                                     </a>
+                                    <?php if ($is_admin && $g['school_id'] > 0): ?>
+                                    <a href="?make_universal=<?= $g['id'] ?>" class="btn btn-sm btn-outline-info" title="Approve & Make Universal Grid" onclick="return confirm('Are you sure you want to approve and make this grid layout universal for all schools?');">
+                                        <i class="fas fa-globe"></i> Make Universal
+                                    </a>
+                                    <?php endif; ?>
                                     <?php else: ?>
                                     <span class="badge bg-light text-muted border" title="System Blueprint Grid"><i class="fas fa-lock text-muted"></i> System</span>
                                     <?php endif; ?>
@@ -205,7 +249,7 @@ ob_start();
                             <?php endforeach; ?>
                         <?php else: ?>
                             <tr>
-                                <td colspan="6" class="text-center text-muted py-4">No customized specification grids found. Click "Create New Grid Layout" to get started!</td>
+                                <td colspan="<?= $is_admin ? 7 : 6 ?>" class="text-center text-muted py-4">No customized specification grids found. Click "Create New Grid Layout" to get started!</td>
                             </tr>
                         <?php endif; ?>
                     </tbody>
