@@ -16,12 +16,27 @@ $is_admin = (Auth::getRole() === 'super_admin');
 $error = '';
 $success = '';
 
-// Fetch school question permission status
+// Fetch school subscription type and permissions
 $permission_status = 'none';
-if ($school_id) {
-    $stmt = $db->prepare("SELECT question_permission_status FROM schools WHERE id = ?");
-    $stmt->execute([$school_id]);
-    $permission_status = $stmt->fetchColumn() ?: 'none';
+$view_permission_status = 'none';
+
+if ($is_admin) {
+    $permission_status = 'approved';
+    $view_permission_status = 'approved';
+} elseif ($school_id) {
+    $sub_type = Auth::getSubscriptionType();
+    if ($sub_type === 'full') {
+        $permission_status = 'approved';
+        $view_permission_status = 'approved';
+    } else {
+        $stmt = $db->prepare("SELECT question_permission_status, question_view_permission FROM schools WHERE id = ?");
+        $stmt->execute([$school_id]);
+        $school_perms = $stmt->fetch();
+        if ($school_perms) {
+            $permission_status = $school_perms['question_permission_status'] ?: 'none';
+            $view_permission_status = $school_perms['question_view_permission'] ?: 'none';
+        }
+    }
 }
 
 // Handle Request Question Creation Permission (School Users only)
@@ -31,6 +46,16 @@ if (isset($_GET['action']) && $_GET['action'] === 'request_permission' && $schoo
         $stmt->execute([$school_id]);
         Auth::logActivity(Auth::getUserId(), 'Request Question Creation Permission', 'schools', $school_id);
         redirect(APP_URL . '/modules/learning/questions.php', 'Question creation permission requested successfully.', 'success');
+    }
+}
+
+// Handle Request Question View Permission (School Users only)
+if (isset($_GET['action']) && $_GET['action'] === 'request_view_permission' && $school_id && !$is_admin) {
+    if ($view_permission_status === 'none') {
+        $stmt = $db->prepare("UPDATE schools SET question_view_permission = 'requested' WHERE id = ?");
+        $stmt->execute([$school_id]);
+        Auth::logActivity(Auth::getUserId(), 'Request Question View Permission', 'schools', $school_id);
+        redirect(APP_URL . '/modules/learning/questions.php', 'Question view permission requested successfully.', 'success');
     }
 }
 
@@ -46,6 +71,60 @@ if (isset($_GET['make_universal'])) {
     } catch (PDOException $e) {
         $error = "Database error: " . $e->getMessage();
     }
+}
+
+// Handle Quick Add Class
+if (isset($_POST['action_quick_add_class'])) {
+    $class_name = sanitize($_POST['class_name'] ?? '');
+    $class_level = sanitize($_POST['class_level'] ?? 'Secondary');
+    $grading_type = sanitize($_POST['grading_type'] ?? 'gpa');
+    
+    if (empty($class_name)) {
+        echo json_encode(['success' => false, 'message' => 'Class name is required.']);
+        exit;
+    }
+    
+    try {
+        $stmt = $db->prepare("INSERT INTO classes (name, name_np, level, grading_type, school_id) VALUES (?, ?, ?, ?, ?)");
+        $stmt->execute([$class_name, $class_name, $class_level, $grading_type, $school_id]);
+        $new_id = $db->lastInsertId();
+        echo json_encode(['success' => true, 'id' => $new_id, 'name' => $class_name]);
+    } catch (Exception $e) {
+        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+    }
+    exit;
+}
+
+// Handle Quick Add Subject
+if (isset($_POST['action_quick_add_subject'])) {
+    $subject_name = sanitize($_POST['subject_name'] ?? '');
+    $subject_code = sanitize($_POST['subject_code'] ?? '');
+    $credit_hours = (int)($_POST['credit_hours'] ?? 4);
+    
+    if (empty($subject_name)) {
+        echo json_encode(['success' => false, 'message' => 'Subject name is required.']);
+        exit;
+    }
+    if (empty($subject_code)) {
+        $subject_code = strtolower(substr($subject_name, 0, 3)) . rand(10, 99);
+    }
+    
+    try {
+        $stmt = $db->prepare("INSERT INTO subjects (code, name_en, name_np, type, credit_hours, school_id) VALUES (?, ?, ?, 'Theory', ?, ?)");
+        $stmt->execute([$subject_code, $subject_name, $subject_name, $credit_hours, $school_id]);
+        $new_id = $db->lastInsertId();
+        
+        $c_id = (int)($_POST['map_class_id'] ?? 0);
+        if ($c_id > 0) {
+            $stmt_map = $db->prepare("INSERT INTO class_subjects (class_id, subject_id, credit_hours, school_id) VALUES (?, ?, ?, ?)");
+            $stmt_map->execute([$c_id, $new_id, $credit_hours, $school_id]);
+        }
+        
+        echo json_encode(['success' => true, 'id' => $new_id, 'name' => $subject_name]);
+    } catch (Exception $e) {
+        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+    }
+    exit;
 }
 
 // Handle Add/Edit Question
@@ -250,13 +329,23 @@ $stmt->execute($params);
 $questions = $stmt->fetchAll();
 
 // Fetch classes and subjects for selects
-$classes_stmt = $db->prepare("SELECT * FROM classes WHERE school_id = ? AND is_active = 1 ORDER BY level, name");
-$classes_stmt->execute([$school_id]);
-$classes = $classes_stmt->fetchAll();
+if ($is_admin && !$school_id) {
+    $classes_stmt = $db->prepare("SELECT * FROM classes WHERE is_active = 1 GROUP BY name ORDER BY level, name");
+    $classes_stmt->execute();
+    $classes = $classes_stmt->fetchAll();
 
-$subjects_stmt = $db->prepare("SELECT * FROM subjects WHERE school_id = ? ORDER BY name_en");
-$subjects_stmt->execute([$school_id]);
-$subjects = $subjects_stmt->fetchAll();
+    $subjects_stmt = $db->prepare("SELECT * FROM subjects GROUP BY name_en ORDER BY name_en");
+    $subjects_stmt->execute();
+    $subjects = $subjects_stmt->fetchAll();
+} else {
+    $classes_stmt = $db->prepare("SELECT * FROM classes WHERE school_id = ? AND is_active = 1 ORDER BY level, name");
+    $classes_stmt->execute([$school_id]);
+    $classes = $classes_stmt->fetchAll();
+
+    $subjects_stmt = $db->prepare("SELECT * FROM subjects WHERE school_id = ? ORDER BY name_en");
+    $subjects_stmt->execute([$school_id]);
+    $subjects = $subjects_stmt->fetchAll();
+}
 
 $pageTitle = 'Question Bank';
 $activePage = 'questions';
@@ -285,19 +374,36 @@ ob_start();
 </div>
 
 <?php if (!$is_admin): ?>
-    <?php if ($permission_status === 'none'): ?>
+    <?php if ($view_permission_status === 'none'): ?>
         <div class="alert alert-warning border-start border-warning border-4 shadow-sm mb-4 d-flex align-items-center justify-content-between">
             <div>
                 <i class="fas fa-exclamation-triangle text-warning me-2"></i>
-                Your school does not have permission to add or edit questions in the universal question bank. You can request permission from the system administrator.
+                Your school does not have permission to view questions in the universal question bank. You can request permission from the system administrator.
             </div>
-            <a href="?action=request_permission" class="btn btn-warning btn-sm fw-bold"><i class="fas fa-paper-plane"></i> Request Permission</a>
+            <a href="?action=request_view_permission" class="btn btn-warning btn-sm fw-bold"><i class="fas fa-paper-plane"></i> Request View Permission</a>
         </div>
-    <?php elseif ($permission_status === 'requested'): ?>
+    <?php elseif ($view_permission_status === 'requested'): ?>
         <div class="alert alert-info border-start border-info border-4 shadow-sm mb-4 d-flex align-items-center">
             <i class="fas fa-info-circle text-info me-2"></i>
-            Your request for question creation permission is pending approval from the System Administrator.
+            Your request for question bank view permission is pending approval from the System Administrator.
         </div>
+    <?php endif; ?>
+
+    <?php if ($view_permission_status === 'approved'): ?>
+        <?php if ($permission_status === 'none'): ?>
+            <div class="alert alert-warning border-start border-warning border-4 shadow-sm mb-4 d-flex align-items-center justify-content-between">
+                <div>
+                    <i class="fas fa-exclamation-triangle text-warning me-2"></i>
+                    Your school does not have permission to add or edit questions in the universal question bank. You can request creation/editing permission from the system administrator.
+                </div>
+                <a href="?action=request_permission" class="btn btn-warning btn-sm fw-bold"><i class="fas fa-paper-plane"></i> Request Add/Edit Permission</a>
+            </div>
+        <?php elseif ($permission_status === 'requested'): ?>
+            <div class="alert alert-info border-start border-info border-4 shadow-sm mb-4 d-flex align-items-center">
+                <i class="fas fa-info-circle text-info me-2"></i>
+                Your request for question creation/editing permission is pending approval from the System Administrator.
+            </div>
+        <?php endif; ?>
     <?php endif; ?>
 <?php endif; ?>
 
@@ -309,6 +415,7 @@ ob_start();
 <div class="alert alert-success"><i class="fas fa-check-circle"></i> <?= sanitize($success) ?></div>
 <?php endif; ?>
 
+<?php if ($is_admin || $view_permission_status === 'approved'): ?>
 <div id="questionsListSection">
 <!-- Filters -->
 <div class="card mb-4">
@@ -444,7 +551,10 @@ ob_start();
         <input type="hidden" name="question_id" id="modalQuestionId">
         <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="form-label">Class *</label>
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label class="form-label mb-0">Class *</label>
+                                <button type="button" class="btn btn-link p-0 text-success fw-semibold small text-decoration-none" onclick="quickAddClass()"><i class="fas fa-plus-circle"></i> Quick Add Class</button>
+                            </div>
                             <select name="class_id" id="modalClass" class="form-select" required>
                                 <option value="">Choose Class</option>
                                 <?php foreach ($classes as $c): ?>
@@ -453,7 +563,10 @@ ob_start();
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Subject *</label>
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label class="form-label mb-0">Subject *</label>
+                                <button type="button" class="btn btn-link p-0 text-success fw-semibold small text-decoration-none" onclick="quickAddSubject()"><i class="fas fa-plus-circle"></i> Quick Add Subject</button>
+                            </div>
                             <select name="subject_id" id="modalSubject" class="form-select" required>
                                 <option value="">Choose Subject</option>
                                 <?php foreach ($subjects as $s): ?>
@@ -863,6 +976,83 @@ function hideForm() {
     document.getElementById('questionsFormSection').style.display = 'none';
 }
 
+function quickAddClass() {
+    const className = prompt("Enter Class Name (e.g. Class 10):");
+    if (!className) return;
+    
+    $.ajax({
+        url: window.location.pathname + window.location.search,
+        type: 'POST',
+        data: {
+            action_quick_add_class: 1,
+            class_name: className,
+            class_level: 'Secondary',
+            grading_type: 'gpa'
+        },
+        dataType: 'json',
+        success: function(res) {
+            if (res.success) {
+                alert("Class added successfully!");
+                // Add option to select
+                const select = document.getElementById('modalClass');
+                const opt = document.createElement('option');
+                opt.value = res.id;
+                opt.textContent = res.name;
+                opt.selected = true;
+                select.appendChild(opt);
+                
+                // Update map
+                classesMap[res.id] = res.name;
+                updateChaptersDropdown('');
+            } else {
+                alert("Error: " + res.message);
+            }
+        },
+        error: function() {
+            alert("An error occurred while adding the class.");
+        }
+    });
+}
+
+function quickAddSubject() {
+    const subjectName = prompt("Enter Subject Name (e.g. Science):");
+    if (!subjectName) return;
+    
+    const classId = document.getElementById('modalClass').value;
+    
+    $.ajax({
+        url: window.location.pathname + window.location.search,
+        type: 'POST',
+        data: {
+            action_quick_add_subject: 1,
+            subject_name: subjectName,
+            map_class_id: classId
+        },
+        dataType: 'json',
+        success: function(res) {
+            if (res.success) {
+                alert("Subject added successfully!");
+                // Add option to select
+                const select = document.getElementById('modalSubject');
+                const opt = document.createElement('option');
+                opt.value = res.id;
+                opt.textContent = res.name;
+                opt.selected = true;
+                select.appendChild(opt);
+                
+                // Update map
+                subjectsMap[res.id] = res.name;
+                updateChaptersDropdown('');
+            } else {
+                alert("Error: " + res.message);
+            }
+        },
+        error: function() {
+            alert("An error occurred while adding the subject.");
+        }
+    });
+}
+
 function updateChaptersDropdown(selectedChapterValue = '') {
     const classId = document.getElementById('modalClass').value;
     const subjectId = document.getElementById('modalSubject').value;
@@ -1091,6 +1281,8 @@ function insertTexIntoEditor() {
     }
 }
 </script>
+
+<?php endif; ?>
 
 <?php
 $content = ob_get_clean();

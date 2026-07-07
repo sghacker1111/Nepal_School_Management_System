@@ -237,119 +237,132 @@
                             </a>
                         </li>
                         
+                        <?php elseif ($sub_type === 'exam_generator'): ?>
+                            <!-- Exam Generator Only Subscription: Show ONLY Question Bank & Exam Paper Gen -->
+                            <li class="nav-item">
+                                <a class="nav-link <?= ($activePage ?? '') == 'questions' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/questions.php">
+                                    <i class="fas fa-database"></i> Question Bank
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link <?= ($activePage ?? '') == 'paper_generator' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/paper_generator.php">
+                                    <i class="fas fa-file-invoice"></i> Exam Paper Gen
+                                </a>
+                            </li>
+
                         <?php elseif (Auth::getRole() === 'teacher'): ?>
-                        <li class="nav-item">
-                            <a class="nav-link <?= ($activePage ?? '') == 'dashboard' ? 'active' : '' ?>" href="<?= APP_URL ?>/index.php">
-                                <i class="fas fa-home"></i> Dashboard
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link <?= ($activePage ?? '') == 'routine' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/classes/routine.php">
-                                <i class="fas fa-calendar-alt"></i> Weekly Routine
-                            </a>
-                        </li>
-                        <?php if ($show_exam_gen): ?>
-                        <li class="nav-item">
-                            <a class="nav-link <?= ($activePage ?? '') == 'questions' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/questions.php">
-                                <i class="fas fa-database"></i> Question Bank
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link <?= ($activePage ?? '') == 'paper_generator' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/paper_generator.php">
-                                <i class="fas fa-file-invoice"></i> Exam Paper Gen
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link <?= ($activePage ?? '') == 'learning' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/index.php">
-                                <i class="fas fa-book-open"></i> Learning Hub
-                            </a>
-                        </li>
-                        <?php endif; ?>
-                        
+                            <li class="nav-item">
+                                <a class="nav-link <?= ($activePage ?? '') == 'dashboard' ? 'active' : '' ?>" href="<?= APP_URL ?>/index.php">
+                                    <i class="fas fa-home"></i> Dashboard
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link <?= ($activePage ?? '') == 'routine' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/classes/routine.php">
+                                    <i class="fas fa-calendar-alt"></i> Weekly Routine
+                                </a>
+                            </li>
+                            <?php if ($show_exam_gen): ?>
+                            <li class="nav-item">
+                                <a class="nav-link <?= ($activePage ?? '') == 'questions' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/questions.php">
+                                    <i class="fas fa-database"></i> Question Bank
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link <?= ($activePage ?? '') == 'paper_generator' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/paper_generator.php">
+                                    <i class="fas fa-file-invoice"></i> Exam Paper Gen
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link <?= ($activePage ?? '') == 'learning' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/index.php">
+                                    <i class="fas fa-book-open"></i> Learning Hub
+                                </a>
+                            </li>
+                            <?php endif; ?>
+                            
                         <?php else: // school_admin or principal ?>
-                        <li class="nav-item">
-                            <a class="nav-link <?= ($activePage ?? '') == 'dashboard' ? 'active' : '' ?>" href="<?= APP_URL ?>/index.php">
-                                <i class="fas fa-home"></i> Dashboard
-                            </a>
-                        </li>
-                        <?php if ($show_results): ?>
-                        <li class="nav-item">
-                            <a class="nav-link <?= ($activePage ?? '') == 'students' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/students/index.php">
-                                <i class="fas fa-user-graduate"></i> Students
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link <?= ($activePage ?? '') == 'teachers' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/teachers/index.php">
-                                <i class="fas fa-chalkboard-teacher"></i> Teachers
-                            </a>
-                        </li>
-                        <?php endif; ?>
-                        <li class="nav-item">
-                            <a class="nav-link <?= ($activePage ?? '') == 'classes' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/classes/index.php">
-                                <i class="fas fa-school"></i> Classes
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link <?= ($activePage ?? '') == 'routine' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/classes/routine.php">
-                                <i class="fas fa-calendar-alt"></i> Weekly Routine
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link <?= ($activePage ?? '') == 'subjects' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/subjects/index.php">
-                                <i class="fas fa-book"></i> Subjects
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link <?= ($activePage ?? '') == 'exams' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/exams/index.php">
-                                <i class="fas fa-file-alt"></i> Exams
-                            </a>
-                        </li>
-                        <?php if ($show_results): ?>
-                        <li class="nav-item">
-                            <a class="nav-link <?= ($activePage ?? '') == 'results' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/results/index.php">
-                                <i class="fas fa-poll"></i> Results
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link <?= ($activePage ?? '') == 'attendance' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/attendance/index.php">
-                                <i class="fas fa-calendar-check"></i> Attendance
-                            </a>
-                        </li>
-                        <?php endif; ?>
-                        <?php if ($show_exam_gen): ?>
-                        <li class="nav-item">
-                            <a class="nav-link <?= ($activePage ?? '') == 'questions' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/questions.php">
-                                <i class="fas fa-database"></i> Question Bank
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link <?= ($activePage ?? '') == 'paper_generator' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/paper_generator.php">
-                                <i class="fas fa-file-invoice"></i> Exam Paper Gen
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link <?= ($activePage ?? '') == 'learning' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/index.php">
-                                <i class="fas fa-book-open"></i> Learning Hub
-                            </a>
-                        </li>
-                        <?php endif; ?>
-                        <?php if ($show_results): ?>
-                        <li class="nav-item">
-                            <a class="nav-link <?= ($activePage ?? '') == 'reports' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/reports/index.php">
-                                <i class="fas fa-chart-bar"></i> Reports
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link <?= ($activePage ?? '') == 'school_settings' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/settings/school.php">
-                                <i class="fas fa-school"></i> School Settings
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link <?= ($activePage ?? '') == 'settings' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/settings/years.php">
-                                <i class="fas fa-cog"></i> Settings / Years
-                            </a>
-                        </li>
-                        <?php endif; ?>
+                            <li class="nav-item">
+                                <a class="nav-link <?= ($activePage ?? '') == 'dashboard' ? 'active' : '' ?>" href="<?= APP_URL ?>/index.php">
+                                    <i class="fas fa-home"></i> Dashboard
+                                </a>
+                            </li>
+                            <?php if ($show_results): ?>
+                            <li class="nav-item">
+                                <a class="nav-link <?= ($activePage ?? '') == 'students' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/students/index.php">
+                                    <i class="fas fa-user-graduate"></i> Students
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link <?= ($activePage ?? '') == 'teachers' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/teachers/index.php">
+                                    <i class="fas fa-chalkboard-teacher"></i> Teachers
+                                </a>
+                            </li>
+                            <?php endif; ?>
+                            <li class="nav-item">
+                                <a class="nav-link <?= ($activePage ?? '') == 'classes' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/classes/index.php">
+                                    <i class="fas fa-school"></i> Classes
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link <?= ($activePage ?? '') == 'routine' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/classes/routine.php">
+                                    <i class="fas fa-calendar-alt"></i> Weekly Routine
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link <?= ($activePage ?? '') == 'subjects' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/subjects/index.php">
+                                    <i class="fas fa-book"></i> Subjects
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link <?= ($activePage ?? '') == 'exams' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/exams/index.php">
+                                    <i class="fas fa-file-alt"></i> Exams
+                                </a>
+                            </li>
+                            <?php if ($show_results): ?>
+                            <li class="nav-item">
+                                <a class="nav-link <?= ($activePage ?? '') == 'results' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/results/index.php">
+                                    <i class="fas fa-poll"></i> Results
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link <?= ($activePage ?? '') == 'attendance' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/attendance/index.php">
+                                    <i class="fas fa-calendar-check"></i> Attendance
+                                </a>
+                            </li>
+                            <?php endif; ?>
+                            <?php if ($show_exam_gen): ?>
+                            <li class="nav-item">
+                                <a class="nav-link <?= ($activePage ?? '') == 'questions' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/questions.php">
+                                    <i class="fas fa-database"></i> Question Bank
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link <?= ($activePage ?? '') == 'paper_generator' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/paper_generator.php">
+                                    <i class="fas fa-file-invoice"></i> Exam Paper Gen
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link <?= ($activePage ?? '') == 'learning' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/index.php">
+                                    <i class="fas fa-book-open"></i> Learning Hub
+                                </a>
+                            </li>
+                            <?php endif; ?>
+                            <?php if ($show_results): ?>
+                            <li class="nav-item">
+                                <a class="nav-link <?= ($activePage ?? '') == 'reports' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/reports/index.php">
+                                    <i class="fas fa-chart-bar"></i> Reports
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link <?= ($activePage ?? '') == 'school_settings' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/settings/school.php">
+                                    <i class="fas fa-school"></i> School Settings
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link <?= ($activePage ?? '') == 'settings' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/settings/years.php">
+                                    <i class="fas fa-cog"></i> Settings / Years
+                                </a>
+                            </li>
+                            <?php endif; ?>
                         <?php endif; ?>
                     </ul>
                 </div>

@@ -31,6 +31,24 @@ if (isset($_GET['perm_action']) && isset($_GET['school_id'])) {
     }
 }
 
+// Handle Question View Permission Action
+if (isset($_GET['view_perm_action']) && isset($_GET['school_id'])) {
+    $view_perm_action = sanitize($_GET['view_perm_action']);
+    $sch_id = (int)$_GET['school_id'];
+    
+    if ($view_perm_action === 'approve') {
+        $stmt = $db->prepare("UPDATE schools SET question_view_permission = 'approved' WHERE id = ?");
+        $stmt->execute([$sch_id]);
+        Auth::logActivity(Auth::getUserId(), 'Approve Question View', 'schools', $sch_id);
+        redirect(APP_URL . '/modules/super_admin/schools.php', 'Question view permission granted.');
+    } elseif ($view_perm_action === 'revoke') {
+        $stmt = $db->prepare("UPDATE schools SET question_view_permission = 'none' WHERE id = ?");
+        $stmt->execute([$sch_id]);
+        Auth::logActivity(Auth::getUserId(), 'Revoke Question View', 'schools', $sch_id);
+        redirect(APP_URL . '/modules/super_admin/schools.php', 'Question view permission revoked.');
+    }
+}
+
 // Handle Learning Hub Permission Action
 if (isset($_GET['hub_perm_action']) && isset($_GET['school_id'])) {
     $hub_perm_action = sanitize($_GET['hub_perm_action']);
@@ -234,7 +252,8 @@ ob_start();
                         <th>Contact info</th>
                         <th>Address</th>
                         <th>Package</th>
-                        <th>Question Perm</th>
+                        <th>Q. View Perm</th>
+                        <th>Q. Add Perm</th>
                         <th>Learning Hub Perm</th>
                         <th>Current Year</th>
                         <th class="text-end">Actions</th>
@@ -269,16 +288,31 @@ ob_start();
                             </td>
                             <td>
                                 <?php
+                                $v_perm = $school['question_view_permission'] ?? 'none';
+                                if ($v_perm === 'approved') {
+                                    echo '<span class="badge bg-success">Approved</span>';
+                                    echo ' <a href="?view_perm_action=revoke&school_id=' . $school['id'] . '" class="btn btn-xs btn-outline-danger" title="Revoke View" onclick="return confirm(\'Are you sure you want to revoke question view permission for this school?\')"><i class="fas fa-ban"></i></a>';
+                                } elseif ($v_perm === 'requested') {
+                                    echo '<span class="badge bg-warning text-dark animate-pulse">Requested</span>';
+                                    echo ' <a href="?view_perm_action=approve&school_id=' . $school['id'] . '" class="btn btn-xs btn-success text-white py-0 px-1" style="font-size:0.75rem;" title="Approve View"><i class="fas fa-check"></i> Approve</a>';
+                                } else {
+                                    echo '<span class="badge bg-secondary">None</span>';
+                                    echo ' <a href="?view_perm_action=approve&school_id=' . $school['id'] . '" class="btn btn-xs btn-outline-success py-0 px-1" style="font-size:0.75rem;" title="Grant View"><i class="fas fa-plus"></i> Grant</a>';
+                                }
+                                ?>
+                            </td>
+                            <td>
+                                <?php
                                 $perm = $school['question_permission_status'] ?? 'none';
                                 if ($perm === 'approved') {
                                     echo '<span class="badge bg-success">Approved</span>';
-                                    echo ' <a href="?perm_action=revoke&school_id=' . $school['id'] . '" class="btn btn-xs btn-outline-danger" title="Revoke Permission" onclick="return confirm(\'Are you sure you want to revoke question creation permission for this school?\')"><i class="fas fa-ban"></i></a>';
+                                    echo ' <a href="?perm_action=revoke&school_id=' . $school['id'] . '" class="btn btn-xs btn-outline-danger" title="Revoke Creation" onclick="return confirm(\'Are you sure you want to revoke question creation permission for this school?\')"><i class="fas fa-ban"></i></a>';
                                 } elseif ($perm === 'requested') {
                                     echo '<span class="badge bg-warning text-dark animate-pulse">Requested</span>';
-                                    echo ' <a href="?perm_action=approve&school_id=' . $school['id'] . '" class="btn btn-xs btn-success text-white py-0 px-1" style="font-size:0.75rem;" title="Approve Permission"><i class="fas fa-check"></i> Approve</a>';
+                                    echo ' <a href="?perm_action=approve&school_id=' . $school['id'] . '" class="btn btn-xs btn-success text-white py-0 px-1" style="font-size:0.75rem;" title="Approve Creation"><i class="fas fa-check"></i> Approve</a>';
                                 } else {
                                     echo '<span class="badge bg-secondary">None</span>';
-                                    echo ' <a href="?perm_action=approve&school_id=' . $school['id'] . '" class="btn btn-xs btn-outline-success py-0 px-1" style="font-size:0.75rem;" title="Grant Permission"><i class="fas fa-plus"></i> Grant</a>';
+                                    echo ' <a href="?perm_action=approve&school_id=' . $school['id'] . '" class="btn btn-xs btn-outline-success py-0 px-1" style="font-size:0.75rem;" title="Grant Creation"><i class="fas fa-plus"></i> Grant</a>';
                                 }
                                 ?>
                             </td>

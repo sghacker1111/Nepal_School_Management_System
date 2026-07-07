@@ -228,7 +228,7 @@ class Auth {
         }
         
         // Modules mapped to Result System
-        $result_modules = ['students', 'teachers', 'results', 'attendance', 'reports', 'settings'];
+        $result_modules = ['students', 'teachers', 'results', 'attendance', 'reports', 'settings', 'classes', 'subjects', 'exams'];
         // Modules mapped to Exam Generator
         $exam_modules = ['paper_generator', 'questions', 'learning'];
         

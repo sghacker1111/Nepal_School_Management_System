@@ -96,6 +96,7 @@ class Database {
             ['schools', 'routine_periods_per_day'],
             ['schools', 'subscription_type'],
             ['schools', 'question_permission_status'],
+            ['schools', 'question_view_permission'],
             ['schools', 'learning_hub_permission_status'],
             ['users', 'signature'],
             ['classes', 'is_active'],
@@ -269,6 +270,7 @@ class Database {
                 'routine_include_sunday' => 'INTEGER DEFAULT 0',
                 'subscription_type' => "VARCHAR(50) DEFAULT 'full'",
                 'question_permission_status' => "VARCHAR(20) DEFAULT 'none'",
+                'question_view_permission' => "VARCHAR(20) DEFAULT 'none'",
                 'learning_hub_permission_status' => "VARCHAR(20) DEFAULT 'none'"
             ],
             'users' => [
