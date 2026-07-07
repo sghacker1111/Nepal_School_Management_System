@@ -13,6 +13,24 @@ $db = getDB();
 $error = '';
 $success = '';
 
+// Handle Question Permission Action
+if (isset($_GET['perm_action']) && isset($_GET['school_id'])) {
+    $perm_action = sanitize($_GET['perm_action']);
+    $sch_id = (int)$_GET['school_id'];
+    
+    if ($perm_action === 'approve') {
+        $stmt = $db->prepare("UPDATE schools SET question_permission_status = 'approved' WHERE id = ?");
+        $stmt->execute([$sch_id]);
+        Auth::logActivity(Auth::getUserId(), 'Approve Question Creation', 'schools', $sch_id);
+        redirect(APP_URL . '/modules/super_admin/schools.php', 'Question creation permission granted.');
+    } elseif ($perm_action === 'revoke') {
+        $stmt = $db->prepare("UPDATE schools SET question_permission_status = 'none' WHERE id = ?");
+        $stmt->execute([$sch_id]);
+        Auth::logActivity(Auth::getUserId(), 'Revoke Question Creation', 'schools', $sch_id);
+        redirect(APP_URL . '/modules/super_admin/schools.php', 'Question creation permission revoked.');
+    }
+}
+
 // Handle Add/Edit School Actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $action = $_POST['action'];
@@ -26,6 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $principal_name = sanitize($_POST['principal_name'] ?? '');
     $principal_mobile = sanitize($_POST['principal_mobile'] ?? '');
     $technical_person = sanitize($_POST['technical_person'] ?? '');
+    $subscription_type = sanitize($_POST['subscription_type'] ?? 'full');
     
     $admin_full_name = sanitize($_POST['admin_full_name'] ?? '');
     $admin_username = sanitize($_POST['admin_username'] ?? '');
@@ -48,10 +67,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         $db->beginTransaction();
                         
                         $stmt = $db->prepare("
-                            INSERT INTO schools (name_en, name_np, emis_code, address, phone, email, academic_year_current, principal_name, principal_mobile, technical_person) 
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            INSERT INTO schools (name_en, name_np, emis_code, address, phone, email, academic_year_current, principal_name, principal_mobile, technical_person, subscription_type) 
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ");
-                        $stmt->execute([$name_en, $name_np, $emis_code, $address, $phone, $email, $academic_year_current, $principal_name, $principal_mobile, $technical_person]);
+                        $stmt->execute([$name_en, $name_np, $emis_code, $address, $phone, $email, $academic_year_current, $principal_name, $principal_mobile, $technical_person, $subscription_type]);
                         $new_school_id = $db->lastInsertId();
                         
                         // Add default academic years for this new school automatically!
@@ -101,10 +120,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     
                     $stmt = $db->prepare("
                         UPDATE schools 
-                        SET name_en = ?, name_np = ?, emis_code = ?, address = ?, phone = ?, email = ?, academic_year_current = ?, principal_name = ?, principal_mobile = ?, technical_person = ?
+                        SET name_en = ?, name_np = ?, emis_code = ?, address = ?, phone = ?, email = ?, academic_year_current = ?, principal_name = ?, principal_mobile = ?, technical_person = ?, subscription_type = ?
                         WHERE id = ?
                     ");
-                    $stmt->execute([$name_en, $name_np, $emis_code, $address, $phone, $email, $academic_year_current, $principal_name, $principal_mobile, $technical_person, $school_id]);
+                    $stmt->execute([$name_en, $name_np, $emis_code, $address, $phone, $email, $academic_year_current, $principal_name, $principal_mobile, $technical_person, $subscription_type, $school_id]);
                     
                     if ($admin_user_id) {
                         if (!empty($admin_password)) {
@@ -196,6 +215,8 @@ ob_start();
                         <th>EMIS Code</th>
                         <th>Contact info</th>
                         <th>Address</th>
+                        <th>Package</th>
+                        <th>Question Perm</th>
                         <th>Current Year</th>
                         <th class="text-end">Actions</th>
                     </tr>
@@ -215,6 +236,33 @@ ob_start();
                                 <i class="fas fa-envelope fa-xs text-muted me-1"></i> <?= sanitize($school['email'] ?: '-') ?>
                             </td>
                             <td><?= sanitize($school['address'] ?: '-') ?></td>
+                            <td>
+                                <?php
+                                $pkg = $school['subscription_type'] ?? 'full';
+                                if ($pkg === 'full') {
+                                    echo '<span class="badge bg-success">Full ERP</span>';
+                                } elseif ($pkg === 'exam_generator') {
+                                    echo '<span class="badge bg-primary">Exam Generator Only</span>';
+                                } elseif ($pkg === 'result_system') {
+                                    echo '<span class="badge bg-secondary">Result System Only</span>';
+                                }
+                                ?>
+                            </td>
+                            <td>
+                                <?php
+                                $perm = $school['question_permission_status'] ?? 'none';
+                                if ($perm === 'approved') {
+                                    echo '<span class="badge bg-success">Approved</span>';
+                                    echo ' <a href="?perm_action=revoke&school_id=' . $school['id'] . '" class="btn btn-xs btn-outline-danger" title="Revoke Permission" onclick="return confirm(\'Are you sure you want to revoke question creation permission for this school?\')"><i class="fas fa-ban"></i></a>';
+                                } elseif ($perm === 'requested') {
+                                    echo '<span class="badge bg-warning text-dark animate-pulse">Requested</span>';
+                                    echo ' <a href="?perm_action=approve&school_id=' . $school['id'] . '" class="btn btn-xs btn-success text-white py-0 px-1" style="font-size:0.75rem;" title="Approve Permission"><i class="fas fa-check"></i> Approve</a>';
+                                } else {
+                                    echo '<span class="badge bg-secondary">None</span>';
+                                    echo ' <a href="?perm_action=approve&school_id=' . $school['id'] . '" class="btn btn-xs btn-outline-success py-0 px-1" style="font-size:0.75rem;" title="Grant Permission"><i class="fas fa-plus"></i> Grant</a>';
+                                }
+                                ?>
+                            </td>
                             <td><span class="badge bg-info"><?= sanitize($school['academic_year_current'] ?: '2081/2025') ?></span></td>
                             <td class="text-end">
                                 <button onclick="editSchool(<?= htmlspecialchars(json_encode($school)) ?>)" class="btn btn-sm btn-outline-warning" title="Edit">
@@ -225,7 +273,7 @@ ob_start();
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="7" class="text-center text-muted py-4">No schools registered in the database.</td>
+                            <td colspan="9" class="text-center text-muted py-4">No schools registered in the database.</td>
                         </tr>
                     <?php endif; ?>
                 </tbody>
@@ -295,6 +343,19 @@ ob_start();
                         <div class="col-md-6">
                             <label class="form-label">Technical Contact Person *</label>
                             <input type="text" name="technical_person" id="modalTechnicalPerson" class="form-control" placeholder="e.g. Sharad Acharya" required>
+                        </div>
+
+                        <!-- Subscription Package -->
+                        <div class="col-12 mt-4">
+                            <h6 class="text-primary border-bottom pb-2 mb-1"><i class="fas fa-box-open"></i> Subscription & Access Details</h6>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Subscription Package *</label>
+                            <select name="subscription_type" id="modalSubscriptionType" class="form-select" required>
+                                <option value="full">Full ERP Package</option>
+                                <option value="exam_generator">Exam Paper Generator Only</option>
+                                <option value="result_system">Result System Only</option>
+                            </select>
                         </div>
 
                         <!-- Administrator Credentials -->
@@ -369,6 +430,7 @@ function showAddModal() {
     document.getElementById('modalPrincipalMobile').value = '';
     document.getElementById('modalTechnicalPerson').value = '';
     
+    document.getElementById('modalSubscriptionType').value = 'full';
     document.getElementById('modalAdminFullName').value = '';
     document.getElementById('modalAdminUsername').value = '';
     document.getElementById('modalAdminPassword').value = '';
@@ -393,6 +455,7 @@ function editSchool(s) {
     document.getElementById('modalPrincipalMobile').value = s.principal_mobile || '';
     document.getElementById('modalTechnicalPerson').value = s.technical_person || '';
     
+    document.getElementById('modalSubscriptionType').value = s.subscription_type || 'full';
     document.getElementById('modalAdminFullName').value = s.admin_full_name || '';
     document.getElementById('modalAdminUsername').value = s.admin_username || '';
     document.getElementById('modalAdminPassword').value = '';

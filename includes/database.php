@@ -93,6 +93,8 @@ class Database {
             ['schools', 'principal_name'],
             ['schools', 'class_teacher_signature'],
             ['schools', 'routine_periods_per_day'],
+            ['schools', 'subscription_type'],
+            ['schools', 'question_permission_status'],
             ['users', 'signature'],
             ['classes', 'is_active'],
             ['classes', 'class_teacher_name'],
@@ -249,7 +251,9 @@ class Database {
                 'technical_person' => 'VARCHAR(100) DEFAULT NULL',
                 'class_teacher_signature' => 'VARCHAR(255) DEFAULT NULL',
                 'routine_periods_per_day' => 'INTEGER DEFAULT 8',
-                'routine_include_sunday' => 'INTEGER DEFAULT 0'
+                'routine_include_sunday' => 'INTEGER DEFAULT 0',
+                'subscription_type' => "VARCHAR(50) DEFAULT 'full'",
+                'question_permission_status' => "VARCHAR(20) DEFAULT 'none'"
             ],
             'users' => [
                 'signature' => 'VARCHAR(255) DEFAULT NULL'

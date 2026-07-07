@@ -8,6 +8,7 @@ require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
 
 Auth::requireRole(['super_admin', 'school_admin', 'principal', 'teacher']);
+Auth::requireAccess('attendance');
 
 $db = getDB();
 $school_id = Auth::getSchoolId();

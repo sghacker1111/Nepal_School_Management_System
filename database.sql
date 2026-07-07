@@ -27,6 +27,8 @@ CREATE TABLE `schools` (
   `class_teacher_signature` varchar(255) DEFAULT NULL,
   `routine_periods_per_day` int(11) DEFAULT 8,
   `routine_include_sunday` tinyint(1) DEFAULT 0,
+  `subscription_type` varchar(50) DEFAULT 'full',
+  `question_permission_status` varchar(20) DEFAULT 'none',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

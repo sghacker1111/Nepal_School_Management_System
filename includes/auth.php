@@ -185,4 +185,71 @@ class Auth {
         self::startSession();
         return hash_equals($_SESSION[CSRF_TOKEN_NAME] ?? '', $token);
     }
+
+    /**
+     * Get current school's subscription/access package
+     * Returns: 'full', 'exam_generator', or 'result_system'
+     */
+    public static function getSubscriptionType() {
+        self::startSession();
+        if (self::getRole() === 'super_admin' && empty($_SESSION['viewing_school_id'])) {
+            return 'full';
+        }
+        
+        $school_id = self::getSchoolId();
+        if (!$school_id) {
+            return 'full';
+        }
+        
+        if (isset($_SESSION['school_subscription_type'])) {
+            return $_SESSION['school_subscription_type'];
+        }
+        
+        try {
+            $db = getDB();
+            $stmt = $db->prepare("SELECT subscription_type FROM schools WHERE id = ?");
+            $stmt->execute([$school_id]);
+            $sub = $stmt->fetchColumn();
+            $_SESSION['school_subscription_type'] = $sub ? $sub : 'full';
+        } catch (Exception $e) {
+            $_SESSION['school_subscription_type'] = 'full';
+        }
+        
+        return $_SESSION['school_subscription_type'];
+    }
+
+    /**
+     * Check if current subscription package allows access to a module
+     */
+    public static function hasAccess($module) {
+        $sub = self::getSubscriptionType();
+        if ($sub === 'full') {
+            return true;
+        }
+        
+        // Modules mapped to Result System
+        $result_modules = ['students', 'teachers', 'results', 'attendance', 'reports', 'settings'];
+        // Modules mapped to Exam Generator
+        $exam_modules = ['paper_generator', 'questions', 'learning'];
+        
+        if (in_array($module, $result_modules)) {
+            return ($sub === 'result_system');
+        }
+        if (in_array($module, $exam_modules)) {
+            return ($sub === 'exam_generator');
+        }
+        
+        return true; // Default to true for common modules (classes, subjects, exams)
+    }
+
+    /**
+     * Block execution if user lacks access to module
+     */
+    public static function requireAccess($module) {
+        self::requireLogin();
+        if (!self::hasAccess($module)) {
+            die("<div style='font-family:sans-serif;padding:30px;text-align:center;'><h2 style='color:#e74c3c;'>Access Denied</h2><p>Your school's active subscription package does not allow access to the <strong>" . htmlspecialchars($module) . "</strong> module.</p><p><a href='" . APP_URL . "/index.php'>Go to Dashboard</a></p></div>");
+        }
+    }
 }
+
