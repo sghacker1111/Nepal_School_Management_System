@@ -236,9 +236,14 @@
                                 <i class="fas fa-file-invoice"></i> Exam Paper Gen
                             </a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link <?= ($activePage ?? '') == 'specification_grids' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/specification_grids.php">
+                                <i class="fas fa-border-all"></i> Specification Grid
+                            </a>
+                        </li>
                         
                         <?php elseif ($sub_type === 'exam_generator'): ?>
-                            <!-- Exam Generator Only Subscription: Show ONLY Question Bank & Exam Paper Gen -->
+                            <!-- Exam Generator Only Subscription: Show ONLY Question Bank, Exam Paper Gen & Specification Grid -->
                             <li class="nav-item">
                                 <a class="nav-link <?= ($activePage ?? '') == 'questions' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/questions.php">
                                     <i class="fas fa-database"></i> Question Bank
@@ -247,6 +252,11 @@
                             <li class="nav-item">
                                 <a class="nav-link <?= ($activePage ?? '') == 'paper_generator' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/paper_generator.php">
                                     <i class="fas fa-file-invoice"></i> Exam Paper Gen
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link <?= ($activePage ?? '') == 'specification_grids' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/specification_grids.php">
+                                    <i class="fas fa-border-all"></i> Specification Grid
                                 </a>
                             </li>
 
@@ -270,6 +280,11 @@
                             <li class="nav-item">
                                 <a class="nav-link <?= ($activePage ?? '') == 'paper_generator' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/paper_generator.php">
                                     <i class="fas fa-file-invoice"></i> Exam Paper Gen
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link <?= ($activePage ?? '') == 'specification_grids' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/specification_grids.php">
+                                    <i class="fas fa-border-all"></i> Specification Grid
                                 </a>
                             </li>
                             <li class="nav-item">
@@ -338,6 +353,11 @@
                             <li class="nav-item">
                                 <a class="nav-link <?= ($activePage ?? '') == 'paper_generator' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/paper_generator.php">
                                     <i class="fas fa-file-invoice"></i> Exam Paper Gen
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link <?= ($activePage ?? '') == 'specification_grids' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/specification_grids.php">
+                                    <i class="fas fa-border-all"></i> Specification Grid
                                 </a>
                             </li>
                             <li class="nav-item">
