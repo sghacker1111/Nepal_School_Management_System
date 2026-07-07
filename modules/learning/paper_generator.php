@@ -7,7 +7,7 @@ require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
 
-Auth::requireRole(['super_admin', 'school_admin', 'teacher', 'exam_officer']);
+Auth::requireRole(['super_admin', 'school_admin', 'principal', 'teacher', 'exam_officer']);
 Auth::requireAccess('paper_generator');
 
 $db = getDB();
@@ -20,7 +20,7 @@ $classes_stmt->execute([$school_id]);
 $classes = $classes_stmt->fetchAll();
 
 // Fetch exams for current school
-$exams_stmt = $db->prepare("SELECT * FROM exams WHERE school_id = ? ORDER BY date DESC");
+$exams_stmt = $db->prepare("SELECT * FROM exams WHERE school_id = ? ORDER BY start_date DESC");
 $exams_stmt->execute([$school_id]);
 $exams = $exams_stmt->fetchAll();
 

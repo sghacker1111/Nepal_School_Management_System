@@ -7,7 +7,7 @@ require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
 
-Auth::requireRole(['super_admin', 'school_admin', 'teacher', 'exam_officer']);
+Auth::requireRole(['super_admin', 'school_admin', 'principal', 'teacher', 'exam_officer']);
 Auth::requireAccess('questions');
 
 $db = getDB();

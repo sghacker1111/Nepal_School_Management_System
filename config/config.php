@@ -17,7 +17,12 @@ define('APP_NAME', 'Nepal School ERP');
 
 // Dynamically detect APP_URL to support localhost, local php server (port 8000), and custom domains
 if (!defined('APP_URL')) {
-    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? "https://" : "http://";
+    $protocol = "http://";
+    if ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || 
+        (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ||
+        (!empty($_SERVER['HTTP_X_FORWARDED_SSL']) && $_SERVER['HTTP_X_FORWARDED_SSL'] === 'on')) {
+        $protocol = "https://";
+    }
     $host = $_SERVER['HTTP_HOST'] ?? 'localhost:8000';
     
     // Detect subdirectory path (e.g. for XAMPP /nepal_school_erp/)
