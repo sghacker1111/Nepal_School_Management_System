@@ -662,8 +662,8 @@ $(document).ready(function() {
             toolbar: 'undo redo | blocks fontfamily fontsize | bold italic underline forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | table | math_tex | fullscreen code',
             branding: false,
             promotion: false,
-            // Styling inside editor iframe to clearly mark locked TeX equations
-            content_style: 'span.math-tex { background: #f8f9fa !important; border: 1px dashed #0d6efd !important; padding: 2px 6px !important; border-radius: 4px !important; cursor: pointer !important; display: inline-block !important; user-select: none !important; margin: 0 2px !important; }',
+            // Styling inside editor iframe to clearly mark locked TeX equations seamlessly (outline on hover/select)
+            content_style: 'span.math-tex { background: transparent !important; border: none !important; cursor: pointer !important; display: inline-block !important; user-select: none !important; margin: 0 2px !important; } span.math-tex:hover, span.math-tex:focus, span.math-tex[data-mce-selected] { outline: 1px dashed #0d6efd !important; background: rgba(13, 110, 253, 0.05) !important; border-radius: 2px !important; }',
             setup: function (editor) {
                 // When content is loaded, wrap LaTeX with span so it can render inside iframe
                 editor.on('BeforeSetContent', function (e) {
