@@ -232,6 +232,11 @@
                             </a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link <?= ($activePage ?? '') == 'classes' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/classes/index.php">
+                                <i class="fas fa-layer-group"></i> Class & Section
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link <?= ($activePage ?? '') == 'questions' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/questions.php">
                                 <i class="fas fa-database"></i> Question Bank
                             </a>
