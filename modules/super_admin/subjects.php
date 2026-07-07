@@ -74,9 +74,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_subject'])) {
     $name_np = trim($_POST['name_np'] ?? '');
     $code = trim($_POST['code'] ?? '');
     $type = $_POST['type'] ?? 'Theory';
-    $full_marks = (int)($_POST['full_marks'] ?? 100);
-    $pass_marks = (int)($_POST['pass_marks'] ?? 35);
-    $credit_hours = (float)($_POST['credit_hours'] ?? 4.0);
+    $full_marks = round((float)($_POST['full_marks'] ?? 100.0), 2);
+    $pass_marks = round((float)($_POST['pass_marks'] ?? 35.0), 2);
+    $credit_hours = round((float)($_POST['credit_hours'] ?? 4.0), 2);
     
     if (empty($name_en) || empty($code)) {
         $error = "Subject Name (EN) and Code are required.";
@@ -382,15 +382,15 @@ ob_start();
                     </div>
                     <div class="col-md-4">
                         <label class="form-label fw-semibold">Full Marks</label>
-                        <input type="number" name="full_marks" id="subjectFull" class="form-control" value="100">
+                        <input type="number" step="0.01" name="full_marks" id="subjectFull" class="form-control" value="100">
                     </div>
                     <div class="col-md-4">
                         <label class="form-label fw-semibold">Pass Marks</label>
-                        <input type="number" name="pass_marks" id="subjectPass" class="form-control" value="35">
+                        <input type="number" step="0.01" name="pass_marks" id="subjectPass" class="form-control" value="35">
                     </div>
                     <div class="col-md-4">
                         <label class="form-label fw-semibold">Credit Hours</label>
-                        <input type="number" step="0.5" name="credit_hours" id="subjectCredit" class="form-control" value="4">
+                        <input type="number" step="0.01" name="credit_hours" id="subjectCredit" class="form-control" value="4">
                     </div>
                 </div>
             </div>

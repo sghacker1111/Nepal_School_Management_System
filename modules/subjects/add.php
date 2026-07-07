@@ -29,9 +29,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name_en = sanitize($_POST['name_en'] ?? '');
     $name_np = sanitize($_POST['name_np'] ?? '');
     $type = sanitize($_POST['type'] ?? 'compulsory');
-    $full_marks = (int)($_POST['full_marks'] ?? 100);
-    $pass_marks = (int)($_POST['pass_marks'] ?? 40);
-    $credit_hours = (int)($_POST['credit_hours'] ?? 4);
+    $full_marks = round((float)($_POST['full_marks'] ?? 100.0), 2);
+    $pass_marks = round((float)($_POST['pass_marks'] ?? 40.0), 2);
+    $credit_hours = round((float)($_POST['credit_hours'] ?? 4.0), 2);
     $teacher_ids = $_POST['teacher_ids'] ?? [];
     
     if (empty($class_id)) {
@@ -132,15 +132,15 @@ ob_start();
                 </div>
                 <div class="col-md-3 mb-3">
                     <label for="credit_hours" class="form-label">Credit Hours (CH) *</label>
-                    <input type="number" class="form-control" id="credit_hours" name="credit_hours" value="4" min="1" max="10" required>
+                    <input type="number" step="0.01" class="form-control" id="credit_hours" name="credit_hours" value="4" min="0" max="10" required>
                 </div>
                 <div class="col-md-3 mb-3">
                     <label for="full_marks" class="form-label">Default Full Marks *</label>
-                    <input type="number" class="form-control" id="full_marks" name="full_marks" value="100" min="1" max="200" required>
+                    <input type="number" step="0.01" class="form-control" id="full_marks" name="full_marks" value="100" min="0" max="200" required>
                 </div>
                 <div class="col-md-3 mb-3">
                     <label for="pass_marks" class="form-label">Default Pass Marks *</label>
-                    <input type="number" class="form-control" id="pass_marks" name="pass_marks" value="40" min="1" max="100" required>
+                    <input type="number" step="0.01" class="form-control" id="pass_marks" name="pass_marks" value="40" min="0" max="100" required>
                 </div>
             </div>
 
