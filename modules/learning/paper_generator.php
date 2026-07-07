@@ -14,6 +14,34 @@ $db = getDB();
 $school_id = Auth::getSchoolId();
 $is_admin = (Auth::getRole() === 'super_admin');
 
+// Handle Grid Layout Save via AJAX
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_save_grid'])) {
+    header('Content-Type: application/json');
+    $grid_name = trim($_POST['grid_name'] ?? '');
+    $c_id = (int)($_POST['class_id'] ?? 0);
+    $s_id = (int)($_POST['subject_id'] ?? 0);
+    $grid_data = $_POST['grid_data'] ?? '';
+    
+    if (empty($grid_name) || !$c_id || !$s_id || empty($grid_data)) {
+        echo json_encode(['success' => false, 'message' => 'Invalid parameters.']);
+        exit;
+    }
+    
+    try {
+        $stmt = $db->prepare("
+            INSERT INTO specification_grids (school_id, class_id, subject_id, name, config_json)
+            VALUES (?, ?, ?, ?, ?)
+        ");
+        $stmt->execute([$school_id, $c_id, $s_id, $grid_name, $grid_data]);
+        $grid_id = $db->lastInsertId();
+        
+        echo json_encode(['success' => true, 'grid_id' => $grid_id, 'name' => $grid_name]);
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+    }
+    exit;
+}
+
 // Fetch active classes for current school
 $classes_stmt = $db->prepare("SELECT * FROM classes WHERE school_id = ? AND is_active = 1 ORDER BY level, name");
 $classes_stmt->execute([$school_id]);
@@ -49,6 +77,18 @@ if ($class_id) {
     ");
     $stmt->execute([$class_id, $school_id]);
     $subjects = $stmt->fetchAll();
+}
+
+// Fetch saved grid layouts for this class/subject
+$saved_grids = [];
+if ($class_id && $subject_id) {
+    $stmt = $db->prepare("
+        SELECT * FROM specification_grids 
+        WHERE school_id = ? AND class_id = ? AND subject_id = ? 
+        ORDER BY name ASC
+    ");
+    $stmt->execute([$school_id, $class_id, $subject_id]);
+    $saved_grids = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
 // Questions variables
@@ -416,35 +456,18 @@ ob_start();
 
                     <div class="mb-4">
                         <label class="form-label fw-semibold">4. Selection Workflow</label>
-                        <div class="btn-group w-100" role="group">
+                        <div class="btn-group-vertical w-100 gap-2" role="group">
                             <input type="radio" class="btn-check" name="generation_mode" id="modeAuto" value="auto" <?= $generation_mode === 'auto' ? 'checked' : '' ?> onchange="document.getElementById('paramForm').submit();">
-                            <label class="btn btn-outline-primary" for="modeAuto"><i class="fas fa-magic"></i> Auto Specification</label>
+                            <label class="btn btn-outline-primary text-start px-3 py-2 fw-semibold" for="modeAuto"><i class="fas fa-magic me-2"></i> Automatic (CDC Grid)</label>
 
                             <input type="radio" class="btn-check" name="generation_mode" id="modeManual" value="manual" <?= $generation_mode === 'manual' ? 'checked' : '' ?> onchange="document.getElementById('paramForm').submit();">
-                            <label class="btn btn-outline-primary" for="modeManual"><i class="fas fa-hand-pointer"></i> Manual Pick</label>
+                            <label class="btn btn-outline-primary text-start px-3 py-2 fw-semibold" for="modeManual"><i class="fas fa-hand-pointer me-2"></i> Manual Selection</label>
+                            
+                            <input type="radio" class="btn-check" name="generation_mode" id="modeOcr" value="ocr" <?= $generation_mode === 'ocr' ? 'checked' : '' ?> onchange="document.getElementById('paramForm').submit();">
+                            <label class="btn btn-outline-primary text-start px-3 py-2 fw-semibold" for="modeOcr"><i class="fas fa-camera me-2"></i> OCR Paper Scanner</label>
                         </div>
                     </div>
                 </form>
-
-                <!-- OCR Paper Scanner Card -->
-                <div class="ocr-collapse-box p-3 mt-4">
-                    <h6 class="text-success fw-bold mb-2"><i class="fas fa-camera"></i> OCR Exam Paper Scanner</h6>
-                    <p class="small text-muted mb-3">Upload a photo of a printed paper to extract question text and copy it into the bank.</p>
-                    
-                    <div class="mb-3">
-                        <input type="file" id="ocrImageFile" class="form-control form-control-sm" accept="image/*">
-                    </div>
-                    
-                    <div id="ocrProgress" class="progress mb-2" style="display:none; height:18px;">
-                        <div id="ocrProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-success" role="progressbar" style="width: 0%;">0%</div>
-                    </div>
-                    <div id="ocrStatus" class="small text-success fw-semibold mb-2" style="display:none;">Initializing OCR Engine...</div>
-
-                    <textarea id="ocrOutputText" class="form-control form-control-sm mb-2" rows="5" placeholder="Extracted text will appear here..." style="font-size:0.8rem;"></textarea>
-                    
-                    <button class="btn btn-sm btn-success w-100" id="btnRunOCR"><i class="fas fa-cogs"></i> Run OCR Text Extraction</button>
-                    <button class="btn btn-sm btn-outline-success w-100 mt-2" onclick="navigator.clipboard.writeText(document.getElementById('ocrOutputText').value); alert('OCR text copied to clipboard!');"><i class="fas fa-copy"></i> Copy Extracted Text</button>
-                </div>
             </div>
         </div>
     </div>
@@ -462,10 +485,22 @@ ob_start();
             <?php if ($generation_mode === 'auto'): ?>
             <!-- CDC NEPAL SPECIFICATION GRID -->
             <div class="card generator-card h-100">
-                <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
                     <h5 class="mb-0 text-primary fw-bold"><i class="fas fa-border-all"></i> CDC Nepal Specification Grid</h5>
-                    <div class="badge bg-primary fs-6 p-2 shadow-sm">
-                        Live Full Marks: <span id="lblLiveMarks">0</span>
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="input-group input-group-sm" style="max-width: 230px;">
+                            <label class="input-group-text bg-light text-muted small" for="loadGridSelect">Load Grid</label>
+                            <select id="loadGridSelect" class="form-select" onchange="loadGridLayout(this)">
+                                <option value="">-- Saved Grids --</option>
+                                <?php foreach ($saved_grids as $sg): ?>
+                                    <option value="<?= htmlspecialchars($sg['config_json']) ?>"><?= sanitize($sg['name']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-success fw-semibold" onclick="saveGridLayout()" title="Save Current Grid Config"><i class="fas fa-save"></i> Save Layout</button>
+                        <div class="badge bg-primary fs-6 p-2 shadow-sm">
+                            Live Full Marks: <span id="lblLiveMarks">0</span>
+                        </div>
                     </div>
                 </div>
                 <div class="card-body p-4">
@@ -522,7 +557,7 @@ ob_start();
                 </div>
             </div>
             
-            <?php else: ?>
+            <?php elseif ($generation_mode === 'manual'): ?>
             <!-- MANUAL SELECTION -->
             <div class="card generator-card h-100">
                 <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
@@ -587,6 +622,45 @@ ob_start();
                             <i class="fas fa-exclamation-triangle me-2"></i> No questions found in the Question Bank matching the selected class and subject. Add questions first!
                         </div>
                     <?php endif; ?>
+                </div>
+            </div>
+            
+            <?php elseif ($generation_mode === 'ocr'): ?>
+            <!-- OCR PAPER SCANNER -->
+            <div class="card generator-card h-100">
+                <div class="card-header bg-white py-3 border-bottom">
+                    <h5 class="mb-0 text-success fw-bold"><i class="fas fa-camera"></i> OCR Exam Paper Scanner</h5>
+                </div>
+                <div class="card-body p-4">
+                    <p class="text-muted mb-4">Upload a high-quality photo or scanned image of a printed examination paper to extract question texts and copy them directly into the system.</p>
+                    
+                    <div class="row g-4">
+                        <div class="col-md-5 border-end">
+                            <div class="mb-4">
+                                <label class="form-label fw-semibold">1. Choose Scan Image File</label>
+                                <input type="file" id="ocrImageFile" class="form-control" accept="image/*">
+                            </div>
+                            
+                            <div class="mb-4">
+                                <button type="button" class="btn btn-success btn-lg w-100 shadow" id="btnRunOCR"><i class="fas fa-cogs"></i> Run OCR Extraction</button>
+                            </div>
+                            
+                            <div id="ocrProgress" class="progress mb-3" style="display:none; height:24px;">
+                                <div id="ocrProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-success" role="progressbar" style="width: 0%;">0%</div>
+                            </div>
+                            <div id="ocrStatus" class="alert alert-info fw-semibold text-center py-2" style="display:none;">Initializing OCR Engine...</div>
+                        </div>
+                        
+                        <div class="col-md-7">
+                            <label class="form-label fw-semibold">Extracted Text Output</label>
+                            <textarea id="ocrOutputText" class="form-control mb-3 font-monospace" rows="12" placeholder="Extracted text will appear here..." style="font-size:0.9rem;"></textarea>
+                            
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-outline-success w-50" onclick="navigator.clipboard.writeText(document.getElementById('ocrOutputText').value); alert('OCR text copied to clipboard!');"><i class="fas fa-copy"></i> Copy Text</button>
+                                <a href="questions.php" class="btn btn-primary w-50"><i class="fas fa-plus"></i> Go to Question Bank</a>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             <?php endif; ?>
@@ -785,54 +859,138 @@ function exportToWord() {
     document.body.removeChild(fileDownload);
 }
 
-// Client-Side OCR scanner using Tesseract.js
-document.getElementById('btnRunOCR').addEventListener('click', function(e) {
-    e.preventDefault();
-    const fileInput = document.getElementById('ocrImageFile');
-    const statusDiv = document.getElementById('ocrStatus');
-    const progressDiv = document.getElementById('ocrProgress');
-    const progressBar = document.getElementById('ocrProgressBar');
-    const outputArea = document.getElementById('ocrOutputText');
+// Client-Side OCR scanner using Tesseract.js (safely check if button exists)
+const btnRunOCR = document.getElementById('btnRunOCR');
+if (btnRunOCR) {
+    btnRunOCR.addEventListener('click', function(e) {
+        e.preventDefault();
+        const fileInput = document.getElementById('ocrImageFile');
+        const statusDiv = document.getElementById('ocrStatus');
+        const progressDiv = document.getElementById('ocrProgress');
+        const progressBar = document.getElementById('ocrProgressBar');
+        const outputArea = document.getElementById('ocrOutputText');
+        
+        if (fileInput.files.length === 0) {
+            alert('Please select an image file first!');
+            return;
+        }
+        
+        const file = fileInput.files[0];
+        statusDiv.style.display = 'block';
+        progressDiv.style.display = 'flex';
+        statusDiv.textContent = 'Initializing Tesseract OCR Engine...';
+        progressBar.style.width = '5%';
+        progressBar.textContent = '5%';
+        
+        Tesseract.recognize(
+            file,
+            'eng+nep', // Supports both English and Nepali OCR extraction!
+            { 
+                logger: m => {
+                    if (m.status === 'recognizing text') {
+                        const pct = Math.round(m.progress * 100);
+                        progressBar.style.width = pct + '%';
+                        progressBar.textContent = pct + '%';
+                        statusDiv.textContent = 'Extracting Text: ' + pct + '%';
+                    }
+                } 
+            }
+        ).then(({ data: { text } }) => {
+            outputArea.value = text;
+            statusDiv.textContent = 'Extraction complete!';
+            progressBar.style.width = '100%';
+            progressBar.textContent = 'Done!';
+            
+            // Render equations if MathJax was found in OCR output (optional)
+            if (window.MathJax && window.MathJax.typesetPromise) {
+                MathJax.typesetPromise();
+            }
+        }).catch(err => {
+            console.error(err);
+            statusDiv.textContent = 'OCR Error: ' + err.message;
+            progressBar.classList.add('bg-danger');
+        });
+    });
+}
+
+// Save Current Grid Layout via AJAX
+function saveGridLayout() {
+    const gridName = prompt("Enter a name for this customized grid layout (e.g., 'First Term Standard Grid'):");
+    if (!gridName) return;
     
-    if (fileInput.files.length === 0) {
-        alert('Please select an image file first!');
+    const classId = "<?= htmlspecialchars($class_id) ?>";
+    const subjectId = "<?= htmlspecialchars($subject_id) ?>";
+    
+    if (!classId || !subjectId) {
+        alert("Please select Class and Subject first.");
         return;
     }
     
-    const file = fileInput.files[0];
-    statusDiv.style.display = 'block';
-    progressDiv.style.display = 'flex';
-    statusDiv.textContent = 'Initializing Tesseract OCR Engine...';
-    progressBar.style.width = '5%';
-    progressBar.textContent = '5%';
-    
-    Tesseract.recognize(
-        file,
-        'eng+nep', // Supports both English and Nepali OCR extraction!
-        { 
-            logger: m => {
-                if (m.status === 'recognizing text') {
-                    const pct = Math.round(m.progress * 100);
-                    progressBar.style.width = pct + '%';
-                    progressBar.textContent = pct + '%';
-                    statusDiv.textContent = 'Extracting Text: ' + pct + '%';
-                }
-            } 
-        }
-    ).then(({ data: { text } }) => {
-        outputArea.value = text;
-        statusDiv.textContent = 'Extraction complete!';
-        progressBar.style.width = '100%';
-        progressBar.textContent = 'Done!';
+    // Build grid data JSON
+    const gridData = {};
+    const rows = document.querySelectorAll('.grid-row');
+    rows.forEach(row => {
+        const countInput = row.querySelector('.grid-count');
+        const marksInput = row.querySelector('.grid-marks');
+        const type = countInput.name.replace('count_', '').replace(/_/g, ' ');
         
-        // Render equations if MathJax was found in OCR output (optional)
-        MathJax.typesetPromise();
-    }).catch(err => {
-        console.error(err);
-        statusDiv.textContent = 'OCR Error: ' + err.message;
-        progressBar.classList.add('bg-danger');
+        gridData[type] = {
+            count: parseInt(countInput.value) || 0,
+            marks: parseInt(marksInput.value) || 0
+        };
     });
-});
+    
+    $.ajax({
+        url: window.location.pathname + window.location.search,
+        type: 'POST',
+        data: {
+            action_save_grid: 1,
+            grid_name: gridName,
+            class_id: classId,
+            subject_id: subjectId,
+            grid_data: JSON.stringify(gridData)
+        },
+        dataType: 'json',
+        success: function(response) {
+            if (response.success) {
+                alert("Grid layout saved successfully!");
+                // Append to load grid dropdown
+                const select = document.getElementById('loadGridSelect');
+                const opt = document.createElement('option');
+                opt.value = JSON.stringify(gridData);
+                opt.textContent = response.name;
+                opt.selected = true;
+                select.appendChild(opt);
+            } else {
+                alert("Error saving grid: " + response.message);
+            }
+        },
+        error: function() {
+            alert("An error occurred while saving the grid.");
+        }
+    });
+}
+
+// Load Selected Grid Layout Config
+function loadGridLayout(selectEl) {
+    const val = selectEl.value;
+    if (!val) return;
+    
+    try {
+        const gridData = JSON.parse(val);
+        for (const type in gridData) {
+            const safeType = type.replace(/ /g, '_');
+            const countInput = document.querySelector('input[name="count_' + safeType + '"]');
+            const marksInput = document.querySelector('input[name="marks_' + safeType + '"]');
+            
+            if (countInput) countInput.value = gridData[type].count;
+            if (marksInput) marksInput.value = gridData[type].marks;
+        }
+        calculateLiveMarks();
+    } catch (e) {
+        console.error("Failed to parse grid data:", e);
+    }
+}
 
 $(document).ready(function() {
     calculateLiveMarks();
