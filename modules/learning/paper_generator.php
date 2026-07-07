@@ -28,11 +28,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_save_grid'])) 
     }
     
     try {
+        $grid_school_id = $school_id ?: 0;
         $stmt = $db->prepare("
             INSERT INTO specification_grids (school_id, class_id, subject_id, name, config_json)
             VALUES (?, ?, ?, ?, ?)
         ");
-        $stmt->execute([$school_id, $c_id, $s_id, $grid_name, $grid_data]);
+        $stmt->execute([$grid_school_id, $c_id, $s_id, $grid_name, $grid_data]);
         $grid_id = $db->lastInsertId();
         
         echo json_encode(['success' => true, 'grid_id' => $grid_id, 'name' => $grid_name]);
@@ -43,14 +44,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_save_grid'])) 
 }
 
 // Fetch active classes for current school
-$classes_stmt = $db->prepare("SELECT * FROM classes WHERE school_id = ? AND is_active = 1 ORDER BY level, name");
-$classes_stmt->execute([$school_id]);
-$classes = $classes_stmt->fetchAll();
+if ($is_admin && !$school_id) {
+    $classes_stmt = $db->prepare("SELECT * FROM classes WHERE is_active = 1 GROUP BY name ORDER BY level, name");
+    $classes_stmt->execute();
+    $classes = $classes_stmt->fetchAll();
+} else {
+    $classes_stmt = $db->prepare("SELECT * FROM classes WHERE school_id = ? AND is_active = 1 ORDER BY level, name");
+    $classes_stmt->execute([$school_id]);
+    $classes = $classes_stmt->fetchAll();
+}
 
 // Fetch exams for current school
-$exams_stmt = $db->prepare("SELECT * FROM exams WHERE school_id = ? ORDER BY start_date DESC");
-$exams_stmt->execute([$school_id]);
-$exams = $exams_stmt->fetchAll();
+if ($is_admin && !$school_id) {
+    $exams_stmt = $db->prepare("SELECT * FROM exams ORDER BY start_date DESC");
+    $exams_stmt->execute();
+    $exams = $exams_stmt->fetchAll();
+} else {
+    $exams_stmt = $db->prepare("SELECT * FROM exams WHERE school_id = ? ORDER BY start_date DESC");
+    $exams_stmt->execute([$school_id]);
+    $exams = $exams_stmt->fetchAll();
+}
 
 // Get filter inputs
 $class_id = $_GET['class_id'] ?? '';
@@ -69,26 +82,47 @@ if ($school_id) {
 // Fetch subjects mapped to selected class
 $subjects = [];
 if ($class_id) {
-    $stmt = $db->prepare("
-        SELECT s.* FROM subjects s 
-        JOIN class_subjects cs ON cs.subject_id = s.id 
-        WHERE cs.class_id = ? AND cs.school_id = ?
-        ORDER BY s.name_en
-    ");
-    $stmt->execute([$class_id, $school_id]);
-    $subjects = $stmt->fetchAll();
+    if ($is_admin && !$school_id) {
+        $stmt = $db->prepare("
+            SELECT s.* FROM subjects s 
+            JOIN class_subjects cs ON cs.subject_id = s.id 
+            WHERE cs.class_id = ?
+            ORDER BY s.name_en
+        ");
+        $stmt->execute([$class_id]);
+        $subjects = $stmt->fetchAll();
+    } else {
+        $stmt = $db->prepare("
+            SELECT s.* FROM subjects s 
+            JOIN class_subjects cs ON cs.subject_id = s.id 
+            WHERE cs.class_id = ? AND cs.school_id = ?
+            ORDER BY s.name_en
+        ");
+        $stmt->execute([$class_id, $school_id]);
+        $subjects = $stmt->fetchAll();
+    }
 }
 
 // Fetch saved grid layouts for this class/subject
 $saved_grids = [];
 if ($class_id && $subject_id) {
-    $stmt = $db->prepare("
-        SELECT * FROM specification_grids 
-        WHERE school_id = ? AND class_id = ? AND subject_id = ? 
-        ORDER BY name ASC
-    ");
-    $stmt->execute([$school_id, $class_id, $subject_id]);
-    $saved_grids = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    if ($is_admin && !$school_id) {
+        $stmt = $db->prepare("
+            SELECT * FROM specification_grids 
+            WHERE class_id = ? AND subject_id = ? 
+            ORDER BY name ASC
+        ");
+        $stmt->execute([$class_id, $subject_id]);
+        $saved_grids = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } else {
+        $stmt = $db->prepare("
+            SELECT * FROM specification_grids 
+            WHERE school_id = ? AND class_id = ? AND subject_id = ? 
+            ORDER BY name ASC
+        ");
+        $stmt->execute([$school_id, $class_id, $subject_id]);
+        $saved_grids = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
 }
 
 // Questions variables

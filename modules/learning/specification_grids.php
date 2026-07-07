@@ -54,12 +54,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $error = "Grid name, Class, and Subject are required.";
     } else {
         try {
+            $grid_school_id = $school_id ?: 0;
             if ($action === 'add') {
                 $stmt = $db->prepare("
                     INSERT INTO specification_grids (school_id, class_id, subject_id, name, config_json)
                     VALUES (?, ?, ?, ?, ?)
                 ");
-                $stmt->execute([$school_id, $class_id, $subject_id, $grid_name, $config_json]);
+                $stmt->execute([$grid_school_id, $class_id, $subject_id, $grid_name, $config_json]);
                 $grid_id = $db->lastInsertId();
                 Auth::logActivity(Auth::getUserId(), 'Create Specification Grid', 'specification_grids', $grid_id);
                 redirect(APP_URL . '/modules/learning/specification_grids.php', 'Specification grid created successfully.', 'success');
@@ -70,7 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     SET name = ?, class_id = ?, subject_id = ?, config_json = ? 
                     WHERE id = ? AND school_id = ?
                 ");
-                $stmt->execute([$grid_name, $class_id, $subject_id, $config_json, $grid_id, $school_id]);
+                $stmt->execute([$grid_name, $class_id, $subject_id, $config_json, $grid_id, $grid_school_id]);
                 Auth::logActivity(Auth::getUserId(), 'Update Specification Grid', 'specification_grids', $grid_id);
                 redirect(APP_URL . '/modules/learning/specification_grids.php', 'Specification grid updated successfully.', 'success');
             }
@@ -82,7 +83,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
 // Fetch all saved grids for current school
 $grids = [];
-if ($school_id) {
+// Fetch all saved grids for current school
+$grids = [];
+if ($is_admin && !$school_id) {
+    $stmt = $db->prepare("
+        SELECT sg.*, c.name as class_name, s.name_en as subject_name 
+        FROM specification_grids sg
+        LEFT JOIN classes c ON sg.class_id = c.id
+        LEFT JOIN subjects s ON sg.subject_id = s.id
+        ORDER BY sg.id DESC
+    ");
+    $stmt->execute();
+    $grids = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} elseif ($school_id) {
     $stmt = $db->prepare("
         SELECT sg.*, c.name as class_name, s.name_en as subject_name 
         FROM specification_grids sg
@@ -98,7 +111,15 @@ if ($school_id) {
 // Fetch classes and subjects for select elements
 $classes = [];
 $subjects = [];
-if ($school_id) {
+if ($is_admin && !$school_id) {
+    $stmt = $db->prepare("SELECT * FROM classes WHERE is_active = 1 GROUP BY name ORDER BY level, name");
+    $stmt->execute();
+    $classes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    $stmt = $db->prepare("SELECT * FROM subjects GROUP BY name_en ORDER BY name_en");
+    $stmt->execute();
+    $subjects = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} elseif ($school_id) {
     $stmt = $db->prepare("SELECT * FROM classes WHERE school_id = ? AND is_active = 1 ORDER BY level, name");
     $stmt->execute([$school_id]);
     $classes = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -169,12 +190,16 @@ ob_start();
                                     <a href="<?= APP_URL ?>/modules/learning/paper_generator.php?class_id=<?= $g['class_id'] ?>&subject_id=<?= $g['subject_id'] ?>&generation_mode=auto" class="btn btn-sm btn-outline-success" title="Generate Paper using this Grid">
                                         <i class="fas fa-magic"></i> Use Grid
                                     </a>
+                                    <?php if ($is_admin || $g['school_id'] == $school_id): ?>
                                     <button onclick='editGrid(<?= json_encode($g) ?>)' class="btn btn-sm btn-outline-warning" title="Edit">
                                         <i class="fas fa-edit"></i>
                                     </button>
                                     <a href="?delete=<?= $g['id'] ?>" class="btn btn-sm btn-outline-danger" title="Delete" onclick="return confirm('Are you sure you want to delete this specification grid layout?');">
                                         <i class="fas fa-trash"></i>
                                     </a>
+                                    <?php else: ?>
+                                    <span class="badge bg-light text-muted border" title="System Blueprint Grid"><i class="fas fa-lock text-muted"></i> System</span>
+                                    <?php endif; ?>
                                 </td>
                             </tr>
                             <?php endforeach; ?>
