@@ -103,7 +103,8 @@ class Database {
             ['classes', 'class_teacher_name'],
             ['students', 'optional_subject_i'],
             ['exam_subjects', 'credit_hours'],
-            ['questions', 'answer']
+            ['questions', 'answer'],
+            ['specification_grids', null]
         ];
         
         foreach ($checks as $check) {
@@ -248,6 +249,18 @@ class Database {
             title VARCHAR(255) NOT NULL,
             content TEXT NOT NULL,
             created_at timestamp DEFAULT CURRENT_TIMESTAMP
+        )";
+        $this->conn->exec($sql);
+
+        // 8. specification_grids
+        $sql = "CREATE TABLE IF NOT EXISTS specification_grids (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            school_id INTEGER NOT NULL,
+            class_id INTEGER NOT NULL,
+            subject_id INTEGER NOT NULL,
+            name VARCHAR(255) NOT NULL,
+            config_json TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )";
         $this->conn->exec($sql);
 
