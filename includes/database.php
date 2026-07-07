@@ -104,7 +104,8 @@ class Database {
             ['students', 'optional_subject_i'],
             ['exam_subjects', 'credit_hours'],
             ['questions', 'answer'],
-            ['specification_grids', null]
+            ['specification_grids', null],
+            ['chapters', null]
         ];
         
         foreach ($checks as $check) {
@@ -263,6 +264,41 @@ class Database {
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )";
         $this->conn->exec($sql);
+
+        // 9. chapters
+        $sql = "CREATE TABLE IF NOT EXISTS chapters (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            school_id INTEGER DEFAULT 0,
+            class_id INTEGER NOT NULL,
+            subject_id INTEGER NOT NULL,
+            name VARCHAR(255) NOT NULL,
+            name_np VARCHAR(255) DEFAULT NULL,
+            sort_order INTEGER DEFAULT 0
+        )";
+        $this->conn->exec($sql);
+
+        // Seed universal classes if not present
+        $stmt = $this->conn->query("SELECT COUNT(*) FROM classes WHERE school_id = 0");
+        if ($stmt->fetchColumn() == 0) {
+            $uni_classes = [
+                ['Class 1', 'कक्षा १', 'Primary'],
+                ['Class 2', 'कक्षा २', 'Primary'],
+                ['Class 3', 'कक्षा ३', 'Primary'],
+                ['Class 4', 'कक्षा ४', 'Primary'],
+                ['Class 5', 'कक्षा ५', 'Primary'],
+                ['Class 6', 'कक्षा ६', 'Lower Secondary'],
+                ['Class 7', 'कक्षा ७', 'Lower Secondary'],
+                ['Class 8', 'कक्षा ८', 'Lower Secondary'],
+                ['Class 9', 'कक्षा ९', 'Secondary'],
+                ['Class 10', 'कक्षा १०', 'Secondary'],
+                ['Class 11', 'कक्षा ११', 'Higher Secondary'],
+                ['Class 12', 'कक्षा १२', 'Higher Secondary']
+            ];
+            $ins = $this->conn->prepare("INSERT INTO classes (name, name_np, level, grading_type, school_id, is_active) VALUES (?, ?, ?, 'gpa', 0, 1)");
+            foreach ($uni_classes as $uc) {
+                $ins->execute($uc);
+            }
+        }
 
         // B. Alter tables - Add columns dynamically
         

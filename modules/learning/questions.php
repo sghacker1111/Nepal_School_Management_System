@@ -127,6 +127,38 @@ if (isset($_POST['action_quick_add_subject'])) {
     exit;
 }
 
+// Handle Get Chapters AJAX Request
+if (isset($_GET['action_get_chapters'])) {
+    header('Content-Type: application/json');
+    $c_id = (int)($_GET['class_id'] ?? 0);
+    $s_id = (int)($_GET['subject_id'] ?? 0);
+    
+    // Fetch class name and subject name for CDC lookup fallback
+    $stmt = $db->prepare("SELECT name FROM classes WHERE id = ?");
+    $stmt->execute([$c_id]);
+    $c_name = $stmt->fetchColumn() ?: '';
+    
+    $stmt = $db->prepare("SELECT name_en FROM subjects WHERE id = ?");
+    $stmt->execute([$s_id]);
+    $s_name = $stmt->fetchColumn() ?: '';
+    
+    // Query DB chapters
+    $stmt = $db->prepare("SELECT name FROM chapters WHERE (school_id = ? OR school_id = 0) AND class_id = ? AND subject_id = ? ORDER BY sort_order, id");
+    $stmt->execute([$school_id ?: 0, $c_id, $s_id]);
+    $chapters = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    
+    if (empty($chapters)) {
+        // Fallback to static cdcCurriculum
+        $curriculum = require __DIR__ . '/../../config/cdc_curriculum.php';
+        if (isset($curriculum[$s_name][$c_name])) {
+            $chapters = $curriculum[$s_name][$c_name];
+        }
+    }
+    
+    echo json_encode($chapters);
+    exit;
+}
+
 // Handle Add/Edit Question
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $action = $_POST['action'];
@@ -1057,49 +1089,13 @@ function updateChaptersDropdown(selectedChapterValue = '') {
     const classId = document.getElementById('modalClass').value;
     const subjectId = document.getElementById('modalSubject').value;
     
-    const className = classesMap[classId] || '';
-    const subjectName = subjectsMap[subjectId] || '';
-    
     const select = document.getElementById('modalChapterSelect');
     const customInput = document.getElementById('modalChapterCustom');
     const hiddenInput = document.getElementById('modalChapter');
     
     select.innerHTML = '';
     
-    let chapters = [];
-    if (cdcCurriculum[subjectName] && cdcCurriculum[subjectName][className]) {
-        chapters = cdcCurriculum[subjectName][className];
-    }
-    
-    if (chapters.length > 0) {
-        chapters.forEach(ch => {
-            const opt = document.createElement('option');
-            opt.value = ch;
-            opt.textContent = ch;
-            select.appendChild(opt);
-        });
-        
-        const optCustom = document.createElement('option');
-        optCustom.value = '__custom__';
-        optCustom.textContent = 'Other / Custom Chapter';
-        select.appendChild(optCustom);
-        
-        if (selectedChapterValue) {
-            if (chapters.includes(selectedChapterValue)) {
-                select.value = selectedChapterValue;
-                customInput.style.display = 'none';
-                hiddenInput.value = selectedChapterValue;
-            } else {
-                select.value = '__custom__';
-                customInput.style.display = 'block';
-                customInput.value = selectedChapterValue;
-                hiddenInput.value = selectedChapterValue;
-            }
-        } else {
-            hiddenInput.value = select.value;
-            customInput.style.display = 'none';
-        }
-    } else {
+    if (!classId || !subjectId) {
         const optCustom = document.createElement('option');
         optCustom.value = '__custom__';
         optCustom.textContent = 'Type Custom Chapter';
@@ -1109,7 +1105,71 @@ function updateChaptersDropdown(selectedChapterValue = '') {
         customInput.style.display = 'block';
         customInput.value = selectedChapterValue || '';
         hiddenInput.value = selectedChapterValue || '';
+        return;
     }
+    
+    $.ajax({
+        url: window.location.pathname + window.location.search,
+        data: {
+            action_get_chapters: 1,
+            class_id: classId,
+            subject_id: subjectId
+        },
+        dataType: 'json',
+        success: function(chapters) {
+            select.innerHTML = '';
+            if (chapters && chapters.length > 0) {
+                chapters.forEach(ch => {
+                    const opt = document.createElement('option');
+                    opt.value = ch;
+                    opt.textContent = ch;
+                    select.appendChild(opt);
+                });
+                
+                const optCustom = document.createElement('option');
+                optCustom.value = '__custom__';
+                optCustom.textContent = 'Other / Custom Chapter';
+                select.appendChild(optCustom);
+                
+                if (selectedChapterValue) {
+                    if (chapters.includes(selectedChapterValue)) {
+                        select.value = selectedChapterValue;
+                        customInput.style.display = 'none';
+                        hiddenInput.value = selectedChapterValue;
+                    } else {
+                        select.value = '__custom__';
+                        customInput.style.display = 'block';
+                        customInput.value = selectedChapterValue;
+                        hiddenInput.value = selectedChapterValue;
+                    }
+                } else {
+                    hiddenInput.value = select.value;
+                    customInput.style.display = 'none';
+                }
+            } else {
+                const optCustom = document.createElement('option');
+                optCustom.value = '__custom__';
+                optCustom.textContent = 'Type Custom Chapter';
+                select.appendChild(optCustom);
+                
+                select.value = '__custom__';
+                customInput.style.display = 'block';
+                customInput.value = selectedChapterValue || '';
+                hiddenInput.value = selectedChapterValue || '';
+            }
+        },
+        error: function() {
+            const optCustom = document.createElement('option');
+            optCustom.value = '__custom__';
+            optCustom.textContent = 'Type Custom Chapter';
+            select.appendChild(optCustom);
+            
+            select.value = '__custom__';
+            customInput.style.display = 'block';
+            customInput.value = selectedChapterValue || '';
+            hiddenInput.value = selectedChapterValue || '';
+        }
+    });
 }
 
 function onChapterSelectChange() {

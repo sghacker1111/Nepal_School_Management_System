@@ -154,6 +154,8 @@ foreach ($types_info as $type => $info) {
 // ----------------------------------------------------
 // FETCH QUESTIONS CORE LOGIC (School-owned + Universal Mapping)
 // ----------------------------------------------------
+$chapter_filter = $_GET['chapter'] ?? '';
+
 $all_available_questions = [];
 if ($class_id && $subject_id) {
     // We need target class level and subject code/name to match Universal questions
@@ -168,19 +170,35 @@ if ($class_id && $subject_id) {
     $sub_name = $sub ? $sub['name_en'] : '';
 
     // Fetch all questions matching this class/subject level
-    $stmt = $db->prepare("
-        SELECT q.*, c.name as class_name, s.name_en as subject_name 
-        FROM questions q
-        LEFT JOIN classes c ON q.class_id = c.id
-        LEFT JOIN subjects s ON q.subject_id = s.id
-        WHERE (
-            (q.school_id = ? AND q.class_id = ? AND q.subject_id = ?)
-            OR
-            (q.school_id = 0 AND c.level = ? AND (s.code = ? OR s.name_en = ?))
-        )
-        ORDER BY q.id DESC
-    ");
-    $stmt->execute([$school_id, $class_id, $subject_id, $lvl, $sub_code, $sub_name]);
+    if ($chapter_filter && $chapter_filter !== 'all') {
+        $stmt = $db->prepare("
+            SELECT q.*, c.name as class_name, s.name_en as subject_name 
+            FROM questions q
+            LEFT JOIN classes c ON q.class_id = c.id
+            LEFT JOIN subjects s ON q.subject_id = s.id
+            WHERE (
+                (q.school_id = ? AND q.class_id = ? AND q.subject_id = ?)
+                OR
+                (q.school_id = 0 AND c.level = ? AND (s.code = ? OR s.name_en = ?))
+            ) AND q.chapter = ?
+            ORDER BY q.id DESC
+        ");
+        $stmt->execute([$school_id, $class_id, $subject_id, $lvl, $sub_code, $sub_name, $chapter_filter]);
+    } else {
+        $stmt = $db->prepare("
+            SELECT q.*, c.name as class_name, s.name_en as subject_name 
+            FROM questions q
+            LEFT JOIN classes c ON q.class_id = c.id
+            LEFT JOIN subjects s ON q.subject_id = s.id
+            WHERE (
+                (q.school_id = ? AND q.class_id = ? AND q.subject_id = ?)
+                OR
+                (q.school_id = 0 AND c.level = ? AND (s.code = ? OR s.name_en = ?))
+            )
+            ORDER BY q.id DESC
+        ");
+        $stmt->execute([$school_id, $class_id, $subject_id, $lvl, $sub_code, $sub_name]);
+    }
     $all_available_questions = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
@@ -479,7 +497,14 @@ ob_start();
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label fw-semibold">3. Select Examination Context</label>
+                        <label class="form-label fw-semibold">3. Filter by Chapter</label>
+                        <select name="chapter" id="chapterFilterSelect" class="form-select" onchange="document.getElementById('paramForm').submit();">
+                            <option value="">All Chapters (Full Syllabus)</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">4. Select Examination Context</label>
                         <select name="exam_id" class="form-select" onchange="document.getElementById('paramForm').submit();">
                             <option value="">Choose Exam (Optional)</option>
                             <?php foreach ($exams as $e): ?>
@@ -1029,6 +1054,38 @@ function loadGridLayout(selectEl) {
 $(document).ready(function() {
     calculateLiveMarks();
     updateManualCount();
+    
+    // Fetch chapters for chapter selector dropdown
+    const classId = "<?= htmlspecialchars($class_id) ?>";
+    const subjectId = "<?= htmlspecialchars($subject_id) ?>";
+    const selectedChapter = "<?= htmlspecialchars($chapter_filter) ?>";
+    
+    if (classId && subjectId) {
+        $.ajax({
+            url: '../learning/questions.php',
+            data: {
+                action_get_chapters: 1,
+                class_id: classId,
+                subject_id: subjectId
+            },
+            dataType: 'json',
+            success: function(chapters) {
+                const select = document.getElementById('chapterFilterSelect');
+                if (select) {
+                    select.innerHTML = '<option value="">All Chapters (Full Syllabus)</option>';
+                    if (chapters && chapters.length > 0) {
+                        chapters.forEach(ch => {
+                            const opt = document.createElement('option');
+                            opt.value = ch;
+                            opt.textContent = ch;
+                            if (ch === selectedChapter) opt.selected = true;
+                            select.appendChild(opt);
+                        });
+                    }
+                }
+            }
+        });
+    }
 });
 </script>
 
