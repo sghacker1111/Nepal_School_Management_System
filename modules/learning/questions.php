@@ -613,18 +613,6 @@ const classesMap = <?= json_encode(array_column($classes, 'name', 'id')) ?>;
 const subjectsMap = <?= json_encode(array_column($subjects, 'name_en', 'id')) ?>;
 const cdcCurriculum = <?= json_encode(require __DIR__ . '/../../config/cdc_curriculum.php') ?>;
 
-$(document).ready(function() {
-    document.getElementById('modalClass').addEventListener('change', () => updateChaptersDropdown());
-    document.getElementById('modalSubject').addEventListener('change', () => updateChaptersDropdown());
-    
-    // Initialize TeX Modal
-    texModalObj = new bootstrap.Modal(document.getElementById('texModal'));
-    
-    // Event listeners for live MathJax TeX preview
-    document.getElementById('texInput').addEventListener('input', updateTexPreview);
-    document.getElementById('texDisplayMode').addEventListener('change', updateTexPreview);
-    document.getElementById('btnInsertTex').addEventListener('click', insertTexIntoEditor);
-    
 function escapeHtml(text) {
     return text
         .replace(/&/g, "&amp;")
@@ -647,8 +635,19 @@ function convertLatexToSpan(content) {
     return content;
 }
 
-// Initialize TinyMCE editors (Unified for all 12 textareas to match size and functionality)
 $(document).ready(function() {
+    document.getElementById('modalClass').addEventListener('change', () => updateChaptersDropdown());
+    document.getElementById('modalSubject').addEventListener('change', () => updateChaptersDropdown());
+    
+    // Initialize TeX Modal
+    texModalObj = new bootstrap.Modal(document.getElementById('texModal'));
+    
+    // Event listeners for live MathJax TeX preview
+    document.getElementById('texInput').addEventListener('input', updateTexPreview);
+    document.getElementById('texDisplayMode').addEventListener('change', updateTexPreview);
+    document.getElementById('btnInsertTex').addEventListener('click', insertTexIntoEditor);
+    
+    // Initialize TinyMCE editors (Unified for all 12 textareas to match size and functionality)
     if (window.tinymce) {
         tinymce.init({
             selector: '#modalQuestionText, #modalQuestionTextNp, #modalAnswer, #modalAnswerNp, #modalOptA, #modalOptB, #modalOptC, #modalOptD, #modalOptANp, #modalOptBNp, #modalOptCNp, #modalOptDNp',
