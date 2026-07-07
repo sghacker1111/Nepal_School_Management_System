@@ -55,11 +55,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $subject_id = (int)$_POST['subject_id'];
     $chapter = sanitize($_POST['chapter'] ?? '');
     $type = sanitize($_POST['type'] ?? 'MCQ');
-    $question_text = sanitize($_POST['question_text'] ?? '');
-    $question_text_np = sanitize($_POST['question_text_np'] ?? '');
+    $question_text = trim($_POST['question_text'] ?? '');
+    $question_text_np = trim($_POST['question_text_np'] ?? '');
     $marks = (int)($_POST['marks'] ?? 1);
-    $answer = sanitize($_POST['answer'] ?? '');
-    $answer_np = sanitize($_POST['answer_np'] ?? '');
+    $answer = trim($_POST['answer'] ?? '');
+    $answer_np = trim($_POST['answer_np'] ?? '');
     
     // MCQ Options
     $options_json = null;
@@ -67,18 +67,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $correct_option = null;
     if ($type === 'MCQ') {
         $opts = [
-            'A' => sanitize($_POST['option_a'] ?? ''),
-            'B' => sanitize($_POST['option_b'] ?? ''),
-            'C' => sanitize($_POST['option_c'] ?? ''),
-            'D' => sanitize($_POST['option_d'] ?? '')
+            'A' => trim($_POST['option_a'] ?? ''),
+            'B' => trim($_POST['option_b'] ?? ''),
+            'C' => trim($_POST['option_c'] ?? ''),
+            'D' => trim($_POST['option_d'] ?? '')
         ];
         $options_json = json_encode($opts);
         
         $opts_np = [
-            'A' => sanitize($_POST['option_a_np'] ?? ''),
-            'B' => sanitize($_POST['option_b_np'] ?? ''),
-            'C' => sanitize($_POST['option_c_np'] ?? ''),
-            'D' => sanitize($_POST['option_d_np'] ?? '')
+            'A' => trim($_POST['option_a_np'] ?? ''),
+            'B' => trim($_POST['option_b_np'] ?? ''),
+            'C' => trim($_POST['option_c_np'] ?? ''),
+            'D' => trim($_POST['option_d_np'] ?? '')
         ];
         $options_np_json = json_encode($opts_np);
         
@@ -515,38 +515,38 @@ ob_start();
                         <div class="row g-3">
                             <div class="col-md-6">
                                 <label class="form-label">Option A (English) *</label>
-                                <input type="text" name="option_a" id="modalOptA" class="form-control mcq-field" placeholder="Answer option A (English)">
+                                <textarea name="option_a" id="modalOptA" class="form-control mcq-field" rows="2" placeholder="Answer option A (English)"></textarea>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Option A (Nepali)</label>
-                                <input type="text" name="option_a_np" id="modalOptANp" class="form-control" placeholder="उत्तर विकल्प क (नेपाली)">
+                                <textarea name="option_a_np" id="modalOptANp" class="form-control" rows="2" placeholder="उत्तर विकल्प क (नेपाली)"></textarea>
                             </div>
                             
                             <div class="col-md-6">
                                 <label class="form-label">Option B (English) *</label>
-                                <input type="text" name="option_b" id="modalOptB" class="form-control mcq-field" placeholder="Answer option B (English)">
+                                <textarea name="option_b" id="modalOptB" class="form-control mcq-field" rows="2" placeholder="Answer option B (English)"></textarea>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Option B (Nepali)</label>
-                                <input type="text" name="option_b_np" id="modalOptBNp" class="form-control" placeholder="उत्तर विकल्प ख (नेपाली)">
+                                <textarea name="option_b_np" id="modalOptBNp" class="form-control" rows="2" placeholder="उत्तर विकल्प ख (नेपाली)"></textarea>
                             </div>
                             
                             <div class="col-md-6">
                                 <label class="form-label">Option C (English) *</label>
-                                <input type="text" name="option_c" id="modalOptC" class="form-control mcq-field" placeholder="Answer option C (English)">
+                                <textarea name="option_c" id="modalOptC" class="form-control mcq-field" rows="2" placeholder="Answer option C (English)"></textarea>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Option C (Nepali)</label>
-                                <input type="text" name="option_c_np" id="modalOptCNp" class="form-control" placeholder="उत्तर विकल्प ग (नेपाली)">
+                                <textarea name="option_c_np" id="modalOptCNp" class="form-control" rows="2" placeholder="उत्तर विकल्प ग (नेपाली)"></textarea>
                             </div>
                             
                             <div class="col-md-6">
                                 <label class="form-label">Option D (English) *</label>
-                                <input type="text" name="option_d" id="modalOptD" class="form-control mcq-field" placeholder="Answer option D (English)">
+                                <textarea name="option_d" id="modalOptD" class="form-control mcq-field" rows="2" placeholder="Answer option D (English)"></textarea>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Option D (Nepali)</label>
-                                <input type="text" name="option_d_np" id="modalOptDNp" class="form-control" placeholder="उत्तर विकल्प घ (नेपाली)">
+                                <textarea name="option_d_np" id="modalOptDNp" class="form-control" rows="2" placeholder="उत्तर विकल्प घ (नेपाली)"></textarea>
                             </div>
                             
                             <div class="col-md-4">
@@ -568,7 +568,47 @@ ob_start();
         </form>
 </div>
 
+<!-- Mathematics in TeX Dialog Modal -->
+<div class="modal fade" id="texModal" tabindex="-1" aria-hidden="true" style="z-index: 9999;">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content shadow-lg border-0">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title fw-bold text-dark"><i class="fas fa-square-root-alt text-primary"></i> Mathematics in TeX</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-secondary">Write your TeX here</label>
+                    <textarea id="texInput" class="form-control font-monospace" rows="4" placeholder="e.g. x = {-b \pm \sqrt{b^2-4ac} \over 2a}"></textarea>
+                </div>
+                <div class="mb-3 text-end">
+                    <a href="https://en.wikibooks.org/wiki/LaTeX/Mathematics" target="_blank" class="text-decoration-none small text-primary fw-bold">
+                        TeX documentation <i class="fas fa-external-link-alt small"></i>
+                    </a>
+                </div>
+                <div class="mb-3 p-3 bg-light rounded border text-center" style="min-height: 100px;">
+                    <div class="text-muted small mb-2 border-bottom pb-1 fw-bold">Live MathJax Preview</div>
+                    <div id="texPreview" style="font-size: 1.3rem; overflow-x: auto; padding: 10px 0; color: #2c3e50;"></div>
+                </div>
+                <div>
+                    <label class="form-label fw-bold text-secondary">Display Mode</label>
+                    <select id="texDisplayMode" class="form-select">
+                        <option value="inline">Inline Math: \( ... \)</option>
+                        <option value="block">Block Math (Centered): \[ ... \]</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer bg-light border-top-0 d-flex justify-content-end gap-2">
+                <button type="button" class="btn btn-secondary px-3" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success px-4 fw-bold" id="btnInsertTex">OK</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
+let activeEditorId = '';
+let texModalObj;
 const classesMap = <?= json_encode(array_column($classes, 'name', 'id')) ?>;
 const subjectsMap = <?= json_encode(array_column($subjects, 'name_en', 'id')) ?>;
 const cdcCurriculum = <?= json_encode(require __DIR__ . '/../../config/cdc_curriculum.php') ?>;
@@ -577,16 +617,57 @@ $(document).ready(function() {
     document.getElementById('modalClass').addEventListener('change', () => updateChaptersDropdown());
     document.getElementById('modalSubject').addEventListener('change', () => updateChaptersDropdown());
     
+    // Initialize TeX Modal
+    texModalObj = new bootstrap.Modal(document.getElementById('texModal'));
+    
+    // Event listeners for live MathJax TeX preview
+    document.getElementById('texInput').addEventListener('input', updateTexPreview);
+    document.getElementById('texDisplayMode').addEventListener('change', updateTexPreview);
+    document.getElementById('btnInsertTex').addEventListener('click', insertTexIntoEditor);
+    
     // Initialize TinyMCE editors if loaded
     if (window.tinymce) {
+        // Init main fields
         tinymce.init({
             selector: '#modalQuestionText, #modalQuestionTextNp, #modalAnswer, #modalAnswerNp',
-            height: 350,
+            height: 280,
             plugins: 'advlist autolink lists link image charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime media table wordcount',
-            toolbar: 'undo redo | blocks fontfamily fontsize | bold italic underline forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | table | fullscreen code',
+            toolbar: 'undo redo | blocks fontfamily fontsize | bold italic underline forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | table | math_tex | fullscreen code',
             branding: false,
             promotion: false,
             setup: function (editor) {
+                editor.ui.registry.addButton('math_tex', {
+                    text: 'TeX',
+                    tooltip: 'Insert Mathematics TeX',
+                    onAction: function () {
+                        openTexModal(editor.id);
+                    }
+                });
+                editor.on('change keyup', function () {
+                    editor.save(); // Automatically sync back to textareas on change
+                    if (window.MathJax && window.MathJax.typesetPromise) {
+                        window.MathJax.typesetPromise();
+                    }
+                });
+            }
+        });
+
+        // Init MCQ Options fields (smaller height)
+        tinymce.init({
+            selector: '#modalOptA, #modalOptB, #modalOptC, #modalOptD, #modalOptANp, #modalOptBNp, #modalOptCNp, #modalOptDNp',
+            height: 140,
+            plugins: 'advlist autolink lists link image charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime media table wordcount',
+            toolbar: 'undo redo | fontfamily fontsize | bold italic underline forecolor | bullist numlist | table | math_tex | fullscreen code',
+            branding: false,
+            promotion: false,
+            setup: function (editor) {
+                editor.ui.registry.addButton('math_tex', {
+                    text: 'TeX',
+                    tooltip: 'Insert Mathematics TeX',
+                    onAction: function () {
+                        openTexModal(editor.id);
+                    }
+                });
                 editor.on('change keyup', function () {
                     editor.save(); // Automatically sync back to textareas on change
                     if (window.MathJax && window.MathJax.typesetPromise) {
@@ -633,15 +714,15 @@ function showAddForm() {
     } else {
         document.getElementById('modalAnswerNp').value = '';
     }
-    
-    document.getElementById('modalOptA').value = '';
-    document.getElementById('modalOptANp').value = '';
-    document.getElementById('modalOptB').value = '';
-    document.getElementById('modalOptBNp').value = '';
-    document.getElementById('modalOptC').value = '';
-    document.getElementById('modalOptCNp').value = '';
-    document.getElementById('modalOptD').value = '';
-    document.getElementById('modalOptDNp').value = '';
+    // Clear options safely using helper
+    setOptionVal('modalOptA', '');
+    setOptionVal('modalOptANp', '');
+    setOptionVal('modalOptB', '');
+    setOptionVal('modalOptBNp', '');
+    setOptionVal('modalOptC', '');
+    setOptionVal('modalOptCNp', '');
+    setOptionVal('modalOptD', '');
+    setOptionVal('modalOptDNp', '');
     document.getElementById('modalCorrect').value = 'A';
     
     updateChaptersDropdown('');
@@ -649,6 +730,15 @@ function showAddForm() {
     
     // Scroll to top
     window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function setOptionVal(id, val) {
+    if (window.tinymce && tinymce.get(id)) {
+        tinymce.get(id).setContent(val || '');
+    } else {
+        const el = document.getElementById(id);
+        if (el) el.value = val || '';
+    }
 }
 
 function editQuestion(q) {
@@ -665,53 +755,34 @@ function editQuestion(q) {
     document.getElementById('modalMarks').value = q.marks;
     
     // Populate editors safely
-    if (window.tinymce && tinymce.get('modalQuestionText')) {
-        tinymce.get('modalQuestionText').setContent(q.question_text || '');
-    } else {
-        document.getElementById('modalQuestionText').value = q.question_text || '';
-    }
-    
-    if (window.tinymce && tinymce.get('modalQuestionTextNp')) {
-        tinymce.get('modalQuestionTextNp').setContent(q.question_text_np || '');
-    } else {
-        document.getElementById('modalQuestionTextNp').value = q.question_text_np || '';
-    }
-    
-    if (window.tinymce && tinymce.get('modalAnswer')) {
-        tinymce.get('modalAnswer').setContent(q.answer || '');
-    } else {
-        document.getElementById('modalAnswer').value = q.answer || '';
-    }
-    
-    if (window.tinymce && tinymce.get('modalAnswerNp')) {
-        tinymce.get('modalAnswerNp').setContent(q.answer_np || '');
-    } else {
-        document.getElementById('modalAnswerNp').value = q.answer_np || '';
-    }
+    setOptionVal('modalQuestionText', q.question_text);
+    setOptionVal('modalQuestionTextNp', q.question_text_np);
+    setOptionVal('modalAnswer', q.answer);
+    setOptionVal('modalAnswerNp', q.answer_np);
     
     if (q.type === 'MCQ') {
         const opts = JSON.parse(q.options || '{}');
-        document.getElementById('modalOptA').value = opts.A || '';
-        document.getElementById('modalOptB').value = opts.B || '';
-        document.getElementById('modalOptC').value = opts.C || '';
-        document.getElementById('modalOptD').value = opts.D || '';
+        setOptionVal('modalOptA', opts.A || '');
+        setOptionVal('modalOptB', opts.B || '');
+        setOptionVal('modalOptC', opts.C || '');
+        setOptionVal('modalOptD', opts.D || '');
         
         const optsNp = JSON.parse(q.options_np || '{}');
-        document.getElementById('modalOptANp').value = optsNp.A || '';
-        document.getElementById('modalOptBNp').value = optsNp.B || '';
-        document.getElementById('modalOptCNp').value = optsNp.C || '';
-        document.getElementById('modalOptDNp').value = optsNp.D || '';
+        setOptionVal('modalOptANp', optsNp.A || '');
+        setOptionVal('modalOptBNp', optsNp.B || '');
+        setOptionVal('modalOptCNp', optsNp.C || '');
+        setOptionVal('modalOptDNp', optsNp.D || '');
         
         document.getElementById('modalCorrect').value = q.correct_option || 'A';
     } else {
-        document.getElementById('modalOptA').value = '';
-        document.getElementById('modalOptANp').value = '';
-        document.getElementById('modalOptB').value = '';
-        document.getElementById('modalOptBNp').value = '';
-        document.getElementById('modalOptC').value = '';
-        document.getElementById('modalOptCNp').value = '';
-        document.getElementById('modalOptD').value = '';
-        document.getElementById('modalOptDNp').value = '';
+        setOptionVal('modalOptA', '');
+        setOptionVal('modalOptANp', '');
+        setOptionVal('modalOptB', '');
+        setOptionVal('modalOptBNp', '');
+        setOptionVal('modalOptC', '');
+        setOptionVal('modalOptCNp', '');
+        setOptionVal('modalOptD', '');
+        setOptionVal('modalOptDNp', '');
     }
     
     updateChaptersDropdown(q.chapter);
@@ -833,6 +904,84 @@ function toggleMCQFields() {
         } else if (type === 'Difference Between') {
             marksField.value = '4';
         }
+    }
+}
+
+function openTexModal(editorId) {
+    activeEditorId = editorId;
+    
+    // Get text selection from active editor
+    let initialText = '';
+    if (window.tinymce && tinymce.get(editorId)) {
+        initialText = tinymce.get(editorId).selection.getContent({format: 'text'}).trim();
+    }
+    
+    // Automatically strip LaTeX wrappers if selection already contains them
+    if (initialText.startsWith('\\(') && initialText.endsWith('\\)')) {
+        initialText = initialText.substring(2, initialText.length - 2).trim();
+        document.getElementById('texDisplayMode').value = 'inline';
+    } else if (initialText.startsWith('\\[') && initialText.endsWith('\\]')) {
+        initialText = initialText.substring(2, initialText.length - 2).trim();
+        document.getElementById('texDisplayMode').value = 'block';
+    } else if (initialText.startsWith('$$') && initialText.endsWith('$$')) {
+        initialText = initialText.substring(2, initialText.length - 2).trim();
+        document.getElementById('texDisplayMode').value = 'block';
+    } else if (initialText.startsWith('$') && initialText.endsWith('$')) {
+        initialText = initialText.substring(1, initialText.length - 1).trim();
+        document.getElementById('texDisplayMode').value = 'inline';
+    }
+    
+    document.getElementById('texInput').value = initialText;
+    updateTexPreview();
+    
+    if (texModalObj) {
+        texModalObj.show();
+    }
+}
+
+function updateTexPreview() {
+    const input = document.getElementById('texInput').value.trim();
+    const preview = document.getElementById('texPreview');
+    const mode = document.getElementById('texDisplayMode').value;
+    
+    if (input === '') {
+        preview.innerHTML = '<span class="text-muted small">No TeX code entered yet</span>';
+        return;
+    }
+    
+    // Wrap according to selected mode
+    if (mode === 'inline') {
+        preview.innerHTML = '\\(' + input + '\\)';
+    } else {
+        preview.innerHTML = '\\[' + input + '\\]';
+    }
+    
+    // Trigger MathJax render
+    if (window.MathJax && window.MathJax.typesetPromise) {
+        MathJax.typesetPromise([preview]);
+    }
+}
+
+function insertTexIntoEditor() {
+    const input = document.getElementById('texInput').value.trim();
+    const mode = document.getElementById('texDisplayMode').value;
+    
+    if (input !== '' && activeEditorId !== '') {
+        let wrapped = '';
+        if (mode === 'inline') {
+            wrapped = '\\( ' + input + ' \\)';
+        } else {
+            wrapped = '\\[ ' + input + ' \\]';
+        }
+        
+        if (window.tinymce && tinymce.get(activeEditorId)) {
+            tinymce.get(activeEditorId).insertContent(wrapped);
+            tinymce.get(activeEditorId).save();
+        }
+    }
+    
+    if (texModalObj) {
+        texModalObj.hide();
     }
 }
 </script>
