@@ -105,7 +105,8 @@ class Database {
             ['exam_subjects', 'credit_hours'],
             ['questions', 'answer'],
             ['specification_grids', null],
-            ['chapters', null]
+            ['chapters', null],
+            ['class_subjects', 'section_id']
         ];
         
         foreach ($checks as $check) {
@@ -159,11 +160,13 @@ class Database {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             class_id INTEGER NOT NULL,
             subject_id INTEGER NOT NULL,
+            section_id INTEGER DEFAULT NULL,
             credit_hours INTEGER DEFAULT 4,
             teacher_id INTEGER DEFAULT NULL,
             FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE,
             FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE,
-            FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE SET NULL
+            FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE SET NULL,
+            FOREIGN KEY (section_id) REFERENCES sections(id) ON DELETE SET NULL
         )";
         $this->conn->exec($sql);
 
@@ -346,6 +349,9 @@ class Database {
                 'answer_np' => 'TEXT DEFAULT NULL',
                 'options_np' => 'TEXT DEFAULT NULL',
                 'school_id' => 'INTEGER DEFAULT 1'
+            ],
+            'class_subjects' => [
+                'section_id' => 'INTEGER DEFAULT NULL'
             ]
         ];
 

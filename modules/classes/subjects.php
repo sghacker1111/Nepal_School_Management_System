@@ -27,6 +27,7 @@ if (!$class) {
 // Handle Add Subject Mapping
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'map_subject') {
     $subject_id = (int)$_POST['subject_id'];
+    $section_id = !empty($_POST['section_id']) ? (int)$_POST['section_id'] : null;
     $credit_hours = (int)($_POST['credit_hours'] ?? 4);
     $teacher_ids = $_POST['teacher_ids'] ?? [];
     $teacher_id_str = !empty($teacher_ids) ? implode(',', array_map('intval', $teacher_ids)) : null;
@@ -35,14 +36,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $error = "Subject is required.";
     } else {
         try {
-            // Check if already mapped
-            $stmt = $db->prepare("SELECT COUNT(*) FROM class_subjects WHERE class_id = ? AND subject_id = ?");
-            $stmt->execute([$class_id, $subject_id]);
+            // Check if already mapped to this class/section combo
+            $stmt = $db->prepare("
+                SELECT COUNT(*) FROM class_subjects 
+                WHERE class_id = ? AND subject_id = ? AND (
+                    (section_id IS NULL AND ? IS NULL)
+                    OR
+                    (section_id = ?)
+                )
+            ");
+            $stmt->execute([$class_id, $subject_id, $section_id, $section_id]);
             if ($stmt->fetchColumn() > 0) {
-                $error = "This subject is already mapped to this class.";
+                $error = "This subject is already mapped to this class / section.";
             } else {
-                $stmt = $db->prepare("INSERT INTO class_subjects (class_id, subject_id, credit_hours, teacher_id, school_id) VALUES (?, ?, ?, ?, ?)");
-                $stmt->execute([$class_id, $subject_id, $credit_hours, $teacher_id_str, $school_id]);
+                $stmt = $db->prepare("INSERT INTO class_subjects (class_id, subject_id, section_id, credit_hours, teacher_id, school_id) VALUES (?, ?, ?, ?, ?, ?)");
+                $stmt->execute([$class_id, $subject_id, $section_id, $credit_hours, $teacher_id_str, $school_id]);
                 Auth::logActivity(Auth::getUserId(), 'Map Subject to Class', 'class_subjects', $db->lastInsertId());
                 $success = "Subject mapped successfully.";
             }
@@ -68,7 +76,7 @@ if (isset($_GET['delete_mapping'])) {
 // Handle Edit Mapping (AJAX or direct POST)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'edit_mapping') {
     $mapping_id = (int)$_POST['mapping_id'];
-    $credit_hours = (int)$_POST['credit_hours'];
+    $credit_hours = round((float)$_POST['credit_hours'], 2);
     $teacher_ids = $_POST['teacher_ids'] ?? [];
     $teacher_id_str = !empty($teacher_ids) ? implode(',', array_map('intval', $teacher_ids)) : null;
     
@@ -84,11 +92,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
 // Fetch subjects currently mapped to this class
 $stmt = $db->prepare("
-    SELECT cs.*, s.name_en as subject_name_en, s.name_np as subject_name_np, s.code as subject_code
+    SELECT cs.*, s.name_en as subject_name_en, s.name_np as subject_name_np, s.code as subject_code, sec.name as section_name
     FROM class_subjects cs 
     JOIN subjects s ON cs.subject_id = s.id 
+    LEFT JOIN sections sec ON cs.section_id = sec.id
     WHERE cs.class_id = ? 
-    ORDER BY s.name_en
+    ORDER BY s.name_en, sec.name
 ");
 $stmt->execute([$class_id]);
 $mapped_subjects = $stmt->fetchAll();
@@ -101,6 +110,11 @@ $stmt = $db->prepare("
 ");
 $stmt->execute([$school_id, $class_id]);
 $available_subjects = $stmt->fetchAll();
+
+// Fetch all class sections
+$stmt = $db->prepare("SELECT * FROM sections WHERE class_id = ? AND school_id = ? ORDER BY name");
+$stmt->execute([$class_id, $school_id]);
+$class_sections = $stmt->fetchAll();
 
 // Fetch all active teachers for dropdown
 $stmt = $db->prepare("SELECT id, full_name FROM users WHERE role = 'teacher' AND status = 1 AND school_id = ? ORDER BY full_name");
@@ -148,6 +162,7 @@ ob_start();
                             <tr>
                                 <th>Subject Code</th>
                                 <th>Subject Name</th>
+                                <th>Target Section</th>
                                 <th>Credit Hours</th>
                                 <th>Assigned Teacher(s)</th>
                                 <th class="text-end">Actions</th>
@@ -161,6 +176,13 @@ ob_start();
                                     <td>
                                         <strong><?= sanitize($ms['subject_name_en']) ?></strong><br>
                                         <small class="text-muted"><?= sanitize($ms['subject_name_np'] ?? '') ?></small>
+                                    </td>
+                                    <td>
+                                        <?php if ($ms['section_id']): ?>
+                                            <span class="badge bg-info text-dark"><i class="fas fa-shapes"></i> Section <?= sanitize($ms['section_name']) ?></span>
+                                        <?php else: ?>
+                                            <span class="badge bg-secondary"><i class="fas fa-layer-group"></i> All Sections</span>
+                                        <?php endif; ?>
                                     </td>
                                     <td><?= $ms['credit_hours'] ?> CH</td>
                                     <td>
@@ -195,7 +217,7 @@ ob_start();
                                 <?php endforeach; ?>
                             <?php else: ?>
                                 <tr>
-                                    <td colspan="5" class="text-center text-muted py-4">No subjects mapped to this class yet.</td>
+                                    <td colspan="6" class="text-center text-muted py-4">No subjects mapped to this class yet.</td>
                                 </tr>
                             <?php endif; ?>
                         </tbody>
@@ -230,9 +252,20 @@ ob_start();
                         </div>
 
                         <div class="mb-3">
+                            <label class="form-label">Target Section (Optional)</label>
+                            <select name="section_id" class="form-select">
+                                <option value="">All Sections (Global Class Subject)</option>
+                                <?php foreach ($class_sections as $sec): ?>
+                                <option value="<?= $sec['id'] ?>">Section <?= sanitize($sec['name']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <small class="text-muted">Choose a specific section if this subject is only taught in that section.</small>
+                        </div>
+
+                        <div class="mb-3">
                             <label class="form-label">Credit Hours *</label>
-                            <input type="number" name="credit_hours" class="form-control" value="4" min="1" max="10" required>
-                            <div class="invalid-feedback">Credit hours must be between 1 and 10.</div>
+                            <input type="number" step="0.01" name="credit_hours" class="form-control" value="4" min="0" max="10" required>
+                            <div class="invalid-feedback">Credit hours must be between 0 and 10.</div>
                         </div>
 
                         <div class="mb-3">
@@ -275,7 +308,7 @@ ob_start();
                 <div class="modal-body p-4">
                     <div class="mb-3">
                         <label class="form-label">Credit Hours *</label>
-                        <input type="number" name="credit_hours" id="editCreditHours" class="form-control" required min="1" max="10">
+                        <input type="number" step="0.01" name="credit_hours" id="editCreditHours" class="form-control" required min="0" max="10">
                     </div>
                     <div class="mb-3">
                         <label class="form-label d-block">Assigned Teachers</label>
