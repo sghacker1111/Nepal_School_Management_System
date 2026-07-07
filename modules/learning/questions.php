@@ -609,6 +609,7 @@ ob_start();
 <script>
 let activeEditorId = '';
 let texModalObj;
+let activeTexSpan = null;
 const classesMap = <?= json_encode(array_column($classes, 'name', 'id')) ?>;
 const subjectsMap = <?= json_encode(array_column($subjects, 'name_en', 'id')) ?>;
 const cdcCurriculum = <?= json_encode(require __DIR__ . '/../../config/cdc_curriculum.php') ?>;
@@ -642,12 +643,17 @@ $(document).ready(function() {
     // Initialize TeX Modal
     texModalObj = new bootstrap.Modal(document.getElementById('texModal'));
     
+    // Clear activeTexSpan when modal hidden
+    document.getElementById('texModal').addEventListener('hidden.bs.modal', function () {
+        activeTexSpan = null;
+    });
+    
     // Event listeners for live MathJax TeX preview
     document.getElementById('texInput').addEventListener('input', updateTexPreview);
     document.getElementById('texDisplayMode').addEventListener('change', updateTexPreview);
     document.getElementById('btnInsertTex').addEventListener('click', insertTexIntoEditor);
     
-    // Initialize TinyMCE editors (Unified for all 12 textareas to match size and functionality)
+    // Initialize TinyMCE editors
     if (window.tinymce) {
         tinymce.init({
             selector: '#modalQuestionText, #modalQuestionTextNp, #modalAnswer, #modalAnswerNp, #modalOptA, #modalOptB, #modalOptC, #modalOptD, #modalOptANp, #modalOptBNp, #modalOptCNp, #modalOptDNp',
@@ -656,6 +662,8 @@ $(document).ready(function() {
             toolbar: 'undo redo | blocks fontfamily fontsize | bold italic underline forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | table | math_tex | fullscreen code',
             branding: false,
             promotion: false,
+            // Styling inside editor iframe to clearly mark locked TeX equations
+            content_style: 'span.math-tex { background: #f8f9fa !important; border: 1px dashed #0d6efd !important; padding: 2px 6px !important; border-radius: 4px !important; cursor: pointer !important; display: inline-block !important; user-select: none !important; margin: 0 2px !important; }',
             setup: function (editor) {
                 // When content is loaded, wrap LaTeX with span so it can render inside iframe
                 editor.on('BeforeSetContent', function (e) {
@@ -711,6 +719,16 @@ $(document).ready(function() {
                     const win = editor.getWin();
                     if (win.MathJax && win.MathJax.typesetPromise) {
                         win.MathJax.typesetPromise();
+                    }
+                });
+
+                // Double click formula widget to trigger TeX editing modal
+                editor.on('dblclick', function (e) {
+                    const target = e.target.closest('span.math-tex');
+                    if (target) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        openTexModal(editor.id, target);
                     }
                 });
 
@@ -955,31 +973,40 @@ function toggleMCQFields() {
     }
 }
 
-function openTexModal(editorId) {
+function openTexModal(editorId, targetSpan = null) {
     activeEditorId = editorId;
+    activeTexSpan = targetSpan;
     
-    // Get text selection from active editor
     let initialText = '';
-    if (window.tinymce && tinymce.get(editorId)) {
-        initialText = tinymce.get(editorId).selection.getContent({format: 'text'}).trim();
-    }
+    let mode = 'inline';
     
-    // Automatically strip LaTeX wrappers if selection already contains them
-    if (initialText.startsWith('\\(') && initialText.endsWith('\\)')) {
-        initialText = initialText.substring(2, initialText.length - 2).trim();
-        document.getElementById('texDisplayMode').value = 'inline';
-    } else if (initialText.startsWith('\\[') && initialText.endsWith('\\]')) {
-        initialText = initialText.substring(2, initialText.length - 2).trim();
-        document.getElementById('texDisplayMode').value = 'block';
-    } else if (initialText.startsWith('$$') && initialText.endsWith('$$')) {
-        initialText = initialText.substring(2, initialText.length - 2).trim();
-        document.getElementById('texDisplayMode').value = 'block';
-    } else if (initialText.startsWith('$') && initialText.endsWith('$')) {
-        initialText = initialText.substring(1, initialText.length - 1).trim();
-        document.getElementById('texDisplayMode').value = 'inline';
+    if (activeTexSpan) {
+        initialText = activeTexSpan.getAttribute('data-tex') || '';
+        mode = activeTexSpan.getAttribute('data-mode') || 'inline';
+    } else {
+        // Get text selection from active editor
+        if (window.tinymce && tinymce.get(editorId)) {
+            initialText = tinymce.get(editorId).selection.getContent({format: 'text'}).trim();
+        }
+        
+        // Automatically strip LaTeX wrappers if selection already contains them
+        if (initialText.startsWith('\\(') && initialText.endsWith('\\)')) {
+            initialText = initialText.substring(2, initialText.length - 2).trim();
+            mode = 'inline';
+        } else if (initialText.startsWith('\\[') && initialText.endsWith('\\]')) {
+            initialText = initialText.substring(2, initialText.length - 2).trim();
+            mode = 'block';
+        } else if (initialText.startsWith('$$') && initialText.endsWith('$$')) {
+            initialText = initialText.substring(2, initialText.length - 2).trim();
+            mode = 'block';
+        } else if (initialText.startsWith('$') && initialText.endsWith('$')) {
+            initialText = initialText.substring(1, initialText.length - 1).trim();
+            mode = 'inline';
+        }
     }
     
     document.getElementById('texInput').value = initialText;
+    document.getElementById('texDisplayMode').value = mode;
     updateTexPreview();
     
     if (texModalObj) {
@@ -1016,24 +1043,48 @@ function insertTexIntoEditor() {
     
     if (input !== '' && activeEditorId !== '') {
         const escapedInput = escapeHtml(input);
-        let html = '';
-        if (mode === 'inline') {
-            html = '<span class="math-tex" data-tex="' + escapedInput + '" data-mode="inline">\\(' + input + '\\)</span>';
-        } else {
-            html = '<span class="math-tex" data-tex="' + escapedInput + '" data-mode="block">\\[' + input + '\\]</span>';
-        }
         
         if (window.tinymce && tinymce.get(activeEditorId)) {
-            tinymce.get(activeEditorId).insertContent(html);
-            tinymce.get(activeEditorId).save();
+            const editor = tinymce.get(activeEditorId);
             
-            // Trigger MathJax typeset inside editor document
-            const win = tinymce.get(activeEditorId).getWin();
-            if (win.MathJax && win.MathJax.typesetPromise) {
-                win.MathJax.typesetPromise();
+            if (activeTexSpan) {
+                // Update existing locked math span
+                activeTexSpan.setAttribute('data-tex', input);
+                activeTexSpan.setAttribute('data-mode', mode);
+                if (mode === 'inline') {
+                    activeTexSpan.innerHTML = '\\(' + input + '\\)';
+                } else {
+                    activeTexSpan.innerHTML = '\\[' + input + '\\]';
+                }
+                editor.save();
+                
+                // Trigger MathJax typeset inside editor document
+                const win = editor.getWin();
+                if (win.MathJax && win.MathJax.typesetPromise) {
+                    win.MathJax.typesetPromise();
+                }
+            } else {
+                // Insert a new locked math span
+                let html = '';
+                if (mode === 'inline') {
+                    html = '<span class="math-tex" contenteditable="false" data-tex="' + escapedInput + '" data-mode="inline">\\(' + input + '\\)</span>';
+                } else {
+                    html = '<span class="math-tex" contenteditable="false" data-tex="' + escapedInput + '" data-mode="block">\\[' + input + '\\]</span>';
+                }
+                editor.insertContent(html);
+                editor.save();
+                
+                // Trigger MathJax typeset inside editor document
+                const win = editor.getWin();
+                if (win.MathJax && win.MathJax.typesetPromise) {
+                    win.MathJax.typesetPromise();
+                }
             }
         }
     }
+    
+    // Reset reference
+    activeTexSpan = null;
     
     if (texModalObj) {
         texModalObj.hide();
