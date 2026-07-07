@@ -487,12 +487,10 @@ ob_start();
                         <div class="col-md-6">
                             <label class="form-label">Question Text (English) *</label>
                             <textarea name="question_text" id="modalQuestionText" class="form-control" rows="3" required placeholder="Type English question here..."></textarea>
-                            <div class="math-preview mt-2 p-2 bg-light rounded border text-muted small" id="preview-modalQuestionText" style="min-height: 40px; font-size: 0.95rem;" title="MathJax Live Preview"></div>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Question Text (Nepali)</label>
                             <textarea name="question_text_np" id="modalQuestionTextNp" class="form-control" rows="3" placeholder="नेपालीमा प्रश्न यहाँ लेखन्होस्..."></textarea>
-                            <div class="math-preview mt-2 p-2 bg-light rounded border text-muted small" id="preview-modalQuestionTextNp" style="min-height: 40px; font-size: 0.95rem;" title="MathJax Live Preview"></div>
                         </div>
                     </div>
                     
@@ -503,12 +501,10 @@ ob_start();
                             <div class="col-md-6">
                                 <label class="form-label">Expected Answer (English)</label>
                                 <textarea name="answer" id="modalAnswer" class="form-control" rows="3" placeholder="Type expected English answer here (optional)..."></textarea>
-                                <div class="math-preview mt-2 p-2 bg-light rounded border text-muted small" id="preview-modalAnswer" style="min-height: 40px; font-size: 0.95rem;" title="MathJax Live Preview"></div>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Expected Answer (Nepali)</label>
                                 <textarea name="answer_np" id="modalAnswerNp" class="form-control" rows="3" placeholder="नेपालीमा अपेक्षित उत्तर यहाँ लेख्नुहोस् (ऐच्छिक)..."></textarea>
-                                <div class="math-preview mt-2 p-2 bg-light rounded border text-muted small" id="preview-modalAnswerNp" style="min-height: 40px; font-size: 0.95rem;" title="MathJax Live Preview"></div>
                             </div>
                         </div>
                     </div>
@@ -520,45 +516,37 @@ ob_start();
                             <div class="col-md-6">
                                 <label class="form-label">Option A (English) *</label>
                                 <textarea name="option_a" id="modalOptA" class="form-control mcq-field" rows="2" placeholder="Answer option A (English)"></textarea>
-                                <div class="math-preview mt-2 p-2 bg-light rounded border text-muted small" id="preview-modalOptA" style="min-height: 40px; font-size: 0.95rem;" title="MathJax Live Preview"></div>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Option A (Nepali)</label>
                                 <textarea name="option_a_np" id="modalOptANp" class="form-control" rows="2" placeholder="उत्तर विकल्प क (नेपाली)"></textarea>
-                                <div class="math-preview mt-2 p-2 bg-light rounded border text-muted small" id="preview-modalOptANp" style="min-height: 40px; font-size: 0.95rem;" title="MathJax Live Preview"></div>
                             </div>
                             
                             <div class="col-md-6">
                                 <label class="form-label">Option B (English) *</label>
                                 <textarea name="option_b" id="modalOptB" class="form-control mcq-field" rows="2" placeholder="Answer option B (English)"></textarea>
-                                <div class="math-preview mt-2 p-2 bg-light rounded border text-muted small" id="preview-modalOptB" style="min-height: 40px; font-size: 0.95rem;" title="MathJax Live Preview"></div>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Option B (Nepali)</label>
                                 <textarea name="option_b_np" id="modalOptBNp" class="form-control" rows="2" placeholder="उत्तर विकल्प ख (नेपाली)"></textarea>
-                                <div class="math-preview mt-2 p-2 bg-light rounded border text-muted small" id="preview-modalOptBNp" style="min-height: 40px; font-size: 0.95rem;" title="MathJax Live Preview"></div>
                             </div>
                             
                             <div class="col-md-6">
                                 <label class="form-label">Option C (English) *</label>
                                 <textarea name="option_c" id="modalOptC" class="form-control mcq-field" rows="2" placeholder="Answer option C (English)"></textarea>
-                                <div class="math-preview mt-2 p-2 bg-light rounded border text-muted small" id="preview-modalOptC" style="min-height: 40px; font-size: 0.95rem;" title="MathJax Live Preview"></div>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Option C (Nepali)</label>
                                 <textarea name="option_c_np" id="modalOptCNp" class="form-control" rows="2" placeholder="उत्तर विकल्प ग (नेपाली)"></textarea>
-                                <div class="math-preview mt-2 p-2 bg-light rounded border text-muted small" id="preview-modalOptCNp" style="min-height: 40px; font-size: 0.95rem;" title="MathJax Live Preview"></div>
                             </div>
                             
                             <div class="col-md-6">
                                 <label class="form-label">Option D (English) *</label>
                                 <textarea name="option_d" id="modalOptD" class="form-control mcq-field" rows="2" placeholder="Answer option D (English)"></textarea>
-                                <div class="math-preview mt-2 p-2 bg-light rounded border text-muted small" id="preview-modalOptD" style="min-height: 40px; font-size: 0.95rem;" title="MathJax Live Preview"></div>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Option D (Nepali)</label>
                                 <textarea name="option_d_np" id="modalOptDNp" class="form-control" rows="2" placeholder="उत्तर विकल्प घ (नेपाली)"></textarea>
-                                <div class="math-preview mt-2 p-2 bg-light rounded border text-muted small" id="preview-modalOptDNp" style="min-height: 40px; font-size: 0.95rem;" title="MathJax Live Preview"></div>
                             </div>
                             
                             <div class="col-md-4">
@@ -637,7 +625,30 @@ $(document).ready(function() {
     document.getElementById('texDisplayMode').addEventListener('change', updateTexPreview);
     document.getElementById('btnInsertTex').addEventListener('click', insertTexIntoEditor);
     
-    // Initialize TinyMCE editors (Unified for all 12 textareas to match size and functionality)
+function escapeHtml(text) {
+    return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+function convertLatexToSpan(content) {
+    if (!content) return content;
+    // Match inline LaTeX math \( ... \)
+    content = content.replace(/\\\((.*?)\\\)/g, function(match, tex) {
+        return '<span class="math-tex" data-tex="' + escapeHtml(tex) + '" data-mode="inline">\\(' + tex + '\\)</span>';
+    });
+    // Match block LaTeX math \[ ... \]
+    content = content.replace(/\\\[(.*?)\\\]/g, function(match, tex) {
+        return '<span class="math-tex" data-tex="' + escapeHtml(tex) + '" data-mode="block">\\[' + tex + '\\]</span>';
+    });
+    return content;
+}
+
+// Initialize TinyMCE editors (Unified for all 12 textareas to match size and functionality)
+$(document).ready(function() {
     if (window.tinymce) {
         tinymce.init({
             selector: '#modalQuestionText, #modalQuestionTextNp, #modalAnswer, #modalAnswerNp, #modalOptA, #modalOptB, #modalOptC, #modalOptD, #modalOptANp, #modalOptBNp, #modalOptCNp, #modalOptDNp',
@@ -647,6 +658,64 @@ $(document).ready(function() {
             branding: false,
             promotion: false,
             setup: function (editor) {
+                // When content is loaded, wrap LaTeX with span so it can render inside iframe
+                editor.on('BeforeSetContent', function (e) {
+                    e.content = convertLatexToSpan(e.content);
+                });
+                
+                // When retrieving content, strip MathJax HTML markup and restore clean LaTeX tags
+                editor.on('PostProcess', function (e) {
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = e.content;
+                    const spans = tempDiv.querySelectorAll('span.math-tex');
+                    spans.forEach(span => {
+                        const tex = span.getAttribute('data-tex');
+                        const mode = span.getAttribute('data-mode') || 'inline';
+                        const replacement = (mode === 'inline') ? '\\(' + tex + '\\)' : '\\[' + tex + '\\]';
+                        span.outerHTML = replacement;
+                    });
+                    e.content = tempDiv.innerHTML;
+                });
+                
+                // Load MathJax inside the editor iframe dynamically
+                editor.on('init', function () {
+                    const doc = editor.getDoc();
+                    
+                    const configScript = doc.createElement('script');
+                    configScript.text = `
+                        window.MathJax = {
+                            tex: {
+                                inlineMath: [['\\\\(', '\\\\)']],
+                                displayMath: [['\\\\[', '\\\\]']]
+                            },
+                            startup: {
+                                typeset: false
+                            }
+                        };
+                    `;
+                    doc.head.appendChild(configScript);
+                    
+                    const script = doc.createElement('script');
+                    script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
+                    script.async = true;
+                    script.onload = function() {
+                        if (editor.getWin().MathJax && editor.getWin().MathJax.typesetPromise) {
+                            editor.getWin().MathJax.typesetPromise();
+                        }
+                    };
+                    doc.head.appendChild(script);
+                });
+                
+                // Render MathJax whenever text changes
+                editor.on('change keyup NodeChange SetContent', function () {
+                    editor.save(); // Sync back to textarea
+                    const win = editor.getWin();
+                    if (win.MathJax && win.MathJax.typesetPromise) {
+                        win.MathJax.typesetPromise();
+                    }
+                });
+
+                // Add TeX modal trigger button
                 editor.ui.registry.addButton('math_tex', {
                     text: 'TeX',
                     tooltip: 'Insert Mathematics TeX',
@@ -654,29 +723,10 @@ $(document).ready(function() {
                         openTexModal(editor.id);
                     }
                 });
-                editor.on('change keyup NodeChange init', function () {
-                    editor.save(); // Automatically sync back to textareas on change
-                    updateEditorPreview(editor.id);
-                });
             }
         });
     }
 });
-
-function updateEditorPreview(editorId) {
-    if (!window.tinymce) return;
-    const editor = tinymce.get(editorId);
-    if (!editor) return;
-    
-    const content = editor.getContent();
-    const previewDiv = document.getElementById('preview-' + editorId);
-    if (previewDiv) {
-        previewDiv.innerHTML = content || '<span class="text-muted small">Empty preview</span>';
-        if (window.MathJax && window.MathJax.typesetPromise) {
-            window.MathJax.typesetPromise([previewDiv]);
-        }
-    }
-}
 
 function showAddForm() {
     document.getElementById('questionsListSection').style.display = 'none';
@@ -734,17 +784,9 @@ function showAddForm() {
 function setOptionVal(id, val) {
     if (window.tinymce && tinymce.get(id)) {
         tinymce.get(id).setContent(val || '');
-        updateEditorPreview(id);
     } else {
         const el = document.getElementById(id);
         if (el) el.value = val || '';
-        const preview = document.getElementById('preview-' + id);
-        if (preview) {
-            preview.innerHTML = val || '<span class="text-muted small">Empty preview</span>';
-            if (window.MathJax && window.MathJax.typesetPromise) {
-                window.MathJax.typesetPromise([preview]);
-            }
-        }
     }
 }
 
@@ -974,16 +1016,23 @@ function insertTexIntoEditor() {
     const mode = document.getElementById('texDisplayMode').value;
     
     if (input !== '' && activeEditorId !== '') {
-        let wrapped = '';
+        const escapedInput = escapeHtml(input);
+        let html = '';
         if (mode === 'inline') {
-            wrapped = '\\( ' + input + ' \\)';
+            html = '<span class="math-tex" data-tex="' + escapedInput + '" data-mode="inline">\\(' + input + '\\)</span>';
         } else {
-            wrapped = '\\[ ' + input + ' \\]';
+            html = '<span class="math-tex" data-tex="' + escapedInput + '" data-mode="block">\\[' + input + '\\]</span>';
         }
         
         if (window.tinymce && tinymce.get(activeEditorId)) {
-            tinymce.get(activeEditorId).insertContent(wrapped);
+            tinymce.get(activeEditorId).insertContent(html);
             tinymce.get(activeEditorId).save();
+            
+            // Trigger MathJax typeset inside editor document
+            const win = tinymce.get(activeEditorId).getWin();
+            if (win.MathJax && win.MathJax.typesetPromise) {
+                win.MathJax.typesetPromise();
+            }
         }
     }
     
