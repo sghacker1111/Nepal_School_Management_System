@@ -705,8 +705,8 @@ $(document).ready(function() {
                     doc.head.appendChild(script);
                 });
                 
-                // Render MathJax whenever text changes
-                editor.on('change keyup NodeChange SetContent', function () {
+                // Render MathJax whenever text changes (only on user-driven input to avoid infinite recursion)
+                editor.on('change keyup', function () {
                     editor.save(); // Sync back to textarea
                     const win = editor.getWin();
                     if (win.MathJax && win.MathJax.typesetPromise) {
