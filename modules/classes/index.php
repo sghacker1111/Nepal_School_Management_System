@@ -10,6 +10,9 @@ require_once __DIR__ . '/../../includes/functions.php';
 Auth::requireRole(['super_admin', 'school_admin', 'principal']);
 
 $school_id = Auth::getSchoolId();
+if (Auth::getRole() === 'super_admin' && !$school_id) {
+    $school_id = 0;
+}
 $db = getDB();
 
 // Handle deletes

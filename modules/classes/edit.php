@@ -15,6 +15,9 @@ $class_id = isset($_GET['class_id']) ? (int)$_GET['class_id'] : 0;
 
 // Fetch class details
 $school_id = Auth::getSchoolId();
+if (Auth::getRole() === 'super_admin' && !$school_id) {
+    $school_id = 0;
+}
 $stmt = $db->prepare("SELECT * FROM classes WHERE id = ? AND school_id = ?");
 $stmt->execute([$class_id, $school_id]);
 $class = $stmt->fetch();

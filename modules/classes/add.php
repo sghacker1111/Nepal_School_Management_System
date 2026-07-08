@@ -11,6 +11,9 @@ Auth::requireRole(['super_admin', 'school_admin']);
 
 $db = getDB();
 $school_id = Auth::getSchoolId();
+if (Auth::getRole() === 'super_admin' && !$school_id) {
+    $school_id = 0;
+}
 $error = '';
 $success = '';
 
