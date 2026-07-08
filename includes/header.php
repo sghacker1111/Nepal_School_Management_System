@@ -202,7 +202,7 @@
     <div class="container-fluid">
         <div class="row">
             <!-- Sidebar -->
-            <nav class="col-md-2 d-none d-md-block sidebar collapse show pt-5" id="sidebar">
+            <nav class="sidebar pt-5" id="sidebar">
                 <div class="position-sticky">
                     <ul class="nav flex-column">
                         <?php 
@@ -399,7 +399,7 @@
             </nav>
 
             <!-- Main Content -->
-            <main class="col-md-10 ms-sm-auto px-md-4 content-wrapper pt-5">
+            <main class="content-wrapper px-3 px-md-4 pt-5" id="main-content">
                 <div class="py-4">
                     <?php if (Auth::isReadOnly()): ?>
                     <div class="alert alert-warning border-start border-warning border-4 shadow-sm mb-4 d-flex align-items-center no-print">

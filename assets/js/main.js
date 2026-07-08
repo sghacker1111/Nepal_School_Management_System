@@ -9,11 +9,28 @@ document.addEventListener('DOMContentLoaded', function() {
     const sidebar = document.getElementById('sidebar');
     
     if (sidebarToggle && sidebar) {
-        sidebarToggle.addEventListener('click', function() {
-            sidebar.classList.toggle('collapse');
-            sidebar.classList.toggle('show');
+        sidebarToggle.addEventListener('click', function(e) {
+            e.stopPropagation();
+            if (window.innerWidth <= 768) {
+                document.body.classList.toggle('sidebar-mobile-show');
+                document.body.classList.remove('sidebar-collapsed');
+            } else {
+                document.body.classList.toggle('sidebar-collapsed');
+                document.body.classList.remove('sidebar-mobile-show');
+            }
         });
     }
+
+    // Close mobile sidebar when clicking outside
+    document.addEventListener('click', function(e) {
+        if (window.innerWidth <= 768 && document.body.classList.contains('sidebar-mobile-show')) {
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            if (sidebar && !sidebar.contains(e.target) && sidebarToggle && !sidebarToggle.contains(e.target)) {
+                document.body.classList.remove('sidebar-mobile-show');
+            }
+        }
+    });
     
     // Initialize tooltips
     const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
