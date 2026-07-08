@@ -55,6 +55,19 @@ class Database {
                 
                 // Run silent migrations if any schema modifications are pending
                 $this->checkAndRunMigrations();
+                
+                // Restore standard classes to school_id = 0 (universal) so all schools can see them
+                try {
+                    $stmt_c = $this->conn->query("SELECT COUNT(*) FROM classes WHERE school_id = 0");
+                    if ($stmt_c->fetchColumn() <= 1) { // 1 because of 'Test Class'
+                        $std_names = ['Nursery', 'Class 1', 'Class 2', 'Class 3', 'Class 4', 'Class 5', 'Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10', 'Class 11', 'Class 12'];
+                        $placeholders = implode(',', array_fill(0, count($std_names), '?'));
+                        $stmt_restore = $this->conn->prepare("UPDATE classes SET school_id = 0 WHERE name IN ($placeholders) AND school_id = 1");
+                        $stmt_restore->execute($std_names);
+                    }
+                } catch (PDOException $e) {
+                    // Suppress
+                }
             } catch (PDOException $sqlite_err) {
                 die("Database connection failed: (MySQL) " . (!empty($mysql_err) ? $mysql_err : 'forced') . " | (SQLite fallback) " . $sqlite_err->getMessage());
             }
@@ -437,15 +450,25 @@ class Database {
             }
         }
 
-        // 3. Make sure all existing data is updated to school_id = 1
+        // 3. Make sure all existing data is updated to school_id = 1 (exclude universal school_id = 0)
         foreach ($tables as $table) {
             try {
                 if ($table !== 'users') {
-                    $this->conn->exec("UPDATE `$table` SET school_id = 1 WHERE school_id IS NULL OR school_id = 0");
+                    $this->conn->exec("UPDATE `$table` SET school_id = 1 WHERE school_id IS NULL");
                 }
             } catch (PDOException $e) {
                 // Suppress if table doesn't exist
             }
+        }
+
+        // Restore standard classes to school_id = 0 (universal) so all schools can see them
+        try {
+            $std_names = ['Nursery', 'Class 1', 'Class 2', 'Class 3', 'Class 4', 'Class 5', 'Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10', 'Class 11', 'Class 12'];
+            $placeholders = implode(',', array_fill(0, count($std_names), '?'));
+            $stmt_restore = $this->conn->prepare("UPDATE classes SET school_id = 0 WHERE name IN ($placeholders) AND school_id = 1");
+            $stmt_restore->execute($std_names);
+        } catch (PDOException $e) {
+            // Suppress
         }
 
         // 4. Update the global super_admin user (username: admin)
