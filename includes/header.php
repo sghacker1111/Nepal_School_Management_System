@@ -124,11 +124,11 @@
     <!-- Top Navbar -->
     <nav class="navbar top-navbar navbar-expand-lg fixed-top">
         <div class="container-fluid">
-            <button class="btn btn-link no-print" id="sidebarToggle" data-bs-toggle="offcanvas" data-bs-target="#sidebar" aria-controls="sidebar">
+            <button class="btn btn-link no-print d-md-none" id="sidebarToggle" data-bs-toggle="offcanvas" data-bs-target="#sidebar" aria-controls="sidebar">
                 <i class="fas fa-bars"></i>
             </button>
             
-            <span class="navbar-brand mb-0 h1 ms-3"><?= APP_NAME ?></span>
+            <span class="navbar-brand mb-0 h1 ms-3 ms-md-0"><?= APP_NAME ?></span>
             
             <div class="ms-auto d-flex align-items-center">
                 <?php

@@ -3,17 +3,7 @@
  * Nepal School ERP
  */
 
-// Sidebar toggle functionality
 document.addEventListener('DOMContentLoaded', function() {
-    const sidebarToggle = document.getElementById('sidebarToggle');
-    
-    if (sidebarToggle) {
-        sidebarToggle.addEventListener('click', function(e) {
-            if (window.innerWidth >= 768) {
-                document.body.classList.toggle('sidebar-collapsed');
-            }
-        });
-    }
     
     // Initialize tooltips
     const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));

@@ -18,7 +18,7 @@ body {
 /* Sidebar Styles */
 .sidebar {
     position: fixed;
-    top: 0;
+    top: 56px;
     bottom: 0;
     left: 0;
     z-index: 1040;
@@ -26,7 +26,6 @@ body {
     padding: 0;
     background: linear-gradient(180deg, #2c3e50 0%, #1a252f 100%) !important;
     box-shadow: inset -1px 0 0 rgba(0, 0, 0, .1);
-    transition: transform 0.3s ease, margin-left 0.3s ease, width 0.3s ease;
     overflow-y: auto;
 }
 
@@ -34,22 +33,7 @@ body {
     background: #f8f9fa;
     min-height: calc(100vh - 56px);
     margin-left: 240px;
-    transition: margin-left 0.3s ease, width 0.3s ease;
     width: calc(100% - 240px);
-}
-
-/* Sidebar collapsed state (desktop) */
-@media (min-width: 768px) {
-    .sidebar {
-        top: 56px;
-    }
-    body.sidebar-collapsed .sidebar {
-        transform: translateX(-240px);
-    }
-    body.sidebar-collapsed .content-wrapper {
-        margin-left: 0;
-        width: 100%;
-    }
 }
 
 /* Card Styles */
@@ -170,6 +154,7 @@ body {
 /* Responsive Adjustments */
 @media (max-width: 768px) {
     .sidebar {
+        top: 0 !important;
         width: 240px !important;
     }
     
