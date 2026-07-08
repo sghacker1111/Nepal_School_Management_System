@@ -124,7 +124,7 @@
     <!-- Top Navbar -->
     <nav class="navbar top-navbar navbar-expand-lg fixed-top">
         <div class="container-fluid">
-            <button class="btn btn-link" id="sidebarToggle">
+            <button class="btn btn-link no-print" id="sidebarToggle" data-bs-toggle="offcanvas" data-bs-target="#sidebar" aria-controls="sidebar">
                 <i class="fas fa-bars"></i>
             </button>
             
@@ -202,7 +202,7 @@
     <div class="container-fluid">
         <div class="row">
             <!-- Sidebar -->
-            <nav class="sidebar pt-5" id="sidebar">
+            <nav class="offcanvas-md offcanvas-start sidebar pt-5" id="sidebar" tabindex="-1">
                 <div class="position-sticky">
                     <ul class="nav flex-column">
                         <?php 

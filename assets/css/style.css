@@ -18,15 +18,15 @@ body {
 /* Sidebar Styles */
 .sidebar {
     position: fixed;
-    top: 56px;
+    top: 0;
     bottom: 0;
     left: 0;
     z-index: 1040;
     width: 240px;
     padding: 0;
-    background: linear-gradient(180deg, #2c3e50 0%, #1a252f 100%);
+    background: linear-gradient(180deg, #2c3e50 0%, #1a252f 100%) !important;
     box-shadow: inset -1px 0 0 rgba(0, 0, 0, .1);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 0.3s ease, margin-left 0.3s ease, width 0.3s ease;
     overflow-y: auto;
 }
 
@@ -34,17 +34,22 @@ body {
     background: #f8f9fa;
     min-height: calc(100vh - 56px);
     margin-left: 240px;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: margin-left 0.3s ease, width 0.3s ease;
     width: calc(100% - 240px);
 }
 
 /* Sidebar collapsed state (desktop) */
-body.sidebar-collapsed .sidebar {
-    left: -240px;
-}
-body.sidebar-collapsed .content-wrapper {
-    margin-left: 0;
-    width: 100%;
+@media (min-width: 768px) {
+    .sidebar {
+        top: 56px;
+    }
+    body.sidebar-collapsed .sidebar {
+        transform: translateX(-240px);
+    }
+    body.sidebar-collapsed .content-wrapper {
+        margin-left: 0;
+        width: 100%;
+    }
 }
 
 /* Card Styles */
@@ -165,8 +170,7 @@ body.sidebar-collapsed .content-wrapper {
 /* Responsive Adjustments */
 @media (max-width: 768px) {
     .sidebar {
-        left: -240px;
-        z-index: 1045;
+        width: 240px !important;
     }
     
     .content-wrapper {
@@ -174,25 +178,6 @@ body.sidebar-collapsed .content-wrapper {
         width: 100%;
         padding-left: 15px !important;
         padding-right: 15px !important;
-    }
-    
-    /* Mobile shown state */
-    body.sidebar-mobile-show .sidebar {
-        left: 0;
-        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
-    }
-    
-    /* Backdrop overlay on mobile when sidebar is shown */
-    body.sidebar-mobile-show::after {
-        content: '';
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.4);
-        z-index: 1040;
-        transition: opacity 0.3s ease;
     }
 }
 
