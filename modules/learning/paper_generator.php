@@ -49,7 +49,7 @@ if ($is_admin && !$school_id) {
     $classes_stmt->execute();
     $classes = $classes_stmt->fetchAll();
 } else {
-    $classes_stmt = $db->prepare("SELECT * FROM classes WHERE school_id = ? AND is_active = 1 ORDER BY level, name");
+    $classes_stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ? OR school_id = 0) AND is_active = 1 ORDER BY level, name");
     $classes_stmt->execute([$school_id]);
     $classes = $classes_stmt->fetchAll();
 }
@@ -82,23 +82,31 @@ if ($school_id) {
 // Fetch subjects mapped to selected class
 $subjects = [];
 if ($class_id) {
+    // Get the name of the selected school class
+    $stmt_name = $db->prepare("SELECT name FROM classes WHERE id = ?");
+    $stmt_name->execute([$class_id]);
+    $target_class_name = $stmt_name->fetchColumn() ?: '';
+
     if ($is_admin && !$school_id) {
         $stmt = $db->prepare("
-            SELECT s.* FROM subjects s 
+            SELECT DISTINCT s.* FROM subjects s 
             JOIN class_subjects cs ON cs.subject_id = s.id 
-            WHERE cs.class_id = ?
+            JOIN classes c ON cs.class_id = c.id
+            WHERE c.id = ? OR (c.name = ? AND cs.school_id = 0 AND c.school_id = 0)
             ORDER BY s.name_en
         ");
-        $stmt->execute([$class_id]);
+        $stmt->execute([$class_id, $target_class_name]);
         $subjects = $stmt->fetchAll();
     } else {
         $stmt = $db->prepare("
-            SELECT s.* FROM subjects s 
+            SELECT DISTINCT s.* FROM subjects s 
             JOIN class_subjects cs ON cs.subject_id = s.id 
-            WHERE cs.class_id = ? AND cs.school_id = ?
+            JOIN classes c ON cs.class_id = c.id
+            WHERE (c.id = ? AND cs.school_id = ?) 
+               OR (c.name = ? AND cs.school_id = 0 AND c.school_id = 0)
             ORDER BY s.name_en
         ");
-        $stmt->execute([$class_id, $school_id]);
+        $stmt->execute([$class_id, $school_id, $target_class_name]);
         $subjects = $stmt->fetchAll();
     }
 }

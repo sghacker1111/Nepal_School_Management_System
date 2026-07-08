@@ -88,7 +88,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_subject'])) {
                     VALUES (?, ?, ?, ?, ?, ?, ?, 0)
                 ");
                 $stmt->execute([$code, $name_en, $name_np, $type, $full_marks, $pass_marks, $credit_hours]);
-                $success = "Universal subject added successfully.";
+                $new_subject_id = $db->lastInsertId();
+                
+                // Automatically map class if selected
+                $map_class_id = (int)($_POST['map_class_id'] ?? 0);
+                if ($map_class_id) {
+                    $stmt_map = $db->prepare("INSERT INTO class_subjects (class_id, subject_id, credit_hours, school_id) VALUES (?, ?, ?, 0)");
+                    $stmt_map->execute([$map_class_id, $new_subject_id, $credit_hours]);
+                }
+                
+                $success = "Universal subject added and mapped successfully.";
             } elseif ($action === 'edit') {
                 $s_id = (int)$_POST['subject_id'];
                 $stmt = $db->prepare("
@@ -380,6 +389,15 @@ ob_start();
                             <option value="Practical">Practical</option>
                         </select>
                     </div>
+                    <div class="col-md-6" id="subjectMapClassWrapper">
+                        <label class="form-label fw-semibold">Target Class (Map Class) *</label>
+                        <select name="map_class_id" id="subjectMapClassId" class="form-select">
+                            <option value="">-- Choose Class --</option>
+                            <?php foreach ($classes as $c): ?>
+                            <option value="<?= $c['id'] ?>"><?= sanitize($c['name']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
                     <div class="col-md-4">
                         <label class="form-label fw-semibold">Full Marks</label>
                         <input type="number" step="0.01" name="full_marks" id="subjectFull" class="form-control" value="100">
@@ -422,6 +440,11 @@ function showAddSubjectForm() {
     document.getElementById('subjectPass').value = '35';
     document.getElementById('subjectCredit').value = '4';
     
+    // Show and require class selection for adding
+    document.getElementById('subjectMapClassWrapper').style.display = 'block';
+    document.getElementById('subjectMapClassId').required = true;
+    document.getElementById('subjectMapClassId').value = '';
+    
     subjectModal.show();
 }
 
@@ -437,6 +460,11 @@ function editSubject(s) {
     document.getElementById('subjectFull').value = s.full_marks;
     document.getElementById('subjectPass').value = s.pass_marks;
     document.getElementById('subjectCredit').value = s.credit_hours;
+    
+    // Hide and don't require class selection for editing
+    document.getElementById('subjectMapClassWrapper').style.display = 'none';
+    document.getElementById('subjectMapClassId').required = false;
+    document.getElementById('subjectMapClassId').value = '';
     
     subjectModal.show();
 }

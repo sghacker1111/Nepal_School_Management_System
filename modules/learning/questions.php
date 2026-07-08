@@ -370,11 +370,11 @@ if ($is_admin && !$school_id) {
     $subjects_stmt->execute();
     $subjects = $subjects_stmt->fetchAll();
 } else {
-    $classes_stmt = $db->prepare("SELECT * FROM classes WHERE school_id = ? AND is_active = 1 ORDER BY level, name");
+    $classes_stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ? OR school_id = 0) AND is_active = 1 ORDER BY level, name");
     $classes_stmt->execute([$school_id]);
     $classes = $classes_stmt->fetchAll();
 
-    $subjects_stmt = $db->prepare("SELECT * FROM subjects WHERE school_id = ? ORDER BY name_en");
+    $subjects_stmt = $db->prepare("SELECT * FROM subjects WHERE school_id = ? OR school_id = 0 ORDER BY name_en");
     $subjects_stmt->execute([$school_id]);
     $subjects = $subjects_stmt->fetchAll();
 }
