@@ -251,6 +251,11 @@
                                 <i class="fas fa-border-all"></i> Specification Grid
                             </a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link <?= ($activePage ?? '') == 'ocr_scanner' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/ocr_scanner.php">
+                                <i class="fas fa-camera"></i> OCR Paper Scanner
+                            </a>
+                        </li>
                         
                         <?php elseif ($sub_type === 'exam_generator'): ?>
                             <!-- Exam Generator Only Subscription: Show ONLY Question Bank, Exam Paper Gen & Specification Grid -->
@@ -267,6 +272,11 @@
                             <li class="nav-item">
                                 <a class="nav-link <?= ($activePage ?? '') == 'specification_grids' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/specification_grids.php">
                                     <i class="fas fa-border-all"></i> Specification Grid
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link <?= ($activePage ?? '') == 'ocr_scanner' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/ocr_scanner.php">
+                                    <i class="fas fa-camera"></i> OCR Paper Scanner
                                 </a>
                             </li>
 
@@ -295,6 +305,11 @@
                             <li class="nav-item">
                                 <a class="nav-link <?= ($activePage ?? '') == 'specification_grids' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/specification_grids.php">
                                     <i class="fas fa-border-all"></i> Specification Grid
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link <?= ($activePage ?? '') == 'ocr_scanner' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/ocr_scanner.php">
+                                    <i class="fas fa-camera"></i> OCR Paper Scanner
                                 </a>
                             </li>
                             <li class="nav-item">
@@ -368,6 +383,11 @@
                             <li class="nav-item">
                                 <a class="nav-link <?= ($activePage ?? '') == 'specification_grids' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/specification_grids.php">
                                     <i class="fas fa-border-all"></i> Specification Grid
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link <?= ($activePage ?? '') == 'ocr_scanner' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/ocr_scanner.php">
+                                    <i class="fas fa-camera"></i> OCR Paper Scanner
                                 </a>
                             </li>
                             <li class="nav-item">
