@@ -146,7 +146,7 @@
                     </button>
                     <ul class="dropdown-menu">
                         <?php
-                        $stmt = $db->prepare("SELECT * FROM academic_years WHERE school_id = ? ORDER BY year_ad DESC");
+                        $stmt = $db->prepare("SELECT * FROM academic_years WHERE school_id = ? AND (is_hidden = 0 OR is_active = 1) ORDER BY year_ad DESC");
                         $stmt->execute([$school_id]);
                         while ($y = $stmt->fetch()):
                         ?>
@@ -256,6 +256,11 @@
                                 <i class="fas fa-camera"></i> OCR Paper Scanner
                             </a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link <?= ($activePage ?? '') == 'curriculum' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/curriculum.php">
+                                <i class="fas fa-sitemap"></i> Curriculum & Topics
+                            </a>
+                        </li>
                         
                         <?php elseif ($sub_type === 'exam_generator'): ?>
                             <!-- Exam Generator Only Subscription: Show ONLY Question Bank, Exam Paper Gen & Specification Grid -->
@@ -277,6 +282,11 @@
                             <li class="nav-item">
                                 <a class="nav-link <?= ($activePage ?? '') == 'ocr_scanner' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/ocr_scanner.php">
                                     <i class="fas fa-camera"></i> OCR Paper Scanner
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link <?= ($activePage ?? '') == 'curriculum' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/curriculum.php">
+                                    <i class="fas fa-sitemap"></i> Curriculum & Topics
                                 </a>
                             </li>
 
@@ -310,6 +320,11 @@
                             <li class="nav-item">
                                 <a class="nav-link <?= ($activePage ?? '') == 'ocr_scanner' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/ocr_scanner.php">
                                     <i class="fas fa-camera"></i> OCR Paper Scanner
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link <?= ($activePage ?? '') == 'curriculum' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/curriculum.php">
+                                    <i class="fas fa-sitemap"></i> Curriculum & Topics
                                 </a>
                             </li>
                             <li class="nav-item">
@@ -388,6 +403,11 @@
                             <li class="nav-item">
                                 <a class="nav-link <?= ($activePage ?? '') == 'ocr_scanner' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/ocr_scanner.php">
                                     <i class="fas fa-camera"></i> OCR Paper Scanner
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link <?= ($activePage ?? '') == 'curriculum' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/curriculum.php">
+                                    <i class="fas fa-sitemap"></i> Curriculum & Topics
                                 </a>
                             </li>
                             <li class="nav-item">

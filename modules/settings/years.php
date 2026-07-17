@@ -41,24 +41,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     }
 }
 
-// Handle Delete Year
-if (isset($_GET['delete'])) {
-    $id = (int)$_GET['delete'];
+// Handle Toggle Hidden Year
+if (isset($_GET['toggle_hidden'])) {
+    $id = (int)$_GET['toggle_hidden'];
     try {
         // Check if active
-        $stmt = $db->prepare("SELECT is_active, school_id FROM academic_years WHERE id = ?");
+        $stmt = $db->prepare("SELECT is_active, is_hidden, school_id FROM academic_years WHERE id = ?");
         $stmt->execute([$id]);
         $yr_record = $stmt->fetch();
         
         if (!$yr_record || $yr_record['school_id'] != $school_id) {
             $error = "Unauthorized access or academic year not found.";
-        } else if ($yr_record['is_active'] == 1) {
-            $error = "Cannot delete the active academic year.";
+        } else if ($yr_record['is_active'] == 1 && $yr_record['is_hidden'] == 0) {
+            $error = "Cannot hide the active academic year.";
         } else {
-            $stmt = $db->prepare("DELETE FROM academic_years WHERE id = ? AND school_id = ?");
-            $stmt->execute([$id, $school_id]);
-            Auth::logActivity(Auth::getUserId(), 'Delete Academic Year', 'academic_years', $id);
-            redirect(APP_URL . '/modules/settings/years.php', 'Academic Year deleted successfully.');
+            $new_hidden = $yr_record['is_hidden'] == 1 ? 0 : 1;
+            $stmt = $db->prepare("UPDATE academic_years SET is_hidden = ? WHERE id = ? AND school_id = ?");
+            $stmt->execute([$new_hidden, $id, $school_id]);
+            Auth::logActivity(Auth::getUserId(), 'Toggle Hidden Academic Year', 'academic_years', $id);
+            $success = $new_hidden ? 'Academic Year hidden successfully.' : 'Academic Year shown successfully.';
+            redirect(APP_URL . '/modules/settings/years.php', $success, 'success');
         }
     } catch (PDOException $e) {
         $error = "Database error: " . $e->getMessage();
@@ -171,6 +173,8 @@ ob_start();
                                 <td>
                                     <?php if ($yr['is_active'] == 1): ?>
                                         <span class="badge bg-success"><i class="fas fa-check"></i> Current Active</span>
+                                    <?php elseif ($yr['is_hidden'] == 1): ?>
+                                        <span class="badge bg-danger"><i class="fas fa-eye-slash"></i> Hidden</span>
                                     <?php else: ?>
                                         <span class="badge bg-secondary">Inactive</span>
                                     <?php endif; ?>
@@ -181,10 +185,17 @@ ob_start();
                                                 class="btn btn-sm btn-success" title="Set Active">
                                             <i class="fas fa-toggle-on"></i> Set Active
                                         </button>
-                                        <button onclick="confirmDeleteYear(<?= $yr['id'] ?>)" 
-                                                class="btn btn-sm btn-outline-danger" title="Delete">
-                                            <i class="fas fa-trash"></i>
-                                        </button>
+                                        <?php if ($yr['is_hidden'] == 1): ?>
+                                            <button onclick="toggleHiddenYear(<?= $yr['id'] ?>, false)" 
+                                                    class="btn btn-sm btn-outline-success" title="Show Academic Year">
+                                                <i class="fas fa-eye"></i> Show
+                                            </button>
+                                        <?php else: ?>
+                                            <button onclick="toggleHiddenYear(<?= $yr['id'] ?>, true)" 
+                                                    class="btn btn-sm btn-outline-warning" title="Hide Academic Year">
+                                                <i class="fas fa-eye-slash"></i> Hide
+                                            </button>
+                                        <?php endif; ?>
                                     <?php else: ?>
                                         <span class="text-muted"><i class="fas fa-lock"></i> Locked</span>
                                     <?php endif; ?>
@@ -255,20 +266,20 @@ function switchYear(id, label) {
     });
 }
 
-function confirmDeleteYear(id) {
+function toggleHiddenYear(id, hide) {
+    const actionText = hide ? 'hide' : 'show';
+    const confirmBtnText = hide ? 'Yes, hide it' : 'Yes, show it';
     Swal.fire({
-        title: 'Delete Academic Year',
-        text: 'Are you sure you want to delete this inactive academic year? This action cannot be undone.',
+        title: (hide ? 'Hide' : 'Show') + ' Academic Year',
+        text: 'Are you sure you want to ' + actionText + ' this academic year?',
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonColor: '#d33',
+        confirmButtonColor: hide ? '#e0a800' : '#28a745',
         cancelButtonColor: '#3085d6',
-        confirmButtonText: 'Yes, delete it'
+        confirmButtonText: confirmBtnText
     }).then((result) => {
         if (result.isConfirmed) {
-            verifyPasswordAndProceed(function() {
-                window.location.href = '<?= APP_URL ?>/modules/settings/years.php?delete=' + id;
-            }, 'Verify Password', 'Please enter your password to confirm deletion:');
+            window.location.href = '<?= APP_URL ?>/modules/settings/years.php?toggle_hidden=' + id;
         }
     });
 }

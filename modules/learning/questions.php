@@ -143,19 +143,53 @@ if (isset($_GET['action_get_chapters'])) {
     $s_name = $stmt->fetchColumn() ?: '';
     
     // Query DB chapters
-    $stmt = $db->prepare("SELECT name FROM chapters WHERE (school_id = ? OR school_id = 0) AND class_id = ? AND subject_id = ? ORDER BY sort_order, id");
+    $stmt = $db->prepare("SELECT id, name FROM chapters WHERE (school_id = ? OR school_id = 0) AND class_id = ? AND subject_id = ? ORDER BY sort_order, id");
     $stmt->execute([$school_id ?: 0, $c_id, $s_id]);
-    $chapters = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    $chapters = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     if (empty($chapters)) {
         // Fallback to static cdcCurriculum
         $curriculum = require __DIR__ . '/../../config/cdc_curriculum.php';
         if (isset($curriculum[$s_name][$c_name])) {
-            $chapters = $curriculum[$s_name][$c_name];
+            $static_chapters = $curriculum[$s_name][$c_name];
+            foreach ($static_chapters as $idx => $name) {
+                // Use negative index for fallbacks
+                $chapters[] = ['id' => -($idx + 1), 'name' => $name];
+            }
         }
     }
     
     echo json_encode($chapters);
+    exit;
+}
+
+// Handle Get Topics AJAX Request
+if (isset($_GET['action_get_topics'])) {
+    header('Content-Type: application/json');
+    $chapter_id = (int)($_GET['chapter_id'] ?? 0);
+    $chapter_name = sanitize($_GET['chapter_name'] ?? '');
+    
+    $topics = [];
+    if ($chapter_id > 0) {
+        $stmt = $db->prepare("SELECT id, name FROM topics WHERE chapter_id = ? AND (school_id = ? OR school_id = 0) ORDER BY sort_order, id");
+        $stmt->execute([$chapter_id, $school_id ?: 0]);
+        $topics = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } elseif ($chapter_id <= 0 && !empty($chapter_name)) {
+        // Look up by matching name
+        $c_id = (int)($_GET['class_id'] ?? 0);
+        $s_id = (int)($_GET['subject_id'] ?? 0);
+        
+        $stmt = $db->prepare("SELECT id FROM chapters WHERE name = ? AND class_id = ? AND subject_id = ? AND (school_id = ? OR school_id = 0) LIMIT 1");
+        $stmt->execute([$chapter_name, $c_id, $s_id, $school_id ?: 0]);
+        $db_ch_id = $stmt->fetchColumn();
+        if ($db_ch_id) {
+            $stmt_t = $db->prepare("SELECT id, name FROM topics WHERE chapter_id = ? AND (school_id = ? OR school_id = 0) ORDER BY sort_order, id");
+            $stmt_t->execute([$db_ch_id, $school_id ?: 0]);
+            $topics = $stmt_t->fetchAll(PDO::FETCH_ASSOC);
+        }
+    }
+    
+    echo json_encode($topics);
     exit;
 }
 
@@ -165,6 +199,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $class_id = (int)$_POST['class_id'];
     $subject_id = (int)$_POST['subject_id'];
     $chapter = sanitize($_POST['chapter'] ?? '');
+    $topic_id = isset($_POST['topic_id']) && $_POST['topic_id'] !== '' ? (int)$_POST['topic_id'] : null;
     $type = sanitize($_POST['type'] ?? 'MCQ');
     $question_text = trim($_POST['question_text'] ?? '');
     $question_text_np = trim($_POST['question_text_np'] ?? '');
@@ -222,10 +257,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 
                 if ($action === 'add') {
                     $stmt = $db->prepare("
-                        INSERT INTO questions (class_id, subject_id, chapter, type, question_text, question_text_np, options, options_np, correct_option, marks, answer, answer_np, school_id) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO questions (class_id, subject_id, chapter, type, question_text, question_text_np, options, options_np, correct_option, marks, answer, answer_np, school_id, topic_id) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ");
-                    $stmt->execute([$class_id, $subject_id, $chapter, $type, $question_text, $question_text_np, $options_json, $options_np_json, $correct_option, $marks, $answer, $answer_np, $q_school_id]);
+                    $stmt->execute([$class_id, $subject_id, $chapter, $type, $question_text, $question_text_np, $options_json, $options_np_json, $correct_option, $marks, $answer, $answer_np, $q_school_id, $topic_id]);
                     Auth::logActivity(Auth::getUserId(), 'Add Question to Bank', 'questions', $db->lastInsertId());
                     $success = "Question added to bank successfully.";
                 } elseif ($action === 'edit') {
@@ -234,17 +269,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     if ($is_admin) {
                         $stmt = $db->prepare("
                             UPDATE questions 
-                            SET class_id = ?, subject_id = ?, chapter = ?, type = ?, question_text = ?, question_text_np = ?, options = ?, options_np = ?, correct_option = ?, marks = ?, answer = ?, answer_np = ? 
+                            SET class_id = ?, subject_id = ?, chapter = ?, type = ?, question_text = ?, question_text_np = ?, options = ?, options_np = ?, correct_option = ?, marks = ?, answer = ?, answer_np = ?, topic_id = ? 
                             WHERE id = ?
                         ");
-                        $stmt->execute([$class_id, $subject_id, $chapter, $type, $question_text, $question_text_np, $options_json, $options_np_json, $correct_option, $marks, $answer, $answer_np, $question_id]);
+                        $stmt->execute([$class_id, $subject_id, $chapter, $type, $question_text, $question_text_np, $options_json, $options_np_json, $correct_option, $marks, $answer, $answer_np, $topic_id, $question_id]);
                     } else {
                         $stmt = $db->prepare("
                             UPDATE questions 
-                            SET class_id = ?, subject_id = ?, chapter = ?, type = ?, question_text = ?, question_text_np = ?, options = ?, options_np = ?, correct_option = ?, marks = ?, answer = ?, answer_np = ? 
+                            SET class_id = ?, subject_id = ?, chapter = ?, type = ?, question_text = ?, question_text_np = ?, options = ?, options_np = ?, correct_option = ?, marks = ?, answer = ?, answer_np = ?, topic_id = ? 
                             WHERE id = ? AND school_id = ?
                         ");
-                        $stmt->execute([$class_id, $subject_id, $chapter, $type, $question_text, $question_text_np, $options_json, $options_np_json, $correct_option, $marks, $answer, $answer_np, $question_id, $school_id]);
+                        $stmt->execute([$class_id, $subject_id, $chapter, $type, $question_text, $question_text_np, $options_json, $options_np_json, $correct_option, $marks, $answer, $answer_np, $topic_id, $question_id, $school_id]);
                     }
                     Auth::logActivity(Auth::getUserId(), 'Edit Question in Bank', 'questions', $question_id);
                     $success = "Question updated successfully.";
@@ -286,10 +321,11 @@ $filter_subject = $_GET['subject'] ?? '';
 
 // Build Query supporting Universal Questions and mapping
 $query = "
-    SELECT q.*, c.name as class_name, s.name_en as subject_name 
+    SELECT q.*, c.name as class_name, s.name_en as subject_name, t.name as topic_name 
     FROM questions q 
     LEFT JOIN classes c ON q.class_id = c.id 
     LEFT JOIN subjects s ON q.subject_id = s.id 
+    LEFT JOIN topics t ON q.topic_id = t.id
     WHERE (q.school_id = ? OR q.school_id = 0)
 ";
 $params = [$school_id];
@@ -306,10 +342,11 @@ if ($filter_class && $filter_subject) {
     $sub_name = $sub ? $sub['name_en'] : '';
 
     $query = "
-        SELECT q.*, c.name as class_name, s.name_en as subject_name 
+        SELECT q.*, c.name as class_name, s.name_en as subject_name, t.name as topic_name 
         FROM questions q 
         LEFT JOIN classes c ON q.class_id = c.id 
         LEFT JOIN subjects s ON q.subject_id = s.id 
+        LEFT JOIN topics t ON q.topic_id = t.id
         WHERE (
             (q.school_id = ? AND q.class_id = ? AND q.subject_id = ?)
             OR
@@ -323,10 +360,11 @@ if ($filter_class && $filter_subject) {
     $lvl = $stmt->fetchColumn();
 
     $query = "
-        SELECT q.*, c.name as class_name, s.name_en as subject_name 
+        SELECT q.*, c.name as class_name, s.name_en as subject_name, t.name as topic_name 
         FROM questions q 
         LEFT JOIN classes c ON q.class_id = c.id 
         LEFT JOIN subjects s ON q.subject_id = s.id 
+        LEFT JOIN topics t ON q.topic_id = t.id
         WHERE (
             (q.school_id = ? AND q.class_id = ?)
             OR
@@ -342,10 +380,11 @@ if ($filter_class && $filter_subject) {
     $sub_name = $sub ? $sub['name_en'] : '';
 
     $query = "
-        SELECT q.*, c.name as class_name, s.name_en as subject_name 
+        SELECT q.*, c.name as class_name, s.name_en as subject_name, t.name as topic_name 
         FROM questions q 
         LEFT JOIN classes c ON q.class_id = c.id 
         LEFT JOIN subjects s ON q.subject_id = s.id 
+        LEFT JOIN topics t ON q.topic_id = t.id
         WHERE (
             (q.school_id = ? AND q.subject_id = ?)
             OR
@@ -606,7 +645,7 @@ ob_start();
                                 <?php endforeach; ?>
                             </select>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <label class="form-label">Chapter / Unit *</label>
                             <select id="modalChapterSelect" class="form-select" onchange="onChapterSelectChange()">
                                 <!-- Populated dynamically -->
@@ -614,7 +653,13 @@ ob_start();
                             <input type="hidden" name="chapter" id="modalChapter">
                             <input type="text" id="modalChapterCustom" class="form-control mt-2" placeholder="Type custom chapter..." style="display:none;" oninput="updateChapterHidden()">
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
+                            <label class="form-label">Topic *</label>
+                            <select name="topic_id" id="modalTopicSelect" class="form-select">
+                                <option value="">Choose Topic</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
                             <label class="form-label">Question Type *</label>
                             <select name="type" id="modalType" class="form-select" onchange="toggleMCQFields()" required>
                                 <option value="MCQ">Multiple Choice (MCQ)</option>
@@ -625,7 +670,7 @@ ob_start();
                                 <option value="Difference Between">Difference Between</option>
                             </select>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <label class="form-label">Marks Weightage *</label>
                             <input type="number" name="marks" id="modalMarks" class="form-control" value="1" required min="1">
                         </div>
@@ -901,6 +946,7 @@ function showAddForm() {
     document.getElementById('modalClass').value = '';
     document.getElementById('modalSubject').value = '';
     document.getElementById('modalChapter').value = '';
+    document.getElementById('modalTopicSelect').innerHTML = '<option value="">Choose Topic</option>';
     document.getElementById('modalType').value = 'MCQ';
     document.getElementById('modalMarks').value = '1';
     
@@ -996,7 +1042,7 @@ function editQuestion(q) {
         setOptionVal('modalOptDNp', '');
     }
     
-    updateChaptersDropdown(q.chapter);
+    updateChaptersDropdown(q.chapter, q.topic_id);
     toggleMCQFields();
     
     // Scroll to top
@@ -1085,7 +1131,7 @@ function quickAddSubject() {
     });
 }
 
-function updateChaptersDropdown(selectedChapterValue = '') {
+function updateChaptersDropdown(selectedChapterValue = '', selectedTopicId = '') {
     const classId = document.getElementById('modalClass').value;
     const subjectId = document.getElementById('modalSubject').value;
     
@@ -1105,6 +1151,7 @@ function updateChaptersDropdown(selectedChapterValue = '') {
         customInput.style.display = 'block';
         customInput.value = selectedChapterValue || '';
         hiddenInput.value = selectedChapterValue || '';
+        updateTopicsDropdown(0, '', selectedTopicId);
         return;
     }
     
@@ -1121,8 +1168,9 @@ function updateChaptersDropdown(selectedChapterValue = '') {
             if (chapters && chapters.length > 0) {
                 chapters.forEach(ch => {
                     const opt = document.createElement('option');
-                    opt.value = ch;
-                    opt.textContent = ch;
+                    opt.value = ch.name;
+                    opt.textContent = ch.name;
+                    opt.setAttribute('data-id', ch.id);
                     select.appendChild(opt);
                 });
                 
@@ -1131,11 +1179,18 @@ function updateChaptersDropdown(selectedChapterValue = '') {
                 optCustom.textContent = 'Other / Custom Chapter';
                 select.appendChild(optCustom);
                 
+                let dbChapterId = 0;
+                let chapterNames = chapters.map(c => c.name);
+                
                 if (selectedChapterValue) {
-                    if (chapters.includes(selectedChapterValue)) {
+                    if (chapterNames.includes(selectedChapterValue)) {
                         select.value = selectedChapterValue;
                         customInput.style.display = 'none';
                         hiddenInput.value = selectedChapterValue;
+                        
+                        // Find matching chapter id
+                        const matched = chapters.find(c => c.name === selectedChapterValue);
+                        if (matched) dbChapterId = matched.id;
                     } else {
                         select.value = '__custom__';
                         customInput.style.display = 'block';
@@ -1145,7 +1200,12 @@ function updateChaptersDropdown(selectedChapterValue = '') {
                 } else {
                     hiddenInput.value = select.value;
                     customInput.style.display = 'none';
+                    if (chapters.length > 0) {
+                        dbChapterId = chapters[0].id;
+                    }
                 }
+                
+                updateTopicsDropdown(dbChapterId, selectedChapterValue || select.value, selectedTopicId);
             } else {
                 const optCustom = document.createElement('option');
                 optCustom.value = '__custom__';
@@ -1156,6 +1216,7 @@ function updateChaptersDropdown(selectedChapterValue = '') {
                 customInput.style.display = 'block';
                 customInput.value = selectedChapterValue || '';
                 hiddenInput.value = selectedChapterValue || '';
+                updateTopicsDropdown(0, '', selectedTopicId);
             }
         },
         error: function() {
@@ -1168,6 +1229,40 @@ function updateChaptersDropdown(selectedChapterValue = '') {
             customInput.style.display = 'block';
             customInput.value = selectedChapterValue || '';
             hiddenInput.value = selectedChapterValue || '';
+            updateTopicsDropdown(0, '', selectedTopicId);
+        }
+    });
+}
+
+function updateTopicsDropdown(chapterId, chapterName, selectedTopicId = '') {
+    const classId = document.getElementById('modalClass').value;
+    const subjectId = document.getElementById('modalSubject').value;
+    const select = document.getElementById('modalTopicSelect');
+    
+    select.innerHTML = '<option value="">Choose Topic</option>';
+    
+    $.ajax({
+        url: window.location.pathname + window.location.search,
+        data: {
+            action_get_topics: 1,
+            chapter_id: chapterId,
+            chapter_name: chapterName,
+            class_id: classId,
+            subject_id: subjectId
+        },
+        dataType: 'json',
+        success: function(topics) {
+            if (topics && topics.length > 0) {
+                topics.forEach(t => {
+                    const opt = document.createElement('option');
+                    opt.value = t.id;
+                    opt.textContent = t.name;
+                    select.appendChild(opt);
+                });
+                if (selectedTopicId) {
+                    select.value = selectedTopicId;
+                }
+            }
         }
     });
 }
@@ -1180,9 +1275,13 @@ function onChapterSelectChange() {
     if (select.value === '__custom__') {
         customInput.style.display = 'block';
         hiddenInput.value = customInput.value;
+        updateTopicsDropdown(0, '', '');
     } else {
         customInput.style.display = 'none';
         hiddenInput.value = select.value;
+        const selectedOpt = select.options[select.selectedIndex];
+        const dbChapterId = selectedOpt ? parseInt(selectedOpt.getAttribute('data-id')) || 0 : 0;
+        updateTopicsDropdown(dbChapterId, select.value, '');
     }
 }
 

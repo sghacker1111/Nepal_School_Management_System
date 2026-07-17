@@ -119,7 +119,10 @@ class Database {
             ['questions', 'answer'],
             ['specification_grids', null],
             ['chapters', null],
-            ['class_subjects', 'section_id']
+            ['class_subjects', 'section_id'],
+            ['academic_years', 'is_hidden'],
+            ['topics', null],
+            ['questions', 'topic_id']
         ];
         
         foreach ($checks as $check) {
@@ -293,6 +296,20 @@ class Database {
         )";
         $this->conn->exec($sql);
 
+        // 10. topics
+        $sql = "CREATE TABLE IF NOT EXISTS topics (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            school_id INTEGER DEFAULT 0,
+            class_id INTEGER NOT NULL,
+            subject_id INTEGER NOT NULL,
+            chapter_id INTEGER NOT NULL,
+            name VARCHAR(255) NOT NULL,
+            name_np VARCHAR(255) DEFAULT NULL,
+            sort_order INTEGER DEFAULT 0,
+            FOREIGN KEY (chapter_id) REFERENCES chapters(id) ON DELETE CASCADE
+        )";
+        $this->conn->exec($sql);
+
         // Seed universal classes if not present
         $stmt = $this->conn->query("SELECT COUNT(*) FROM classes WHERE school_id = 0");
         if ($stmt->fetchColumn() == 0) {
@@ -338,6 +355,9 @@ class Database {
                 'question_view_permission' => "VARCHAR(20) DEFAULT 'none'",
                 'learning_hub_permission_status' => "VARCHAR(20) DEFAULT 'none'"
             ],
+            'academic_years' => [
+                'is_hidden' => 'INTEGER DEFAULT 0'
+            ],
             'users' => [
                 'signature' => 'VARCHAR(255) DEFAULT NULL'
             ],
@@ -361,7 +381,8 @@ class Database {
                 'question_text_np' => 'TEXT DEFAULT NULL',
                 'answer_np' => 'TEXT DEFAULT NULL',
                 'options_np' => 'TEXT DEFAULT NULL',
-                'school_id' => 'INTEGER DEFAULT 1'
+                'school_id' => 'INTEGER DEFAULT 1',
+                'topic_id' => 'INTEGER DEFAULT NULL'
             ],
             'class_subjects' => [
                 'section_id' => 'INTEGER DEFAULT NULL'
