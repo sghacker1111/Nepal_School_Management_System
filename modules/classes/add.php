@@ -29,6 +29,14 @@ if (isset($_POST['add_class'])) {
     if (empty($name)) {
         $error = 'Class name is required';
     } else {
+        $stmt_check = $db->prepare("SELECT COUNT(*) FROM classes WHERE LOWER(name) = LOWER(?) AND school_id = ?");
+        $stmt_check->execute([$name, $school_id]);
+        if ($stmt_check->fetchColumn() > 0) {
+            $error = 'Class with this name already exists.';
+        }
+    }
+    
+    if (empty($error)) {
         try {
             $stmt = $db->prepare("INSERT INTO classes (name, name_np, level, grading_type, class_teacher_name, school_id, is_grading_teaching) VALUES (?, ?, ?, ?, ?, ?, ?)");
             $stmt->execute([$name, $name_np, $level, $grading_type, $class_teacher_name, $school_id, $is_grading_teaching]);

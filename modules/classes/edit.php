@@ -46,6 +46,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($name)) {
         $error = 'Class name is required';
     } else {
+        $stmt_check = $db->prepare("SELECT COUNT(*) FROM classes WHERE LOWER(name) = LOWER(?) AND school_id = ? AND id != ?");
+        $stmt_check->execute([$name, $school_id, $class_id]);
+        if ($stmt_check->fetchColumn() > 0) {
+            $error = 'Class with this name already exists.';
+        }
+    }
+    
+    if (empty($error)) {
         try {
             $upload_dir = UPLOAD_DIR;
             if (!file_exists($upload_dir)) {
