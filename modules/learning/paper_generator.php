@@ -45,11 +45,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_save_grid'])) 
 
 // Fetch active classes for current school
 if ($is_admin && !$school_id) {
-    $classes_stmt = $db->prepare("SELECT * FROM classes WHERE is_active = 1 GROUP BY name ORDER BY level, name");
+    $classes_stmt = $db->prepare("SELECT * FROM classes WHERE is_active = 1 GROUP BY name ORDER BY id ASC");
     $classes_stmt->execute();
     $classes = $classes_stmt->fetchAll();
 } else {
-    $classes_stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ? OR school_id = 0) AND is_active = 1 ORDER BY level, name");
+    $classes_stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ? OR school_id = 0) AND is_active = 1 ORDER BY id ASC");
     $classes_stmt->execute([$school_id]);
     $classes = $classes_stmt->fetchAll();
 }
@@ -79,7 +79,7 @@ if ($school_id) {
     $school = $stmt->fetch();
 }
 
-// Fetch subjects mapped to selected class
+// Fetch subjects mapped to selected class (compulsory + active optional only)
 $subjects = [];
 if ($class_id) {
     // Get the name of the selected school class
@@ -92,7 +92,8 @@ if ($class_id) {
             SELECT DISTINCT s.* FROM subjects s 
             JOIN class_subjects cs ON cs.subject_id = s.id 
             JOIN classes c ON cs.class_id = c.id
-            WHERE c.id = ? OR (c.name = ? AND cs.school_id = 0 AND c.school_id = 0)
+            WHERE (c.id = ? OR (c.name = ? AND cs.school_id = 0 AND c.school_id = 0))
+              AND (cs.is_optional = 0 OR cs.is_active = 1)
             ORDER BY s.name_en
         ");
         $stmt->execute([$class_id, $target_class_name]);
@@ -102,8 +103,9 @@ if ($class_id) {
             SELECT DISTINCT s.* FROM subjects s 
             JOIN class_subjects cs ON cs.subject_id = s.id 
             JOIN classes c ON cs.class_id = c.id
-            WHERE (c.id = ? AND cs.school_id = ?) 
-               OR (c.name = ? AND cs.school_id = 0 AND c.school_id = 0)
+            WHERE ((c.id = ? AND (cs.school_id = ? OR cs.school_id = 0)) 
+               OR (c.name = ? AND cs.school_id = 0 AND c.school_id = 0))
+              AND (cs.is_optional = 0 OR cs.is_active = 1)
             ORDER BY s.name_en
         ");
         $stmt->execute([$class_id, $school_id, $target_class_name]);

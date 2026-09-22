@@ -76,11 +76,18 @@ if (isset($_GET['make_universal'])) {
 // Handle Quick Add Class
 if (isset($_POST['action_quick_add_class'])) {
     $class_name = sanitize($_POST['class_name'] ?? '');
-    $class_level = sanitize($_POST['class_level'] ?? 'Secondary');
-    $grading_type = sanitize($_POST['grading_type'] ?? 'gpa');
+    $class_level = sanitize($_POST['class_level'] ?? 'Basic');
+    $grading_type = 'gpa';
     
     if (empty($class_name)) {
         echo json_encode(['success' => false, 'message' => 'Class name is required.']);
+        exit;
+    }
+    
+    $stmt_c = $db->prepare("SELECT COUNT(*) FROM classes WHERE LOWER(name) = LOWER(?) AND (school_id = ? OR school_id = 0)");
+    $stmt_c->execute([$class_name, $school_id]);
+    if ($stmt_c->fetchColumn() > 0) {
+        echo json_encode(['success' => false, 'message' => 'Class with this name already exists. Class names must be unique.']);
         exit;
     }
     
@@ -318,6 +325,7 @@ if (isset($_GET['delete'])) {
 // Fetch Filters
 $filter_class = $_GET['class'] ?? '';
 $filter_subject = $_GET['subject'] ?? '';
+$filter_category = sanitize($_GET['category'] ?? 'all'); // 'all', 'mcq', or 'other'
 
 // Build Query supporting Universal Questions and mapping
 $query = "
@@ -394,14 +402,20 @@ if ($filter_class && $filter_subject) {
     $params = [$school_id, $filter_subject, $sub_code, $sub_name];
 }
 
+if ($filter_category === 'mcq') {
+    $query .= " AND q.type = 'MCQ'";
+} elseif ($filter_category === 'other') {
+    $query .= " AND q.type != 'MCQ'";
+}
+
 $query .= " ORDER BY q.id DESC";
 $stmt = $db->prepare($query);
 $stmt->execute($params);
 $questions = $stmt->fetchAll();
 
-// Fetch classes and subjects for selects
+// Fetch classes and subjects for selects (natural grade order)
 if ($is_admin && !$school_id) {
-    $classes_stmt = $db->prepare("SELECT * FROM classes WHERE is_active = 1 GROUP BY name ORDER BY level, name");
+    $classes_stmt = $db->prepare("SELECT * FROM classes WHERE is_active = 1 GROUP BY name ORDER BY id ASC");
     $classes_stmt->execute();
     $classes = $classes_stmt->fetchAll();
 
@@ -409,7 +423,7 @@ if ($is_admin && !$school_id) {
     $subjects_stmt->execute();
     $subjects = $subjects_stmt->fetchAll();
 } else {
-    $classes_stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ? OR school_id = 0) AND is_active = 1 ORDER BY level, name");
+    $classes_stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ? OR school_id = 0) AND is_active = 1 ORDER BY id ASC");
     $classes_stmt->execute([$school_id]);
     $classes = $classes_stmt->fetchAll();
 
@@ -417,6 +431,17 @@ if ($is_admin && !$school_id) {
     $subjects_stmt->execute([$school_id]);
     $subjects = $subjects_stmt->fetchAll();
 }
+
+// Fetch active class-subject mappings (unticked optional subjects are excluded)
+$cs_stmt = $db->prepare("
+    SELECT cs.class_id, s.id as subject_id, s.name_en, s.name_np, s.code, cs.is_optional, cs.is_active
+    FROM class_subjects cs
+    JOIN subjects s ON cs.subject_id = s.id
+    WHERE (cs.is_optional = 0 OR cs.is_active = 1)
+    ORDER BY s.name_en ASC
+");
+$cs_stmt->execute();
+$class_subjects_map = $cs_stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $pageTitle = 'Question Bank';
 $activePage = 'questions';
@@ -482,15 +507,21 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
 }
 </style>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2><i class="fas fa-database text-primary"></i> Question Bank</h2>
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
     <div>
-        <a href="<?= APP_URL ?>/modules/learning/index.php" class="btn btn-secondary me-2">
+        <h2 class="mb-1"><i class="fas fa-database text-primary me-2"></i>Question Bank</h2>
+        <span class="text-muted small">Manage Multiple Choice and Subjective questions aligned with CDC Nepal curriculum</span>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        <a href="<?= APP_URL ?>/modules/learning/index.php" class="btn btn-secondary">
             <i class="fas fa-arrow-left"></i> Back to Portal
         </a>
         <?php if ($is_admin || $permission_status === 'approved'): ?>
-        <button class="btn btn-primary" onclick="showAddForm()">
-            <i class="fas fa-plus"></i> Add Question
+        <button class="btn btn-primary fw-bold shadow-sm" onclick="showAddForm('MCQ')">
+            <i class="fas fa-list-ol me-1"></i> Add Multiple Choice Questions
+        </button>
+        <button class="btn btn-success fw-bold shadow-sm" onclick="showAddForm('other')">
+            <i class="fas fa-pen-nib me-1"></i> Add Questions
         </button>
         <?php endif; ?>
     </div>
@@ -540,10 +571,30 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
 
 <?php if ($is_admin || $view_permission_status === 'approved'): ?>
 <div id="questionsListSection">
+<!-- Category Tabs (All / MCQ / Other) -->
+<ul class="nav nav-pills mb-3 bg-white p-2 rounded shadow-sm border">
+    <li class="nav-item">
+        <a class="nav-link fw-bold <?= $filter_category === 'all' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/questions.php?category=all<?= $filter_class ? '&class='.$filter_class : '' ?><?= $filter_subject ? '&subject='.$filter_subject : '' ?>">
+            <i class="fas fa-layer-group me-1"></i> All Questions
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link fw-bold <?= $filter_category === 'mcq' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/questions.php?category=mcq<?= $filter_class ? '&class='.$filter_class : '' ?><?= $filter_subject ? '&subject='.$filter_subject : '' ?>">
+            <i class="fas fa-list-ol me-1"></i> Multiple Choice Questions (MCQ)
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link fw-bold <?= $filter_category === 'other' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/questions.php?category=other<?= $filter_class ? '&class='.$filter_class : '' ?><?= $filter_subject ? '&subject='.$filter_subject : '' ?>">
+            <i class="fas fa-pen-alt me-1"></i> Other Questions (Subjective)
+        </a>
+    </li>
+</ul>
+
 <!-- Filters -->
-<div class="card mb-4">
+<div class="card mb-4 shadow-sm border-0">
     <div class="card-body">
         <form method="GET" action="" class="row g-3">
+            <input type="hidden" name="category" value="<?= htmlspecialchars($filter_category) ?>">
             <div class="col-md-5">
                 <label class="form-label">Filter Class</label>
                 <select name="class" class="form-select" onchange="this.form.submit()">
@@ -675,30 +726,31 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
         <div class="row g-3">
                         <div class="col-md-6">
                             <div class="d-flex justify-content-between align-items-center mb-1">
-                                <label class="form-label mb-0">Class *</label>
+                                <label class="form-label mb-0 fw-bold">Class *</label>
                                 <button type="button" class="btn btn-link p-0 text-success fw-semibold small text-decoration-none" onclick="quickAddClass()"><i class="fas fa-plus-circle"></i> Quick Add Class</button>
                             </div>
-                            <select name="class_id" id="modalClass" class="form-select" required>
-                                <option value="">Choose Class</option>
+                            <select name="class_id" id="modalClass" class="form-select" required onchange="onModalClassChange()">
+                                <option value="">-- Choose Class --</option>
                                 <?php foreach ($classes as $c): ?>
-                                <option value="<?= $c['id'] ?>"><?= sanitize($c['name']) ?></option>
+                                <option value="<?= $c['id'] ?>"><?= sanitize($c['name']) ?> (<?= sanitize($c['level']) ?> Level)</option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
                         <div class="col-md-6">
                             <div class="d-flex justify-content-between align-items-center mb-1">
-                                <label class="form-label mb-0">Subject *</label>
+                                <label class="form-label mb-0 fw-bold">Subject *</label>
                                 <button type="button" class="btn btn-link p-0 text-success fw-semibold small text-decoration-none" onclick="quickAddSubject()"><i class="fas fa-plus-circle"></i> Quick Add Subject</button>
                             </div>
-                            <select name="subject_id" id="modalSubject" class="form-select" required>
-                                <option value="">Choose Subject</option>
+                            <select name="subject_id" id="modalSubject" class="form-select" required onchange="updateChaptersDropdown('')">
+                                <option value="">-- First Select a Class --</option>
                                 <?php foreach ($subjects as $s): ?>
                                 <option value="<?= $s['id'] ?>"><?= sanitize($s['name_en']) ?></option>
                                 <?php endforeach; ?>
                             </select>
+                            <small class="text-muted">Filtered to show compulsory and active optional subjects for selected class.</small>
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label">Chapter / Unit *</label>
+                            <label class="form-label fw-bold">Chapter / Unit *</label>
                             <select id="modalChapterSelect" class="form-select" onchange="onChapterSelectChange()">
                                 <!-- Populated dynamically -->
                             </select>
@@ -706,13 +758,16 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                             <input type="text" id="modalChapterCustom" class="form-control mt-2" placeholder="Type custom chapter..." style="display:none;" oninput="updateChapterHidden()">
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label">Topic *</label>
+                            <label class="form-label fw-bold">Topic</label>
                             <select name="topic_id" id="modalTopicSelect" class="form-select">
                                 <option value="">Choose Topic</option>
                             </select>
                         </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Question Type *</label>
+                        <div class="col-md-3" id="typeContainer">
+                            <label class="form-label fw-bold">Question Type *</label>
+                            <div id="typeBadgeContainer" style="display:none;" class="mb-1">
+                                <span class="badge bg-primary fs-6 px-3 py-2"><i class="fas fa-check-square me-1"></i> Multiple Choice (MCQ)</span>
+                            </div>
                             <select name="type" id="modalType" class="form-select" onchange="toggleMCQFields()" required>
                                 <option value="MCQ">Multiple Choice (MCQ)</option>
                                 <option value="Very Short">Very Short Answer</option>
@@ -723,7 +778,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                             </select>
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label">Marks Weightage *</label>
+                            <label class="form-label fw-bold">Marks Weightage *</label>
                             <input type="number" name="marks" id="modalMarks" class="form-control" value="1" required min="1">
                         </div>
                         <div class="col-md-6">
@@ -935,6 +990,7 @@ let texModalObj;
 let activeTexSpan = null;
 const classesMap = <?= json_encode(array_column($classes, 'name', 'id')) ?>;
 const subjectsMap = <?= json_encode(array_column($subjects, 'name_en', 'id')) ?>;
+const classSubjectsMap = <?= json_encode($class_subjects_map) ?>;
 const cdcCurriculum = <?= json_encode(require __DIR__ . '/../../config/cdc_curriculum.php') ?>;
 
 function escapeHtml(text) {
@@ -1143,20 +1199,82 @@ $(document).ready(function() {
     }
 });
 
-function showAddForm() {
+function onModalClassChange(selectedSubjectId = '') {
+    const classId = document.getElementById('modalClass').value;
+    const subjectSelect = document.getElementById('modalSubject');
+    subjectSelect.innerHTML = '';
+    
+    if (!classId) {
+        subjectSelect.innerHTML = '<option value="">-- First Select a Class --</option>';
+        updateChaptersDropdown('');
+        return;
+    }
+    
+    // Filter active class-subject mappings
+    const available = classSubjectsMap.filter(cs => cs.class_id == classId);
+    if (available.length > 0) {
+        subjectSelect.innerHTML = '<option value="">-- Choose Subject --</option>';
+        available.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s.subject_id;
+            opt.textContent = `[${s.code || 'SUB'}] ${s.name_en} (${s.name_np || ''})${s.is_optional == 1 ? ' [Optional]' : ''}`;
+            subjectSelect.appendChild(opt);
+        });
+    } else {
+        subjectSelect.innerHTML = '<option value="">-- Choose Subject --</option>';
+        for (const [id, name] of Object.entries(subjectsMap)) {
+            const opt = document.createElement('option');
+            opt.value = id;
+            opt.textContent = name;
+            subjectSelect.appendChild(opt);
+        }
+    }
+    
+    if (selectedSubjectId) {
+        subjectSelect.value = selectedSubjectId;
+    }
+    
+    updateChaptersDropdown('');
+}
+
+function showAddForm(category = 'MCQ') {
     document.getElementById('questionsListSection').style.display = 'none';
     document.getElementById('questionsFormSection').style.display = 'block';
     
     document.getElementById('modalAction').value = 'add';
     document.getElementById('modalQuestionId').value = '';
-    document.getElementById('formTitle').innerText = 'Add New Question';
+    
+    const typeSelect = document.getElementById('modalType');
+    const typeBadge = document.getElementById('typeBadgeContainer');
+    
+    if (category === 'MCQ') {
+        document.getElementById('formTitle').innerHTML = '<i class="fas fa-list-ol text-primary me-2"></i> Add Multiple Choice Question (MCQ)';
+        typeSelect.value = 'MCQ';
+        typeSelect.style.display = 'none';
+        if (typeBadge) typeBadge.style.display = 'block';
+    } else {
+        document.getElementById('formTitle').innerHTML = '<i class="fas fa-pen-nib text-success me-2"></i> Add Question (Subjective / Theory)';
+        typeSelect.style.display = 'block';
+        if (typeBadge) typeBadge.style.display = 'none';
+        
+        // Default to Short answer and hide MCQ option
+        if (typeSelect.value === 'MCQ') {
+            typeSelect.value = 'Short';
+        }
+        for (let i = 0; i < typeSelect.options.length; i++) {
+            if (typeSelect.options[i].value === 'MCQ') {
+                typeSelect.options[i].style.display = 'none';
+            } else {
+                typeSelect.options[i].style.display = '';
+            }
+        }
+    }
     
     document.getElementById('modalClass').value = '';
-    document.getElementById('modalSubject').value = '';
+    onModalClassChange();
     document.getElementById('modalChapter').value = '';
     document.getElementById('modalTopicSelect').innerHTML = '<option value="">Choose Topic</option>';
-    document.getElementById('modalType').value = 'MCQ';
-    document.getElementById('modalMarks').value = '1';
+    document.getElementById('modalMarks').value = (category === 'MCQ') ? '1' : '5';
     
     // Clear editors safely
     if (window.tinymce && tinymce.get('modalQuestionText')) {
@@ -1259,10 +1377,27 @@ function editQuestion(q) {
     
     document.getElementById('modalAction').value = 'edit';
     document.getElementById('modalQuestionId').value = q.id;
-    document.getElementById('formTitle').innerText = 'Edit Question Details';
+    
+    const typeSelect = document.getElementById('modalType');
+    const typeBadge = document.getElementById('typeBadgeContainer');
+    
+    // Ensure all options are visible during edit
+    for (let i = 0; i < typeSelect.options.length; i++) {
+        typeSelect.options[i].style.display = '';
+    }
+    
+    if (q.type === 'MCQ') {
+        document.getElementById('formTitle').innerHTML = '<i class="fas fa-list-ol text-primary me-2"></i> Edit Multiple Choice Question (MCQ)';
+        typeSelect.style.display = 'none';
+        if (typeBadge) typeBadge.style.display = 'block';
+    } else {
+        document.getElementById('formTitle').innerHTML = '<i class="fas fa-edit text-warning me-2"></i> Edit Question Details';
+        typeSelect.style.display = 'block';
+        if (typeBadge) typeBadge.style.display = 'none';
+    }
     
     document.getElementById('modalClass').value = q.class_id;
-    document.getElementById('modalSubject').value = q.subject_id;
+    onModalClassChange(q.subject_id);
     document.getElementById('modalType').value = q.type;
     document.getElementById('modalMarks').value = q.marks;
     

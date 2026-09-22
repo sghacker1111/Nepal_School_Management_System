@@ -120,6 +120,7 @@ class Database {
             ['specification_grids', null],
             ['chapters', null],
             ['class_subjects', 'section_id'],
+            ['class_subjects', 'is_optional'],
             ['academic_years', 'is_hidden'],
             ['topics', null],
             ['questions', 'topic_id']
@@ -385,7 +386,9 @@ class Database {
                 'topic_id' => 'INTEGER DEFAULT NULL'
             ],
             'class_subjects' => [
-                'section_id' => 'INTEGER DEFAULT NULL'
+                'section_id' => 'INTEGER DEFAULT NULL',
+                'is_optional' => 'INTEGER DEFAULT 0',
+                'is_active' => 'INTEGER DEFAULT 1'
             ]
         ];
 
@@ -484,10 +487,11 @@ class Database {
 
         // Restore standard classes to school_id = 0 (universal) so all schools can see them
         try {
-            $std_names = ['Nursery', 'Class 1', 'Class 2', 'Class 3', 'Class 4', 'Class 5', 'Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10', 'Class 11', 'Class 12'];
+            $std_names = ['Nursery', 'LKG', 'UKG', 'ECD', 'Class 1', 'Class 2', 'Class 3', 'Class 4', 'Class 5', 'Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10', 'Class 11', 'Class 12'];
             $placeholders = implode(',', array_fill(0, count($std_names), '?'));
             $stmt_restore = $this->conn->prepare("UPDATE classes SET school_id = 0 WHERE name IN ($placeholders) AND school_id = 1");
             $stmt_restore->execute($std_names);
+            $this->conn->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_classes_name_school ON classes(name, school_id)");
         } catch (PDOException $e) {
             // Suppress
         }

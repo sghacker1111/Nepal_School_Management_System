@@ -33,7 +33,7 @@ if (isset($_GET['delete_section']) && Auth::hasRole(['super_admin', 'school_admi
 }
 
 // Fetch classes
-$stmt = $db->prepare("SELECT * FROM classes WHERE school_id = ? ORDER BY level, name");
+$stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ? OR school_id = 0) ORDER BY id ASC");
 $stmt->execute([$school_id]);
 $classes = $stmt->fetchAll();
 
@@ -44,7 +44,7 @@ $stmt = $db->prepare("
     JOIN classes c ON s.class_id = c.id 
     LEFT JOIN users u ON s.class_teacher_id = u.id AND u.role = 'teacher'
     WHERE s.school_id = ?
-    ORDER BY c.name, s.name
+    ORDER BY c.id, s.name
 ");
 $stmt->execute([$school_id]);
 $sections = $stmt->fetchAll();
@@ -67,7 +67,7 @@ ob_start();
 <div class="row">
     <!-- Classes Column -->
     <div class="col-md-7 mb-4">
-        <div class="card h-100">
+        <div class="card h-100 shadow-sm border-0">
             <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
                 <h5 class="mb-0 text-primary"><i class="fas fa-layer-group"></i> Academic Classes</h5>
                 <span class="badge bg-primary rounded-pill"><?= count($classes) ?> Classes</span>
@@ -80,7 +80,6 @@ ob_start();
                                 <th>Class Name</th>
                                 <th>Nepali Name</th>
                                 <th>Level</th>
-                                <th>Grading Type</th>
                                 <th>Class Teacher</th>
                                 <?php if (Auth::hasRole(['super_admin', 'school_admin'])): ?>
                                 <th class="text-end">Actions</th>
@@ -95,18 +94,9 @@ ob_start();
                                     <td><?= sanitize($class['name_np'] ?? '-') ?></td>
                                     <td>
                                         <?php
-                                        $levelBadge = [
-                                            'ECD' => 'bg-secondary',
-                                            'Basic' => 'bg-info text-dark',
-                                            'Secondary' => 'bg-success'
-                                        ][$class['level']] ?? 'bg-light text-dark';
+                                        $levelBadge = ($class['level'] === 'Secondary') ? 'bg-success' : 'bg-primary';
                                         ?>
                                         <span class="badge <?= $levelBadge ?>"><?= $class['level'] ?></span>
-                                    </td>
-                                    <td>
-                                        <span class="badge bg-light text-dark text-capitalize border">
-                                            <?= $class['grading_type'] ?>
-                                        </span>
                                     </td>
                                     <td>
                                         <?php if (!empty($class['class_teacher_name'])): ?>

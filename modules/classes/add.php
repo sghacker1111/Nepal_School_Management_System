@@ -22,17 +22,17 @@ if (isset($_POST['add_class'])) {
     $name = sanitize($_POST['name'] ?? '');
     $name_np = sanitize($_POST['name_np'] ?? '');
     $level = sanitize($_POST['level'] ?? 'Basic');
-    $grading_type = sanitize($_POST['grading_type'] ?? 'gpa');
+    $grading_type = 'gpa';
     $class_teacher_name = sanitize($_POST['class_teacher_name'] ?? '');
     $is_grading_teaching = isset($_POST['is_grading_teaching']) ? 1 : 0;
     
     if (empty($name)) {
         $error = 'Class name is required';
     } else {
-        $stmt_check = $db->prepare("SELECT COUNT(*) FROM classes WHERE LOWER(name) = LOWER(?) AND school_id = ?");
+        $stmt_check = $db->prepare("SELECT COUNT(*) FROM classes WHERE LOWER(name) = LOWER(?) AND (school_id = ? OR school_id = 0)");
         $stmt_check->execute([$name, $school_id]);
         if ($stmt_check->fetchColumn() > 0) {
-            $error = 'Class with this name already exists.';
+            $error = 'Class with this name already exists. Class names must be unique.';
         }
     }
     
@@ -117,7 +117,7 @@ if (isset($_POST['add_section'])) {
 }
 
 // Fetch classes for dropdown
-$stmt = $db->prepare("SELECT * FROM classes WHERE school_id = ? ORDER BY name");
+$stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ? OR school_id = 0) ORDER BY id ASC");
 $stmt->execute([$school_id]);
 $classes = $stmt->fetchAll();
 
@@ -148,7 +148,7 @@ ob_start();
 <div class="row">
     <!-- Add Class Form -->
     <div class="col-md-6 mb-4">
-        <div class="card">
+        <div class="card shadow-sm border-0">
             <div class="card-header bg-primary text-white py-3">
                 <h5 class="mb-0"><i class="fas fa-school"></i> Create New Class</h5>
             </div>
@@ -163,23 +163,12 @@ ob_start();
                         <input type="text" class="form-control" id="name_np" name="name_np" placeholder="e.g. कक्षा २">
                     </div>
                     <div class="mb-3">
-                        <label for="level" class="form-label">Education Level</label>
-                        <select class="form-select" id="level" name="level">
-                            <option value="ECD">ECD (Early Childhood Development)</option>
-                            <option value="Basic" selected>Basic (Class 1-8)</option>
-                            <option value="Secondary">Secondary (Class 9-12)</option>
+                        <label for="level" class="form-label">Education Level *</label>
+                        <select class="form-select" id="level" name="level" required>
+                            <option value="Basic" selected>Basic (Nursery - Class 8)</option>
+                            <option value="Secondary">Secondary (Class 9 - Class 12)</option>
                         </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label d-block">Grading Type</label>
-                        <div class="form-check form-check-inline">
-                            <input class="form-check-input" type="radio" name="grading_type" id="grading_gpa" value="gpa" checked>
-                            <label class="form-check-label" for="grading_gpa">GPA Grading</label>
-                        </div>
-                        <div class="form-check form-check-inline">
-                            <input class="form-check-input" type="radio" name="grading_type" id="grading_percentage" value="percentage">
-                            <label class="form-check-label" for="grading_percentage">Percentage Grading</label>
-                        </div>
+                        <small class="text-muted">Nursery to Class 8 are Basic Level; Class 9 to 12 are Secondary Level.</small>
                     </div>
                     <div class="mb-3">
                         <div class="form-check">
