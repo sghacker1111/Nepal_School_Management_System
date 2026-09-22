@@ -123,7 +123,8 @@ class Database {
             ['class_subjects', 'is_optional'],
             ['academic_years', 'is_hidden'],
             ['topics', null],
-            ['questions', 'topic_id']
+            ['questions', 'topic_id'],
+            ['questions', 'cognitive_domain']
         ];
         
         foreach ($checks as $check) {
@@ -214,6 +215,7 @@ class Database {
             options TEXT DEFAULT NULL, -- JSON array
             correct_option VARCHAR(5) DEFAULT NULL,
             marks INTEGER DEFAULT 1,
+            cognitive_domain VARCHAR(50) DEFAULT 'Knowledge',
             FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE,
             FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE
         )";
@@ -383,7 +385,8 @@ class Database {
                 'answer_np' => 'TEXT DEFAULT NULL',
                 'options_np' => 'TEXT DEFAULT NULL',
                 'school_id' => 'INTEGER DEFAULT 1',
-                'topic_id' => 'INTEGER DEFAULT NULL'
+                'topic_id' => 'INTEGER DEFAULT NULL',
+                'cognitive_domain' => "VARCHAR(50) DEFAULT 'Knowledge'"
             ],
             'class_subjects' => [
                 'section_id' => 'INTEGER DEFAULT NULL',

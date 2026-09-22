@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/xlsx_helper.php';
 
 Auth::requireRole(['super_admin', 'school_admin', 'principal', 'teacher', 'exam_officer']);
 Auth::requireAccess('questions');
@@ -70,6 +71,300 @@ if (isset($_GET['make_universal'])) {
         redirect(APP_URL . '/modules/learning/questions.php', 'Question is now universal for all schools.');
     } catch (PDOException $e) {
         $error = "Database error: " . $e->getMessage();
+    }
+}
+
+// Handle Download Sample Excel Template
+if (isset($_GET['action']) && $_GET['action'] === 'download_template') {
+    $type = strtolower($_GET['type'] ?? 'mcq');
+    $format = strtolower($_GET['format'] ?? 'xlsx');
+    
+    if ($type === 'mcq') {
+        $sample = XlsxHelper::getMcqSample();
+        $filename = 'sample_mcq_questions_template';
+    } else {
+        $sample = XlsxHelper::getOtherSample();
+        $filename = 'sample_other_questions_template';
+    }
+    
+    if ($format === 'csv') {
+        $content = XlsxHelper::generateCsv($sample['headers'], $sample['rows']);
+        header('Content-Type: text/csv; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '.csv"');
+        echo $content;
+        exit;
+    } else {
+        $content = XlsxHelper::generateXlsx($sample['headers'], $sample['rows'], ucfirst($type) . ' Questions');
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment; filename="' . $filename . '.xlsx"');
+        header('Content-Length: ' . strlen($content));
+        header('Cache-Control: max-age=0');
+        echo $content;
+        exit;
+    }
+}
+
+// Handle Bulk Excel / CSV Import
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_import_excel'])) {
+    if (!$is_admin && $permission_status !== 'approved') {
+        $error = "Your school does not have permission to import questions.";
+    } elseif (!isset($_FILES['excel_file']) || $_FILES['excel_file']['error'] !== UPLOAD_ERR_OK) {
+        $error = "Please choose a valid Excel (.xlsx) or CSV file to upload.";
+    } else {
+        $fileTmp = $_FILES['excel_file']['tmp_name'];
+        $fileName = $_FILES['excel_file']['name'];
+        $fileExt = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+
+        if (!in_array($fileExt, ['xlsx', 'csv', 'txt'])) {
+            $error = "Only .xlsx and .csv files are supported.";
+        } else {
+            try {
+                $rows = XlsxHelper::read($fileTmp);
+                if (empty($rows) || count($rows) < 2) {
+                    $error = "Uploaded file contains no data or only the header row.";
+                } else {
+                    $headerRow = $rows[0];
+                    $colMap = [];
+                    
+                    // Column normalization mapping (strip non-alphanumeric chars)
+                    $aliasMap = [
+                        'class' => ['class', 'classname', 'grade', 'classlevel', 'standard'],
+                        'subject' => ['subject', 'subjectname', 'course', 'sub'],
+                        'chapter' => ['chapter', 'unit', 'lesson', 'chaptername', 'chapterunit'],
+                        'topic' => ['topic', 'topicname', 'subtopic'],
+                        'type' => ['type', 'questiontype', 'qtype'],
+                        'cognitive_domain' => ['cognitivelevel', 'cognitivedomain', 'cognitive', 'domain', 'bloom', 'bloomslevel', 'kuaha', 'level', 'taxonomylevel'],
+                        'question_text' => ['question', 'questiontext', 'questionenglish', 'questionen', 'qenglish', 'qtext', 'englishquestion'],
+                        'question_text_np' => ['questionnepali', 'questionnp', 'qnepali', 'qtextnp', 'nepaliquestion', 'nepali'],
+                        'marks' => ['marks', 'mark', 'weightage', 'point', 'points'],
+                        'answer' => ['answer', 'answermodelen', 'modelanswer', 'modelanswerenglish', 'expectedanswer', 'expectedansweren'],
+                        'answer_np' => ['answernp', 'answermodelnp', 'modelanswernepali', 'expectedanswernp', 'expectedanswernepali'],
+                        'option_a' => ['optiona', 'optionaen', 'optionaenglish', 'opta', 'optaen', 'optaenglish', 'choicea', 'choiceaen', 'a'],
+                        'option_a_np' => ['optionanp', 'optionanepali', 'optanp', 'optanepali', 'choiceanp', 'choiceanepali', 'anp'],
+                        'option_b' => ['optionb', 'optionben', 'optionbenglish', 'optb', 'optben', 'optbenglish', 'choiceb', 'choiceben', 'b'],
+                        'option_b_np' => ['optionbnp', 'optionbnepali', 'optbnp', 'optbnepali', 'choicebnp', 'choicebnepali', 'bnp'],
+                        'option_c' => ['optionc', 'optioncen', 'optioncenglish', 'optc', 'optcen', 'optcenglish', 'choicec', 'choicecen', 'c'],
+                        'option_c_np' => ['optioncnp', 'optioncnepali', 'optcnp', 'optcnepali', 'choicecnp', 'choicecnepali', 'cnp'],
+                        'option_d' => ['optiond', 'optionden', 'optiondenglish', 'optd', 'optden', 'optdenglish', 'choiced', 'choiceden', 'd'],
+                        'option_d_np' => ['optiondnp', 'optiondnepali', 'optdnp', 'optdnepali', 'choicednp', 'choicednepali', 'dnp'],
+                        'correct_option' => ['correctoption', 'correct', 'answerkey', 'key', 'correctanswer', 'correctchoice']
+                    ];
+
+                    foreach ($headerRow as $idx => $headerText) {
+                        $clean = strtolower(preg_replace('/[^a-z0-9]/i', '', (string)$headerText));
+                        foreach ($aliasMap as $targetKey => $aliases) {
+                            if (in_array($clean, $aliases)) {
+                                $colMap[$targetKey] = $idx;
+                                break;
+                            }
+                        }
+                    }
+
+                    // Fallback Class and Subject
+                    $defaultClassId = (int)($_POST['default_class_id'] ?? 0);
+                    $defaultSubjectId = (int)($_POST['default_subject_id'] ?? 0);
+
+                    // Fetch existing classes and subjects for fast resolution
+                    $allClasses = $db->query("SELECT id, name, name_np FROM classes WHERE is_active = 1")->fetchAll(PDO::FETCH_ASSOC);
+                    $allSubjects = $db->query("SELECT id, name_en, name_np, code FROM subjects")->fetchAll(PDO::FETCH_ASSOC);
+
+                    $importedCount = 0;
+                    $skippedCount = 0;
+                    $skippedReasons = [];
+                    $q_school_id = $is_admin ? 0 : $school_id;
+
+                    for ($r = 1; $r < count($rows); $r++) {
+                        $row = $rows[$r];
+                        $rowNum = $r + 1; // Excel row number (1-indexed)
+
+                        // Helper to get mapped value
+                        $getVal = function($key) use ($colMap, $row) {
+                            if (isset($colMap[$key]) && isset($row[$colMap[$key]])) {
+                                return trim((string)$row[$colMap[$key]]);
+                            }
+                            return '';
+                        };
+
+                        $qText = fixNepaliInLatex($getVal('question_text'));
+                        $qTextNp = fixNepaliInLatex($getVal('question_text_np'));
+
+                        if (empty($qText) && !empty($qTextNp)) {
+                            // If English is empty but Nepali is provided, duplicate
+                            $qText = $qTextNp;
+                        }
+
+                        if (empty($qText)) {
+                            $skippedCount++;
+                            $skippedReasons[] = "Row {$rowNum}: Question text is empty.";
+                            continue;
+                        }
+
+                        // Resolve Class
+                        $classVal = $getVal('class');
+                        $resolvedClassId = 0;
+                        if (!empty($classVal)) {
+                            $classValClean = strtolower(trim($classVal));
+                            $classNum = preg_replace('/[^0-9]/', '', $classValClean);
+                            foreach ($allClasses as $c) {
+                                if (strtolower($c['name']) === $classValClean || strtolower($c['name_np']) === $classValClean) {
+                                    $resolvedClassId = $c['id'];
+                                    break;
+                                }
+                                if ($classNum !== '' && preg_replace('/[^0-9]/', '', $c['name']) === $classNum) {
+                                    $resolvedClassId = $c['id'];
+                                    break;
+                                }
+                            }
+                        }
+                        if (!$resolvedClassId) {
+                            $resolvedClassId = $defaultClassId;
+                        }
+                        if (!$resolvedClassId && !empty($allClasses)) {
+                            $resolvedClassId = $allClasses[0]['id'];
+                        }
+
+                        // Resolve Subject
+                        $subVal = $getVal('subject');
+                        $resolvedSubjectId = 0;
+                        if (!empty($subVal)) {
+                            $subValClean = strtolower(trim($subVal));
+                            foreach ($allSubjects as $s) {
+                                if (strtolower($s['name_en']) === $subValClean || 
+                                    strtolower($s['name_np']) === $subValClean || 
+                                    (!empty($s['code']) && strtolower($s['code']) === $subValClean)) {
+                                    $resolvedSubjectId = $s['id'];
+                                    break;
+                                }
+                            }
+                        }
+                        if (!$resolvedSubjectId) {
+                            $resolvedSubjectId = $defaultSubjectId;
+                        }
+                        if (!$resolvedSubjectId && !empty($allSubjects)) {
+                            $resolvedSubjectId = $allSubjects[0]['id'];
+                        }
+
+                        // Resolve Chapter
+                        $chapterVal = $getVal('chapter');
+                        if (empty($chapterVal)) {
+                            $chapterVal = 'General';
+                        }
+
+                        // Resolve Topic
+                        $topicVal = $getVal('topic');
+                        $resolvedTopicId = null;
+                        if (!empty($topicVal)) {
+                            $stmtT = $db->prepare("SELECT id FROM topics WHERE LOWER(name) = LOWER(?) AND class_id = ? AND subject_id = ? LIMIT 1");
+                            $stmtT->execute([$topicVal, $resolvedClassId, $resolvedSubjectId]);
+                            $resolvedTopicId = $stmtT->fetchColumn() ?: null;
+                        }
+
+                        // Resolve Cognitive Level (K, U, A, HA)
+                        $cdRaw = $getVal('cognitive_domain');
+                        $cdMap = [
+                            'k' => 'Knowledge', 'knowledge' => 'Knowledge', 'knowledgek' => 'Knowledge',
+                            'u' => 'Understanding', 'understanding' => 'Understanding', 'understandingu' => 'Understanding',
+                            'a' => 'Application', 'application' => 'Application', 'applicationa' => 'Application',
+                            'ha' => 'Higher Ability', 'higherability' => 'Higher Ability', 'higherabilityha' => 'Higher Ability'
+                        ];
+                        $cdClean = strtolower(preg_replace('/[^a-z0-9]/i', '', $cdRaw));
+                        $cognitiveDomain = $cdMap[$cdClean] ?? 'Knowledge';
+
+                        // Resolve Type
+                        $typeVal = ucfirst(strtolower($getVal('type')));
+                        $optA = fixNepaliInLatex($getVal('option_a'));
+                        $optB = fixNepaliInLatex($getVal('option_b'));
+                        $optC = fixNepaliInLatex($getVal('option_c'));
+                        $optD = fixNepaliInLatex($getVal('option_d'));
+
+                        $optANp = fixNepaliInLatex($getVal('option_a_np'));
+                        $optBNp = fixNepaliInLatex($getVal('option_b_np'));
+                        $optCNp = fixNepaliInLatex($getVal('option_c_np'));
+                        $optDNp = fixNepaliInLatex($getVal('option_d_np'));
+
+                        $correctOpt = strtoupper(trim($getVal('correct_option')));
+                        if (!in_array($correctOpt, ['A', 'B', 'C', 'D'])) {
+                            $correctOpt = 'A';
+                        }
+
+                        $optionsJson = null;
+                        $optionsNpJson = null;
+
+                        if (!empty($optA) || !empty($optB) || $typeVal === 'Mcq' || $typeVal === 'MCQ') {
+                            $typeVal = 'MCQ';
+                            $optionsJson = json_encode([
+                                'A' => $optA,
+                                'B' => $optB,
+                                'C' => $optC,
+                                'D' => $optD
+                            ]);
+                            $optionsNpJson = json_encode([
+                                'A' => $optANp,
+                                'B' => $optBNp,
+                                'C' => $optCNp,
+                                'D' => $optDNp
+                            ]);
+                        } else {
+                            if (!in_array($typeVal, ['Very Short', 'Short', 'Long', 'Reasoning', 'Difference Between'])) {
+                                $typeVal = 'Short';
+                            }
+                            $correctOpt = null;
+                        }
+
+                        // Resolve Marks
+                        $marksVal = (int)$getVal('marks');
+                        if ($marksVal <= 0) {
+                            if ($typeVal === 'MCQ' || $typeVal === 'Very Short') {
+                                $marksVal = 1;
+                            } elseif ($typeVal === 'Long') {
+                                $marksVal = 8;
+                            } elseif ($typeVal === 'Reasoning' || $typeVal === 'Difference Between') {
+                                $marksVal = 4;
+                            } else {
+                                $marksVal = 5;
+                            }
+                        }
+
+                        // Resolve Model Answer
+                        $answer = fixNepaliInLatex($getVal('answer'));
+                        $answerNp = fixNepaliInLatex($getVal('answer_np'));
+
+                        // Insert into questions
+                        $stmtIns = $db->prepare("
+                            INSERT INTO questions 
+                            (class_id, subject_id, chapter, type, question_text, question_text_np, options, options_np, correct_option, marks, answer, answer_np, school_id, topic_id, cognitive_domain)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ");
+                        $stmtIns->execute([
+                            $resolvedClassId,
+                            $resolvedSubjectId,
+                            $chapterVal,
+                            $typeVal,
+                            $qText,
+                            $qTextNp,
+                            $optionsJson,
+                            $optionsNpJson,
+                            $correctOpt,
+                            $marksVal,
+                            $answer,
+                            $answerNp,
+                            $q_school_id,
+                            $resolvedTopicId,
+                            $cognitiveDomain
+                        ]);
+                        $importedCount++;
+                    }
+
+                    Auth::logActivity(Auth::getUserId(), "Bulk Imported $importedCount Questions from Excel", 'questions', 0);
+                    $success = "Successfully imported <strong>$importedCount</strong> questions into the Question Bank!";
+                    if ($skippedCount > 0) {
+                        $success .= " (" . $skippedCount . " row(s) skipped: " . implode("; ", array_slice($skippedReasons, 0, 3)) . ")";
+                    }
+                }
+            } catch (Exception $e) {
+                $error = "Error importing Excel file: " . $e->getMessage();
+            }
+        }
     }
 }
 
@@ -214,6 +509,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $answer = fixNepaliInLatex(trim($_POST['answer'] ?? ''));
     $answer_np = fixNepaliInLatex(trim($_POST['answer_np'] ?? ''));
     
+    // Cognitive Domain (K, U, A, HA)
+    $cognitive_domain = sanitize($_POST['cognitive_domain'] ?? 'Knowledge');
+    $cd_map = [
+        'k' => 'Knowledge', 'knowledge' => 'Knowledge',
+        'u' => 'Understanding', 'understanding' => 'Understanding',
+        'a' => 'Application', 'application' => 'Application',
+        'ha' => 'Higher Ability', 'higher ability' => 'Higher Ability', 'higher_ability' => 'Higher Ability'
+    ];
+    $cognitive_domain = $cd_map[strtolower(trim($cognitive_domain))] ?? 'Knowledge';
+    
     // MCQ Options
     $options_json = null;
     $options_np_json = null;
@@ -264,10 +569,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 
                 if ($action === 'add') {
                     $stmt = $db->prepare("
-                        INSERT INTO questions (class_id, subject_id, chapter, type, question_text, question_text_np, options, options_np, correct_option, marks, answer, answer_np, school_id, topic_id) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO questions (class_id, subject_id, chapter, type, question_text, question_text_np, options, options_np, correct_option, marks, answer, answer_np, school_id, topic_id, cognitive_domain) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ");
-                    $stmt->execute([$class_id, $subject_id, $chapter, $type, $question_text, $question_text_np, $options_json, $options_np_json, $correct_option, $marks, $answer, $answer_np, $q_school_id, $topic_id]);
+                    $stmt->execute([$class_id, $subject_id, $chapter, $type, $question_text, $question_text_np, $options_json, $options_np_json, $correct_option, $marks, $answer, $answer_np, $q_school_id, $topic_id, $cognitive_domain]);
                     Auth::logActivity(Auth::getUserId(), 'Add Question to Bank', 'questions', $db->lastInsertId());
                     $success = "Question added to bank successfully.";
                 } elseif ($action === 'edit') {
@@ -276,17 +581,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     if ($is_admin) {
                         $stmt = $db->prepare("
                             UPDATE questions 
-                            SET class_id = ?, subject_id = ?, chapter = ?, type = ?, question_text = ?, question_text_np = ?, options = ?, options_np = ?, correct_option = ?, marks = ?, answer = ?, answer_np = ?, topic_id = ? 
+                            SET class_id = ?, subject_id = ?, chapter = ?, type = ?, question_text = ?, question_text_np = ?, options = ?, options_np = ?, correct_option = ?, marks = ?, answer = ?, answer_np = ?, topic_id = ?, cognitive_domain = ? 
                             WHERE id = ?
                         ");
-                        $stmt->execute([$class_id, $subject_id, $chapter, $type, $question_text, $question_text_np, $options_json, $options_np_json, $correct_option, $marks, $answer, $answer_np, $topic_id, $question_id]);
+                        $stmt->execute([$class_id, $subject_id, $chapter, $type, $question_text, $question_text_np, $options_json, $options_np_json, $correct_option, $marks, $answer, $answer_np, $topic_id, $cognitive_domain, $question_id]);
                     } else {
                         $stmt = $db->prepare("
                             UPDATE questions 
-                            SET class_id = ?, subject_id = ?, chapter = ?, type = ?, question_text = ?, question_text_np = ?, options = ?, options_np = ?, correct_option = ?, marks = ?, answer = ?, answer_np = ?, topic_id = ? 
+                            SET class_id = ?, subject_id = ?, chapter = ?, type = ?, question_text = ?, question_text_np = ?, options = ?, options_np = ?, correct_option = ?, marks = ?, answer = ?, answer_np = ?, topic_id = ?, cognitive_domain = ? 
                             WHERE id = ? AND school_id = ?
                         ");
-                        $stmt->execute([$class_id, $subject_id, $chapter, $type, $question_text, $question_text_np, $options_json, $options_np_json, $correct_option, $marks, $answer, $answer_np, $topic_id, $question_id, $school_id]);
+                        $stmt->execute([$class_id, $subject_id, $chapter, $type, $question_text, $question_text_np, $options_json, $options_np_json, $correct_option, $marks, $answer, $answer_np, $topic_id, $cognitive_domain, $question_id, $school_id]);
                     }
                     Auth::logActivity(Auth::getUserId(), 'Edit Question in Bank', 'questions', $question_id);
                     $success = "Question updated successfully.";
@@ -326,6 +631,7 @@ if (isset($_GET['delete'])) {
 $filter_class = $_GET['class'] ?? '';
 $filter_subject = $_GET['subject'] ?? '';
 $filter_category = sanitize($_GET['category'] ?? 'all'); // 'all', 'mcq', or 'other'
+$filter_cognitive = sanitize($_GET['cognitive_domain'] ?? '');
 
 // Build Query supporting Universal Questions and mapping
 $query = "
@@ -408,6 +714,11 @@ if ($filter_category === 'mcq') {
     $query .= " AND q.type != 'MCQ'";
 }
 
+if (!empty($filter_cognitive)) {
+    $query .= " AND q.cognitive_domain = ?";
+    $params[] = $filter_cognitive;
+}
+
 $query .= " ORDER BY q.id DESC";
 $stmt = $db->prepare($query);
 $stmt->execute($params);
@@ -479,9 +790,21 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
     font-family: 'Kokila', 'Noto Sans Devanagari', 'Segoe UI', 'Kalimati', sans-serif !important;
     font-style: normal !important;
 }
-.font-nepali, .nepali-text {
-    font-family: 'Kokila', 'Noto Sans Devanagari', 'Kalimati', sans-serif !important;
+
+/* English Inputs Default Font: Arial */
+.font-english,
+#modalQuestionText, #modalAnswer, #modalOptA, #modalOptB, #modalOptC, #modalOptD {
+    font-family: Arial, Helvetica, sans-serif !important;
+    font-size: 15px;
 }
+
+/* Nepali Inputs Default Font: Kokila */
+.font-nepali, .nepali-text,
+#modalQuestionTextNp, #modalAnswerNp, #modalOptANp, #modalOptBNp, #modalOptCNp, #modalOptDNp {
+    font-family: 'Kokila', 'Noto Sans Devanagari', 'Kalimati', sans-serif !important;
+    font-size: 1.15rem;
+}
+
 #texPreview {
     font-size: 1.35rem;
     overflow-x: auto;
@@ -522,6 +845,9 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
         </button>
         <button class="btn btn-success fw-bold shadow-sm" onclick="showAddForm('other')">
             <i class="fas fa-pen-nib me-1"></i> Add Questions
+        </button>
+        <button class="btn btn-info text-white fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#importExcelModal">
+            <i class="fas fa-file-excel me-1"></i> Import from Excel (.xlsx)
         </button>
         <?php endif; ?>
     </div>
@@ -574,17 +900,17 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
 <!-- Category Tabs (All / MCQ / Other) -->
 <ul class="nav nav-pills mb-3 bg-white p-2 rounded shadow-sm border">
     <li class="nav-item">
-        <a class="nav-link fw-bold <?= $filter_category === 'all' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/questions.php?category=all<?= $filter_class ? '&class='.$filter_class : '' ?><?= $filter_subject ? '&subject='.$filter_subject : '' ?>">
+        <a class="nav-link fw-bold <?= $filter_category === 'all' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/questions.php?category=all<?= $filter_class ? '&class='.$filter_class : '' ?><?= $filter_subject ? '&subject='.$filter_subject : '' ?><?= $filter_cognitive ? '&cognitive_domain='.$filter_cognitive : '' ?>">
             <i class="fas fa-layer-group me-1"></i> All Questions
         </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link fw-bold <?= $filter_category === 'mcq' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/questions.php?category=mcq<?= $filter_class ? '&class='.$filter_class : '' ?><?= $filter_subject ? '&subject='.$filter_subject : '' ?>">
+        <a class="nav-link fw-bold <?= $filter_category === 'mcq' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/questions.php?category=mcq<?= $filter_class ? '&class='.$filter_class : '' ?><?= $filter_subject ? '&subject='.$filter_subject : '' ?><?= $filter_cognitive ? '&cognitive_domain='.$filter_cognitive : '' ?>">
             <i class="fas fa-list-ol me-1"></i> Multiple Choice Questions (MCQ)
         </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link fw-bold <?= $filter_category === 'other' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/questions.php?category=other<?= $filter_class ? '&class='.$filter_class : '' ?><?= $filter_subject ? '&subject='.$filter_subject : '' ?>">
+        <a class="nav-link fw-bold <?= $filter_category === 'other' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/questions.php?category=other<?= $filter_class ? '&class='.$filter_class : '' ?><?= $filter_subject ? '&subject='.$filter_subject : '' ?><?= $filter_cognitive ? '&cognitive_domain='.$filter_cognitive : '' ?>">
             <i class="fas fa-pen-alt me-1"></i> Other Questions (Subjective)
         </a>
     </li>
@@ -595,8 +921,8 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
     <div class="card-body">
         <form method="GET" action="" class="row g-3">
             <input type="hidden" name="category" value="<?= htmlspecialchars($filter_category) ?>">
-            <div class="col-md-5">
-                <label class="form-label">Filter Class</label>
+            <div class="col-md-4">
+                <label class="form-label fw-bold">Filter Class</label>
                 <select name="class" class="form-select" onchange="this.form.submit()">
                     <option value="">All Classes</option>
                     <?php foreach ($classes as $c): ?>
@@ -604,13 +930,23 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-md-5">
-                <label class="form-label">Filter Subject</label>
+            <div class="col-md-4">
+                <label class="form-label fw-bold">Filter Subject</label>
                 <select name="subject" class="form-select" onchange="this.form.submit()">
                     <option value="">All Subjects</option>
                     <?php foreach ($subjects as $s): ?>
                     <option value="<?= $s['id'] ?>" <?= $filter_subject == $s['id'] ? 'selected' : '' ?>><?= sanitize($s['name_en']) ?></option>
                     <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-bold">Cognitive Level</label>
+                <select name="cognitive_domain" class="form-select" onchange="this.form.submit()">
+                    <option value="">All Levels</option>
+                    <option value="Knowledge" <?= $filter_cognitive === 'Knowledge' ? 'selected' : '' ?>>Knowledge (K)</option>
+                    <option value="Understanding" <?= $filter_cognitive === 'Understanding' ? 'selected' : '' ?>>Understanding (U)</option>
+                    <option value="Application" <?= $filter_cognitive === 'Application' ? 'selected' : '' ?>>Application (A)</option>
+                    <option value="Higher Ability" <?= $filter_cognitive === 'Higher Ability' ? 'selected' : '' ?>>Higher Ability (HA)</option>
                 </select>
             </div>
             <div class="col-md-2 d-flex align-items-end">
@@ -633,6 +969,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                         <th>Class & Subject</th>
                         <th>Chapter</th>
                         <th>Type</th>
+                        <th>Cognitive Level</th>
                         <th>Question Snippet</th>
                         <th>Marks</th>
                         <th class="text-end">Actions</th>
@@ -662,6 +999,26 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                                 <?php if (($q['school_id'] ?? 0) == 0): ?>
                                 <span class="badge bg-dark ms-1" title="Universal question visible to all schools"><i class="fas fa-globe"></i> Universal</span>
                                 <?php endif; ?>
+                            </td>
+                            <td>
+                                <?php
+                                $cd = $q['cognitive_domain'] ?? 'Knowledge';
+                                $cd_badge = [
+                                    'Knowledge' => 'bg-info text-dark',
+                                    'Understanding' => 'bg-primary text-white',
+                                    'Application' => 'bg-warning text-dark',
+                                    'Higher Ability' => 'bg-danger text-white'
+                                ][$cd] ?? 'bg-secondary text-white';
+                                $cd_short = [
+                                    'Knowledge' => 'K',
+                                    'Understanding' => 'U',
+                                    'Application' => 'A',
+                                    'Higher Ability' => 'HA'
+                                ][$cd] ?? substr($cd, 0, 2);
+                                ?>
+                                <span class="badge <?= $cd_badge ?> px-2 py-1" title="<?= htmlspecialchars($cd) ?>">
+                                    <strong><?= $cd_short ?></strong> - <?= htmlspecialchars($cd) ?>
+                                </span>
                             </td>
                             <td>
                                 <div class="text-truncate mathjax-render" style="max-width: 300px;" title="<?= sanitize($q['question_text']) ?>">
@@ -703,7 +1060,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="6" class="text-center text-muted py-4">No questions found in database matching selection.</td>
+                            <td colspan="7" class="text-center text-muted py-4">No questions found in database matching selection.</td>
                         </tr>
                     <?php endif; ?>
                 </tbody>
@@ -763,7 +1120,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                                 <option value="">Choose Topic</option>
                             </select>
                         </div>
-                        <div class="col-md-3" id="typeContainer">
+                        <div class="col-md-2" id="typeContainer">
                             <label class="form-label fw-bold">Question Type *</label>
                             <div id="typeBadgeContainer" style="display:none;" class="mb-1">
                                 <span class="badge bg-primary fs-6 px-3 py-2"><i class="fas fa-check-square me-1"></i> Multiple Choice (MCQ)</span>
@@ -777,16 +1134,25 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                                 <option value="Difference Between">Difference Between</option>
                             </select>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold">Cognitive Level *</label>
+                            <select name="cognitive_domain" id="modalCognitiveDomain" class="form-select" required>
+                                <option value="Knowledge">Knowledge (K)</option>
+                                <option value="Understanding">Understanding (U)</option>
+                                <option value="Application">Application (A)</option>
+                                <option value="Higher Ability">Higher Ability (HA)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
                             <label class="form-label fw-bold">Marks Weightage *</label>
                             <input type="number" name="marks" id="modalMarks" class="form-control" value="1" required min="1">
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Question Text (English) *</label>
-                            <textarea name="question_text" id="modalQuestionText" class="form-control" rows="3" required placeholder="Type English question here..."></textarea>
+                            <label class="form-label fw-bold">Question Text (English) * <span class="badge bg-light text-secondary border ms-1" style="font-size:0.75rem;">Arial</span></label>
+                            <textarea name="question_text" id="modalQuestionText" class="form-control font-english" rows="3" required placeholder="Type English question here..."></textarea>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label font-nepali fw-semibold">Question Text (Nepali) / प्रश्न (नेपाली)</label>
+                            <label class="form-label font-nepali fw-semibold">Question Text (Nepali) / प्रश्न (नेपाली) <span class="badge bg-light text-secondary border ms-1 font-monospace" style="font-size:0.75rem;">Kokila</span></label>
                             <textarea name="question_text_np" id="modalQuestionTextNp" class="form-control font-nepali" rows="3" placeholder="नेपालीमा प्रश्न यहाँ लेख्नुहोस्..."></textarea>
                         </div>
                     </div>
@@ -984,6 +1350,93 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
     </div>
 </div>
 
+<!-- Import Questions from Excel Modal -->
+<div class="modal fade" id="importExcelModal" tabindex="-1" aria-labelledby="importExcelModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content shadow-lg border-0">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold" id="importExcelModalLabel">
+                    <i class="fas fa-file-excel me-2"></i> Import Questions from Excel (.xlsx)
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="" enctype="multipart/form-data">
+                <input type="hidden" name="action_import_excel" value="1">
+                <div class="modal-body p-4">
+                    <!-- Download Templates Section -->
+                    <div class="card bg-light border-0 shadow-sm mb-4">
+                        <div class="card-body">
+                            <h6 class="fw-bold text-dark mb-2"><i class="fas fa-download text-primary me-2"></i>Download Sample Excel Templates</h6>
+                            <p class="small text-muted mb-3">
+                                Download sample template files below to see the required column format. The first row in your Excel spreadsheet is automatically scanned as the column header.
+                            </p>
+                            <div class="d-flex gap-2 flex-wrap">
+                                <a href="?action=download_template&type=mcq&format=xlsx" class="btn btn-sm btn-outline-primary fw-bold">
+                                    <i class="fas fa-file-excel text-success me-1"></i> Sample MCQs Template (.xlsx)
+                                </a>
+                                <a href="?action=download_template&type=other&format=xlsx" class="btn btn-sm btn-outline-success fw-bold">
+                                    <i class="fas fa-file-excel text-success me-1"></i> Sample Other Questions Template (.xlsx)
+                                </a>
+                                <a href="?action=download_template&type=mcq&format=csv" class="btn btn-sm btn-outline-secondary">
+                                    <i class="fas fa-file-csv me-1"></i> Sample MCQs (.csv)
+                                </a>
+                                <a href="?action=download_template&type=other&format=csv" class="btn btn-sm btn-outline-secondary">
+                                    <i class="fas fa-file-csv me-1"></i> Sample Other (.csv)
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- File Upload Input -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Select Excel (.xlsx) or CSV (.csv) File *</label>
+                        <input type="file" name="excel_file" id="excelFileInput" class="form-control" accept=".xlsx,.csv" required>
+                        <div class="form-text">Upload your .xlsx or .csv spreadsheet. First row is scanned as headers. Supports multiple questions import at once.</div>
+                    </div>
+
+                    <!-- Fallback Defaults -->
+                    <div class="row g-3 p-3 bg-light rounded border mb-3">
+                        <div class="col-12">
+                            <h6 class="fw-bold text-secondary mb-1"><i class="fas fa-sliders-h me-1"></i> Optional Fallback Defaults</h6>
+                            <small class="text-muted">Used automatically if any row in your Excel file leaves Class or Subject empty.</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Default Class</label>
+                            <select name="default_class_id" class="form-select form-select-sm">
+                                <option value="">-- Auto-detect from spreadsheet --</option>
+                                <?php foreach ($classes as $c): ?>
+                                <option value="<?= $c['id'] ?>"><?= sanitize($c['name']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Default Subject</label>
+                            <select name="default_subject_id" class="form-select form-select-sm">
+                                <option value="">-- Auto-detect from spreadsheet --</option>
+                                <?php foreach ($subjects as $s): ?>
+                                <option value="<?= $s['id'] ?>"><?= sanitize($s['name_en']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Guidelines Box -->
+                    <div class="alert alert-info py-2 px-3 mb-0 small">
+                        <i class="fas fa-info-circle me-1"></i>
+                        <strong>Supported Columns:</strong> <em>Class</em>, <em>Subject</em>, <em>Chapter</em>, <em>Topic</em>, <em>Cognitive Level</em> (Knowledge / Understanding / Application / Higher Ability or K / U / A / HA), <em>Question (English)</em>, <em>Question (Nepali)</em>, <em>Option A/B/C/D</em>, <em>Correct Option</em>, <em>Marks</em>, <em>Model Answer</em>.
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary fw-bold px-4 shadow-sm">
+                        <i class="fas fa-upload me-1"></i> Upload & Import Questions
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
 let activeEditorId = '';
 let texModalObj;
@@ -1051,12 +1504,12 @@ $(document).ready(function() {
         tinymce.init({
             selector: '#modalQuestionText, #modalQuestionTextNp, #modalAnswer, #modalAnswerNp, #modalOptA, #modalOptB, #modalOptC, #modalOptD, #modalOptANp, #modalOptBNp, #modalOptCNp, #modalOptDNp',
             height: 250,
-            font_family_formats: 'Kokila=Kokila,Noto Sans Devanagari,sans-serif; Arial=arial,helvetica,sans-serif; Courier New=courier new,courier; Georgia=georgia,palatino; Tahoma=tahoma,arial,helvetica,sans-serif; Times New Roman=times new roman,times; Trebuchet MS=trebuchet ms,geneva; Verdana=verdana,geneva',
+            font_family_formats: 'Arial=arial,helvetica,sans-serif; Kokila=Kokila,Noto Sans Devanagari,Kalimati,sans-serif; Courier New=courier new,courier; Georgia=georgia,palatino; Tahoma=tahoma,arial,helvetica,sans-serif; Times New Roman=times new roman,times; Trebuchet MS=trebuchet ms,geneva; Verdana=verdana,geneva',
             plugins: 'advlist autolink lists link image charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime media table wordcount',
             toolbar: 'undo redo | blocks fontfamily fontsize | bold italic underline forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | table | math_tex | fullscreen code',
             branding: false,
             promotion: false,
-            // Styling inside editor iframe to support Kokila font and locked TeX equations
+            // Styling inside editor iframe to support Arial for English, Kokila for Nepali, and locked TeX equations
             content_style: `
                 @font-face {
                     font-family: 'Kokila';
@@ -1083,8 +1536,16 @@ $(document).ready(function() {
                     font-style: italic;
                 }
                 body {
-                    font-family: 'Kokila', 'Segoe UI', Tahoma, sans-serif;
-                    font-size: 17px;
+                    font-family: Arial, Helvetica, sans-serif;
+                    font-size: 15px;
+                }
+                body.nepali-editor {
+                    font-family: 'Kokila', 'Noto Sans Devanagari', 'Kalimati', sans-serif !important;
+                    font-size: 18px !important;
+                }
+                body.english-editor {
+                    font-family: Arial, Helvetica, sans-serif !important;
+                    font-size: 15px !important;
                 }
                 span.math-tex {
                     background: transparent !important;
@@ -1124,11 +1585,22 @@ $(document).ready(function() {
                     e.content = tempDiv.innerHTML;
                 });
                 
-                // Load MathJax inside the editor iframe dynamically
+                // Load MathJax inside the editor iframe dynamically and configure English/Nepali base font
                 editor.on('init', function () {
                     const doc = editor.getDoc();
                     const win = editor.getWin();
                     
+                    // Set default font: English -> Arial, Nepali -> Kokila
+                    if (editor.id.endsWith('Np')) {
+                        doc.body.classList.add('nepali-editor');
+                        doc.body.style.fontFamily = "'Kokila', 'Noto Sans Devanagari', 'Kalimati', sans-serif";
+                        doc.body.style.fontSize = "18px";
+                    } else {
+                        doc.body.classList.add('english-editor');
+                        doc.body.style.fontFamily = "Arial, Helvetica, sans-serif";
+                        doc.body.style.fontSize = "15px";
+                    }
+
                     // Attach MathJax Devanagari observer to editor iframe
                     if (typeof observeMathJaxDevanagari === 'function') {
                         observeMathJaxDevanagari(doc);
@@ -1275,6 +1747,9 @@ function showAddForm(category = 'MCQ') {
     document.getElementById('modalChapter').value = '';
     document.getElementById('modalTopicSelect').innerHTML = '<option value="">Choose Topic</option>';
     document.getElementById('modalMarks').value = (category === 'MCQ') ? '1' : '5';
+    if (document.getElementById('modalCognitiveDomain')) {
+        document.getElementById('modalCognitiveDomain').value = 'Knowledge';
+    }
     
     // Clear editors safely
     if (window.tinymce && tinymce.get('modalQuestionText')) {
@@ -1400,6 +1875,9 @@ function editQuestion(q) {
     onModalClassChange(q.subject_id);
     document.getElementById('modalType').value = q.type;
     document.getElementById('modalMarks').value = q.marks;
+    if (document.getElementById('modalCognitiveDomain')) {
+        document.getElementById('modalCognitiveDomain').value = q.cognitive_domain || 'Knowledge';
+    }
     
     // Populate editors safely
     setOptionVal('modalQuestionText', q.question_text);
