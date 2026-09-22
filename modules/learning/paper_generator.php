@@ -452,6 +452,17 @@ ob_start();
 </style>
 
 <!-- MathJax support for LaTeX -->
+<script>
+window.MathJax = {
+    tex: {
+        inlineMath: [['\\(', '\\)']],
+        displayMath: [['\\[', '\\]']]
+    },
+    startup: {
+        typeset: true
+    }
+};
+</script>
 <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 
 <!-- Tesseract OCR CDN -->
@@ -829,12 +840,12 @@ ob_start();
                             <span class="question-marks">[<?= $q['marks'] ?>]</span>
                             <div style="margin-left: 25px; text-indent: -25px;">
                                 <?= $q_idx ?>. 
-                                <span class="mathjax-render"><?= $q['question_text'] ?></span>
+                                <span class="mathjax-render"><?= fixNepaliInLatex($q['question_text']) ?></span>
                             </div>
                             
                             <?php if ($q['question_text_np']): ?>
                             <div style="margin-left: 25px; margin-top:2px;" class="text-muted small">
-                                <span class="mathjax-render"><?= $q['question_text_np'] ?></span>
+                                <span class="mathjax-render"><?= fixNepaliInLatex($q['question_text_np']) ?></span>
                             </div>
                             <?php endif; ?>
 
@@ -844,10 +855,10 @@ ob_start();
                                 $opts_np = json_decode($q['options_np'], true);
                             ?>
                                 <div class="mcq-options-grid">
-                                    <div>A. <span class="mathjax-render"><?= $opts['A'] ?? '' ?></span> <?= isset($opts_np['A']) && !empty($opts_np['A']) ? ' <span class="text-muted small">(' . $opts_np['A'] . ')</span>' : '' ?></div>
-                                    <div>B. <span class="mathjax-render"><?= $opts['B'] ?? '' ?></span> <?= isset($opts_np['B']) && !empty($opts_np['B']) ? ' <span class="text-muted small">(' . $opts_np['B'] . ')</span>' : '' ?></div>
-                                    <div>C. <span class="mathjax-render"><?= $opts['C'] ?? '' ?></span> <?= isset($opts_np['C']) && !empty($opts_np['C']) ? ' <span class="text-muted small">(' . $opts_np['C'] . ')</span>' : '' ?></div>
-                                    <div>D. <span class="mathjax-render"><?= $opts['D'] ?? '' ?></span> <?= isset($opts_np['D']) && !empty($opts_np['D']) ? ' <span class="text-muted small">(' . $opts_np['D'] . ')</span>' : '' ?></div>
+                                    <div>A. <span class="mathjax-render"><?= fixNepaliInLatex($opts['A'] ?? '') ?></span> <?= isset($opts_np['A']) && !empty($opts_np['A']) ? ' <span class="text-muted small">(' . fixNepaliInLatex($opts_np['A']) . ')</span>' : '' ?></div>
+                                    <div>B. <span class="mathjax-render"><?= fixNepaliInLatex($opts['B'] ?? '') ?></span> <?= isset($opts_np['B']) && !empty($opts_np['B']) ? ' <span class="text-muted small">(' . fixNepaliInLatex($opts_np['B']) . ')</span>' : '' ?></div>
+                                    <div>C. <span class="mathjax-render"><?= fixNepaliInLatex($opts['C'] ?? '') ?></span> <?= isset($opts_np['C']) && !empty($opts_np['C']) ? ' <span class="text-muted small">(' . fixNepaliInLatex($opts_np['C']) . ')</span>' : '' ?></div>
+                                    <div>D. <span class="mathjax-render"><?= fixNepaliInLatex($opts['D'] ?? '') ?></span> <?= isset($opts_np['D']) && !empty($opts_np['D']) ? ' <span class="text-muted small">(' . fixNepaliInLatex($opts_np['D']) . ')</span>' : '' ?></div>
                                 </div>
                             <?php endif; ?>
                         </div>

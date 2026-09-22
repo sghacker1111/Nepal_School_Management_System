@@ -73,6 +73,12 @@
             .content-wrapper { background: #fff; }
         }
 
+        /* MathJax Devanagari / Nepali Script Font Support */
+        mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"] {
+            font-family: 'Noto Sans Devanagari', 'Segoe UI', 'Kalimati', sans-serif !important;
+            font-style: normal !important;
+        }
+
         <?php if (Auth::isReadOnly()): ?>
         /* Hide actions and write buttons in read-only school viewer mode */
         .btn-primary:not(#sidebarToggle):not(.btn-info):not(form[method="GET"] *),

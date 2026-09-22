@@ -201,11 +201,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $chapter = sanitize($_POST['chapter'] ?? '');
     $topic_id = isset($_POST['topic_id']) && $_POST['topic_id'] !== '' ? (int)$_POST['topic_id'] : null;
     $type = sanitize($_POST['type'] ?? 'MCQ');
-    $question_text = trim($_POST['question_text'] ?? '');
-    $question_text_np = trim($_POST['question_text_np'] ?? '');
+    $question_text = fixNepaliInLatex(trim($_POST['question_text'] ?? ''));
+    $question_text_np = fixNepaliInLatex(trim($_POST['question_text_np'] ?? ''));
     $marks = (int)($_POST['marks'] ?? 1);
-    $answer = trim($_POST['answer'] ?? '');
-    $answer_np = trim($_POST['answer_np'] ?? '');
+    $answer = fixNepaliInLatex(trim($_POST['answer'] ?? ''));
+    $answer_np = fixNepaliInLatex(trim($_POST['answer_np'] ?? ''));
     
     // MCQ Options
     $options_json = null;
@@ -213,18 +213,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $correct_option = null;
     if ($type === 'MCQ') {
         $opts = [
-            'A' => trim($_POST['option_a'] ?? ''),
-            'B' => trim($_POST['option_b'] ?? ''),
-            'C' => trim($_POST['option_c'] ?? ''),
-            'D' => trim($_POST['option_d'] ?? '')
+            'A' => fixNepaliInLatex(trim($_POST['option_a'] ?? '')),
+            'B' => fixNepaliInLatex(trim($_POST['option_b'] ?? '')),
+            'C' => fixNepaliInLatex(trim($_POST['option_c'] ?? '')),
+            'D' => fixNepaliInLatex(trim($_POST['option_d'] ?? ''))
         ];
         $options_json = json_encode($opts);
         
         $opts_np = [
-            'A' => trim($_POST['option_a_np'] ?? ''),
-            'B' => trim($_POST['option_b_np'] ?? ''),
-            'C' => trim($_POST['option_c_np'] ?? ''),
-            'D' => trim($_POST['option_d_np'] ?? '')
+            'A' => fixNepaliInLatex(trim($_POST['option_a_np'] ?? '')),
+            'B' => fixNepaliInLatex(trim($_POST['option_b_np'] ?? '')),
+            'C' => fixNepaliInLatex(trim($_POST['option_c_np'] ?? '')),
+            'D' => fixNepaliInLatex(trim($_POST['option_d_np'] ?? ''))
         ];
         $options_np_json = json_encode($opts_np);
         
@@ -427,8 +427,50 @@ ob_start();
 <!-- TinyMCE CDN for MS Word formatting and Full-screen editor -->
 <script src="https://cdn.jsdelivr.net/npm/tinymce@6/tinymce.min.js" referrerpolicy="origin"></script>
 
-<!-- MathJax for LaTeX Equation Rendering -->
+<!-- MathJax Configuration & Script for LaTeX Equation Rendering -->
+<script>
+window.MathJax = {
+    tex: {
+        inlineMath: [['\\(', '\\)']],
+        displayMath: [['\\[', '\\]']]
+    },
+    startup: {
+        typeset: true
+    }
+};
+</script>
 <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+<style>
+/* MathJax Nepali / Devanagari Unicode Text Support */
+mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"] {
+    font-family: 'Noto Sans Devanagari', 'Segoe UI', 'Kalimati', sans-serif !important;
+    font-style: normal !important;
+}
+#texPreview {
+    font-size: 1.35rem;
+    overflow-x: auto;
+    padding: 12px 0;
+    color: #2c3e50;
+    min-height: 60px;
+    font-family: 'Noto Sans Devanagari', 'Segoe UI', 'Kalimati', sans-serif;
+}
+#texPreview mjx-utext, #texPreview mjx-mtext {
+    font-family: 'Noto Sans Devanagari', 'Segoe UI', 'Kalimati', sans-serif !important;
+    font-style: normal !important;
+}
+.option-container {
+    transition: all 0.2s ease-in-out;
+}
+.correct-tick-badge {
+    transition: all 0.2s ease-in-out;
+    user-select: none;
+}
+.correct-tick-badge:hover {
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1) !important;
+    transform: translateY(-1px);
+}
+</style>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="fas fa-database text-primary"></i> Question Bank</h2>
@@ -561,12 +603,12 @@ ob_start();
                                 <?php endif; ?>
                             </td>
                             <td>
-                                <div class="text-truncate" style="max-width: 300px;" title="<?= sanitize($q['question_text']) ?>">
-                                    <strong>EN:</strong> <?= $q['question_text'] ?>
+                                <div class="text-truncate mathjax-render" style="max-width: 300px;" title="<?= sanitize($q['question_text']) ?>">
+                                    <strong>EN:</strong> <?= fixNepaliInLatex($q['question_text']) ?>
                                 </div>
                                 <?php if (!empty($q['question_text_np'])): ?>
-                                <div class="text-truncate text-muted small" style="max-width: 300px;" title="<?= sanitize($q['question_text_np']) ?>">
-                                    <strong>NP:</strong> <?= $q['question_text_np'] ?>
+                                <div class="text-truncate text-muted small mathjax-render" style="max-width: 300px;" title="<?= sanitize($q['question_text_np']) ?>">
+                                    <strong>NP:</strong> <?= fixNepaliInLatex($q['question_text_np']) ?>
                                 </div>
                                 <?php endif; ?>
                             </td>
@@ -701,52 +743,133 @@ ob_start();
                     
                     <!-- MCQ Details -->
                     <div id="mcqDetails" class="mt-4 border-top pt-3">
-                        <h6 class="text-primary mb-3"><i class="fas fa-list-ol"></i> Multiple Choice Options & Key</h6>
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <label class="form-label">Option A (English) *</label>
-                                <textarea name="option_a" id="modalOptA" class="form-control mcq-field" rows="2" placeholder="Answer option A (English)"></textarea>
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="text-primary mb-0 fw-bold"><i class="fas fa-list-ol"></i> Multiple Choice Options & Correct Key</h6>
+                            <span class="text-muted small"><i class="fas fa-info-circle"></i> Tick the box between English and Nepali to mark that option as correct.</span>
+                        </div>
+                        <input type="hidden" id="modalCorrect" value="A">
+                        
+                        <!-- Option A Container -->
+                        <div class="option-container border rounded-3 p-3 mb-3 bg-light" id="optContainer_A">
+                            <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="badge bg-primary fs-6 px-2 py-1">A</span>
+                                    <span class="fw-bold text-dark">Option A (English) *</span>
+                                </div>
+
+                                <!-- Center Tick Mark Box for Correct Answer -->
+                                <div class="correct-tick-badge px-3 py-1 bg-white border rounded-pill shadow-sm d-flex align-items-center gap-2" onclick="selectCorrectOption('A')">
+                                    <input type="radio" name="correct_option" id="correctOpt_A" value="A" class="form-check-input m-0 correct-radio" style="cursor: pointer; width: 1.15em; height: 1.15em;" onchange="onCorrectOptionChange('A')" checked>
+                                    <label for="correctOpt_A" class="form-check-label fw-bold text-success m-0" style="cursor: pointer; font-size: 0.88rem;">
+                                        <i class="fas fa-check-circle"></i> Correct Answer
+                                    </label>
+                                </div>
+
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="fw-bold text-secondary">विकल्प क (नेपाली)</span>
+                                    <span class="badge bg-secondary fs-6 px-2 py-1">क</span>
+                                </div>
                             </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Option A (Nepali)</label>
-                                <textarea name="option_a_np" id="modalOptANp" class="form-control" rows="2" placeholder="उत्तर विकल्प क (नेपाली)"></textarea>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <textarea name="option_a" id="modalOptA" class="form-control mcq-field" rows="2" placeholder="Answer option A (English)"></textarea>
+                                </div>
+                                <div class="col-md-6">
+                                    <textarea name="option_a_np" id="modalOptANp" class="form-control" rows="2" placeholder="उत्तर विकल्प क (नेपाली)"></textarea>
+                                </div>
                             </div>
-                            
-                            <div class="col-md-6">
-                                <label class="form-label">Option B (English) *</label>
-                                <textarea name="option_b" id="modalOptB" class="form-control mcq-field" rows="2" placeholder="Answer option B (English)"></textarea>
+                        </div>
+
+                        <!-- Option B Container -->
+                        <div class="option-container border rounded-3 p-3 mb-3 bg-light" id="optContainer_B">
+                            <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="badge bg-primary fs-6 px-2 py-1">B</span>
+                                    <span class="fw-bold text-dark">Option B (English) *</span>
+                                </div>
+
+                                <!-- Center Tick Mark Box for Correct Answer -->
+                                <div class="correct-tick-badge px-3 py-1 bg-white border rounded-pill shadow-sm d-flex align-items-center gap-2" onclick="selectCorrectOption('B')">
+                                    <input type="radio" name="correct_option" id="correctOpt_B" value="B" class="form-check-input m-0 correct-radio" style="cursor: pointer; width: 1.15em; height: 1.15em;" onchange="onCorrectOptionChange('B')">
+                                    <label for="correctOpt_B" class="form-check-label fw-bold text-success m-0" style="cursor: pointer; font-size: 0.88rem;">
+                                        <i class="fas fa-check-circle"></i> Correct Answer
+                                    </label>
+                                </div>
+
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="fw-bold text-secondary">विकल्प ख (नेपाली)</span>
+                                    <span class="badge bg-secondary fs-6 px-2 py-1">ख</span>
+                                </div>
                             </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Option B (Nepali)</label>
-                                <textarea name="option_b_np" id="modalOptBNp" class="form-control" rows="2" placeholder="उत्तर विकल्प ख (नेपाली)"></textarea>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <textarea name="option_b" id="modalOptB" class="form-control mcq-field" rows="2" placeholder="Answer option B (English)"></textarea>
+                                </div>
+                                <div class="col-md-6">
+                                    <textarea name="option_b_np" id="modalOptBNp" class="form-control" rows="2" placeholder="उत्तर विकल्प ख (नेपाली)"></textarea>
+                                </div>
                             </div>
-                            
-                            <div class="col-md-6">
-                                <label class="form-label">Option C (English) *</label>
-                                <textarea name="option_c" id="modalOptC" class="form-control mcq-field" rows="2" placeholder="Answer option C (English)"></textarea>
+                        </div>
+
+                        <!-- Option C Container -->
+                        <div class="option-container border rounded-3 p-3 mb-3 bg-light" id="optContainer_C">
+                            <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="badge bg-primary fs-6 px-2 py-1">C</span>
+                                    <span class="fw-bold text-dark">Option C (English) *</span>
+                                </div>
+
+                                <!-- Center Tick Mark Box for Correct Answer -->
+                                <div class="correct-tick-badge px-3 py-1 bg-white border rounded-pill shadow-sm d-flex align-items-center gap-2" onclick="selectCorrectOption('C')">
+                                    <input type="radio" name="correct_option" id="correctOpt_C" value="C" class="form-check-input m-0 correct-radio" style="cursor: pointer; width: 1.15em; height: 1.15em;" onchange="onCorrectOptionChange('C')">
+                                    <label for="correctOpt_C" class="form-check-label fw-bold text-success m-0" style="cursor: pointer; font-size: 0.88rem;">
+                                        <i class="fas fa-check-circle"></i> Correct Answer
+                                    </label>
+                                </div>
+
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="fw-bold text-secondary">विकल्प ग (नेपाली)</span>
+                                    <span class="badge bg-secondary fs-6 px-2 py-1">ग</span>
+                                </div>
                             </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Option C (Nepali)</label>
-                                <textarea name="option_c_np" id="modalOptCNp" class="form-control" rows="2" placeholder="उत्तर विकल्प ग (नेपाली)"></textarea>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <textarea name="option_c" id="modalOptC" class="form-control mcq-field" rows="2" placeholder="Answer option C (English)"></textarea>
+                                </div>
+                                <div class="col-md-6">
+                                    <textarea name="option_c_np" id="modalOptCNp" class="form-control" rows="2" placeholder="उत्तर विकल्प ग (नेपाली)"></textarea>
+                                </div>
                             </div>
-                            
-                            <div class="col-md-6">
-                                <label class="form-label">Option D (English) *</label>
-                                <textarea name="option_d" id="modalOptD" class="form-control mcq-field" rows="2" placeholder="Answer option D (English)"></textarea>
+                        </div>
+
+                        <!-- Option D Container -->
+                        <div class="option-container border rounded-3 p-3 mb-3 bg-light" id="optContainer_D">
+                            <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="badge bg-primary fs-6 px-2 py-1">D</span>
+                                    <span class="fw-bold text-dark">Option D (English) *</span>
+                                </div>
+
+                                <!-- Center Tick Mark Box for Correct Answer -->
+                                <div class="correct-tick-badge px-3 py-1 bg-white border rounded-pill shadow-sm d-flex align-items-center gap-2" onclick="selectCorrectOption('D')">
+                                    <input type="radio" name="correct_option" id="correctOpt_D" value="D" class="form-check-input m-0 correct-radio" style="cursor: pointer; width: 1.15em; height: 1.15em;" onchange="onCorrectOptionChange('D')">
+                                    <label for="correctOpt_D" class="form-check-label fw-bold text-success m-0" style="cursor: pointer; font-size: 0.88rem;">
+                                        <i class="fas fa-check-circle"></i> Correct Answer
+                                    </label>
+                                </div>
+
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="fw-bold text-secondary">विकल्प घ (नेपाली)</span>
+                                    <span class="badge bg-secondary fs-6 px-2 py-1">घ</span>
+                                </div>
                             </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Option D (Nepali)</label>
-                                <textarea name="option_d_np" id="modalOptDNp" class="form-control" rows="2" placeholder="उत्तर विकल्प घ (नेपाली)"></textarea>
-                            </div>
-                            
-                            <div class="col-md-4">
-                                <label class="form-label">Correct Option Key *</label>
-                                <select name="correct_option" id="modalCorrect" class="form-select">
-                                    <option value="A">A / क</option>
-                                    <option value="B">B / ख</option>
-                                    <option value="C">C / ग</option>
-                                    <option value="D">D / घ</option>
-                                </select>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <textarea name="option_d" id="modalOptD" class="form-control mcq-field" rows="2" placeholder="Answer option D (English)"></textarea>
+                                </div>
+                                <div class="col-md-6">
+                                    <textarea name="option_d_np" id="modalOptDNp" class="form-control" rows="2" placeholder="उत्तर विकल्प घ (नेपाली)"></textarea>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -813,14 +936,28 @@ function escapeHtml(text) {
         .replace(/'/g, "&#039;");
 }
 
+function fixNepaliInLatex(tex) {
+    if (!tex || typeof tex !== 'string') return tex;
+    if (!/[\u0900-\u097F]/.test(tex)) return tex;
+
+    return tex.replace(/(\\text\{[^{}]*\}|\\mbox\{[^{}]*\}|\\mathrm\{[^{}]*\}|\\mathbf\{[^{}]*\}|\\mathit\{[^{}]*\})|(\\[a-zA-Z]+)|([\u0900-\u097F]+(?:[ \t\u00A0]+[\u0900-\u097F]+)*)/g, function(match, textCmd, otherCmd, nepaliText) {
+        if (textCmd) return textCmd;
+        if (otherCmd) return otherCmd;
+        if (nepaliText) return '\\text{' + nepaliText + '}';
+        return match;
+    });
+}
+
 function convertLatexToSpan(content) {
     if (!content) return content;
     // Match inline LaTeX math \( ... \)
-    content = content.replace(/\\\((.*?)\\\)/g, function(match, tex) {
+    content = content.replace(/\\\(([\s\S]*?)\\\)/g, function(match, tex) {
+        tex = fixNepaliInLatex(tex);
         return '<span class="math-tex" data-tex="' + escapeHtml(tex) + '" data-mode="inline">\\(' + tex + '\\)</span>';
     });
     // Match block LaTeX math \[ ... \]
-    content = content.replace(/\\\[(.*?)\\\]/g, function(match, tex) {
+    content = content.replace(/\\\[([\s\S]*?)\\\]/g, function(match, tex) {
+        tex = fixNepaliInLatex(tex);
         return '<span class="math-tex" data-tex="' + escapeHtml(tex) + '" data-mode="block">\\[' + tex + '\\]</span>';
     });
     return content;
@@ -852,8 +989,8 @@ $(document).ready(function() {
             toolbar: 'undo redo | blocks fontfamily fontsize | bold italic underline forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | table | math_tex | fullscreen code',
             branding: false,
             promotion: false,
-            // Styling inside editor iframe to clearly mark locked TeX equations seamlessly (outline on hover/select)
-            content_style: 'span.math-tex { background: transparent !important; border: none !important; cursor: pointer !important; display: inline-block !important; user-select: none !important; margin: 0 2px !important; } span.math-tex:hover, span.math-tex:focus, span.math-tex[data-mce-selected] { outline: 1px dashed #0d6efd !important; background: rgba(13, 110, 253, 0.05) !important; border-radius: 2px !important; }',
+            // Styling inside editor iframe to clearly mark locked TeX equations seamlessly (outline on hover/select) and render Devanagari text fonts
+            content_style: 'span.math-tex { background: transparent !important; border: none !important; cursor: pointer !important; display: inline-block !important; user-select: none !important; margin: 0 2px !important; } span.math-tex:hover, span.math-tex:focus, span.math-tex[data-mce-selected] { outline: 1px dashed #0d6efd !important; background: rgba(13, 110, 253, 0.05) !important; border-radius: 2px !important; } mjx-utext, mjx-mtext, .MathJax mtext { font-family: "Noto Sans Devanagari", "Segoe UI", "Kalimati", sans-serif !important; font-style: normal !important; }',
             setup: function (editor) {
                 // When content is loaded, wrap LaTeX with span so it can render inside iframe
                 editor.on('BeforeSetContent', function (e) {
@@ -980,13 +1117,60 @@ function showAddForm() {
     setOptionVal('modalOptCNp', '');
     setOptionVal('modalOptD', '');
     setOptionVal('modalOptDNp', '');
-    document.getElementById('modalCorrect').value = 'A';
+    selectCorrectOption('A');
     
     updateChaptersDropdown('');
     toggleMCQFields();
     
     // Scroll to top
     window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function selectCorrectOption(opt) {
+    opt = (opt || 'A').toUpperCase();
+    const radio = document.getElementById('correctOpt_' + opt);
+    if (radio) {
+        radio.checked = true;
+    }
+    onCorrectOptionChange(opt);
+}
+
+function onCorrectOptionChange(opt) {
+    opt = (opt || 'A').toUpperCase();
+    ['A', 'B', 'C', 'D'].forEach(o => {
+        const container = document.getElementById('optContainer_' + o);
+        const radio = document.getElementById('correctOpt_' + o);
+        const badge = container ? container.querySelector('.correct-tick-badge') : null;
+        
+        if (container && radio) {
+            if (o === opt) {
+                radio.checked = true;
+                container.style.borderColor = '#198754';
+                container.style.backgroundColor = 'rgba(25, 135, 84, 0.05)';
+                container.classList.add('shadow');
+                if (badge) {
+                    badge.classList.remove('bg-white');
+                    badge.classList.add('bg-success', 'border-success');
+                    const label = badge.querySelector('label');
+                    if (label) label.className = 'form-check-label fw-bold text-white m-0';
+                }
+            } else {
+                radio.checked = false;
+                container.style.borderColor = '#dee2e6';
+                container.style.backgroundColor = '#f8f9fa';
+                container.classList.remove('shadow');
+                if (badge) {
+                    badge.classList.remove('bg-success', 'border-success');
+                    badge.classList.add('bg-white');
+                    const label = badge.querySelector('label');
+                    if (label) label.className = 'form-check-label fw-bold text-success m-0';
+                }
+            }
+        }
+    });
+    
+    const hidden = document.getElementById('modalCorrect');
+    if (hidden) hidden.value = opt;
 }
 
 function setOptionVal(id, val) {
@@ -1030,7 +1214,7 @@ function editQuestion(q) {
         setOptionVal('modalOptCNp', optsNp.C || '');
         setOptionVal('modalOptDNp', optsNp.D || '');
         
-        document.getElementById('modalCorrect').value = q.correct_option || 'A';
+        selectCorrectOption(q.correct_option || 'A');
     } else {
         setOptionVal('modalOptA', '');
         setOptionVal('modalOptANp', '');
@@ -1364,7 +1548,7 @@ function openTexModal(editorId, targetSpan = null) {
 }
 
 function updateTexPreview() {
-    const input = document.getElementById('texInput').value.trim();
+    let input = document.getElementById('texInput').value.trim();
     const preview = document.getElementById('texPreview');
     const mode = document.getElementById('texDisplayMode').value;
     
@@ -1373,11 +1557,14 @@ function updateTexPreview() {
         return;
     }
     
+    // Automatically wrap any Nepali / Devanagari text in \text{...} for seamless MathJax rendering
+    const processedInput = fixNepaliInLatex(input);
+    
     // Wrap according to selected mode
     if (mode === 'inline') {
-        preview.innerHTML = '\\(' + input + '\\)';
+        preview.innerHTML = '\\(' + processedInput + '\\)';
     } else {
-        preview.innerHTML = '\\[' + input + '\\]';
+        preview.innerHTML = '\\[' + processedInput + '\\]';
     }
     
     // Trigger MathJax render
@@ -1387,10 +1574,12 @@ function updateTexPreview() {
 }
 
 function insertTexIntoEditor() {
-    const input = document.getElementById('texInput').value.trim();
+    let input = document.getElementById('texInput').value.trim();
     const mode = document.getElementById('texDisplayMode').value;
     
     if (input !== '' && activeEditorId !== '') {
+        // Automatically wrap any Nepali / Devanagari text in \text{...} so valid LaTeX is saved
+        input = fixNepaliInLatex(input);
         const escapedInput = escapeHtml(input);
         
         if (window.tinymce && tinymce.get(activeEditorId)) {

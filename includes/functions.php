@@ -198,6 +198,26 @@ function isNepali($string) {
 }
 
 /**
+ * Ensure Nepali / Devanagari text inside LaTeX expressions is wrapped in \text{...}
+ * so MathJax renders complex ligatures, matras, and conjuncts properly without breaking.
+ */
+function fixNepaliInLatex($tex) {
+    if (empty($tex) || !is_string($tex)) return $tex;
+    if (!preg_match('/[\x{0900}-\x{097F}]/u', $tex)) return $tex;
+    
+    return preg_replace_callback(
+        '/(\\\\(?:text|mbox|mathrm|mathbf|mathit)\{[^{}]*\})|(\\\\[a-zA-Z]+)|([\x{0900}-\x{097F}]+(?:[ \t\x{00A0}]+[\x{0900}-\x{097F}]+)*)/u',
+        function($matches) {
+            if (!empty($matches[1])) return $matches[1];
+            if (!empty($matches[2])) return $matches[2];
+            if (!empty($matches[3])) return '\\text{' . $matches[3] . '}';
+            return $matches[0];
+        },
+        $tex
+    );
+}
+
+/**
  * Debug helper
  */
 function dd($data) {
