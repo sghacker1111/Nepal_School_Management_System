@@ -435,17 +435,27 @@ window.MathJax = {
         displayMath: [['\\[', '\\]']]
     },
     startup: {
-        typeset: true
+        ready: () => {
+            MathJax.startup.defaultReady();
+            MathJax.startup.promise.then(() => {
+                if (typeof fixDevanagariInMathJax === 'function') {
+                    fixDevanagariInMathJax(document);
+                }
+            });
+        }
     }
 };
 </script>
 <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 
 <style>
-/* MathJax Nepali / Devanagari Unicode Text Support */
-mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"] {
-    font-family: 'Noto Sans Devanagari', 'Segoe UI', 'Kalimati', sans-serif !important;
+/* Kokila Nepali / Devanagari Unicode Text & MathJax Support */
+mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
+    font-family: 'Kokila', 'Noto Sans Devanagari', 'Segoe UI', 'Kalimati', sans-serif !important;
     font-style: normal !important;
+}
+.font-nepali, .nepali-text {
+    font-family: 'Kokila', 'Noto Sans Devanagari', 'Kalimati', sans-serif !important;
 }
 #texPreview {
     font-size: 1.35rem;
@@ -453,10 +463,10 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"] {
     padding: 12px 0;
     color: #2c3e50;
     min-height: 60px;
-    font-family: 'Noto Sans Devanagari', 'Segoe UI', 'Kalimati', sans-serif;
+    font-family: 'Kokila', 'Noto Sans Devanagari', 'Segoe UI', 'Kalimati', sans-serif;
 }
-#texPreview mjx-utext, #texPreview mjx-mtext {
-    font-family: 'Noto Sans Devanagari', 'Segoe UI', 'Kalimati', sans-serif !important;
+#texPreview mjx-utext, #texPreview mjx-mtext, #texPreview mjx-c {
+    font-family: 'Kokila', 'Noto Sans Devanagari', 'Segoe UI', 'Kalimati', sans-serif !important;
     font-style: normal !important;
 }
 .option-container {
@@ -607,7 +617,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"] {
                                     <strong>EN:</strong> <?= fixNepaliInLatex($q['question_text']) ?>
                                 </div>
                                 <?php if (!empty($q['question_text_np'])): ?>
-                                <div class="text-truncate text-muted small mathjax-render" style="max-width: 300px;" title="<?= sanitize($q['question_text_np']) ?>">
+                                <div class="text-truncate text-muted small mathjax-render font-nepali" style="max-width: 300px; font-size: 0.95rem;" title="<?= sanitize($q['question_text_np']) ?>">
                                     <strong>NP:</strong> <?= fixNepaliInLatex($q['question_text_np']) ?>
                                 </div>
                                 <?php endif; ?>
@@ -721,8 +731,8 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"] {
                             <textarea name="question_text" id="modalQuestionText" class="form-control" rows="3" required placeholder="Type English question here..."></textarea>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Question Text (Nepali)</label>
-                            <textarea name="question_text_np" id="modalQuestionTextNp" class="form-control" rows="3" placeholder="नेपालीमा प्रश्न यहाँ लेखन्होस्..."></textarea>
+                            <label class="form-label font-nepali fw-semibold">Question Text (Nepali) / प्रश्न (नेपाली)</label>
+                            <textarea name="question_text_np" id="modalQuestionTextNp" class="form-control font-nepali" rows="3" placeholder="नेपालीमा प्रश्न यहाँ लेख्नुहोस्..."></textarea>
                         </div>
                     </div>
                     
@@ -735,8 +745,8 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"] {
                                 <textarea name="answer" id="modalAnswer" class="form-control" rows="3" placeholder="Type expected English answer here (optional)..."></textarea>
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">Expected Answer (Nepali)</label>
-                                <textarea name="answer_np" id="modalAnswerNp" class="form-control" rows="3" placeholder="नेपालीमा अपेक्षित उत्तर यहाँ लेख्नुहोस् (ऐच्छिक)..."></textarea>
+                                <label class="form-label font-nepali fw-semibold">Expected Answer (Nepali) / अपेक्षित उत्तर (नेपाली)</label>
+                                <textarea name="answer_np" id="modalAnswerNp" class="form-control font-nepali" rows="3" placeholder="नेपालीमा अपेक्षित उत्तर यहाँ लेख्नुहोस् (ऐच्छिक)..."></textarea>
                             </div>
                         </div>
                     </div>
@@ -775,7 +785,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"] {
                                     <textarea name="option_a" id="modalOptA" class="form-control mcq-field" rows="2" placeholder="Answer option A (English)"></textarea>
                                 </div>
                                 <div class="col-md-6">
-                                    <textarea name="option_a_np" id="modalOptANp" class="form-control" rows="2" placeholder="उत्तर विकल्प क (नेपाली)"></textarea>
+                                    <textarea name="option_a_np" id="modalOptANp" class="form-control font-nepali" rows="2" placeholder="उत्तर विकल्प क (नेपाली)"></textarea>
                                 </div>
                             </div>
                         </div>
@@ -806,7 +816,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"] {
                                     <textarea name="option_b" id="modalOptB" class="form-control mcq-field" rows="2" placeholder="Answer option B (English)"></textarea>
                                 </div>
                                 <div class="col-md-6">
-                                    <textarea name="option_b_np" id="modalOptBNp" class="form-control" rows="2" placeholder="उत्तर विकल्प ख (नेपाली)"></textarea>
+                                    <textarea name="option_b_np" id="modalOptBNp" class="form-control font-nepali" rows="2" placeholder="उत्तर विकल्प ख (नेपाली)"></textarea>
                                 </div>
                             </div>
                         </div>
@@ -837,7 +847,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"] {
                                     <textarea name="option_c" id="modalOptC" class="form-control mcq-field" rows="2" placeholder="Answer option C (English)"></textarea>
                                 </div>
                                 <div class="col-md-6">
-                                    <textarea name="option_c_np" id="modalOptCNp" class="form-control" rows="2" placeholder="उत्तर विकल्प ग (नेपाली)"></textarea>
+                                    <textarea name="option_c_np" id="modalOptCNp" class="form-control font-nepali" rows="2" placeholder="उत्तर विकल्प ग (नेपाली)"></textarea>
                                 </div>
                             </div>
                         </div>
@@ -868,7 +878,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"] {
                                     <textarea name="option_d" id="modalOptD" class="form-control mcq-field" rows="2" placeholder="Answer option D (English)"></textarea>
                                 </div>
                                 <div class="col-md-6">
-                                    <textarea name="option_d_np" id="modalOptDNp" class="form-control" rows="2" placeholder="उत्तर विकल्प घ (नेपाली)"></textarea>
+                                    <textarea name="option_d_np" id="modalOptDNp" class="form-control font-nepali" rows="2" placeholder="उत्तर विकल्प घ (नेपाली)"></textarea>
                                 </div>
                             </div>
                         </div>
@@ -985,12 +995,59 @@ $(document).ready(function() {
         tinymce.init({
             selector: '#modalQuestionText, #modalQuestionTextNp, #modalAnswer, #modalAnswerNp, #modalOptA, #modalOptB, #modalOptC, #modalOptD, #modalOptANp, #modalOptBNp, #modalOptCNp, #modalOptDNp',
             height: 250,
+            font_family_formats: 'Kokila=Kokila,Noto Sans Devanagari,sans-serif; Arial=arial,helvetica,sans-serif; Courier New=courier new,courier; Georgia=georgia,palatino; Tahoma=tahoma,arial,helvetica,sans-serif; Times New Roman=times new roman,times; Trebuchet MS=trebuchet ms,geneva; Verdana=verdana,geneva',
             plugins: 'advlist autolink lists link image charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime media table wordcount',
             toolbar: 'undo redo | blocks fontfamily fontsize | bold italic underline forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | table | math_tex | fullscreen code',
             branding: false,
             promotion: false,
-            // Styling inside editor iframe to clearly mark locked TeX equations seamlessly (outline on hover/select) and render Devanagari text fonts
-            content_style: 'span.math-tex { background: transparent !important; border: none !important; cursor: pointer !important; display: inline-block !important; user-select: none !important; margin: 0 2px !important; } span.math-tex:hover, span.math-tex:focus, span.math-tex[data-mce-selected] { outline: 1px dashed #0d6efd !important; background: rgba(13, 110, 253, 0.05) !important; border-radius: 2px !important; } mjx-utext, mjx-mtext, .MathJax mtext { font-family: "Noto Sans Devanagari", "Segoe UI", "Kalimati", sans-serif !important; font-style: normal !important; }',
+            // Styling inside editor iframe to support Kokila font and locked TeX equations
+            content_style: `
+                @font-face {
+                    font-family: 'Kokila';
+                    src: local('Kokila'), url('${window.APP_URL}/assets/fonts/kokila.ttf') format('truetype');
+                    font-weight: normal;
+                    font-style: normal;
+                }
+                @font-face {
+                    font-family: 'Kokila';
+                    src: local('Kokila Bold'), url('${window.APP_URL}/assets/fonts/kokilab.ttf') format('truetype');
+                    font-weight: bold;
+                    font-style: normal;
+                }
+                @font-face {
+                    font-family: 'Kokila';
+                    src: local('Kokila Italic'), url('${window.APP_URL}/assets/fonts/kokilai.ttf') format('truetype');
+                    font-weight: normal;
+                    font-style: italic;
+                }
+                @font-face {
+                    font-family: 'Kokila';
+                    src: local('Kokila Bold Italic'), url('${window.APP_URL}/assets/fonts/kokilabi.ttf') format('truetype');
+                    font-weight: bold;
+                    font-style: italic;
+                }
+                body {
+                    font-family: 'Kokila', 'Segoe UI', Tahoma, sans-serif;
+                    font-size: 17px;
+                }
+                span.math-tex {
+                    background: transparent !important;
+                    border: none !important;
+                    cursor: pointer !important;
+                    display: inline-block !important;
+                    user-select: none !important;
+                    margin: 0 2px !important;
+                }
+                span.math-tex:hover, span.math-tex:focus, span.math-tex[data-mce-selected] {
+                    outline: 1px dashed #0d6efd !important;
+                    background: rgba(13, 110, 253, 0.05) !important;
+                    border-radius: 2px !important;
+                }
+                mjx-utext, mjx-mtext, .MathJax mtext, mjx-c {
+                    font-family: 'Kokila', 'Noto Sans Devanagari', 'Segoe UI', 'Kalimati', sans-serif !important;
+                    font-style: normal !important;
+                }
+            `,
             setup: function (editor) {
                 // When content is loaded, wrap LaTeX with span so it can render inside iframe
                 editor.on('BeforeSetContent', function (e) {
@@ -1014,6 +1071,12 @@ $(document).ready(function() {
                 // Load MathJax inside the editor iframe dynamically
                 editor.on('init', function () {
                     const doc = editor.getDoc();
+                    const win = editor.getWin();
+                    
+                    // Attach MathJax Devanagari observer to editor iframe
+                    if (typeof observeMathJaxDevanagari === 'function') {
+                        observeMathJaxDevanagari(doc);
+                    }
                     
                     const configScript = doc.createElement('script');
                     configScript.text = `
@@ -1033,8 +1096,12 @@ $(document).ready(function() {
                     script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
                     script.async = true;
                     script.onload = function() {
-                        if (editor.getWin().MathJax && editor.getWin().MathJax.typesetPromise) {
-                            editor.getWin().MathJax.typesetPromise();
+                        if (win.MathJax && win.MathJax.typesetPromise) {
+                            win.MathJax.typesetPromise().then(() => {
+                                if (typeof fixDevanagariInMathJax === 'function') {
+                                    fixDevanagariInMathJax(doc);
+                                }
+                            });
                         }
                     };
                     doc.head.appendChild(script);
@@ -1045,7 +1112,11 @@ $(document).ready(function() {
                     editor.save(); // Sync back to textarea
                     const win = editor.getWin();
                     if (win.MathJax && win.MathJax.typesetPromise) {
-                        win.MathJax.typesetPromise();
+                        win.MathJax.typesetPromise().then(() => {
+                            if (typeof fixDevanagariInMathJax === 'function') {
+                                fixDevanagariInMathJax(editor.getDoc());
+                            }
+                        });
                     }
                 });
 
@@ -1569,7 +1640,11 @@ function updateTexPreview() {
     
     // Trigger MathJax render
     if (window.MathJax && window.MathJax.typesetPromise) {
-        MathJax.typesetPromise([preview]);
+        MathJax.typesetPromise([preview]).then(() => {
+            if (typeof fixDevanagariInMathJax === 'function') {
+                fixDevanagariInMathJax(preview);
+            }
+        });
     }
 }
 
@@ -1599,7 +1674,11 @@ function insertTexIntoEditor() {
                 // Trigger MathJax typeset inside editor document
                 const win = editor.getWin();
                 if (win.MathJax && win.MathJax.typesetPromise) {
-                    win.MathJax.typesetPromise();
+                    win.MathJax.typesetPromise().then(() => {
+                        if (typeof fixDevanagariInMathJax === 'function') {
+                            fixDevanagariInMathJax(editor.getDoc());
+                        }
+                    });
                 }
             } else {
                 // Insert a new locked math span
@@ -1615,7 +1694,11 @@ function insertTexIntoEditor() {
                 // Trigger MathJax typeset inside editor document
                 const win = editor.getWin();
                 if (win.MathJax && win.MathJax.typesetPromise) {
-                    win.MathJax.typesetPromise();
+                    win.MathJax.typesetPromise().then(() => {
+                        if (typeof fixDevanagariInMathJax === 'function') {
+                            fixDevanagariInMathJax(editor.getDoc());
+                        }
+                    });
                 }
             }
         }

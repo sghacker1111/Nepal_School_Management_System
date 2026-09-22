@@ -182,6 +182,24 @@ ob_start();
 <script src="https://cdn.jsdelivr.net/npm/tinymce@6/tinymce.min.js" referrerpolicy="origin"></script>
 
 <!-- MathJax for rendering equations -->
+<script>
+window.MathJax = {
+    tex: {
+        inlineMath: [['\\(', '\\)']],
+        displayMath: [['\\[', '\\]']]
+    },
+    startup: {
+        ready: () => {
+            MathJax.startup.defaultReady();
+            MathJax.startup.promise.then(() => {
+                if (typeof fixDevanagariInMathJax === 'function') {
+                    fixDevanagariInMathJax(document);
+                }
+            });
+        }
+    }
+};
+</script>
 <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -438,7 +456,11 @@ $(document).ready(function() {
             editor.on('change keyup', function () {
                 editor.save();
                 if (window.MathJax && window.MathJax.typesetPromise) {
-                    window.MathJax.typesetPromise();
+                    window.MathJax.typesetPromise().then(() => {
+                        if (typeof fixDevanagariInMathJax === 'function') {
+                            fixDevanagariInMathJax();
+                        }
+                    });
                 }
             });
         }

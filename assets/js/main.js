@@ -359,6 +359,129 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
+/**
+ * MathJax 3 Devanagari / Nepali Ligature & Combining Matra Merger
+ * 
+ * MathJax CHTML output breaks individual Unicode characters into separate <mjx-utext> elements.
+ * For Devanagari (Nepali Unicode), this splits consonants and combining vowel signs (matras like 
+ * f-kar, e-kar, halanta) across different DOM nodes, causing the browser font engine to draw dotted 
+ * circles (e.g. म ◌ि instead of मि).
+ * 
+ * This function merges adjacent Devanagari character nodes back into complete words so that 
+ * the Kokila font engine renders ligatures, conjuncts, and matras flawlessly.
+ */
+function fixDevanagariInMathJax(root) {
+    root = root || document;
+    if (!root || !root.querySelectorAll) return;
+
+    try {
+        const containers = (root.matches && root.matches('mjx-container'))
+            ? [root]
+            : Array.from(root.querySelectorAll('mjx-container'));
+
+        containers.forEach(container => {
+            if (container.getAttribute('data-dev-fixed') === '1') return;
+
+            // 1. Merge adjacent mjx-utext inside mjx-mtext (from \text{...} or \mathrm{...})
+            container.querySelectorAll('mjx-mtext').forEach(mtext => {
+                const utexts = Array.from(mtext.querySelectorAll('mjx-utext'));
+                if (utexts.length > 1) {
+                    let hasDev = false;
+                    let str = '';
+                    utexts.forEach(u => {
+                        str += u.textContent;
+                        if (/[\u0900-\u097F]/.test(u.textContent)) hasDev = true;
+                    });
+                    if (hasDev) {
+                        utexts[0].textContent = str;
+                        utexts[0].style.fontFamily = "'Kokila', 'Noto Sans Devanagari', 'Nirmala UI', 'Mangal', sans-serif";
+                        utexts[0].style.fontStyle = 'normal';
+                        for (let i = 1; i < utexts.length; i++) {
+                            utexts[i].remove();
+                        }
+                    }
+                } else if (utexts.length === 1 && /[\u0900-\u097F]/.test(utexts[0].textContent)) {
+                    utexts[0].style.fontFamily = "'Kokila', 'Noto Sans Devanagari', 'Nirmala UI', 'Mangal', sans-serif";
+                    utexts[0].style.fontStyle = 'normal';
+                }
+            });
+
+            // 2. Merge consecutive mjx-mi / mjx-mo / mjx-mn elements with Devanagari characters (raw math mode)
+            const groupingParents = container.querySelectorAll('mjx-mrow, mjx-num, mjx-den, mjx-math, mjx-over, mjx-under, mjx-script, mjx-root, mjx-sqrt, mjx-mtd');
+            groupingParents.forEach(row => {
+                const children = Array.from(row.children);
+                let currentGroup = [];
+
+                function mergeGroup(group) {
+                    if (group.length === 0) return;
+                    let fullText = group.map(el => el.textContent).join('');
+                    if (/[\u0900-\u097F]/.test(fullText)) {
+                        const first = group[0];
+                        first.className = 'mjx-n';
+                        first.innerHTML = '<mjx-utext style="font-family: \'Kokila\', \'Noto Sans Devanagari\', \'Nirmala UI\', \'Mangal\', sans-serif !important; font-style: normal !important;">' + fullText + '</mjx-utext>';
+                        for (let i = 1; i < group.length; i++) {
+                            group[i].remove();
+                        }
+                    }
+                }
+
+                children.forEach(child => {
+                    if (child.tagName && ['MJX-MI', 'MJX-MO', 'MJX-MN', 'MJX-MS'].includes(child.tagName.toUpperCase()) && /[\u0900-\u097F]/.test(child.textContent)) {
+                        currentGroup.push(child);
+                    } else {
+                        mergeGroup(currentGroup);
+                        currentGroup = [];
+                    }
+                });
+                mergeGroup(currentGroup);
+            });
+
+            container.setAttribute('data-dev-fixed', '1');
+        });
+    } catch (e) {
+        console.error("MathJax Devanagari repair error:", e);
+    }
+}
+window.fixDevanagariInMathJax = fixDevanagariInMathJax;
+
+/**
+ * MutationObserver to automatically detect newly inserted MathJax containers
+ * and instantly fix Devanagari ligatures without needing manual event calls.
+ */
+function observeMathJaxDevanagari(targetDoc) {
+    targetDoc = targetDoc || document;
+    if (!targetDoc || !targetDoc.body || typeof MutationObserver === 'undefined') return null;
+
+    const observer = new MutationObserver(mutations => {
+        let needsFix = false;
+        for (const m of mutations) {
+            for (const node of m.addedNodes) {
+                if (node.nodeType === 1) {
+                    if (node.tagName === 'MJX-CONTAINER' || (node.querySelector && node.querySelector('mjx-container'))) {
+                        needsFix = true;
+                        break;
+                    }
+                }
+            }
+            if (needsFix) break;
+        }
+        if (needsFix) {
+            fixDevanagariInMathJax(targetDoc);
+        }
+    });
+
+    observer.observe(targetDoc.body, { childList: true, subtree: true });
+    return observer;
+}
+window.observeMathJaxDevanagari = observeMathJaxDevanagari;
+
+// Auto-observe main document on load
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => observeMathJaxDevanagari(document));
+} else {
+    observeMathJaxDevanagari(document);
+}
+
 // Console welcome message
 console.log('%c Nepal School ERP ', 'background: #2c3e50; color: #fff; font-size: 20px; padding: 10px;');
 console.log('%c Welcome to the system! ', 'color: #3498db; font-size: 14px;');

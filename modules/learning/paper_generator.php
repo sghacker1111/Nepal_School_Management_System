@@ -351,8 +351,8 @@ ob_start();
     margin: 0 auto;
     box-shadow: 0 0 10px rgba(0,0,0,0.5);
     color: #000000;
-    font-family: 'Times New Roman', Times, serif, 'Mukta', sans-serif;
-    font-size: 14px;
+    font-family: 'Kokila', 'Times New Roman', Times, 'Noto Sans Devanagari', serif;
+    font-size: 15px;
     line-height: 1.5;
     position: relative;
     box-sizing: border-box;
@@ -459,7 +459,14 @@ window.MathJax = {
         displayMath: [['\\[', '\\]']]
     },
     startup: {
-        typeset: true
+        ready: () => {
+            MathJax.startup.defaultReady();
+            MathJax.startup.promise.then(() => {
+                if (typeof fixDevanagariInMathJax === 'function') {
+                    fixDevanagariInMathJax(document);
+                }
+            });
+        }
     }
 };
 </script>
@@ -844,7 +851,7 @@ window.MathJax = {
                             </div>
                             
                             <?php if ($q['question_text_np']): ?>
-                            <div style="margin-left: 25px; margin-top:2px;" class="text-muted small">
+                            <div style="margin-left: 25px; margin-top:2px;" class="text-muted small font-nepali">
                                 <span class="mathjax-render"><?= fixNepaliInLatex($q['question_text_np']) ?></span>
                             </div>
                             <?php endif; ?>
@@ -855,10 +862,10 @@ window.MathJax = {
                                 $opts_np = json_decode($q['options_np'], true);
                             ?>
                                 <div class="mcq-options-grid">
-                                    <div>A. <span class="mathjax-render"><?= fixNepaliInLatex($opts['A'] ?? '') ?></span> <?= isset($opts_np['A']) && !empty($opts_np['A']) ? ' <span class="text-muted small">(' . fixNepaliInLatex($opts_np['A']) . ')</span>' : '' ?></div>
-                                    <div>B. <span class="mathjax-render"><?= fixNepaliInLatex($opts['B'] ?? '') ?></span> <?= isset($opts_np['B']) && !empty($opts_np['B']) ? ' <span class="text-muted small">(' . fixNepaliInLatex($opts_np['B']) . ')</span>' : '' ?></div>
-                                    <div>C. <span class="mathjax-render"><?= fixNepaliInLatex($opts['C'] ?? '') ?></span> <?= isset($opts_np['C']) && !empty($opts_np['C']) ? ' <span class="text-muted small">(' . fixNepaliInLatex($opts_np['C']) . ')</span>' : '' ?></div>
-                                    <div>D. <span class="mathjax-render"><?= fixNepaliInLatex($opts['D'] ?? '') ?></span> <?= isset($opts_np['D']) && !empty($opts_np['D']) ? ' <span class="text-muted small">(' . fixNepaliInLatex($opts_np['D']) . ')</span>' : '' ?></div>
+                                    <div>A. <span class="mathjax-render"><?= fixNepaliInLatex($opts['A'] ?? '') ?></span> <?= isset($opts_np['A']) && !empty($opts_np['A']) ? ' <span class="text-muted small font-nepali">(' . fixNepaliInLatex($opts_np['A']) . ')</span>' : '' ?></div>
+                                    <div>B. <span class="mathjax-render"><?= fixNepaliInLatex($opts['B'] ?? '') ?></span> <?= isset($opts_np['B']) && !empty($opts_np['B']) ? ' <span class="text-muted small font-nepali">(' . fixNepaliInLatex($opts_np['B']) . ')</span>' : '' ?></div>
+                                    <div>C. <span class="mathjax-render"><?= fixNepaliInLatex($opts['C'] ?? '') ?></span> <?= isset($opts_np['C']) && !empty($opts_np['C']) ? ' <span class="text-muted small font-nepali">(' . fixNepaliInLatex($opts_np['C']) . ')</span>' : '' ?></div>
+                                    <div>D. <span class="mathjax-render"><?= fixNepaliInLatex($opts['D'] ?? '') ?></span> <?= isset($opts_np['D']) && !empty($opts_np['D']) ? ' <span class="text-muted small font-nepali">(' . fixNepaliInLatex($opts_np['D']) . ')</span>' : '' ?></div>
                                 </div>
                             <?php endif; ?>
                         </div>
@@ -981,7 +988,11 @@ if (btnRunOCR) {
             
             // Render equations if MathJax was found in OCR output (optional)
             if (window.MathJax && window.MathJax.typesetPromise) {
-                MathJax.typesetPromise();
+                MathJax.typesetPromise().then(() => {
+                    if (typeof fixDevanagariInMathJax === 'function') {
+                        fixDevanagariInMathJax();
+                    }
+                });
             }
         }).catch(err => {
             console.error(err);

@@ -73,9 +73,49 @@
             .content-wrapper { background: #fff; }
         }
 
+        /* Kokila Nepali Unicode Font Definitions */
+        @font-face {
+            font-family: 'Kokila';
+            src: local('Kokila'),
+                 url('<?= APP_URL ?>/assets/fonts/kokila.ttf') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+            font-display: swap;
+        }
+        @font-face {
+            font-family: 'Kokila';
+            src: local('Kokila Bold'),
+                 url('<?= APP_URL ?>/assets/fonts/kokilab.ttf') format('truetype');
+            font-weight: bold;
+            font-style: normal;
+            font-display: swap;
+        }
+        @font-face {
+            font-family: 'Kokila';
+            src: local('Kokila Italic'),
+                 url('<?= APP_URL ?>/assets/fonts/kokilai.ttf') format('truetype');
+            font-weight: normal;
+            font-style: italic;
+            font-display: swap;
+        }
+        @font-face {
+            font-family: 'Kokila';
+            src: local('Kokila Bold Italic'),
+                 url('<?= APP_URL ?>/assets/fonts/kokilabi.ttf') format('truetype');
+            font-weight: bold;
+            font-style: italic;
+            font-display: swap;
+        }
+
+        /* Nepali / Devanagari Typography */
+        .font-nepali, .nepali-text, [lang="ne"], .kokila-font,
+        textarea[name*="_np"], input[name*="_np"] {
+            font-family: 'Kokila', 'Noto Sans Devanagari', 'Kalimati', 'Segoe UI', sans-serif !important;
+        }
+
         /* MathJax Devanagari / Nepali Script Font Support */
-        mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"] {
-            font-family: 'Noto Sans Devanagari', 'Segoe UI', 'Kalimati', sans-serif !important;
+        mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
+            font-family: 'Kokila', 'Noto Sans Devanagari', 'Segoe UI', 'Kalimati', sans-serif !important;
             font-style: normal !important;
         }
 
