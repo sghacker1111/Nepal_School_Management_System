@@ -70,7 +70,7 @@ if ($is_admin) {
 }
 
 // 3. Classes and subjects configuration based on active school context
-$classes_stmt = $db->prepare("SELECT * FROM classes WHERE school_id = ? AND is_active = 1 ORDER BY level, name");
+$classes_stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ? OR school_id = 0) AND is_active = 1 ORDER BY id ASC");
 $classes_stmt->execute([$school_id]);
 $classes = $classes_stmt->fetchAll();
 
@@ -78,7 +78,7 @@ $class_id = $_GET['class_id'] ?? ($classes[0]['id'] ?? '');
 
 $selected_class = null;
 if ($class_id) {
-    $stmt = $db->prepare("SELECT * FROM classes WHERE id = ? AND school_id = ? AND is_active = 1");
+    $stmt = $db->prepare("SELECT * FROM classes WHERE id = ? AND (school_id = ? OR school_id = 0) AND is_active = 1");
     $stmt->execute([$class_id, $school_id]);
     $selected_class = $stmt->fetch();
 }
@@ -88,7 +88,7 @@ if ($class_id) {
     $stmt = $db->prepare("
         SELECT s.* FROM subjects s 
         JOIN class_subjects cs ON cs.subject_id = s.id 
-        WHERE cs.class_id = ? AND cs.school_id = ?
+        WHERE cs.class_id = ? AND (cs.school_id = ? OR cs.school_id = 0)
         ORDER BY s.name_en
     ");
     $stmt->execute([$class_id, $school_id]);
@@ -99,7 +99,7 @@ $subject_id = $_GET['subject_id'] ?? ($subjects[0]['id'] ?? '');
 
 $selected_subject = null;
 if ($subject_id) {
-    $stmt = $db->prepare("SELECT * FROM subjects WHERE id = ? AND school_id = ?");
+    $stmt = $db->prepare("SELECT * FROM subjects WHERE id = ? AND (school_id = ? OR school_id = 0)");
     $stmt->execute([$subject_id, $school_id]);
     $selected_subject = $stmt->fetch();
 }

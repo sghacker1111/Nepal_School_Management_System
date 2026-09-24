@@ -262,12 +262,12 @@ if (isset($_GET['delete_mapping']) && Auth::hasRole(['super_admin', 'school_admi
 }
 
 // Fetch classes
-$stmt = $db->prepare("SELECT * FROM classes WHERE school_id = ? AND is_active = 1 ORDER BY level, name");
+$stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ? OR school_id = 0) AND is_active = 1 ORDER BY id ASC");
 $stmt->execute([$school_id]);
 $classes = $stmt->fetchAll();
 
 // Fetch subjects
-$stmt = $db->prepare("SELECT * FROM subjects WHERE school_id = ? ORDER BY code, name_en");
+$stmt = $db->prepare("SELECT * FROM subjects WHERE (school_id = ? OR school_id = 0) ORDER BY code, name_en");
 $stmt->execute([$school_id]);
 $subjects = $stmt->fetchAll();
 

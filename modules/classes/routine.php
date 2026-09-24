@@ -27,7 +27,7 @@ $include_sunday = isset($school['routine_include_sunday']) ? (int)$school['routi
 $active_tab = $_POST['tab'] ?? $_GET['tab'] ?? 'view';
 
 // Fetch classes
-$stmt = $db->prepare("SELECT id, name, class_teacher_name, is_grading_teaching FROM classes WHERE school_id = ? AND is_active = 1");
+$stmt = $db->prepare("SELECT id, name, class_teacher_name, is_grading_teaching FROM classes WHERE (school_id = ? OR school_id = 0) AND is_active = 1 ORDER BY id ASC");
 $stmt->execute([$school_id]);
 $classes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 

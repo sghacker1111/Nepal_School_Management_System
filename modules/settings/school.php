@@ -55,12 +55,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // Update active classes status
             $active_classes = $_POST['active_classes'] ?? [];
-            $stmt_deact = $db->prepare("UPDATE classes SET is_active = 0 WHERE school_id = ?");
+            $stmt_deact = $db->prepare("UPDATE classes SET is_active = 0 WHERE (school_id = ? OR school_id = 0)");
             $stmt_deact->execute([$school_id]);
             
             if (!empty($active_classes)) {
                 $placeholders = implode(',', array_fill(0, count($active_classes), '?'));
-                $stmt_act = $db->prepare("UPDATE classes SET is_active = 1 WHERE id IN ($placeholders) AND school_id = ?");
+                $stmt_act = $db->prepare("UPDATE classes SET is_active = 1 WHERE id IN ($placeholders) AND (school_id = ? OR school_id = 0)");
                 $params = array_keys($active_classes);
                 $params[] = $school_id;
                 $stmt_act->execute($params);
@@ -295,7 +295,7 @@ ob_start();
                 <div class="card-body p-4">
                     <p class="text-muted small mb-3">Check the classes that are active and taught in your school. Unchecked classes will be hidden from all modules (Students, Exams, Results, Attendance, Routine, etc.).</p>
                     <?php
-                    $stmt_c = $db->prepare("SELECT id, name, is_active FROM classes WHERE school_id = ? ORDER BY level, id");
+                    $stmt_c = $db->prepare("SELECT id, name, is_active FROM classes WHERE (school_id = ? OR school_id = 0) ORDER BY id ASC");
                     $stmt_c->execute([$school_id]);
                     $school_classes = $stmt_c->fetchAll(PDO::FETCH_ASSOC);
                     ?>

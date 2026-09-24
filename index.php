@@ -33,7 +33,7 @@ if (Auth::hasRole(['school_admin', 'principal', 'super_admin']) && $school_id) {
     $stats['teachers'] = $stmt->fetch()['count'];
     
     // Total classes
-    $stmt = $db->prepare("SELECT COUNT(*) as count FROM classes WHERE school_id = ?");
+    $stmt = $db->prepare("SELECT COUNT(*) as count FROM classes WHERE (school_id = ? OR school_id = 0) AND is_active = 1");
     $stmt->execute([$school_id]);
     $stats['classes'] = $stmt->fetch()['count'];
     

@@ -22,7 +22,7 @@ $stmt = $db->prepare("SELECT COUNT(*) FROM users WHERE school_id = ? AND role = 
 $stmt->execute([$school_id]);
 $teachers_count = $stmt->fetchColumn();
 
-$stmt = $db->prepare("SELECT COUNT(*) FROM classes WHERE school_id = ? AND is_active = 1");
+$stmt = $db->prepare("SELECT COUNT(*) FROM classes WHERE (school_id = ? OR school_id = 0) AND is_active = 1");
 $stmt->execute([$school_id]);
 $classes_count = $stmt->fetchColumn();
 
@@ -39,9 +39,9 @@ $stmt = $db->prepare("
            COUNT(s.id) as total_count
     FROM classes c
     LEFT JOIN students s ON s.class_id = c.id AND s.status = 'active' AND s.school_id = ?
-    WHERE c.school_id = ? AND c.is_active = 1
+    WHERE (c.school_id = ? OR c.school_id = 0) AND c.is_active = 1
     GROUP BY c.id
-    ORDER BY c.level, c.name
+    ORDER BY c.id ASC
 ");
 $stmt->execute([$school_id, $school_id]);
 $class_reports = $stmt->fetchAll();

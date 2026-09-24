@@ -129,13 +129,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 
                 // Clear teacher's old name from any classes
-                $stmt_clear = $db->prepare("UPDATE classes SET class_teacher_name = NULL WHERE class_teacher_name = ? AND school_id = ?");
+                $stmt_clear = $db->prepare("UPDATE classes SET class_teacher_name = NULL WHERE class_teacher_name = ? AND (school_id = ? OR school_id = 0)");
                 $stmt_clear->execute([$teacher['full_name'], $school_id]);
 
                 // Assign to new class if selected
                 $assigned_class_id = isset($_POST['assigned_class_id']) ? (int)$_POST['assigned_class_id'] : 0;
                 if ($assigned_class_id > 0) {
-                    $stmt_set = $db->prepare("UPDATE classes SET class_teacher_name = ? WHERE id = ? AND school_id = ?");
+                    $stmt_set = $db->prepare("UPDATE classes SET class_teacher_name = ? WHERE id = ? AND (school_id = ? OR school_id = 0)");
                     $stmt_set->execute([$full_name, $assigned_class_id, $school_id]);
                     
                     // Handle signature file upload
@@ -361,12 +361,12 @@ ob_start();
                 <div class="card-body p-4">
                     <?php
                     // Fetch all classes
-                    $stmt_cls = $db->prepare("SELECT id, name FROM classes WHERE school_id = ? AND is_active = 1 ORDER BY level, name");
+                    $stmt_cls = $db->prepare("SELECT id, name FROM classes WHERE (school_id = ? OR school_id = 0) AND is_active = 1 ORDER BY id ASC");
                     $stmt_cls->execute([$school_id]);
                     $classes_list = $stmt_cls->fetchAll();
                     
                     // Find if this teacher is currently assigned to a class
-                    $stmt_curr = $db->prepare("SELECT id FROM classes WHERE class_teacher_name = ? AND school_id = ?");
+                    $stmt_curr = $db->prepare("SELECT id FROM classes WHERE class_teacher_name = ? AND (school_id = ? OR school_id = 0)");
                     $stmt_curr->execute([$teacher['full_name'], $school_id]);
                     $assigned_class_id = $stmt_curr->fetchColumn();
                     ?>

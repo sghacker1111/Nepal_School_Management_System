@@ -27,7 +27,7 @@ if (!$class) {
 }
 
 // Fetch active teachers
-$stmt_t = $db->prepare("SELECT id, full_name FROM users WHERE role = 'teacher' AND status = 1 AND school_id = ? ORDER BY full_name");
+$stmt_t = $db->prepare("SELECT id, full_name FROM users WHERE role = 'teacher' AND status = 1 AND (school_id = ? OR school_id = 0) ORDER BY full_name");
 $stmt_t->execute([$school_id]);
 $teachers_list = $stmt_t->fetchAll();
 

@@ -147,11 +147,11 @@ if ($is_admin && !$school_id) {
     $stmt->execute();
     $subjects = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } elseif ($school_id) {
-    $stmt = $db->prepare("SELECT * FROM classes WHERE school_id = ? AND is_active = 1 ORDER BY level, name");
+    $stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ? OR school_id = 0) AND is_active = 1 ORDER BY id ASC");
     $stmt->execute([$school_id]);
     $classes = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
-    $stmt = $db->prepare("SELECT * FROM subjects WHERE school_id = ? ORDER BY name_en");
+    $stmt = $db->prepare("SELECT * FROM subjects WHERE (school_id = ? OR school_id = 0) ORDER BY name_en");
     $stmt->execute([$school_id]);
     $subjects = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }

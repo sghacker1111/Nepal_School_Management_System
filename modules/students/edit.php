@@ -103,7 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // Get classes and sections
-$stmt = $db->prepare("SELECT * FROM classes WHERE school_id = ? AND is_active = 1 ORDER BY name");
+$stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ? OR school_id = 0) AND is_active = 1 ORDER BY id ASC");
 $stmt->execute([$school_id]);
 $classes = $stmt->fetchAll();
 
@@ -111,7 +111,7 @@ $stmt = $db->prepare("SELECT * FROM sections WHERE school_id = ? ORDER BY name")
 $stmt->execute([$school_id]);
 $sections = $stmt->fetchAll();
 
-$stmt = $db->prepare("SELECT * FROM subjects WHERE school_id = ? AND type = 'optional' ORDER BY name_en");
+$stmt = $db->prepare("SELECT * FROM subjects WHERE (school_id = ? OR school_id = 0) AND type = 'optional' ORDER BY name_en");
 $stmt->execute([$school_id]);
 $optional_subjects = $stmt->fetchAll();
 

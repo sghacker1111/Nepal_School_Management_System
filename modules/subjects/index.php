@@ -11,6 +11,9 @@ Auth::requireRole(['super_admin', 'school_admin', 'principal', 'teacher']);
 
 $db = getDB();
 $school_id = Auth::getSchoolId();
+if (Auth::getRole() === 'super_admin' && !$school_id) {
+    $school_id = 0;
+}
 
 // Handle delete
 if (isset($_GET['delete']) && Auth::hasRole(['super_admin', 'school_admin'])) {
@@ -20,10 +23,10 @@ if (isset($_GET['delete']) && Auth::hasRole(['super_admin', 'school_admin'])) {
         $db->beginTransaction();
         
         // Delete mappings first
-        $db->prepare("DELETE FROM class_subjects WHERE subject_id = ? AND school_id = ?")->execute([$id, $school_id]);
+        $db->prepare("DELETE FROM class_subjects WHERE subject_id = ? AND (school_id = ? OR school_id = 0)")->execute([$id, $school_id]);
         
         // Delete subject
-        $stmt = $db->prepare("DELETE FROM subjects WHERE id = ? AND school_id = ?");
+        $stmt = $db->prepare("DELETE FROM subjects WHERE id = ? AND (school_id = ? OR school_id = 0)");
         $stmt->execute([$id, $school_id]);
         
         $db->commit();
@@ -39,23 +42,23 @@ if (isset($_GET['delete']) && Auth::hasRole(['super_admin', 'school_admin'])) {
 
 // Fetch all subjects with class name and teacher IDs from class_subjects mapping
 $stmt = $db->prepare("
-    SELECT s.*, c.name as class_name, cs.teacher_id as teacher_ids, cs.id as mapping_id
+    SELECT s.*, c.name as class_name, c.id as class_id, cs.teacher_id as teacher_ids, cs.id as mapping_id, cs.is_optional, cs.is_active
     FROM subjects s
-    LEFT JOIN class_subjects cs ON s.id = cs.subject_id
+    LEFT JOIN class_subjects cs ON s.id = cs.subject_id AND (cs.school_id = ? OR cs.school_id = 0)
     LEFT JOIN classes c ON cs.class_id = c.id
-    WHERE s.school_id = ? AND (c.is_active = 1 OR cs.class_id IS NULL)
-    ORDER BY c.name, s.code, s.name_en
+    WHERE (s.school_id = ? OR s.school_id = 0) AND (c.is_active = 1 OR cs.class_id IS NULL)
+    ORDER BY c.id ASC, s.type ASC, s.code ASC, s.name_en ASC
 ");
-$stmt->execute([$school_id]);
+$stmt->execute([$school_id, $school_id]);
 $subjects = $stmt->fetchAll();
 
 // Fetch all school teachers to display their names
-$stmt_teachers = $db->prepare("SELECT id, full_name FROM users WHERE role = 'teacher' AND school_id = ?");
+$stmt_teachers = $db->prepare("SELECT id, full_name FROM users WHERE role = 'teacher' AND (school_id = ? OR school_id = 0)");
 $stmt_teachers->execute([$school_id]);
 $all_teachers = $stmt_teachers->fetchAll(PDO::FETCH_KEY_PAIR);
 
 // Fetch all classes for filter dropdown
-$stmt_classes = $db->prepare("SELECT DISTINCT name FROM classes WHERE school_id = ? AND is_active = 1 ORDER BY level, name");
+$stmt_classes = $db->prepare("SELECT DISTINCT name FROM classes WHERE (school_id = ? OR school_id = 0) AND is_active = 1 ORDER BY id ASC");
 $stmt_classes->execute([$school_id]);
 $all_classes_filter = $stmt_classes->fetchAll(PDO::FETCH_COLUMN);
 

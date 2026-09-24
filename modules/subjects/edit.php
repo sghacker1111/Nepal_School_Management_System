@@ -11,12 +11,15 @@ Auth::requireRole(['super_admin', 'school_admin']);
 
 $db = getDB();
 $school_id = Auth::getSchoolId();
+if (Auth::getRole() === 'super_admin' && !$school_id) {
+    $school_id = 0;
+}
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 $error = '';
 $success = '';
 
 // Fetch subject details
-$stmt = $db->prepare("SELECT * FROM subjects WHERE id = ? AND school_id = ?");
+$stmt = $db->prepare("SELECT * FROM subjects WHERE id = ? AND (school_id = ? OR school_id = 0)");
 $stmt->execute([$id, $school_id]);
 $subject = $stmt->fetch();
 
@@ -25,17 +28,17 @@ if (!$subject) {
 }
 
 // Fetch current class mapping
-$stmt_map = $db->prepare("SELECT * FROM class_subjects WHERE subject_id = ? AND school_id = ? LIMIT 1");
+$stmt_map = $db->prepare("SELECT * FROM class_subjects WHERE subject_id = ? AND (school_id = ? OR school_id = 0) LIMIT 1");
 $stmt_map->execute([$id, $school_id]);
 $mapping = $stmt_map->fetch();
 
 // Fetch classes for dropdown
-$stmt = $db->prepare("SELECT * FROM classes WHERE school_id = ? AND is_active = 1 ORDER BY name");
+$stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ? OR school_id = 0) AND is_active = 1 ORDER BY id ASC");
 $stmt->execute([$school_id]);
 $classes = $stmt->fetchAll();
 
 // Fetch active teachers for checklist
-$stmt = $db->prepare("SELECT id, full_name FROM users WHERE role = 'teacher' AND status = 1 AND school_id = ? ORDER BY full_name");
+$stmt = $db->prepare("SELECT id, full_name FROM users WHERE role = 'teacher' AND status = 1 AND (school_id = ? OR school_id = 0) ORDER BY full_name");
 $stmt->execute([$school_id]);
 $teachers = $stmt->fetchAll();
 
@@ -81,7 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $db->beginTransaction();
                 
                 // 1. Update Subject
-                $stmt = $db->prepare("UPDATE subjects SET code = ?, name_en = ?, name_np = ?, type = ?, full_marks = ?, pass_marks = ?, credit_hours = ? WHERE id = ? AND school_id = ?");
+                $stmt = $db->prepare("UPDATE subjects SET code = ?, name_en = ?, name_np = ?, type = ?, full_marks = ?, pass_marks = ?, credit_hours = ? WHERE id = ? AND (school_id = ? OR school_id = 0)");
                 $stmt->execute([$code, $name_en, $name_np, $type, $full_marks, $pass_marks, $credit_hours, $id, $school_id]);
                 
                 // 2. Update mapping in class_subjects

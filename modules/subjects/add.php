@@ -11,15 +11,18 @@ Auth::requireRole(['super_admin', 'school_admin']);
 
 $db = getDB();
 $school_id = Auth::getSchoolId();
+if (Auth::getRole() === 'super_admin' && !$school_id) {
+    $school_id = 0;
+}
 $error = '';
 
-// Fetch classes for dropdown
-$stmt = $db->prepare("SELECT * FROM classes WHERE school_id = ? AND is_active = 1 ORDER BY name");
+// Fetch classes for dropdown (all 16 standard classes)
+$stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ? OR school_id = 0) AND is_active = 1 ORDER BY id ASC");
 $stmt->execute([$school_id]);
 $classes = $stmt->fetchAll();
 
 // Fetch active teachers for checklist
-$stmt = $db->prepare("SELECT id, full_name FROM users WHERE role = 'teacher' AND status = 1 AND school_id = ? ORDER BY full_name");
+$stmt = $db->prepare("SELECT id, full_name FROM users WHERE role = 'teacher' AND status = 1 AND (school_id = ? OR school_id = 0) ORDER BY full_name");
 $stmt->execute([$school_id]);
 $teachers = $stmt->fetchAll();
 

@@ -189,7 +189,7 @@ if (isset($_GET['delete_map'])) {
 }
 
 // Fetch all universal classes
-$classes = $db->query("SELECT * FROM classes WHERE school_id = 0 ORDER BY level, name")->fetchAll(PDO::FETCH_ASSOC);
+$classes = $db->query("SELECT * FROM classes WHERE school_id = 0 ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
 
 // Fetch all universal subjects
 $subjects = $db->query("SELECT * FROM subjects WHERE school_id = 0 ORDER BY name_en")->fetchAll(PDO::FETCH_ASSOC);
@@ -201,7 +201,7 @@ $mappings = $db->query("
     JOIN classes c ON cs.class_id = c.id
     JOIN subjects s ON cs.subject_id = s.id
     WHERE cs.school_id = 0
-    ORDER BY c.level, c.name, s.name_en
+    ORDER BY c.id ASC, s.name_en ASC
 ")->fetchAll(PDO::FETCH_ASSOC);
 
 $pageTitle = 'Subjects & Chapters Catalog';

@@ -140,7 +140,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
             $error = 'Please upload a valid CSV file.';
         } else {
             // Load classes & sections mapping
-            $stmt_cl = $db->prepare("SELECT id, name FROM classes WHERE school_id = ? AND is_active = 1");
+            $stmt_cl = $db->prepare("SELECT id, name FROM classes WHERE (school_id = ? OR school_id = 0) AND is_active = 1");
             $stmt_cl->execute([$school_id]);
             $classes_db = $stmt_cl->fetchAll(PDO::FETCH_ASSOC);
             
