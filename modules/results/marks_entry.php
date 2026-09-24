@@ -68,7 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_marks'])) {
                 SELECT es.*, sub.name_en as subject_name, sub.type as subject_type
                 FROM exam_subjects es
                 JOIN subjects sub ON es.subject_id = sub.id
-                WHERE es.exam_id = ? AND es.class_id = ?
+                WHERE es.exam_id = ? AND es.class_id = ? AND (sub.is_hidden = 0 OR sub.is_hidden IS NULL)
             ");
             $stmt_es->execute([$exam_id_post, $class_id_post]);
             $exam_subjects = $stmt_es->fetchAll(PDO::FETCH_ASSOC);
@@ -315,7 +315,7 @@ if ($exam_id && $class_id) {
         SELECT es.*, sub.name_en as subject_name, sub.code as subject_code, sub.type as subject_type
         FROM exam_subjects es
         JOIN subjects sub ON es.subject_id = sub.id
-        WHERE es.exam_id = ? AND es.class_id = ?
+        WHERE es.exam_id = ? AND es.class_id = ? AND (sub.is_hidden = 0 OR sub.is_hidden IS NULL)
     ");
     $stmt->execute([$exam_id, $class_id]);
     $subjects = $stmt->fetchAll(PDO::FETCH_ASSOC);

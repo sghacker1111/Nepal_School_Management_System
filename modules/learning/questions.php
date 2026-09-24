@@ -738,17 +738,17 @@ if ($is_admin && !$school_id) {
     $classes_stmt->execute([$school_id]);
     $classes = $classes_stmt->fetchAll();
 
-    $subjects_stmt = $db->prepare("SELECT * FROM subjects WHERE school_id = ? OR school_id = 0 ORDER BY name_en");
+    $subjects_stmt = $db->prepare("SELECT * FROM subjects WHERE (school_id = ? OR school_id = 0) AND (is_hidden = 0 OR is_hidden IS NULL) ORDER BY name_en");
     $subjects_stmt->execute([$school_id]);
     $subjects = $subjects_stmt->fetchAll();
 }
 
-// Fetch active class-subject mappings (unticked optional subjects are excluded)
+// Fetch active class-subject mappings (unticked optional and hidden subjects are excluded)
 $cs_stmt = $db->prepare("
     SELECT cs.class_id, s.id as subject_id, s.name_en, s.name_np, s.code, cs.is_optional, cs.is_active
     FROM class_subjects cs
     JOIN subjects s ON cs.subject_id = s.id
-    WHERE (cs.is_optional = 0 OR cs.is_active = 1)
+    WHERE cs.is_active = 1 AND (s.is_hidden = 0 OR s.is_hidden IS NULL)
     ORDER BY s.name_en ASC
 ");
 $cs_stmt->execute();

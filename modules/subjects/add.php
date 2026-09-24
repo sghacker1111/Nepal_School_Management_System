@@ -31,10 +31,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $code = sanitize($_POST['code'] ?? '');
     $name_en = sanitize($_POST['name_en'] ?? '');
     $name_np = sanitize($_POST['name_np'] ?? '');
-    $type = sanitize($_POST['type'] ?? 'compulsory');
-    $full_marks = round((float)($_POST['full_marks'] ?? 100.0), 2);
-    $pass_marks = round((float)($_POST['pass_marks'] ?? 40.0), 2);
-    $credit_hours = round((float)($_POST['credit_hours'] ?? 4.0), 2);
+    $is_optional = !empty($_POST['is_optional']) ? 1 : 0;
+    $type = $is_optional ? 'optional' : 'compulsory';
+    
+    // Theory (TH) individual fields
+    $th_credit_hours = round((float)($_POST['th_credit_hours'] ?? 3.0), 2);
+    $th_full_marks = round((float)($_POST['th_full_marks'] ?? 75.0), 2);
+    $th_pass_marks = round((float)($_POST['th_pass_marks'] ?? 26.25), 2);
+    
+    // Internal (IN) individual fields
+    $in_credit_hours = round((float)($_POST['in_credit_hours'] ?? 1.0), 2);
+    $in_full_marks = round((float)($_POST['in_full_marks'] ?? 25.0), 2);
+    $in_pass_marks = round((float)($_POST['in_pass_marks'] ?? 10.0), 2);
+    
+    // Combined Totals
+    $credit_hours = round($th_credit_hours + $in_credit_hours, 2);
+    $full_marks = round($th_full_marks + $in_full_marks, 2);
+    $pass_marks = round($th_pass_marks + $in_pass_marks, 2);
+    
     $teacher_ids = $_POST['teacher_ids'] ?? [];
     
     if (empty($class_id)) {
@@ -61,21 +75,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $db->beginTransaction();
                 
-                // 1. Insert Subject
-                $stmt = $db->prepare("INSERT INTO subjects (code, name_en, name_np, type, full_marks, pass_marks, credit_hours, school_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-                $stmt->execute([$code, $name_en, $name_np, $type, $full_marks, $pass_marks, $credit_hours, $school_id]);
+                // 1. Insert Subject with Theory and Internal fields
+                $stmt = $db->prepare("
+                    INSERT INTO subjects (
+                        code, name_en, name_np, type, full_marks, pass_marks, credit_hours,
+                        th_credit_hours, in_credit_hours, th_full_marks, th_pass_marks, in_full_marks, in_pass_marks,
+                        is_hidden, school_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+                ");
+                $stmt->execute([
+                    $code, $name_en, $name_np, $type, $full_marks, $pass_marks, $credit_hours,
+                    $th_credit_hours, $in_credit_hours, $th_full_marks, $th_pass_marks, $in_full_marks, $in_pass_marks,
+                    $school_id
+                ]);
                 $new_subject_id = $db->lastInsertId();
                 
-                // 2. Insert mapping in class_subjects (is_optional = 0 if compulsory, 1 if optional)
-                $is_opt = ($type === 'optional') ? 1 : 0;
+                // 2. Insert mapping in class_subjects
                 $teacher_id_str = !empty($teacher_ids) ? implode(',', array_map('intval', $teacher_ids)) : null;
-                $stmt_map = $db->prepare("INSERT INTO class_subjects (class_id, subject_id, credit_hours, teacher_id, school_id, is_optional, is_active) VALUES (?, ?, ?, ?, ?, ?, 1)");
-                $stmt_map->execute([$class_id, $new_subject_id, $credit_hours, $teacher_id_str, $school_id, $is_opt]);
+                $stmt_map = $db->prepare("
+                    INSERT INTO class_subjects (
+                        class_id, subject_id, credit_hours, teacher_id, school_id, is_optional, is_active,
+                        th_credit_hours, in_credit_hours, th_full_marks, th_pass_marks, in_full_marks, in_pass_marks
+                    ) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)
+                ");
+                $stmt_map->execute([
+                    $class_id, $new_subject_id, $credit_hours, $teacher_id_str, $school_id, $is_optional,
+                    $th_credit_hours, $in_credit_hours, $th_full_marks, $th_pass_marks, $in_full_marks, $in_pass_marks
+                ]);
                 
                 $db->commit();
                 
                 Auth::logActivity(Auth::getUserId(), 'Add Subject and Class Mapping', 'subjects', $new_subject_id);
-                redirect(APP_URL . '/modules/subjects/index.php', 'Subject added and mapped successfully');
+                redirect(APP_URL . '/modules/subjects/index.php', 'Subject added and mapped successfully with Theory & Internal evaluation components.');
             } catch (PDOException $e) {
                 if ($db->inTransaction()) {
                     $db->rollBack();
@@ -146,26 +177,88 @@ ob_start();
                 </div>
             </div>
             
-            <div class="row g-3">
-                <div class="col-md-3 mb-3">
-                    <label for="type" class="form-label">Subject Type</label>
-                    <select class="form-select" id="type" name="type">
-                        <option value="compulsory" selected>Compulsory</option>
-                        <option value="optional">Optional (Elective)</option>
-                        <option value="local">Local Subject</option>
-                    </select>
+            <!-- Theory (TH) and Internal (IN) Individual Field Boxes -->
+            <div class="row g-3 mb-3">
+                <!-- Theory (TH) Card -->
+                <div class="col-md-6">
+                    <div class="card border border-primary h-100">
+                        <div class="card-header bg-primary text-white py-2">
+                            <h6 class="mb-0 fw-bold"><i class="fas fa-file-alt me-1"></i> Theory Evaluation (TH)</h6>
+                        </div>
+                        <div class="card-body p-3 bg-light">
+                            <div class="mb-2">
+                                <label for="th_credit_hours" class="form-label small fw-bold">Theory Credit Hours (TH) *</label>
+                                <input type="number" step="0.01" class="form-control" id="th_credit_hours" name="th_credit_hours" value="3.00" min="0" max="10" required oninput="calcTotals()">
+                            </div>
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <label for="th_full_marks" class="form-label small fw-bold">Theory Full Marks *</label>
+                                    <input type="number" step="0.01" class="form-control" id="th_full_marks" name="th_full_marks" value="75.00" min="0" max="100" required oninput="calcTotals()">
+                                </div>
+                                <div class="col-6">
+                                    <label for="th_pass_marks" class="form-label small fw-bold">Theory Pass Marks *</label>
+                                    <input type="number" step="0.01" class="form-control" id="th_pass_marks" name="th_pass_marks" value="26.25" min="0" max="100" required oninput="calcTotals()">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="col-md-3 mb-3">
-                    <label for="credit_hours" class="form-label">Credit Hours (CH) *</label>
-                    <input type="number" step="0.01" class="form-control" id="credit_hours" name="credit_hours" value="4" min="0" max="10" required>
+
+                <!-- Internal (IN) Card (Changed from Practical) -->
+                <div class="col-md-6">
+                    <div class="card border border-info h-100">
+                        <div class="card-header bg-info text-dark py-2">
+                            <h6 class="mb-0 fw-bold"><i class="fas fa-tasks me-1"></i> Internal Assessment (IN)</h6>
+                        </div>
+                        <div class="card-body p-3 bg-light">
+                            <div class="mb-2">
+                                <label for="in_credit_hours" class="form-label small fw-bold">Internal Credit Hours (IN) *</label>
+                                <input type="number" step="0.01" class="form-control" id="in_credit_hours" name="in_credit_hours" value="1.00" min="0" max="10" required oninput="calcTotals()">
+                            </div>
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <label for="in_full_marks" class="form-label small fw-bold">Internal Full Marks *</label>
+                                    <input type="number" step="0.01" class="form-control" id="in_full_marks" name="in_full_marks" value="25.00" min="0" max="100" required oninput="calcTotals()">
+                                </div>
+                                <div class="col-6">
+                                    <label for="in_pass_marks" class="form-label small fw-bold">Internal Pass Marks *</label>
+                                    <input type="number" step="0.01" class="form-control" id="in_pass_marks" name="in_pass_marks" value="10.00" min="0" max="100" required oninput="calcTotals()">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="col-md-3 mb-3">
-                    <label for="full_marks" class="form-label">Default Full Marks *</label>
-                    <input type="number" step="0.01" class="form-control" id="full_marks" name="full_marks" value="100" min="0" max="200" required>
+            </div>
+
+            <!-- Total Evaluation Summary (Auto Sum) -->
+            <div class="p-3 mb-3 bg-white border rounded shadow-sm">
+                <div class="row g-3 align-items-center">
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold text-muted mb-1">Total Credit Hours (TH + IN)</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control fw-bold bg-light" id="total_credit_hours" readonly value="4.00">
+                            <span class="input-group-text bg-light">CH</span>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold text-muted mb-1">Total Full Marks</label>
+                        <input type="text" class="form-control fw-bold text-success bg-light" id="total_full_marks" readonly value="100.00">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold text-muted mb-1">Total Pass Marks</label>
+                        <input type="text" class="form-control fw-bold text-danger bg-light" id="total_pass_marks" readonly value="36.25">
+                    </div>
                 </div>
-                <div class="col-md-3 mb-3">
-                    <label for="pass_marks" class="form-label">Default Pass Marks *</label>
-                    <input type="number" step="0.01" class="form-control" id="pass_marks" name="pass_marks" value="40" min="0" max="100" required>
+            </div>
+
+            <!-- Optional Subject Toggle -->
+            <div class="mb-3 p-3 bg-light border rounded">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" role="switch" id="is_optional" name="is_optional" value="1">
+                    <label class="form-check-label fw-bold" for="is_optional">
+                        Elective / Optional Subject (ऐच्छिक विषय)
+                    </label>
+                    <div class="text-muted small">Tick if this subject is elective / optional for students in this class. Untick for compulsory core subjects.</div>
                 </div>
             </div>
 
@@ -194,13 +287,27 @@ ob_start();
             </div>
             
             <button type="submit" class="btn btn-primary w-100 py-2">
-                <i class="fas fa-save"></i> Save Subject
+                <i class="fas fa-save"></i> Save Subject (Theory & Internal)
             </button>
         </form>
     </div>
 </div>
 
 <script>
+function calcTotals() {
+    var th_ch = parseFloat(document.getElementById('th_credit_hours').value) || 0;
+    var in_ch = parseFloat(document.getElementById('in_credit_hours').value) || 0;
+    document.getElementById('total_credit_hours').value = (th_ch + in_ch).toFixed(2);
+
+    var th_fm = parseFloat(document.getElementById('th_full_marks').value) || 0;
+    var in_fm = parseFloat(document.getElementById('in_full_marks').value) || 0;
+    document.getElementById('total_full_marks').value = (th_fm + in_fm).toFixed(2);
+
+    var th_pm = parseFloat(document.getElementById('th_pass_marks').value) || 0;
+    var in_pm = parseFloat(document.getElementById('in_pass_marks').value) || 0;
+    document.getElementById('total_pass_marks').value = (th_pm + in_pm).toFixed(2);
+}
+
 // Bootstrap form validation
 (function () {
   'use strict'

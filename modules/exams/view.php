@@ -101,10 +101,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['map_subject']) && Aut
     } else {
         $class_id = (int)$_POST['class_id'];
         $subject_id = (int)$_POST['subject_id'];
-        $theory_full = (int)$_POST['theory_full'];
-        $theory_pass = (int)$_POST['theory_pass'];
-        $practical_full = ($exam['type'] === 'unit') ? 0 : ($exam['has_internal'] ? (int)($_POST['practical_full'] ?? 0) : 0);
-        $practical_pass = ($exam['type'] === 'unit') ? 0 : ($exam['has_internal'] ? (int)($_POST['practical_pass'] ?? 0) : 0);
+        $theory_full = (float)$_POST['theory_full'];
+        $theory_pass = (float)$_POST['theory_pass'];
+        $practical_full = ($exam['type'] === 'unit') ? 0 : ($exam['has_internal'] ? (float)($_POST['practical_full'] ?? 0) : 0);
+        $practical_pass = ($exam['type'] === 'unit') ? 0 : ($exam['has_internal'] ? (float)($_POST['practical_pass'] ?? 0) : 0);
         $credit_hours = ($exam['type'] === 'unit' || $_POST['credit_hours'] === '') ? null : (float)$_POST['credit_hours'];
         $internal_credit_hours = ($exam['type'] === 'unit' || $_POST['internal_credit_hours'] === '') ? null : (float)$_POST['internal_credit_hours'];
         $external_credit_hours = ($exam['type'] === 'unit' || $_POST['external_credit_hours'] === '') ? null : (float)$_POST['external_credit_hours'];
@@ -150,12 +150,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['initialize_defaults']
             $error = 'Class must be selected to initialize.';
         } else {
             try {
-                // Fetch subjects mapped to this class in class_subjects
+                // Fetch subjects mapped to this class in class_subjects (only active mappings and non-hidden subjects)
                 $stmt = $db->prepare("
-                    SELECT cs.*, s.name_en as subject_name, s.full_marks as s_full, s.pass_marks as s_pass, s.credit_hours as s_credit 
+                    SELECT cs.*, s.name_en as subject_name, s.full_marks as s_full, s.pass_marks as s_pass, s.credit_hours as s_credit,
+                           s.th_credit_hours as s_th_credit, s.in_credit_hours as s_in_credit,
+                           s.th_full_marks as s_th_full, s.th_pass_marks as s_th_pass,
+                           s.in_full_marks as s_in_full, s.in_pass_marks as s_in_pass
                     FROM class_subjects cs
                     JOIN subjects s ON cs.subject_id = s.id
-                    WHERE cs.class_id = ? AND (cs.is_optional = 0 OR cs.is_active = 1)
+                    WHERE cs.class_id = ? AND cs.is_active = 1 AND (s.is_hidden = 0 OR s.is_hidden IS NULL)
                 ");
                 $stmt->execute([$class_id]);
                 $class_subs = $stmt->fetchAll();
@@ -170,63 +173,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['initialize_defaults']
                     $chk = $db->prepare("SELECT id FROM exam_subjects WHERE exam_id = ? AND subject_id = ? AND class_id = ?");
                     $chk->execute([$exam_id, $cs['subject_id'], $class_id]);
                     if (!$chk->fetch()) {
-                        $total_full = $cs['s_full'] ?: 100;
-                        $total_pass = $cs['s_pass'] ?: 40;
-                        $credit_hours = $cs['credit_hours'] ?: $cs['s_credit'];
-                        
-                        // Detect internal / external credit hours splits
-                        $int_ch = null;
-                        $ext_ch = null;
-                        
-                        $is_class_4_8 = false;
-                        $is_class_9_12 = false;
-                        $is_class_1_3 = false;
-                        if (preg_match('/Class\s+(\d+)/i', $class_name, $m_c)) {
-                            $num = (int)$m_c[1];
-                            if ($num >= 1 && $num <= 3) $is_class_1_3 = true;
-                            elseif ($num >= 4 && $num <= 8) $is_class_4_8 = true;
-                            elseif ($num >= 9) $is_class_9_12 = true;
-                        } elseif (in_array(strtolower($class_name), ['nursery', 'lkg', 'ukg'])) {
-                            $is_class_1_3 = true;
+                        if ($exam['type'] === 'unit') {
+                            $theory_full = ($cs['th_full_marks'] !== null && $cs['th_full_marks'] !== '') ? (float)$cs['th_full_marks'] : (($cs['s_th_full'] !== null && $cs['s_th_full'] !== '') ? (float)$cs['s_th_full'] : ($cs['s_full'] ?: 100));
+                            $theory_pass = ($cs['th_pass_marks'] !== null && $cs['th_pass_marks'] !== '') ? (float)$cs['th_pass_marks'] : (($cs['s_th_pass'] !== null && $cs['s_th_pass'] !== '') ? (float)$cs['s_th_pass'] : ($cs['s_pass'] ?: 40));
+                            $practical_full = 0;
+                            $practical_pass = 0;
+                            $credit_hours = null;
+                            $int_ch = null;
+                            $ext_ch = null;
                         } else {
-                            $stmt_level = $db->prepare("SELECT level FROM classes WHERE id = ?");
-                            $stmt_level->execute([$class_id]);
-                            $c_lvl = $stmt_level->fetchColumn();
-                            if ($c_lvl === 'ECD') $is_class_1_3 = true;
-                            elseif ($c_lvl === 'Secondary') $is_class_9_12 = true;
-                            else $is_class_4_8 = true;
-                        }
-                        
-                        $theory_full = $total_full;
-                        $theory_pass = $total_pass;
-                        $practical_full = 0;
-                        $practical_pass = 0;
-                        
-                        if ($exam['type'] !== 'unit' && $exam['has_internal']) {
-                            if ($is_class_4_8) {
-                                $theory_full = 50;
-                                $theory_pass = 17.5;
-                                $practical_full = 50;
-                                $practical_pass = 20.0;
-                                
-                                if (stripos($cs['subject_name'], 'Nepali') !== false || stripos($cs['subject_name'], 'English') !== false || stripos($cs['subject_name'], 'Math') !== false || stripos($cs['subject_name'], 'Science') !== false || stripos($cs['subject_name'], 'Social') !== false) {
-                                    $int_ch = 2.5; $ext_ch = 2.5;
-                                } elseif (stripos($cs['subject_name'], 'Health') !== false || stripos($cs['subject_name'], 'Creative') !== false || stripos($cs['subject_name'], 'Arts') !== false) {
-                                    $int_ch = 1.5; $ext_ch = 1.5;
-                                } else {
-                                    $int_ch = 2.0; $ext_ch = 2.0;
-                                }
-                            } elseif ($is_class_9_12) {
-                                $theory_full = 75;
-                                $theory_pass = 26.25;
-                                $practical_full = 25;
-                                $practical_pass = 10.0;
-                                
-                                if (stripos($cs['subject_name'], 'Nepali') !== false || stripos($cs['subject_name'], 'English') !== false || stripos($cs['subject_name'], 'Math') !== false || stripos($cs['subject_name'], 'Science') !== false) {
-                                    $int_ch = 1.25; $ext_ch = 3.75;
-                                } else {
-                                    $int_ch = 1.0; $ext_ch = 3.0;
-                                }
+                            // Extract Theory (TH) and Internal (IN) credit hours
+                            $ext_ch = ($cs['th_credit_hours'] !== null && $cs['th_credit_hours'] !== '') ? (float)$cs['th_credit_hours'] : (($cs['s_th_credit'] !== null && $cs['s_th_credit'] !== '') ? (float)$cs['s_th_credit'] : null);
+                            $int_ch = ($cs['in_credit_hours'] !== null && $cs['in_credit_hours'] !== '') ? (float)$cs['in_credit_hours'] : (($cs['s_in_credit'] !== null && $cs['s_in_credit'] !== '') ? (float)$cs['s_in_credit'] : null);
+                            $credit_hours = ($cs['credit_hours'] !== null && $cs['credit_hours'] !== '') ? (float)$cs['credit_hours'] : (($ext_ch !== null && $int_ch !== null) ? ($ext_ch + $int_ch) : ($cs['s_credit'] ?: 4.0));
+
+                            // Extract Theory (TH) marks
+                            $theory_full = ($cs['th_full_marks'] !== null && $cs['th_full_marks'] !== '') ? (float)$cs['th_full_marks'] : (($cs['s_th_full'] !== null && $cs['s_th_full'] !== '') ? (float)$cs['s_th_full'] : ($cs['s_full'] ?: 75));
+                            $theory_pass = ($cs['th_pass_marks'] !== null && $cs['th_pass_marks'] !== '') ? (float)$cs['th_pass_marks'] : (($cs['s_th_pass'] !== null && $cs['s_th_pass'] !== '') ? (float)$cs['s_th_pass'] : ($cs['s_pass'] ? round($cs['s_pass'] * 0.75, 1) : 26.25));
+
+                            // Extract Internal (IN) marks
+                            if ($exam['has_internal']) {
+                                $practical_full = ($cs['in_full_marks'] !== null && $cs['in_full_marks'] !== '') ? (float)$cs['in_full_marks'] : (($cs['s_in_full'] !== null && $cs['s_in_full'] !== '') ? (float)$cs['s_in_full'] : 25);
+                                $practical_pass = ($cs['in_pass_marks'] !== null && $cs['in_pass_marks'] !== '') ? (float)$cs['in_pass_marks'] : (($cs['s_in_pass'] !== null && $cs['s_in_pass'] !== '') ? (float)$cs['s_in_pass'] : 10);
+                            } else {
+                                $practical_full = 0;
+                                $practical_pass = 0;
                             }
                         }
                         
@@ -252,9 +223,19 @@ if (isset($_GET['delete_mapping']) && Auth::hasRole(['super_admin', 'school_admi
     } else {
         $mapping_id = (int)$_GET['delete_mapping'];
         try {
-            $db->prepare("DELETE FROM exam_subjects WHERE id = ? AND exam_id = ?")->execute([$mapping_id, $exam_id]);
-            Auth::logActivity(Auth::getUserId(), 'Removed Exam Subject Configuration', 'exam_subjects', $mapping_id);
-            redirect(APP_URL . "/modules/exams/view.php?id=$exam_id", "Subject configuration removed");
+            $chk_marks = $db->prepare("
+                SELECT COUNT(*) FROM marks m
+                JOIN exam_subjects es ON es.exam_id = m.exam_id AND es.subject_id = m.subject_id
+                WHERE es.id = ?
+            ");
+            $chk_marks->execute([$mapping_id]);
+            if ($chk_marks->fetchColumn() > 0) {
+                redirect(APP_URL . "/modules/exams/view.php?id=$exam_id", "Cannot remove subject configuration: student marks have already been recorded for this subject.", 'error');
+            } else {
+                $db->prepare("DELETE FROM exam_subjects WHERE id = ? AND exam_id = ?")->execute([$mapping_id, $exam_id]);
+                Auth::logActivity(Auth::getUserId(), 'Removed Exam Subject Configuration', 'exam_subjects', $mapping_id);
+                redirect(APP_URL . "/modules/exams/view.php?id=$exam_id", "Subject configuration removed");
+            }
         } catch (PDOException $e) {
             redirect(APP_URL . "/modules/exams/view.php?id=$exam_id", "Error: " . $e->getMessage(), 'error');
         }
@@ -267,17 +248,19 @@ $stmt->execute([$school_id]);
 $classes = $stmt->fetchAll();
 
 // Fetch subjects
-$stmt = $db->prepare("SELECT * FROM subjects WHERE (school_id = ? OR school_id = 0) ORDER BY code, name_en");
+$stmt = $db->prepare("SELECT * FROM subjects WHERE (school_id = ? OR school_id = 0) AND (is_hidden = 0 OR is_hidden IS NULL) ORDER BY code, name_en");
 $stmt->execute([$school_id]);
 $subjects = $stmt->fetchAll();
 
 // Fetch class-subject mappings for dynamic dropdown filtering
 $stmt_cs_map = $db->prepare("
-    SELECT cs.class_id, s.id as subject_id, s.name_en, s.code
+    SELECT cs.class_id, s.id as subject_id, s.name_en, s.code,
+           cs.th_credit_hours, cs.in_credit_hours, cs.th_full_marks, cs.th_pass_marks, cs.in_full_marks, cs.in_pass_marks,
+           s.th_credit_hours as s_th_cr, s.in_credit_hours as s_in_cr, s.th_full_marks as s_th_fm, s.th_pass_marks as s_th_pm, s.in_full_marks as s_in_fm, s.in_pass_marks as s_in_pm
     FROM class_subjects cs
     JOIN subjects s ON cs.subject_id = s.id
     JOIN classes c ON cs.class_id = c.id
-    WHERE (cs.school_id = ? OR cs.school_id = 0) AND c.is_active = 1 AND (cs.is_optional = 0 OR cs.is_active = 1)
+    WHERE (cs.school_id = ? OR cs.school_id = 0) AND c.is_active = 1 AND cs.is_active = 1 AND (s.is_hidden = 0 OR s.is_hidden IS NULL)
 ");
 $stmt_cs_map->execute([$school_id]);
 $class_subject_mappings = $stmt_cs_map->fetchAll(PDO::FETCH_ASSOC);
@@ -286,7 +269,13 @@ $class_subjects_json = [];
 foreach ($class_subject_mappings as $mapping) {
     $class_subjects_json[$mapping['class_id']][] = [
         'id' => $mapping['subject_id'],
-        'name' => ($mapping['code'] ? '[' . $mapping['code'] . '] ' : '') . $mapping['name_en']
+        'name' => ($mapping['code'] ? '[' . $mapping['code'] . '] ' : '') . $mapping['name_en'],
+        'th_credit' => ($mapping['th_credit_hours'] !== null && $mapping['th_credit_hours'] !== '') ? $mapping['th_credit_hours'] : $mapping['s_th_cr'],
+        'in_credit' => ($mapping['in_credit_hours'] !== null && $mapping['in_credit_hours'] !== '') ? $mapping['in_credit_hours'] : $mapping['s_in_cr'],
+        'th_full' => ($mapping['th_full_marks'] !== null && $mapping['th_full_marks'] !== '') ? $mapping['th_full_marks'] : ($mapping['s_th_fm'] ?: 75),
+        'th_pass' => ($mapping['th_pass_marks'] !== null && $mapping['th_pass_marks'] !== '') ? $mapping['th_pass_marks'] : ($mapping['s_th_pm'] ?: 26.25),
+        'in_full' => ($mapping['in_full_marks'] !== null && $mapping['in_full_marks'] !== '') ? $mapping['in_full_marks'] : ($mapping['s_in_fm'] ?: 25),
+        'in_pass' => ($mapping['in_pass_marks'] !== null && $mapping['in_pass_marks'] !== '') ? $mapping['in_pass_marks'] : ($mapping['s_in_pm'] ?: 10),
     ];
 }
 
@@ -296,7 +285,7 @@ $mapped_subjects = $db->prepare("
     FROM exam_subjects es
     JOIN classes c ON es.class_id = c.id
     JOIN subjects sub ON es.subject_id = sub.id
-    WHERE es.exam_id = ? AND c.is_active = 1
+    WHERE es.exam_id = ? AND c.is_active = 1 AND (sub.is_hidden = 0 OR sub.is_hidden IS NULL)
     ORDER BY c.name, sub.name_en
 ");
 $mapped_subjects->execute([$exam_id]);
@@ -403,28 +392,28 @@ ob_start();
                     <div class="row g-2 mb-3">
                         <div class="col-md-6">
                             <label class="form-label text-success">Theory Full *</label>
-                            <input type="number" name="theory_full" class="form-control" value="<?= $edit_mapping ? $edit_mapping['theory_full'] : 75 ?>" required>
+                            <input type="number" step="any" name="theory_full" id="form_theory_full" class="form-control" value="<?= $edit_mapping ? $edit_mapping['theory_full'] : 75 ?>" required>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label text-success">Theory Pass *</label>
-                            <input type="number" name="theory_pass" class="form-control" value="<?= $edit_mapping ? $edit_mapping['theory_pass'] : 30 ?>" required>
+                            <input type="number" step="any" name="theory_pass" id="form_theory_pass" class="form-control" value="<?= $edit_mapping ? $edit_mapping['theory_pass'] : 30 ?>" required>
                         </div>
                     </div>
                     
                     <?php if ($exam['has_internal']): ?>
                     <div class="row g-2 mb-4">
                         <div class="col-md-6">
-                            <label class="form-label text-warning">Practical Full *</label>
-                            <input type="number" name="practical_full" class="form-control" value="<?= $edit_mapping ? $edit_mapping['practical_full'] : 25 ?>" required>
+                            <label class="form-label text-warning">Internal (IN) Full *</label>
+                            <input type="number" step="any" name="practical_full" id="form_practical_full" class="form-control" value="<?= $edit_mapping ? $edit_mapping['practical_full'] : 25 ?>" required>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label text-warning">Practical Pass *</label>
-                            <input type="number" name="practical_pass" class="form-control" value="<?= $edit_mapping ? $edit_mapping['practical_pass'] : 10 ?>" required>
+                            <label class="form-label text-warning">Internal (IN) Pass *</label>
+                            <input type="number" step="any" name="practical_pass" id="form_practical_pass" class="form-control" value="<?= $edit_mapping ? $edit_mapping['practical_pass'] : 10 ?>" required>
                         </div>
                     </div>
                     <?php else: ?>
                     <div class="alert alert-secondary py-2 small mb-3">
-                        <i class="fas fa-info-circle"></i> Internal exam / practical component is disabled for this exam.
+                        <i class="fas fa-info-circle"></i> Internal evaluation component is disabled for this exam.
                     </div>
                     <input type="hidden" name="practical_full" value="0">
                     <input type="hidden" name="practical_pass" value="0">
@@ -553,7 +542,7 @@ ob_start();
                                         <?php else: ?>
                                         <th class="text-center">Credit Hours</th>
                                         <th class="text-center">Theory (Full/Pass)</th>
-                                        <th class="text-center">Practical (Full/Pass)</th>
+                                        <th class="text-center">Internal (Full/Pass)</th>
                                         <th class="text-center">Total Full Marks</th>
                                         <?php endif; ?>
                                         <?php if (Auth::hasRole(['super_admin', 'school_admin', 'exam_officer']) && !$exam['is_locked']): ?>
@@ -641,6 +630,13 @@ const editMapping = <?= $edit_mapping ? json_encode($edit_mapping) : 'null' ?>;
 document.addEventListener('DOMContentLoaded', function() {
     const classSelect = document.getElementById('class_id');
     const subjectSelect = document.getElementById('subject_id');
+    const creditHoursInput = document.getElementById('credit_hours');
+    const intCreditInput = document.getElementById('internal_credit_hours');
+    const extCreditInput = document.getElementById('external_credit_hours');
+    const thFullInput = document.getElementById('form_theory_full');
+    const thPassInput = document.getElementById('form_theory_pass');
+    const inFullInput = document.getElementById('form_practical_full');
+    const inPassInput = document.getElementById('form_practical_pass');
     
     function updateSubjects() {
         const classId = classSelect.value;
@@ -653,6 +649,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     const opt = document.createElement('option');
                     opt.value = sub.id;
                     opt.textContent = sub.name;
+                    opt.dataset.thCredit = sub.th_credit ?? '';
+                    opt.dataset.inCredit = sub.in_credit ?? '';
+                    opt.dataset.thFull = sub.th_full ?? '';
+                    opt.dataset.thPass = sub.th_pass ?? '';
+                    opt.dataset.inFull = sub.in_full ?? '';
+                    opt.dataset.inPass = sub.in_pass ?? '';
                     if (sub.id == selectedSubjectId) {
                         opt.selected = true;
                     }
@@ -665,11 +667,33 @@ document.addEventListener('DOMContentLoaded', function() {
             subjectSelect.innerHTML = '<option value="">Choose Class First</option>';
         }
     }
+
+    function onSubjectChange() {
+        if (editMapping) return; // Do not overwrite when explicitly editing an existing mapping
+        const selectedOpt = subjectSelect.options[subjectSelect.selectedIndex];
+        if (selectedOpt && selectedOpt.value) {
+            const thCr = parseFloat(selectedOpt.dataset.thCredit) || 0;
+            const inCr = parseFloat(selectedOpt.dataset.inCredit) || 0;
+            if (extCreditInput) extCreditInput.value = selectedOpt.dataset.thCredit || '';
+            if (intCreditInput) intCreditInput.value = selectedOpt.dataset.inCredit || '';
+            if (creditHoursInput) {
+                creditHoursInput.value = (thCr + inCr > 0) ? (thCr + inCr) : '';
+            }
+            if (thFullInput && selectedOpt.dataset.thFull) thFullInput.value = selectedOpt.dataset.thFull;
+            if (thPassInput && selectedOpt.dataset.thPass) thPassInput.value = selectedOpt.dataset.thPass;
+            if (inFullInput && selectedOpt.dataset.inFull) inFullInput.value = selectedOpt.dataset.inFull;
+            if (inPassInput && selectedOpt.dataset.inPass) inPassInput.value = selectedOpt.dataset.inPass;
+        }
+    }
     
     if (classSelect) {
         classSelect.addEventListener('change', updateSubjects);
         // Pre-fill / trigger on page load (essential for edit states)
         updateSubjects();
+    }
+
+    if (subjectSelect) {
+        subjectSelect.addEventListener('change', onSubjectChange);
     }
 });
 </script>

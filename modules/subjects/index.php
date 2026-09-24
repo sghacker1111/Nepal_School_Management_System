@@ -15,39 +15,38 @@ if (Auth::getRole() === 'super_admin' && !$school_id) {
     $school_id = 0;
 }
 
-// Handle delete
-if (isset($_GET['delete']) && Auth::hasRole(['super_admin', 'school_admin'])) {
-    $id = (int)$_GET['delete'];
-    
-    try {
-        $db->beginTransaction();
+// Handle hide / unhide toggle
+if (isset($_GET['toggle_hide']) && Auth::hasRole(['super_admin', 'school_admin'])) {
+    $id = (int)$_GET['toggle_hide'];
+    $stmt = $db->prepare("SELECT is_hidden, name_en FROM subjects WHERE id = ? AND (school_id = ? OR school_id = 0)");
+    $stmt->execute([$id, $school_id]);
+    $curr = $stmt->fetch();
+    if ($curr) {
+        $new_state = empty($curr['is_hidden']) ? 1 : 0;
+        $stmt_up = $db->prepare("UPDATE subjects SET is_hidden = ? WHERE id = ? AND (school_id = ? OR school_id = 0)");
+        $stmt_up->execute([$new_state, $id, $school_id]);
         
-        // Delete mappings first
-        $db->prepare("DELETE FROM class_subjects WHERE subject_id = ? AND (school_id = ? OR school_id = 0)")->execute([$id, $school_id]);
-        
-        // Delete subject
-        $stmt = $db->prepare("DELETE FROM subjects WHERE id = ? AND (school_id = ? OR school_id = 0)");
-        $stmt->execute([$id, $school_id]);
-        
-        $db->commit();
-        Auth::logActivity(Auth::getUserId(), 'Delete Subject', 'subjects', $id);
-        redirect(APP_URL . '/modules/subjects/index.php', 'Subject deleted successfully');
-    } catch (PDOException $e) {
-        if ($db->inTransaction()) {
-            $db->rollBack();
-        }
-        redirect(APP_URL . '/modules/subjects/index.php', 'Cannot delete subject. It might be linked to exams.', 'error');
+        $msg = $new_state ? ("Subject '" . htmlspecialchars($curr['name_en']) . "' is now hidden from lists and student forms.") : ("Subject '" . htmlspecialchars($curr['name_en']) . "' is now visible and active.");
+        redirect(APP_URL . '/modules/subjects/index.php', $msg);
     }
 }
 
+// Disallow hard delete to protect exams and marks data integrity
+if (isset($_GET['delete'])) {
+    redirect(APP_URL . '/modules/subjects/index.php', 'Permanent deletion is disabled to protect existing marks, exams, and student result history. Please use the Hide option instead.', 'error');
+}
+
+$show_hidden = isset($_GET['show_hidden']) && $_GET['show_hidden'] == '1';
+
 // Fetch all subjects with class name and teacher IDs from class_subjects mapping
+$hidden_clause = $show_hidden ? "" : " AND (s.is_hidden = 0 OR s.is_hidden IS NULL)";
 $stmt = $db->prepare("
     SELECT s.*, c.name as class_name, c.id as class_id, cs.teacher_id as teacher_ids, cs.id as mapping_id, cs.is_optional, cs.is_active
     FROM subjects s
     LEFT JOIN class_subjects cs ON s.id = cs.subject_id AND (cs.school_id = ? OR cs.school_id = 0)
     LEFT JOIN classes c ON cs.class_id = c.id
-    WHERE (s.school_id = ? OR s.school_id = 0) AND (c.is_active = 1 OR cs.class_id IS NULL)
-    ORDER BY c.id ASC, s.type ASC, s.code ASC, s.name_en ASC
+    WHERE (s.school_id = ? OR s.school_id = 0) $hidden_clause AND (c.is_active = 1 OR cs.class_id IS NULL)
+    ORDER BY c.id ASC, s.code ASC, s.name_en ASC
 ");
 $stmt->execute([$school_id, $school_id]);
 $subjects = $stmt->fetchAll();
@@ -69,12 +68,20 @@ ob_start();
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2><i class="fas fa-book"></i> Subject Management</h2>
-    <?php if (Auth::hasRole(['super_admin', 'school_admin'])): ?>
-    <a href="<?= APP_URL ?>/modules/subjects/add.php" class="btn btn-primary">
-        <i class="fas fa-plus"></i> Add New Subject
-    </a>
-    <?php endif; ?>
+    <div>
+        <h2 class="mb-1"><i class="fas fa-book"></i> Subject Management</h2>
+        <p class="text-muted small mb-0">Theory (TH) and Internal (IN) components configured per subject and class.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="?show_hidden=<?= $show_hidden ? '0' : '1' ?>" class="btn <?= $show_hidden ? 'btn-warning text-dark' : 'btn-outline-secondary' ?>">
+            <i class="fas <?= $show_hidden ? 'fa-eye-slash' : 'fa-eye' ?>"></i> <?= $show_hidden ? 'Hide Inactive Subjects' : 'Show Hidden Subjects' ?>
+        </a>
+        <?php if (Auth::hasRole(['super_admin', 'school_admin'])): ?>
+        <a href="<?= APP_URL ?>/modules/subjects/add.php" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Add New Subject
+        </a>
+        <?php endif; ?>
+    </div>
 </div>
 
 <!-- Custom Filters -->
@@ -107,22 +114,23 @@ ob_start();
     </div>
 </div>
 
-<div class="card">
-    <div class="card-header bg-white py-3">
-        <h5 class="mb-0 text-primary">Subject Catalog (<?= count($subjects) ?>)</h5>
+<div class="card shadow-sm border-0">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h5 class="mb-0 text-primary">Subject Catalog (<?= count($subjects) ?> <?= $show_hidden ? 'including hidden' : 'active' ?>)</h5>
+        <span class="badge bg-light text-dark border">No duplicate subjects allowed per class</span>
     </div>
-    <div class="card-body">
+    <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-hover table-striped align-middle" id="subjectTable">
+            <table class="table table-hover table-striped align-middle mb-0" id="subjectTable">
                 <thead class="table-light">
                     <tr>
                         <th>Subject Code</th>
                         <th>Subject Name</th>
                         <th>Class Mapped</th>
                         <th>Assigned Teachers</th>
-                        <th>Type</th>
-                        <th>Credit Hours</th>
-                        <th>Default Full/Pass Marks</th>
+                        <th>Credit Hours (TH / IN)</th>
+                        <th>Evaluation Marks (TH / IN)</th>
+                        <th>Status</th>
                         <?php if (Auth::hasRole(['super_admin', 'school_admin'])): ?>
                         <th class="text-end">Actions</th>
                         <?php endif; ?>
@@ -131,13 +139,17 @@ ob_start();
                 <tbody>
                     <?php if (count($subjects) > 0): ?>
                         <?php foreach ($subjects as $subject): ?>
-                        <tr>
+                        <tr class="<?= !empty($subject['is_hidden']) ? 'table-secondary opacity-75' : '' ?>">
                             <td><code><?= sanitize($subject['code'] ?? 'N/A') ?></code></td>
                             <td>
                                 <strong><?= sanitize($subject['name_en']) ?></strong><br>
                                 <small class="text-muted"><?= sanitize($subject['name_np'] ?? '-') ?></small>
                             </td>
-                            <td><?= sanitize($subject['class_name'] ?? 'Not Mapped') ?></td>
+                            <td>
+                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle fw-semibold">
+                                    <?= sanitize($subject['class_name'] ?? 'Not Mapped') ?>
+                                </span>
+                            </td>
                             <td>
                                 <?php
                                 if (!empty($subject['teacher_ids'])) {
@@ -155,29 +167,43 @@ ob_start();
                                 ?>
                             </td>
                             <td>
-                                <?php
-                                $typeBadge = [
-                                    'compulsory' => 'bg-primary',
-                                    'optional' => 'bg-warning text-dark',
-                                    'local' => 'bg-info text-dark'
-                                ][$subject['type']] ?? 'bg-secondary';
-                                ?>
-                                <span class="badge <?= $typeBadge ?> text-capitalize"><?= $subject['type'] ?></span>
+                                <strong><?= sanitize($subject['credit_hours']) ?> CH Total</strong>
+                                <div class="small mt-1">
+                                    <span class="badge bg-light text-dark border" title="Theory Credit Hours">TH: <?= $subject['th_credit_hours'] !== null ? $subject['th_credit_hours'] : '-' ?></span>
+                                    <span class="badge bg-light text-primary border" title="Internal Credit Hours">IN: <?= $subject['in_credit_hours'] !== null ? $subject['in_credit_hours'] : '-' ?></span>
+                                </div>
                             </td>
-                            <td><?= sanitize($subject['credit_hours']) ?> CH</td>
                             <td>
-                                <span class="text-success font-monospace"><?= sanitize($subject['full_marks']) ?></span> 
-                                / 
-                                <span class="text-danger font-monospace"><?= sanitize($subject['pass_marks']) ?></span>
+                                <div class="small">
+                                    <span class="fw-bold text-dark">TH:</span> 
+                                    <span class="text-success"><?= $subject['th_full_marks'] !== null ? $subject['th_full_marks'] : '-' ?></span>/<span class="text-danger"><?= $subject['th_pass_marks'] !== null ? $subject['th_pass_marks'] : '-' ?></span>
+                                </div>
+                                <div class="small mt-1">
+                                    <span class="fw-bold text-dark">IN:</span> 
+                                    <span class="text-success"><?= $subject['in_full_marks'] !== null ? $subject['in_full_marks'] : '-' ?></span>/<span class="text-danger"><?= $subject['in_pass_marks'] !== null ? $subject['in_pass_marks'] : '-' ?></span>
+                                </div>
+                            </td>
+                            <td>
+                                <?php if (!empty($subject['is_hidden'])): ?>
+                                    <span class="badge bg-secondary"><i class="fas fa-eye-slash me-1"></i> Hidden</span>
+                                <?php else: ?>
+                                    <span class="badge bg-success"><i class="fas fa-check me-1"></i> Visible</span>
+                                <?php endif; ?>
                             </td>
                             <?php if (Auth::hasRole(['super_admin', 'school_admin'])): ?>
-                            <td class="text-end">
-                                <a href="<?= APP_URL ?>/modules/subjects/edit.php?id=<?= $subject['id'] ?>" class="btn btn-sm btn-outline-warning" title="Edit">
+                            <td class="text-end text-nowrap">
+                                <a href="<?= APP_URL ?>/modules/subjects/edit.php?id=<?= $subject['id'] ?>" class="btn btn-sm btn-outline-warning me-1" title="Edit Subject Details">
                                     <i class="fas fa-edit"></i> Edit
                                 </a>
-                                <button onclick="confirmDeleteSubject(<?= $subject['id'] ?>)" class="btn btn-sm btn-outline-danger" title="Delete">
-                                    <i class="fas fa-trash"></i>
-                                </button>
+                                <?php if (!empty($subject['is_hidden'])): ?>
+                                <a href="?toggle_hide=<?= $subject['id'] ?>" class="btn btn-sm btn-outline-success" title="Restore and show subject">
+                                    <i class="fas fa-eye"></i> Show
+                                </a>
+                                <?php else: ?>
+                                <a href="?toggle_hide=<?= $subject['id'] ?>" class="btn btn-sm btn-outline-secondary" title="Hide subject from list" onclick="return confirm('Hide this subject from student forms and exam lists? Historical marks remain safe.');">
+                                    <i class="fas fa-eye-slash"></i> Hide
+                                </a>
+                                <?php endif; ?>
                             </td>
                             <?php endif; ?>
                         </tr>
@@ -192,8 +218,8 @@ ob_start();
 <script>
 $(document).ready(function() {
     var table = $('#subjectTable').DataTable({
-        pageLength: 10,
-        order: [[0, 'asc']],
+        pageLength: 25,
+        order: [[2, 'asc'], [0, 'asc']],
         language: {
             emptyTable: "No subjects configured."
         },
@@ -212,12 +238,6 @@ $(document).ready(function() {
         table.column(3).search(this.value).draw();
     });
 });
-
-function confirmDeleteSubject(id) {
-    verifyPasswordAndProceed(function() {
-        window.location.href = '<?= APP_URL ?>/modules/subjects/index.php?delete=' + id;
-    }, 'Confirm Deletion', 'Please enter your administrator password to permanently delete this subject:');
-}
 </script>
 
 <?php

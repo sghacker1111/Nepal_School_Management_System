@@ -5,7 +5,7 @@
  */
 
 class Database {
-    private const SCHEMA_VERSION = 7;
+    private const SCHEMA_VERSION = 8;
     private static $instance = null;
     private $conn;
     
@@ -126,7 +126,12 @@ class Database {
             ['academic_years', 'is_hidden'],
             ['topics', null],
             ['questions', 'topic_id'],
-            ['questions', 'cognitive_domain']
+            ['questions', 'cognitive_domain'],
+            ['subjects', 'th_credit_hours'],
+            ['subjects', 'in_credit_hours'],
+            ['subjects', 'is_hidden'],
+            ['class_subjects', 'th_credit_hours'],
+            ['class_subjects', 'in_credit_hours']
         ];
         
         foreach ($checks as $check) {
@@ -394,10 +399,25 @@ class Database {
                 'topic_id' => 'INTEGER DEFAULT NULL',
                 'cognitive_domain' => "VARCHAR(50) DEFAULT 'Knowledge'"
             ],
+            'subjects' => [
+                'th_credit_hours' => 'DECIMAL(4,2) DEFAULT 0.0',
+                'in_credit_hours' => 'DECIMAL(4,2) DEFAULT 0.0',
+                'th_full_marks' => 'DECIMAL(5,2) DEFAULT 75.0',
+                'th_pass_marks' => 'DECIMAL(5,2) DEFAULT 26.25',
+                'in_full_marks' => 'DECIMAL(5,2) DEFAULT 25.0',
+                'in_pass_marks' => 'DECIMAL(5,2) DEFAULT 10.0',
+                'is_hidden' => 'INTEGER DEFAULT 0'
+            ],
             'class_subjects' => [
                 'section_id' => 'INTEGER DEFAULT NULL',
                 'is_optional' => 'INTEGER DEFAULT 0',
-                'is_active' => 'INTEGER DEFAULT 1'
+                'is_active' => 'INTEGER DEFAULT 1',
+                'th_credit_hours' => 'DECIMAL(4,2) DEFAULT 0.0',
+                'in_credit_hours' => 'DECIMAL(4,2) DEFAULT 0.0',
+                'th_full_marks' => 'DECIMAL(5,2) DEFAULT 75.0',
+                'th_pass_marks' => 'DECIMAL(5,2) DEFAULT 26.25',
+                'in_full_marks' => 'DECIMAL(5,2) DEFAULT 25.0',
+                'in_pass_marks' => 'DECIMAL(5,2) DEFAULT 10.0'
             ]
         ];
 

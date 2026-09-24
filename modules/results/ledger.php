@@ -78,7 +78,7 @@ if ($exam_id && $class_id) {
         FROM exam_subjects es
         JOIN subjects s ON es.subject_id = s.id
         LEFT JOIN class_subjects cs ON cs.class_id = es.class_id AND cs.subject_id = es.subject_id
-        WHERE es.exam_id = ? AND es.class_id = ?
+        WHERE es.exam_id = ? AND es.class_id = ? AND (s.is_hidden = 0 OR s.is_hidden IS NULL)
         ORDER BY s.type DESC, s.name_en ASC
     ");
     $stmt->execute([$exam_id, $class_id]);
@@ -350,7 +350,7 @@ ob_start();
                     <tr>
                         <?php foreach ($subjects as $sub): ?>
                         <th style="font-size: 0.7rem;">TH</th>
-                        <th style="font-size: 0.7rem;">PR</th>
+                        <th style="font-size: 0.7rem;">IN</th>
                         <th style="font-size: 0.7rem;">GD</th>
                         <?php endforeach; ?>
                     </tr>

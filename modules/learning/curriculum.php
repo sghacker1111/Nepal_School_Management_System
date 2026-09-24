@@ -28,7 +28,7 @@ if (isset($_GET['action'])) {
                 SELECT s.id, s.name_en, s.code 
                 FROM subjects s
                 JOIN class_subjects cs ON s.id = cs.subject_id
-                WHERE cs.class_id = ? AND (cs.school_id = ? OR cs.school_id = 0)
+                WHERE cs.class_id = ? AND (cs.school_id = ? OR cs.school_id = 0) AND cs.is_active = 1 AND (s.is_hidden = 0 OR s.is_hidden IS NULL)
                 ORDER BY s.name_en
             ");
             $stmt->execute([$class_id, $school_id]);
@@ -43,7 +43,7 @@ if (isset($_GET['action'])) {
     if ($action === 'get_all_subjects') {
         // Return all subjects to map to class
         try {
-            $stmt = $db->prepare("SELECT id, name_en, code FROM subjects WHERE school_id = ? OR school_id = 0 ORDER BY name_en");
+            $stmt = $db->prepare("SELECT id, name_en, code FROM subjects WHERE (school_id = ? OR school_id = 0) AND (is_hidden = 0 OR is_hidden IS NULL) ORDER BY name_en");
             $stmt->execute([$school_id]);
             $subjects = $stmt->fetchAll(PDO::FETCH_ASSOC);
             echo json_encode(['success' => true, 'subjects' => $subjects]);

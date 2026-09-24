@@ -114,7 +114,7 @@ $stmt = $db->prepare("SELECT * FROM sections WHERE school_id = ? ORDER BY name")
 $stmt->execute([$school_id]);
 $sections = $stmt->fetchAll();
 
-$stmt = $db->prepare("SELECT * FROM subjects WHERE (school_id = ? OR school_id = 0) AND type = 'optional' ORDER BY name_en");
+$stmt = $db->prepare("SELECT * FROM subjects WHERE (school_id = ? OR school_id = 0) AND (is_hidden = 0 OR is_hidden IS NULL) AND type = 'optional' ORDER BY name_en");
 $stmt->execute([$school_id]);
 $optional_subjects = $stmt->fetchAll();
 

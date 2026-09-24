@@ -40,7 +40,7 @@ $stmt = $db->prepare("
     FROM class_subjects cs 
     JOIN classes c ON cs.class_id = c.id 
     JOIN subjects s ON cs.subject_id = s.id 
-    WHERE cs.teacher_id = ? AND c.is_active = 1
+    WHERE cs.teacher_id = ? AND c.is_active = 1 AND cs.is_active = 1 AND (s.is_hidden = 0 OR s.is_hidden IS NULL)
 ");
 $stmt->execute([$id]);
 $teaching_subjects = $stmt->fetchAll();

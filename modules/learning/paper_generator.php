@@ -93,7 +93,7 @@ if ($class_id) {
             JOIN class_subjects cs ON cs.subject_id = s.id 
             JOIN classes c ON cs.class_id = c.id
             WHERE (c.id = ? OR (c.name = ? AND cs.school_id = 0 AND c.school_id = 0))
-              AND (cs.is_optional = 0 OR cs.is_active = 1)
+              AND cs.is_active = 1 AND (s.is_hidden = 0 OR s.is_hidden IS NULL)
             ORDER BY s.name_en
         ");
         $stmt->execute([$class_id, $target_class_name]);
@@ -105,7 +105,7 @@ if ($class_id) {
             JOIN classes c ON cs.class_id = c.id
             WHERE ((c.id = ? AND (cs.school_id = ? OR cs.school_id = 0)) 
                OR (c.name = ? AND cs.school_id = 0 AND c.school_id = 0))
-              AND (cs.is_optional = 0 OR cs.is_active = 1)
+              AND cs.is_active = 1 AND (s.is_hidden = 0 OR s.is_hidden IS NULL)
             ORDER BY s.name_en
         ");
         $stmt->execute([$class_id, $school_id, $target_class_name]);

@@ -27,8 +27,8 @@ if (!$class) {
     redirect(APP_URL . '/modules/classes/index.php', 'Class not found', 'error');
 }
 
-// Handle Toggle Optional Subject Active State (AJAX or direct POST)
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'toggle_optional') {
+// Handle Toggle Subject Active/Hidden State (Compulsory or Optional)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array($_POST['action'], ['toggle_optional', 'toggle_subject_status'])) {
     $mapping_id = (int)($_POST['mapping_id'] ?? 0);
     $is_active = !empty($_POST['is_active']) ? 1 : 0;
     
@@ -41,7 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         
         if ($is_ajax) {
             header('Content-Type: application/json');
-            echo json_encode(['success' => true, 'is_active' => $is_active, 'message' => $is_active ? 'Subject is now active and in use.' : 'Subject is now hidden from class.']);
+            echo json_encode(['success' => true, 'is_active' => $is_active, 'message' => $is_active ? 'Subject is now active and in use.' : 'Subject is now hidden from class routines and exams.']);
             exit;
         }
         redirect(APP_URL . '/modules/classes/subjects.php?class_id=' . $class_id, 'Subject status updated successfully.');
@@ -59,7 +59,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'map_subject') {
     $subject_id = (int)$_POST['subject_id'];
     $section_id = !empty($_POST['section_id']) ? (int)$_POST['section_id'] : null;
-    $credit_hours = round((float)($_POST['credit_hours'] ?? 4), 2);
+    
+    // Theory (TH) & Internal (IN) individual fields
+    $th_credit_hours = round((float)($_POST['th_credit_hours'] ?? 0), 2);
+    $in_credit_hours = round((float)($_POST['in_credit_hours'] ?? 0), 2);
+    $credit_hours = round((float)($_POST['credit_hours'] ?? ($th_credit_hours + $in_credit_hours)), 2);
+    if ($credit_hours <= 0 && ($th_credit_hours + $in_credit_hours) > 0) {
+        $credit_hours = $th_credit_hours + $in_credit_hours;
+    }
+    $th_full_marks = round((float)($_POST['th_full_marks'] ?? 75), 2);
+    $th_pass_marks = round((float)($_POST['th_pass_marks'] ?? 26.25), 2);
+    $in_full_marks = round((float)($_POST['in_full_marks'] ?? 25), 2);
+    $in_pass_marks = round((float)($_POST['in_pass_marks'] ?? 10), 2);
+    
     $is_optional = isset($_POST['is_optional']) ? (int)$_POST['is_optional'] : 0;
     $teacher_ids = $_POST['teacher_ids'] ?? [];
     $teacher_id_str = !empty($teacher_ids) ? implode(',', array_map('intval', $teacher_ids)) : null;
@@ -95,8 +107,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 if ($existing_sub) {
                     $error = "Duplicate Subject Blocked: A subject with the name '" . htmlspecialchars($existing_sub['name_en']) . "' is already assigned to this class. Creating or mapping duplicate subjects for the same class is not allowed.";
                 } else {
-                    $stmt = $db->prepare("INSERT INTO class_subjects (class_id, subject_id, section_id, credit_hours, teacher_id, school_id, is_optional, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, 1)");
-                    $stmt->execute([$class_id, $subject_id, $section_id, $credit_hours, $teacher_id_str, $school_id, $is_optional]);
+                    $stmt = $db->prepare("
+                        INSERT INTO class_subjects (
+                            class_id, subject_id, section_id, credit_hours,
+                            th_credit_hours, in_credit_hours, th_full_marks, th_pass_marks, in_full_marks, in_pass_marks,
+                            teacher_id, school_id, is_optional, is_active
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                    ");
+                    $stmt->execute([
+                        $class_id, $subject_id, $section_id, $credit_hours,
+                        $th_credit_hours, $in_credit_hours, $th_full_marks, $th_pass_marks, $in_full_marks, $in_pass_marks,
+                        $teacher_id_str, $school_id, $is_optional
+                    ]);
                     Auth::logActivity(Auth::getUserId(), 'Map Subject to Class', 'class_subjects', $db->lastInsertId());
                     $success = "Subject mapped successfully.";
                 }
@@ -111,30 +133,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     }
 }
 
-// Handle Delete Subject Mapping
+// Disallow Hard Deletion of Subject Mappings (Data Integrity Protection)
 if (isset($_GET['delete_mapping'])) {
-    $mapping_id = (int)$_GET['delete_mapping'];
-    try {
-        $stmt = $db->prepare("DELETE FROM class_subjects WHERE id = ? AND class_id = ?");
-        $stmt->execute([$mapping_id, $class_id]);
-        Auth::logActivity(Auth::getUserId(), 'Delete Subject Class Mapping', 'class_subjects', $mapping_id);
-        redirect(APP_URL . '/modules/classes/subjects.php?class_id=' . $class_id, 'Subject mapping deleted successfully.');
-    } catch (PDOException $e) {
-        $error = "Database error: " . $e->getMessage();
-    }
+    $error = "Subject deletion is disabled to protect student marks, report cards, and historical records. You can toggle the subject to 'Hidden' instead.";
 }
 
 // Handle Edit Mapping
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'edit_mapping') {
     $mapping_id = (int)$_POST['mapping_id'];
-    $credit_hours = round((float)$_POST['credit_hours'], 2);
+    $th_credit_hours = round((float)($_POST['th_credit_hours'] ?? 0), 2);
+    $in_credit_hours = round((float)($_POST['in_credit_hours'] ?? 0), 2);
+    $credit_hours = round((float)($_POST['credit_hours'] ?? ($th_credit_hours + $in_credit_hours)), 2);
+    if ($credit_hours <= 0 && ($th_credit_hours + $in_credit_hours) > 0) {
+        $credit_hours = $th_credit_hours + $in_credit_hours;
+    }
+    $th_full_marks = round((float)($_POST['th_full_marks'] ?? 75), 2);
+    $th_pass_marks = round((float)($_POST['th_pass_marks'] ?? 26.25), 2);
+    $in_full_marks = round((float)($_POST['in_full_marks'] ?? 25), 2);
+    $in_pass_marks = round((float)($_POST['in_pass_marks'] ?? 10), 2);
+    
     $is_optional = isset($_POST['is_optional']) ? (int)$_POST['is_optional'] : 0;
     $teacher_ids = $_POST['teacher_ids'] ?? [];
     $teacher_id_str = !empty($teacher_ids) ? implode(',', array_map('intval', $teacher_ids)) : null;
     
     try {
-        $stmt = $db->prepare("UPDATE class_subjects SET credit_hours = ?, teacher_id = ?, is_optional = ? WHERE id = ? AND class_id = ?");
-        $stmt->execute([$credit_hours, $teacher_id_str, $is_optional, $mapping_id, $class_id]);
+        $stmt = $db->prepare("
+            UPDATE class_subjects 
+            SET credit_hours = ?, th_credit_hours = ?, in_credit_hours = ?,
+                th_full_marks = ?, th_pass_marks = ?, in_full_marks = ?, in_pass_marks = ?,
+                teacher_id = ?, is_optional = ? 
+            WHERE id = ? AND class_id = ?
+        ");
+        $stmt->execute([
+            $credit_hours, $th_credit_hours, $in_credit_hours,
+            $th_full_marks, $th_pass_marks, $in_full_marks, $in_pass_marks,
+            $teacher_id_str, $is_optional, $mapping_id, $class_id
+        ]);
         Auth::logActivity(Auth::getUserId(), 'Edit Class Subject Assignment', 'class_subjects', $mapping_id);
         $success = "Subject mapping updated successfully.";
     } catch (PDOException $e) {
@@ -144,7 +178,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
 // Fetch subjects currently mapped to this class
 $stmt = $db->prepare("
-    SELECT cs.*, s.name_en as subject_name_en, s.name_np as subject_name_np, s.code as subject_code, s.type as subject_catalog_type, sec.name as section_name
+    SELECT cs.*, s.name_en as subject_name_en, s.name_np as subject_name_np, s.code as subject_code, s.type as subject_catalog_type,
+           s.is_hidden as is_catalog_hidden,
+           COALESCE(NULLIF(cs.th_credit_hours, 0), s.th_credit_hours, 0) as th_credit_hours,
+           COALESCE(NULLIF(cs.in_credit_hours, 0), s.in_credit_hours, 0) as in_credit_hours,
+           COALESCE(NULLIF(cs.th_full_marks, 0), s.th_full_marks, 75) as th_full_marks,
+           COALESCE(NULLIF(cs.th_pass_marks, 0), s.th_pass_marks, 26.25) as th_pass_marks,
+           COALESCE(NULLIF(cs.in_full_marks, 0), s.in_full_marks, 25) as in_full_marks,
+           COALESCE(NULLIF(cs.in_pass_marks, 0), s.in_pass_marks, 10) as in_pass_marks,
+           sec.name as section_name
     FROM class_subjects cs 
     JOIN subjects s ON cs.subject_id = s.id 
     LEFT JOIN sections sec ON cs.section_id = sec.id
@@ -164,10 +206,11 @@ foreach ($all_mapped as $m) {
     }
 }
 
-// Fetch all available subjects for mapping (excluding already mapped ones or subjects with identical names)
+// Fetch all available subjects for mapping (excluding already mapped ones, identical names, or hidden subjects)
 $stmt = $db->prepare("
     SELECT * FROM subjects 
     WHERE (school_id = ? OR school_id = 0) 
+      AND (is_hidden = 0 OR is_hidden IS NULL)
       AND id NOT IN (SELECT subject_id FROM class_subjects WHERE class_id = ?)
       AND LOWER(TRIM(name_en)) NOT IN (
           SELECT LOWER(TRIM(s_m.name_en)) 
@@ -241,9 +284,12 @@ ob_start();
         <!-- 1. Compulsory Subjects Section -->
         <div class="card shadow-sm border-0 mb-4">
             <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center border-bottom">
-                <h5 class="mb-0 text-primary">
-                    <i class="fas fa-layer-group me-2"></i> Compulsory Subjects (अनिवार्य विषयहरू)
-                </h5>
+                <div>
+                    <h5 class="mb-0 text-primary fw-bold">
+                        <i class="fas fa-layer-group me-2"></i> Compulsory Subjects (अनिवार्य विषयहरू)
+                    </h5>
+                    <small class="text-muted">Core curriculum subjects with Theory (TH) & Internal (IN) components</small>
+                </div>
                 <span class="badge bg-primary rounded-pill"><?= count($compulsory_subjects) ?> Compulsory</span>
             </div>
             <div class="card-body p-0">
@@ -251,31 +297,62 @@ ob_start();
                     <table class="table table-hover align-middle mb-0">
                         <thead class="table-light">
                             <tr>
-                                <th style="width: 15%;">Code</th>
+                                <th style="width: 12%;">Code</th>
                                 <th>Subject Name</th>
+                                <th>Theory (TH)</th>
+                                <th>Internal (IN)</th>
+                                <th>Credit</th>
                                 <th>Section</th>
-                                <th>Credit Hrs</th>
-                                <th>Assigned Teacher(s)</th>
-                                <th class="text-end" style="width: 15%;">Actions</th>
+                                <th>Status</th>
+                                <th>Teacher(s)</th>
+                                <th class="text-end" style="width: 10%;">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php if (count($compulsory_subjects) > 0): ?>
                                 <?php foreach ($compulsory_subjects as $cs): ?>
-                                <tr>
+                                <tr id="row_mapping_<?= $cs['id'] ?>" class="<?= empty($cs['is_active']) ? 'table-secondary opacity-75' : '' ?>">
                                     <td><span class="badge bg-secondary font-monospace"><?= sanitize($cs['subject_code'] ?? 'N/A') ?></span></td>
                                     <td>
                                         <div class="fw-bold text-dark"><?= sanitize($cs['subject_name_en']) ?></div>
                                         <small class="text-muted"><?= sanitize($cs['subject_name_np'] ?? '') ?></small>
                                     </td>
                                     <td>
+                                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary font-monospace">
+                                            <?= (float)$cs['th_credit_hours'] ?> CH
+                                        </span>
+                                        <div class="small text-muted font-monospace"><?= (float)$cs['th_full_marks'] ?> FM / <?= (float)$cs['th_pass_marks'] ?> PM</div>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-warning bg-opacity-10 text-dark border border-warning font-monospace">
+                                            <?= (float)$cs['in_credit_hours'] ?> CH
+                                        </span>
+                                        <div class="small text-muted font-monospace"><?= (float)$cs['in_full_marks'] ?> FM / <?= (float)$cs['in_pass_marks'] ?> PM</div>
+                                    </td>
+                                    <td><strong class="font-monospace"><?= $cs['credit_hours'] ?></strong> CH</td>
+                                    <td>
                                         <?php if ($cs['section_id']): ?>
                                             <span class="badge bg-info text-dark">Section <?= sanitize($cs['section_name']) ?></span>
                                         <?php else: ?>
-                                            <span class="badge bg-light text-secondary border">All Sections</span>
+                                            <span class="badge bg-light text-secondary border">All</span>
                                         <?php endif; ?>
                                     </td>
-                                    <td><strong><?= $cs['credit_hours'] ?></strong> CH</td>
+                                    <td>
+                                        <div class="form-check form-switch d-inline-block">
+                                            <input class="form-check-input subject-status-toggle" type="checkbox" role="switch" 
+                                                   id="toggle_<?= $cs['id'] ?>" 
+                                                   data-id="<?= $cs['id'] ?>" 
+                                                   <?= !empty($cs['is_active']) ? 'checked' : '' ?>
+                                                   title="Toggle to make subject active or hide from <?= sanitize($class['name']) ?>">
+                                            <label class="form-check-label fw-bold small ms-1" id="label_<?= $cs['id'] ?>" for="toggle_<?= $cs['id'] ?>">
+                                                <?php if (!empty($cs['is_active'])): ?>
+                                                    <span class="badge bg-success bg-opacity-10 text-success border border-success"><i class="fas fa-check me-1"></i>Active</span>
+                                                <?php else: ?>
+                                                    <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary"><i class="fas fa-eye-slash me-1"></i>Hidden</span>
+                                                <?php endif; ?>
+                                            </label>
+                                        </div>
+                                    </td>
                                     <td>
                                         <?php
                                         if (!empty($cs['teacher_id'])) {
@@ -293,21 +370,16 @@ ob_start();
                                         ?>
                                     </td>
                                     <td class="text-end">
-                                        <button onclick="editMapping(<?= $cs['id'] ?>, <?= $cs['credit_hours'] ?>, '<?= $cs['teacher_id'] ?>', 0)" 
-                                                class="btn btn-sm btn-outline-warning me-1" title="Edit Assignment">
+                                        <button onclick='editMapping(<?= json_encode($cs) ?>)' 
+                                                class="btn btn-sm btn-outline-warning" title="Edit Assignment & Evaluation">
                                             <i class="fas fa-edit"></i>
                                         </button>
-                                        <a href="<?= APP_URL ?>/modules/classes/subjects.php?class_id=<?= $class_id ?>&delete_mapping=<?= $cs['id'] ?>" 
-                                           class="btn btn-sm btn-outline-danger" title="Remove Subject"
-                                           onclick="return confirm('Are you sure you want to remove this subject from <?= sanitize($class['name']) ?>?');">
-                                            <i class="fas fa-trash"></i>
-                                        </a>
                                     </td>
                                 </tr>
                                 <?php endforeach; ?>
                             <?php else: ?>
                                 <tr>
-                                    <td colspan="6" class="text-center text-muted py-4">No compulsory subjects configured yet.</td>
+                                    <td colspan="9" class="text-center text-muted py-4">No compulsory subjects configured yet.</td>
                                 </tr>
                             <?php endif; ?>
                         </tbody>
@@ -316,7 +388,8 @@ ob_start();
             </div>
             <div class="card-footer bg-light py-2">
                 <small class="text-muted">
-                    <i class="fas fa-info-circle me-1"></i> Compulsory subjects are required by the CDC Nepal curriculum and automatically active in all school routines, exams, and grading.
+                    <i class="fas fa-shield-alt text-primary me-1"></i> 
+                    <strong>Protected:</strong> Deletion is disabled to protect grades. Active subjects are in use in exams and grading; hidden subjects cannot show in student mark entry.
                 </small>
             </div>
         </div>
@@ -325,10 +398,10 @@ ob_start();
         <div class="card shadow-sm border-0">
             <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center border-bottom">
                 <div>
-                    <h5 class="mb-0 text-success">
+                    <h5 class="mb-0 text-success fw-bold">
                         <i class="fas fa-toggle-on me-2"></i> Optional / Elective Subjects (ऐच्छिक विषयहरू)
                     </h5>
-                    <small class="text-muted">Tick (enable) or untick (hide) subjects for this class</small>
+                    <small class="text-muted">Tick (Active/In Use) or Untick (Hide) elective subjects for this class</small>
                 </div>
                 <span class="badge bg-success rounded-pill"><?= count($optional_subjects) ?> Configured</span>
             </div>
@@ -337,12 +410,14 @@ ob_start();
                     <table class="table table-hover align-middle mb-0">
                         <thead class="table-light">
                             <tr>
-                                <th style="width: 15%;">Code</th>
+                                <th style="width: 12%;">Code</th>
                                 <th>Subject Name</th>
-                                <th>Credit Hrs</th>
+                                <th>Theory (TH)</th>
+                                <th>Internal (IN)</th>
+                                <th>Credit</th>
                                 <th>In Use / Active?</th>
-                                <th>Assigned Teacher(s)</th>
-                                <th class="text-end" style="width: 15%;">Actions</th>
+                                <th>Teacher(s)</th>
+                                <th class="text-end" style="width: 10%;">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -354,11 +429,23 @@ ob_start();
                                         <div class="fw-bold text-dark"><?= sanitize($os['subject_name_en']) ?></div>
                                         <small class="text-muted"><?= sanitize($os['subject_name_np'] ?? '') ?></small>
                                     </td>
-                                    <td><strong><?= $os['credit_hours'] ?></strong> CH</td>
+                                    <td>
+                                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary font-monospace">
+                                            <?= (float)$os['th_credit_hours'] ?> CH
+                                        </span>
+                                        <div class="small text-muted font-monospace"><?= (float)$os['th_full_marks'] ?> FM / <?= (float)$os['th_pass_marks'] ?> PM</div>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-warning bg-opacity-10 text-dark border border-warning font-monospace">
+                                            <?= (float)$os['in_credit_hours'] ?> CH
+                                        </span>
+                                        <div class="small text-muted font-monospace"><?= (float)$os['in_full_marks'] ?> FM / <?= (float)$os['in_pass_marks'] ?> PM</div>
+                                    </td>
+                                    <td><strong class="font-monospace"><?= $os['credit_hours'] ?></strong> CH</td>
                                     <td>
                                         <!-- Tick/Untick Toggle Switch -->
                                         <div class="form-check form-switch d-inline-block">
-                                            <input class="form-check-input optional-toggle" type="checkbox" role="switch" 
+                                            <input class="form-check-input subject-status-toggle" type="checkbox" role="switch" 
                                                    id="toggle_<?= $os['id'] ?>" 
                                                    data-id="<?= $os['id'] ?>" 
                                                    <?= !empty($os['is_active']) ? 'checked' : '' ?>
@@ -389,21 +476,16 @@ ob_start();
                                         ?>
                                     </td>
                                     <td class="text-end">
-                                        <button onclick="editMapping(<?= $os['id'] ?>, <?= $os['credit_hours'] ?>, '<?= $os['teacher_id'] ?>', 1)" 
-                                                class="btn btn-sm btn-outline-warning me-1" title="Edit Assignment">
+                                        <button onclick='editMapping(<?= json_encode($os) ?>)' 
+                                                class="btn btn-sm btn-outline-warning" title="Edit Assignment & Evaluation">
                                             <i class="fas fa-edit"></i>
                                         </button>
-                                        <a href="<?= APP_URL ?>/modules/classes/subjects.php?class_id=<?= $class_id ?>&delete_mapping=<?= $os['id'] ?>" 
-                                           class="btn btn-sm btn-outline-danger" title="Remove Subject"
-                                           onclick="return confirm('Are you sure you want to remove this optional subject?');">
-                                            <i class="fas fa-trash"></i>
-                                        </a>
                                     </td>
                                 </tr>
                                 <?php endforeach; ?>
                             <?php else: ?>
                                 <tr>
-                                    <td colspan="6" class="text-center text-muted py-4">No optional subjects mapped to this class yet. Use the form on the right to add elective subjects.</td>
+                                    <td colspan="8" class="text-center text-muted py-4">No optional subjects mapped to this class yet. Use the form on the right to add elective subjects.</td>
                                 </tr>
                             <?php endif; ?>
                         </tbody>
@@ -413,7 +495,7 @@ ob_start();
             <div class="card-footer bg-light py-2">
                 <small class="text-muted">
                     <i class="fas fa-lightbulb text-warning me-1"></i> 
-                    <strong>How it works:</strong> Ticked subjects are actively offered in this class and appear in Exam Paper Generator, Question Bank, and Mark Sheets. Unticked subjects are completely hidden.
+                    <strong>How it works:</strong> Ticked subjects are actively offered in this class and appear in Exam Paper Generator and Mark Sheets. Unticked subjects are hidden.
                 </small>
             </div>
         </div>
@@ -423,7 +505,7 @@ ob_start();
     <div class="col-lg-4 mb-4">
         <div class="card shadow-sm border-0 sticky-top" style="top: 20px;">
             <div class="card-header bg-white py-3 border-bottom">
-                <h5 class="mb-0 text-dark"><i class="fas fa-plus-circle text-primary me-2"></i>Map Subject to Class</h5>
+                <h5 class="mb-0 text-dark fw-bold"><i class="fas fa-plus-circle text-primary me-2"></i>Map Subject to Class</h5>
             </div>
             <div class="card-body p-4">
                 <?php if (count($available_subjects) > 0): ?>
@@ -432,10 +514,18 @@ ob_start();
                         
                         <div class="mb-3">
                             <label class="form-label fw-bold">Select Subject *</label>
-                            <select name="subject_id" id="subject_id" class="form-select" required onchange="autoDetectType(this)">
+                            <select name="subject_id" id="subject_id" class="form-select" required onchange="populateSubjectDetails(this)">
                                 <option value="">-- Choose Subject from CDC Catalog --</option>
                                 <?php foreach ($available_subjects as $sub): ?>
-                                <option value="<?= $sub['id'] ?>" data-type="<?= $sub['type'] ?? 'compulsory' ?>">
+                                <option value="<?= $sub['id'] ?>" 
+                                        data-type="<?= $sub['type'] ?? 'compulsory' ?>"
+                                        data-optional="<?= ($sub['type'] === 'optional' || $sub['is_optional']) ? 1 : 0 ?>"
+                                        data-th-ch="<?= (float)($sub['th_credit_hours'] ?? 3.0) ?>"
+                                        data-in-ch="<?= (float)($sub['in_credit_hours'] ?? 1.0) ?>"
+                                        data-th-fm="<?= (float)($sub['th_full_marks'] ?? 75.0) ?>"
+                                        data-th-pm="<?= (float)($sub['th_pass_marks'] ?? 26.25) ?>"
+                                        data-in-fm="<?= (float)($sub['in_full_marks'] ?? 25.0) ?>"
+                                        data-in-pm="<?= (float)($sub['in_pass_marks'] ?? 10.0) ?>">
                                     [<?= sanitize($sub['code'] ?? 'SUB') ?>] <?= sanitize($sub['name_en']) ?> (<?= sanitize($sub['name_np'] ?? '') ?>)
                                     <?= ($sub['type'] === 'optional') ? ' [Optional]' : ' [Compulsory]' ?>
                                 </option>
@@ -463,10 +553,61 @@ ob_start();
                             </select>
                         </div>
 
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">Credit Hours *</label>
-                            <input type="number" step="0.01" name="credit_hours" class="form-control" value="4" min="0" max="10" required>
-                            <div class="invalid-feedback">Credit hours must be between 0 and 10.</div>
+                        <!-- Theory (TH) & Internal (IN) Evaluation Boxes -->
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <div class="p-2 border rounded bg-light">
+                                    <div class="d-flex align-items-center mb-1">
+                                        <span class="badge bg-primary me-1"><i class="fas fa-book-open"></i></span>
+                                        <strong class="small text-primary">Theory (TH)</strong>
+                                    </div>
+                                    <div class="mb-1">
+                                        <label class="small text-muted mb-0">Credit Hrs</label>
+                                        <input type="number" step="0.01" name="th_credit_hours" id="map_th_ch" class="form-control form-control-sm font-monospace" value="3.00" oninput="calculateMappingTotals()">
+                                    </div>
+                                    <div class="mb-1">
+                                        <label class="small text-muted mb-0">Full Marks</label>
+                                        <input type="number" step="0.01" name="th_full_marks" id="map_th_fm" class="form-control form-control-sm font-monospace" value="75" oninput="calculateMappingTotals()">
+                                    </div>
+                                    <div>
+                                        <label class="small text-muted mb-0">Pass Marks</label>
+                                        <input type="number" step="0.01" name="th_pass_marks" id="map_th_pm" class="form-control form-control-sm font-monospace" value="26.25">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="p-2 border rounded bg-light">
+                                    <div class="d-flex align-items-center mb-1">
+                                        <span class="badge bg-warning text-dark me-1"><i class="fas fa-tasks"></i></span>
+                                        <strong class="small text-dark">Internal (IN)</strong>
+                                    </div>
+                                    <div class="mb-1">
+                                        <label class="small text-muted mb-0">Credit Hrs</label>
+                                        <input type="number" step="0.01" name="in_credit_hours" id="map_in_ch" class="form-control form-control-sm font-monospace" value="1.00" oninput="calculateMappingTotals()">
+                                    </div>
+                                    <div class="mb-1">
+                                        <label class="small text-muted mb-0">Full Marks</label>
+                                        <input type="number" step="0.01" name="in_full_marks" id="map_in_fm" class="form-control form-control-sm font-monospace" value="25" oninput="calculateMappingTotals()">
+                                    </div>
+                                    <div>
+                                        <label class="small text-muted mb-0">Pass Marks</label>
+                                        <input type="number" step="0.01" name="in_pass_marks" id="map_in_pm" class="form-control form-control-sm font-monospace" value="10">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Total Evaluation Summary -->
+                        <div class="p-2 rounded border bg-white mb-3 d-flex justify-content-between align-items-center">
+                            <div>
+                                <small class="text-muted d-block">Total Credit Hrs:</small>
+                                <strong id="map_total_ch_display" class="text-primary font-monospace">4.00 CH</strong>
+                            </div>
+                            <div class="text-end">
+                                <small class="text-muted d-block">Total Full Marks:</small>
+                                <strong id="map_total_fm_display" class="text-dark font-monospace">100 FM</strong>
+                            </div>
+                            <input type="hidden" name="credit_hours" id="map_credit_hours" value="4.00">
                         </div>
 
                         <div class="mb-3">
@@ -502,15 +643,15 @@ ob_start();
     </div>
 </div>
 
-<!-- Edit Mapping Modal -->
+<!-- Edit Mapping Modal with Individual TH and IN Fields -->
 <div class="modal fade" id="editMappingModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-centered">
         <form method="POST" action="">
             <input type="hidden" name="action" value="edit_mapping">
             <input type="hidden" name="mapping_id" id="editMappingId">
             <div class="modal-content shadow">
                 <div class="modal-header bg-light">
-                    <h5 class="modal-title"><i class="fas fa-edit me-2"></i>Edit Subject Mapping</h5>
+                    <h5 class="modal-title"><i class="fas fa-edit me-2 text-warning"></i>Edit Subject Mapping & Evaluation</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body p-4">
@@ -521,10 +662,63 @@ ob_start();
                             <option value="1">Optional / Elective (ऐच्छिक)</option>
                         </select>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Credit Hours *</label>
-                        <input type="number" step="0.01" name="credit_hours" id="editCreditHours" class="form-control" required min="0" max="10">
+
+                    <!-- Individual Fields for Theory (TH) and Internal (IN) -->
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <div class="p-2 border rounded bg-light">
+                                <div class="d-flex align-items-center mb-1">
+                                    <span class="badge bg-primary me-1"><i class="fas fa-book-open"></i></span>
+                                    <strong class="small text-primary">Theory (TH)</strong>
+                                </div>
+                                <div class="mb-1">
+                                    <label class="small text-muted mb-0">Credit Hrs</label>
+                                    <input type="number" step="0.01" name="th_credit_hours" id="editThCh" class="form-control form-control-sm font-monospace" required oninput="calculateEditTotals()">
+                                </div>
+                                <div class="mb-1">
+                                    <label class="small text-muted mb-0">Full Marks</label>
+                                    <input type="number" step="0.01" name="th_full_marks" id="editThFm" class="form-control form-control-sm font-monospace" required oninput="calculateEditTotals()">
+                                </div>
+                                <div>
+                                    <label class="small text-muted mb-0">Pass Marks</label>
+                                    <input type="number" step="0.01" name="th_pass_marks" id="editThPm" class="form-control form-control-sm font-monospace" required>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="p-2 border rounded bg-light">
+                                <div class="d-flex align-items-center mb-1">
+                                    <span class="badge bg-warning text-dark me-1"><i class="fas fa-tasks"></i></span>
+                                    <strong class="small text-dark">Internal (IN)</strong>
+                                </div>
+                                <div class="mb-1">
+                                    <label class="small text-muted mb-0">Credit Hrs</label>
+                                    <input type="number" step="0.01" name="in_credit_hours" id="editInCh" class="form-control form-control-sm font-monospace" required oninput="calculateEditTotals()">
+                                </div>
+                                <div class="mb-1">
+                                    <label class="small text-muted mb-0">Full Marks</label>
+                                    <input type="number" step="0.01" name="in_full_marks" id="editInFm" class="form-control form-control-sm font-monospace" required oninput="calculateEditTotals()">
+                                </div>
+                                <div>
+                                    <label class="small text-muted mb-0">Pass Marks</label>
+                                    <input type="number" step="0.01" name="in_pass_marks" id="editInPm" class="form-control form-control-sm font-monospace" required>
+                                </div>
+                            </div>
+                        </div>
                     </div>
+
+                    <div class="p-2 rounded border bg-white mb-3 d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="text-muted d-block">Combined Credit Hrs:</small>
+                            <strong id="edit_total_ch_display" class="text-primary font-monospace">4.00 CH</strong>
+                        </div>
+                        <div class="text-end">
+                            <small class="text-muted d-block">Combined Full Marks:</small>
+                            <strong id="edit_total_fm_display" class="text-dark font-monospace">100 FM</strong>
+                        </div>
+                        <input type="hidden" name="credit_hours" id="editCreditHours" value="4.00">
+                    </div>
+
                     <div class="mb-3">
                         <label class="form-label fw-bold d-block">Assigned Teachers</label>
                         <div class="border rounded p-2 bg-light" style="max-height: 150px; overflow-y: auto;">
@@ -561,29 +755,81 @@ ob_start();
 </div>
 
 <script>
-function autoDetectType(selectElem) {
+function populateSubjectDetails(selectElem) {
     const selectedOption = selectElem.options[selectElem.selectedIndex];
-    const type = selectedOption.getAttribute('data-type');
+    if (!selectedOption || !selectedOption.value) return;
+
+    const isOpt = selectedOption.getAttribute('data-optional');
     const typeSelect = document.getElementById('is_optional');
-    if (type === 'optional') {
-        typeSelect.value = '1';
-    } else if (type === 'compulsory') {
-        typeSelect.value = '0';
+    if (typeSelect) {
+        typeSelect.value = isOpt == '1' ? '1' : '0';
     }
+
+    const thCh = parseFloat(selectedOption.getAttribute('data-th-ch')) || 0;
+    const inCh = parseFloat(selectedOption.getAttribute('data-in-ch')) || 0;
+    const thFm = parseFloat(selectedOption.getAttribute('data-th-fm')) || 0;
+    const thPm = parseFloat(selectedOption.getAttribute('data-th-pm')) || 0;
+    const inFm = parseFloat(selectedOption.getAttribute('data-in-fm')) || 0;
+    const inPm = parseFloat(selectedOption.getAttribute('data-in-pm')) || 0;
+
+    document.getElementById('map_th_ch').value = thCh.toFixed(2);
+    document.getElementById('map_in_ch').value = inCh.toFixed(2);
+    document.getElementById('map_th_fm').value = thFm.toFixed(2);
+    document.getElementById('map_th_pm').value = thPm.toFixed(2);
+    document.getElementById('map_in_fm').value = inFm.toFixed(2);
+    document.getElementById('map_in_pm').value = inPm.toFixed(2);
+
+    calculateMappingTotals();
 }
 
-function editMapping(id, creditHours, teacherIds, isOptional) {
-    document.getElementById('editMappingId').value = id;
-    document.getElementById('editCreditHours').value = creditHours;
-    document.getElementById('editIsOptional').value = isOptional ? '1' : '0';
+function calculateMappingTotals() {
+    const thCh = parseFloat(document.getElementById('map_th_ch').value) || 0;
+    const inCh = parseFloat(document.getElementById('map_in_ch').value) || 0;
+    const thFm = parseFloat(document.getElementById('map_th_fm').value) || 0;
+    const inFm = parseFloat(document.getElementById('map_in_fm').value) || 0;
+
+    const totalCh = (thCh + inCh).toFixed(2);
+    const totalFm = (thFm + inFm).toFixed(2);
+
+    document.getElementById('map_credit_hours').value = totalCh;
+    document.getElementById('map_total_ch_display').innerText = totalCh + ' CH';
+    document.getElementById('map_total_fm_display').innerText = totalFm + ' FM';
+}
+
+function calculateEditTotals() {
+    const thCh = parseFloat(document.getElementById('editThCh').value) || 0;
+    const inCh = parseFloat(document.getElementById('editInCh').value) || 0;
+    const thFm = parseFloat(document.getElementById('editThFm').value) || 0;
+    const inFm = parseFloat(document.getElementById('editInFm').value) || 0;
+
+    const totalCh = (thCh + inCh).toFixed(2);
+    const totalFm = (thFm + inFm).toFixed(2);
+
+    document.getElementById('editCreditHours').value = totalCh;
+    document.getElementById('edit_total_ch_display').innerText = totalCh + ' CH';
+    document.getElementById('edit_total_fm_display').innerText = totalFm + ' FM';
+}
+
+function editMapping(item) {
+    document.getElementById('editMappingId').value = item.id;
+    document.getElementById('editIsOptional').value = (item.is_optional == '1') ? '1' : '0';
+    
+    document.getElementById('editThCh').value = parseFloat(item.th_credit_hours || 0).toFixed(2);
+    document.getElementById('editInCh').value = parseFloat(item.in_credit_hours || 0).toFixed(2);
+    document.getElementById('editThFm').value = parseFloat(item.th_full_marks || 75).toFixed(2);
+    document.getElementById('editThPm').value = parseFloat(item.th_pass_marks || 26.25).toFixed(2);
+    document.getElementById('editInFm').value = parseFloat(item.in_full_marks || 25).toFixed(2);
+    document.getElementById('editInPm').value = parseFloat(item.in_pass_marks || 10).toFixed(2);
+    
+    calculateEditTotals();
     
     // Uncheck all edit checkboxes
     const checkboxes = document.querySelectorAll('.edit-teacher-check');
     checkboxes.forEach(cb => cb.checked = false);
     
     // Check assigned teachers
-    if (teacherIds) {
-        const ids = teacherIds.toString().split(',');
+    if (item.teacher_id) {
+        const ids = item.teacher_id.toString().split(',');
         ids.forEach(tid => {
             const cb = document.getElementById('edit_teacher_' + tid.trim());
             if (cb) {
@@ -596,13 +842,13 @@ function editMapping(id, creditHours, teacherIds, isOptional) {
     editModal.show();
 }
 
-// Live Toggle for Optional Subjects
+// Live Toggle for Subject Status (Compulsory or Optional)
 document.addEventListener('DOMContentLoaded', function() {
     const toastElem = document.getElementById('liveToast');
     const toast = new bootstrap.Toast(toastElem, { delay: 3000 });
     const toastMsg = document.getElementById('toastMessage');
 
-    document.querySelectorAll('.optional-toggle').forEach(function(toggle) {
+    document.querySelectorAll('.subject-status-toggle').forEach(function(toggle) {
         toggle.addEventListener('change', function() {
             const mappingId = this.getAttribute('data-id');
             const isActive = this.checked ? 1 : 0;
@@ -611,16 +857,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Optimistic UI update
             if (isActive) {
-                label.innerHTML = '<span class="badge bg-success bg-opacity-10 text-success border border-success"><i class="fas fa-check me-1"></i>Active (In Use)</span>';
+                label.innerHTML = '<span class="badge bg-success bg-opacity-10 text-success border border-success"><i class="fas fa-check me-1"></i>Active</span>';
                 if (row) row.classList.remove('table-secondary', 'opacity-75');
             } else {
-                label.innerHTML = '<span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary"><i class="fas fa-eye-slash me-1"></i>Hidden (Unticked)</span>';
+                label.innerHTML = '<span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary"><i class="fas fa-eye-slash me-1"></i>Hidden</span>';
                 if (row) row.classList.add('table-secondary', 'opacity-75');
             }
 
             // AJAX Request
             const formData = new FormData();
-            formData.append('action', 'toggle_optional');
+            formData.append('action', 'toggle_subject_status');
             formData.append('mapping_id', mappingId);
             formData.append('is_active', isActive);
             formData.append('is_ajax', '1');
@@ -658,3 +904,4 @@ document.addEventListener('DOMContentLoaded', function() {
 $content = ob_get_clean();
 include __DIR__ . '/../../includes/header.php';
 ?>
+

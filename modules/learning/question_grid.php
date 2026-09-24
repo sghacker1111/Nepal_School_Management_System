@@ -30,7 +30,7 @@ if ($class_id) {
     $stmt = $db->prepare("
         SELECT s.* FROM subjects s 
         JOIN class_subjects cs ON cs.subject_id = s.id 
-        WHERE cs.class_id = ? AND (cs.school_id = ? OR cs.school_id = 0)
+        WHERE cs.class_id = ? AND (cs.school_id = ? OR cs.school_id = 0) AND cs.is_active = 1 AND (s.is_hidden = 0 OR s.is_hidden IS NULL)
         ORDER BY s.name_en
     ");
     $stmt->execute([$class_id, $school_id]);

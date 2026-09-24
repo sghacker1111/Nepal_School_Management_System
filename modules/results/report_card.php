@@ -77,7 +77,7 @@ $stmt = $db->prepare("
     FROM exam_subjects es
     JOIN subjects sub ON es.subject_id = sub.id
     LEFT JOIN marks m ON m.exam_id = es.exam_id AND m.subject_id = es.subject_id AND m.student_id = ?
-    WHERE es.exam_id = ? AND es.class_id = ?
+    WHERE es.exam_id = ? AND es.class_id = ? AND (sub.is_hidden = 0 OR sub.is_hidden IS NULL)
 ");
 $stmt->execute([$student_id, $exam_id, $student['class_id']]);
 $marks = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -585,7 +585,7 @@ if ($has_failed_subject) {
                 <th width="90">Full Marks</th>
                 <th width="90">Pass Marks</th>
                 <th width="90">Theory (TH)</th>
-                <th width="90">Practical (PR)</th>
+                <th width="90">Internal (IN)</th>
                 <th width="100">Total Obtained</th>
                 <th width="80">Percentage</th>
                 <th width="100">Remarks</th>

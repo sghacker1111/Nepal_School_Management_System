@@ -194,7 +194,7 @@ ob_start();
                     FROM exam_subjects es
                     JOIN subjects sub ON es.subject_id = sub.id
                     LEFT JOIN marks m ON m.exam_id = es.exam_id AND m.subject_id = es.subject_id AND m.student_id = ?
-                    WHERE es.exam_id = ? AND es.class_id = ?
+                    WHERE es.exam_id = ? AND es.class_id = ? AND (sub.is_hidden = 0 OR sub.is_hidden IS NULL)
                 ");
                 $stmt->execute([$student['id'], $exam_id, $class_id]);
                 $marks = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -561,7 +561,7 @@ ob_start();
                             <th width="90" class="text-center" style="font-weight: 700;">Full Marks</th>
                             <th width="90" class="text-center" style="font-weight: 700;">Pass Marks</th>
                             <th width="90" class="text-center" style="font-weight: 700;">Theory (TH)</th>
-                            <th width="90" class="text-center" style="font-weight: 700;">Practical (PR)</th>
+                            <th width="90" class="text-center" style="font-weight: 700;">Internal (IN)</th>
                             <th width="100" class="text-center" style="font-weight: 700;">Total Obtained</th>
                             <th width="80" class="text-center" style="font-weight: 700;">Percentage</th>
                             <th width="100" class="text-center" style="font-weight: 700;">Remarks</th>
