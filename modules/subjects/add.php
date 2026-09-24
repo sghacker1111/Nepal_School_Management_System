@@ -39,28 +39,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (empty($name_en)) {
         $error = 'Subject name in English is required';
     } else {
-        try {
-            $db->beginTransaction();
-            
-            // 1. Insert Subject
-            $stmt = $db->prepare("INSERT INTO subjects (code, name_en, name_np, type, full_marks, pass_marks, credit_hours, school_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$code, $name_en, $name_np, $type, $full_marks, $pass_marks, $credit_hours, $school_id]);
-            $new_subject_id = $db->lastInsertId();
-            
-            // 2. Insert mapping in class_subjects
-            $teacher_id_str = !empty($teacher_ids) ? implode(',', array_map('intval', $teacher_ids)) : null;
-            $stmt_map = $db->prepare("INSERT INTO class_subjects (class_id, subject_id, credit_hours, teacher_id, school_id) VALUES (?, ?, ?, ?, ?)");
-            $stmt_map->execute([$class_id, $new_subject_id, $credit_hours, $teacher_id_str, $school_id]);
-            
-            $db->commit();
-            
-            Auth::logActivity(Auth::getUserId(), 'Add Subject and Class Mapping', 'subjects', $new_subject_id);
-            redirect(APP_URL . '/modules/subjects/index.php', 'Subject added and mapped successfully');
-        } catch (PDOException $e) {
-            if ($db->inTransaction()) {
-                $db->rollBack();
+        // Check if this class already has a subject with identical English name, Nepali name, or code
+        $stmt_check = $db->prepare("
+            SELECT s.name_en, s.code FROM class_subjects cs
+            JOIN subjects s ON cs.subject_id = s.id
+            WHERE cs.class_id = ? AND (
+                LOWER(TRIM(s.name_en)) = LOWER(TRIM(?))
+                OR (? != '' AND s.name_np != '' AND s.name_np IS NOT NULL AND TRIM(s.name_np) = TRIM(?))
+                OR (? != '' AND LOWER(TRIM(s.code)) = LOWER(TRIM(?)))
+            )
+        ");
+        $stmt_check->execute([$class_id, $name_en, $name_np, $name_np, $code, $code]);
+        $existing = $stmt_check->fetch();
+
+        if ($existing) {
+            $error = "Duplicate Subject Blocked: A subject with name '" . htmlspecialchars($existing['name_en']) . "' (Code: " . htmlspecialchars($existing['code']) . ") is already assigned to the selected class. Duplicate subjects for each class are not allowed.";
+        } else {
+            try {
+                $db->beginTransaction();
+                
+                // 1. Insert Subject
+                $stmt = $db->prepare("INSERT INTO subjects (code, name_en, name_np, type, full_marks, pass_marks, credit_hours, school_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+                $stmt->execute([$code, $name_en, $name_np, $type, $full_marks, $pass_marks, $credit_hours, $school_id]);
+                $new_subject_id = $db->lastInsertId();
+                
+                // 2. Insert mapping in class_subjects (is_optional = 0 if compulsory, 1 if optional)
+                $is_opt = ($type === 'optional') ? 1 : 0;
+                $teacher_id_str = !empty($teacher_ids) ? implode(',', array_map('intval', $teacher_ids)) : null;
+                $stmt_map = $db->prepare("INSERT INTO class_subjects (class_id, subject_id, credit_hours, teacher_id, school_id, is_optional, is_active) VALUES (?, ?, ?, ?, ?, ?, 1)");
+                $stmt_map->execute([$class_id, $new_subject_id, $credit_hours, $teacher_id_str, $school_id, $is_opt]);
+                
+                $db->commit();
+                
+                Auth::logActivity(Auth::getUserId(), 'Add Subject and Class Mapping', 'subjects', $new_subject_id);
+                redirect(APP_URL . '/modules/subjects/index.php', 'Subject added and mapped successfully');
+            } catch (PDOException $e) {
+                if ($db->inTransaction()) {
+                    $db->rollBack();
+                }
+                if (strpos($e->getMessage(), 'UNIQUE constraint failed') !== false) {
+                    $error = 'Duplicate Subject Blocked: This subject is already assigned to this class.';
+                } else {
+                    $error = 'Database error: ' . $e->getMessage();
+                }
             }
-            $error = 'Database error: ' . $e->getMessage();
         }
     }
 }

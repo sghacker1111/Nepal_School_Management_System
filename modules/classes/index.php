@@ -43,7 +43,7 @@ $stmt = $db->prepare("
     FROM sections s 
     JOIN classes c ON s.class_id = c.id 
     LEFT JOIN users u ON s.class_teacher_id = u.id AND u.role = 'teacher'
-    WHERE s.school_id = ?
+    WHERE (s.school_id = ? OR s.school_id = 0)
     ORDER BY c.id, s.name
 ");
 $stmt->execute([$school_id]);

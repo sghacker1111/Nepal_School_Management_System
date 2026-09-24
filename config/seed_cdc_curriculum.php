@@ -6,8 +6,9 @@
  * - Basic Level: Nursery, LKG, UKG, ECD, Class 1 to Class 8
  * - Secondary Level: Class 9, Class 10, Class 11, Class 12
  * 
- * Seeds official CDC Nepal Compulsory Subjects and Optional Subjects.
+ * Seeds official CDC Nepal Compulsory Subjects and Optional / Local Subjects.
  * Configures class_subjects mapping with is_optional and is_active flags.
+ * Enforces unique constraints so duplicates cannot exist.
  */
 
 require_once __DIR__ . '/config.php';
@@ -17,8 +18,8 @@ $db = Database::getInstance()->getConnection();
 
 echo "=== Starting CDC Nepal Curriculum & Class Seeding ===\n\n";
 
-// 1. Ensure Schema has required columns & unique index
-echo "1. Updating Schema...\n";
+// 1. Ensure Schema has required columns & unique indexes
+echo "1. Updating Schema & Unique Indexes...\n";
 
 // Add is_optional and is_active to class_subjects if not present
 $cs_cols = $db->query("PRAGMA table_info(class_subjects)")->fetchAll(PDO::FETCH_ASSOC);
@@ -48,10 +49,15 @@ $db->exec("DELETE FROM subjects");
 $db->exec("DELETE FROM classes");
 $db->exec("DELETE FROM sqlite_sequence WHERE name IN ('classes', 'subjects', 'class_subjects')");
 
-// Create UNIQUE index on classes (LOWER(name), school_id)
+// Create UNIQUE index on classes (name, school_id)
 $db->exec("DROP INDEX IF EXISTS idx_classes_name_school");
 $db->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_classes_name_school ON classes(name, school_id)");
 echo " - Unique index `idx_classes_name_school` established\n";
+
+// Create UNIQUE index on class_subjects (class_id, subject_id)
+$db->exec("DROP INDEX IF EXISTS idx_class_subjects_unique");
+$db->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_class_subjects_unique ON class_subjects (class_id, subject_id)");
+echo " - Unique index `idx_class_subjects_unique` established\n";
 
 // 3. Recreate the 16 exact standard classes
 echo "\n3. Creating 16 Standard Classes (Nursery to Class 12)...\n";
@@ -85,7 +91,6 @@ foreach ($classes_data as $c) {
 // 4. Seed Official CDC Nepal Subjects Catalog
 echo "\n4. Creating CDC Nepal Subjects Catalog...\n";
 
-// Helper map to insert subject
 $stmt_sub = $db->prepare("INSERT INTO subjects (code, name_en, name_np, type, full_marks, pass_marks, credit_hours, school_id) VALUES (?, ?, ?, ?, ?, ?, ?, 0)");
 
 $subjects_catalog = [
@@ -96,37 +101,41 @@ $subjects_catalog = [
     'pre_env'   => ['code' => 'ENV-00', 'en' => 'Our Environment & GK', 'np' => 'हाम्रो वातावरण तथा सामान्य ज्ञान', 'type' => 'compulsory', 'fm' => 100, 'pm' => 35, 'cr' => 3],
     'pre_art'   => ['code' => 'ART-00', 'en' => 'Creative Arts', 'np' => 'सिर्जनात्मक कला', 'type' => 'compulsory', 'fm' => 100, 'pm' => 35, 'cr' => 2],
 
-    // Grades 1-3 Compulsory (Integrated Curriculum - एकीकृत पाठ्यक्रम)
+    // Grades 1-3 (Classes 1, 2, 3) Compulsory & Optional/Local Component
     'g13_nep'   => ['code' => 'NEP-123', 'en' => 'Nepali', 'np' => 'नेपाली', 'type' => 'compulsory', 'fm' => 100, 'pm' => 35, 'cr' => 5],
     'g13_eng'   => ['code' => 'ENG-123', 'en' => 'English', 'np' => 'अंग्रेजी', 'type' => 'compulsory', 'fm' => 100, 'pm' => 35, 'cr' => 4],
     'g13_mat'   => ['code' => 'MAT-123', 'en' => 'Mathematics', 'np' => 'गणित', 'type' => 'compulsory', 'fm' => 100, 'pm' => 35, 'cr' => 4],
-    'g13_ser'   => ['code' => 'SER-123', 'en' => 'Hamro Serophero', 'np' => 'हाम्रो सेरोफेरो', 'type' => 'compulsory', 'fm' => 100, 'pm' => 35, 'cr' => 8],
+    'g13_ser'   => ['code' => 'SER-123', 'en' => 'Our Surroundings (हाम्रो सेरोफेरो)', 'np' => 'हाम्रो सेरोफेरो', 'type' => 'compulsory', 'fm' => 100, 'pm' => 35, 'cr' => 8],
+    'g13_loc'   => ['code' => 'LOC-123', 'en' => 'Local Curriculum / Mother Tongue', 'np' => 'स्थानीय पाठ्यक्रम / मातृभाषा', 'type' => 'optional', 'fm' => 100, 'pm' => 35, 'cr' => 4],
 
-    // Grades 4-5 Compulsory
+    // Grades 4-5 (Classes 4, 5) Compulsory & Local Component
     'g45_nep'   => ['code' => 'NEP-45', 'en' => 'Nepali', 'np' => 'नेपाली', 'type' => 'compulsory', 'fm' => 100, 'pm' => 35, 'cr' => 5],
     'g45_eng'   => ['code' => 'ENG-45', 'en' => 'English', 'np' => 'अंग्रेजी', 'type' => 'compulsory', 'fm' => 100, 'pm' => 35, 'cr' => 4],
     'g45_mat'   => ['code' => 'MAT-45', 'en' => 'Mathematics', 'np' => 'गणित', 'type' => 'compulsory', 'fm' => 100, 'pm' => 35, 'cr' => 4],
     'g45_sci'   => ['code' => 'SCI-45', 'en' => 'Science and Technology', 'np' => 'विज्ञान तथा प्रविधि', 'type' => 'compulsory', 'fm' => 100, 'pm' => 35, 'cr' => 4],
-    'g45_soc'   => ['code' => 'SOC-45', 'en' => 'Social Studies and Human Value Education', 'np' => 'सामाजिक अध्ययन तथा मानव मूल्य शिक्षा', 'type' => 'compulsory', 'fm' => 100, 'pm' => 35, 'cr' => 4],
+    'g45_soc'   => ['code' => 'SOC-45', 'en' => 'Social Studies and Human Values Education', 'np' => 'सामाजिक अध्ययन तथा मानव मूल्य शिक्षा', 'type' => 'compulsory', 'fm' => 100, 'pm' => 35, 'cr' => 4],
     'g45_hpc'   => ['code' => 'HPC-45', 'en' => 'Health, Physical and Creative Arts', 'np' => 'स्वास्थ्य, शारीरिक तथा सिर्जनात्मक कला', 'type' => 'compulsory', 'fm' => 100, 'pm' => 35, 'cr' => 3],
+    'g45_loc'   => ['code' => 'LOC-45', 'en' => 'Local Curriculum / Mother Tongue', 'np' => 'स्थानीय पाठ्यक्रम / मातृभाषा', 'type' => 'optional', 'fm' => 100, 'pm' => 35, 'cr' => 4],
 
-    // Grades 6-8 Compulsory
+    // Grades 6-8 (Classes 6, 7, 8) Main Subjects
     'g68_nep'   => ['code' => 'NEP-68', 'en' => 'Nepali', 'np' => 'नेपाली', 'type' => 'compulsory', 'fm' => 100, 'pm' => 35, 'cr' => 5],
     'g68_eng'   => ['code' => 'ENG-68', 'en' => 'English', 'np' => 'अंग्रेजी', 'type' => 'compulsory', 'fm' => 100, 'pm' => 35, 'cr' => 4],
     'g68_mat'   => ['code' => 'MAT-68', 'en' => 'Mathematics', 'np' => 'गणित', 'type' => 'compulsory', 'fm' => 100, 'pm' => 35, 'cr' => 4],
     'g68_sci'   => ['code' => 'SCI-68', 'en' => 'Science and Technology', 'np' => 'विज्ञान तथा प्रविधि', 'type' => 'compulsory', 'fm' => 100, 'pm' => 35, 'cr' => 4],
-    'g68_soc'   => ['code' => 'SOC-68', 'en' => 'Social Studies and Human Value Education', 'np' => 'सामाजिक अध्ययन तथा मानव मूल्य शिक्षा', 'type' => 'compulsory', 'fm' => 100, 'pm' => 35, 'cr' => 4],
-    'g68_hpc'   => ['code' => 'HPC-68', 'en' => 'Health, Physical and Creative Arts', 'np' => 'स्वास्थ्य, शारीरिक तथा सिर्जनात्मक कला', 'type' => 'compulsory', 'fm' => 100, 'pm' => 35, 'cr' => 3],
-    'g68_loc'   => ['code' => 'LOC-68', 'en' => 'Local Subject / Mother Tongue', 'np' => 'स्थानीय विषय / मातृभाषा', 'type' => 'compulsory', 'fm' => 100, 'pm' => 35, 'cr' => 4],
+    'g68_soc'   => ['code' => 'SOC-68', 'en' => 'Social Studies and Human Values Education', 'np' => 'सामाजिक अध्ययन तथा मानव मूल्य शिक्षा', 'type' => 'compulsory', 'fm' => 100, 'pm' => 35, 'cr' => 4],
+    'g68_hpe'   => ['code' => 'HPE-68', 'en' => 'Health and Physical Education', 'np' => 'स्वास्थ्य तथा शारीरिक शिक्षा', 'type' => 'compulsory', 'fm' => 100, 'pm' => 35, 'cr' => 3],
+    'g68_loc'   => ['code' => 'LOC-68', 'en' => 'Local/Mother-Tongue Subject', 'np' => 'स्थानीय विषय / मातृभाषा', 'type' => 'compulsory', 'fm' => 100, 'pm' => 35, 'cr' => 4],
 
-    // Grades 9-10 Compulsory (SEE)
-    'g910_nep'  => ['code' => 'NEP-910', 'en' => 'Compulsory Nepali', 'np' => 'अनिवार्य नेपाली', 'type' => 'compulsory', 'fm' => 100, 'pm' => 35, 'cr' => 5],
-    'g910_eng'  => ['code' => 'ENG-910', 'en' => 'Compulsory English', 'np' => 'अनिवार्य अंग्रेजी', 'type' => 'compulsory', 'fm' => 100, 'pm' => 35, 'cr' => 5],
-    'g910_mat'  => ['code' => 'MAT-910', 'en' => 'Compulsory Mathematics', 'np' => 'अनिवार्य गणित', 'type' => 'compulsory', 'fm' => 100, 'pm' => 35, 'cr' => 5],
+    // Grades 9-10 (Classes 9, 10) Compulsory (SEE)
+    'g910_nep'  => ['code' => 'NEP-910', 'en' => 'Nepali', 'np' => 'नेपाली', 'type' => 'compulsory', 'fm' => 100, 'pm' => 35, 'cr' => 5],
+    'g910_eng'  => ['code' => 'ENG-910', 'en' => 'English', 'np' => 'अंग्रेजी', 'type' => 'compulsory', 'fm' => 100, 'pm' => 35, 'cr' => 5],
+    'g910_mat'  => ['code' => 'MAT-910', 'en' => 'Mathematics', 'np' => 'गणित', 'type' => 'compulsory', 'fm' => 100, 'pm' => 35, 'cr' => 5],
     'g910_sci'  => ['code' => 'SCI-910', 'en' => 'Science and Technology', 'np' => 'विज्ञान तथा प्रविधि', 'type' => 'compulsory', 'fm' => 100, 'pm' => 35, 'cr' => 5],
     'g910_soc'  => ['code' => 'SOC-910', 'en' => 'Social Studies', 'np' => 'सामाजिक अध्ययन', 'type' => 'compulsory', 'fm' => 100, 'pm' => 35, 'cr' => 4],
 
-    // Grades 9-10 Optional Subjects (Electives)
+    // Grades 9-10 Elective / Optional Subjects
+    'opt_sub1'  => ['code' => 'OPT-1',   'en' => 'Optional Subject I', 'np' => 'ऐच्छिक विषय १', 'type' => 'optional', 'fm' => 100, 'pm' => 35, 'cr' => 4],
+    'opt_sub2'  => ['code' => 'OPT-2',   'en' => 'Optional Subject II', 'np' => 'ऐच्छिक विषय २', 'type' => 'optional', 'fm' => 100, 'pm' => 35, 'cr' => 4],
     'opt_mat'   => ['code' => 'OPT-MAT', 'en' => 'Optional Mathematics', 'np' => 'ऐच्छिक गणित', 'type' => 'optional', 'fm' => 100, 'pm' => 35, 'cr' => 4],
     'opt_com'   => ['code' => 'OPT-COM', 'en' => 'Computer Science', 'np' => 'कम्प्युटर विज्ञान', 'type' => 'optional', 'fm' => 100, 'pm' => 35, 'cr' => 4],
     'opt_acc'   => ['code' => 'OPT-ACC', 'en' => 'Accountancy', 'np' => 'लेखा', 'type' => 'optional', 'fm' => 100, 'pm' => 35, 'cr' => 4],
@@ -161,7 +170,7 @@ $subject_ids = [];
 foreach ($subjects_catalog as $key => $s) {
     $stmt_sub->execute([$s['code'], $s['en'], $s['np'], $s['type'], $s['fm'], $s['pm'], $s['cr']]);
     $subject_ids[$key] = $db->lastInsertId();
-    echo " - Subject: [{$s['code']}] {$s['en']} ({$s['np']}) [{$s['type']}]\n";
+    echo " - Subject ID {$subject_ids[$key]}: [{$s['code']}] {$s['en']} ({$s['np']}) [{$s['type']}]\n";
 }
 
 // 5. Map Compulsory and Optional Subjects to Classes
@@ -184,60 +193,84 @@ foreach ($pre_classes as $cid) {
 echo " - Mapped 5 Compulsory Subjects to Pre-Primary classes (Nursery, LKG, UKG, ECD)\n";
 
 // Grades 1-3: Class 1 (5), Class 2 (6), Class 3 (7)
+// Compulsory: Nepali, English, Mathematics, Our Surroundings (हाम्रो सेरोफेरो)
+// Optional / Local Component: Local Curriculum / Mother Tongue
 $g13_classes = [5, 6, 7];
-$g13_subs = ['g13_nep', 'g13_eng', 'g13_mat', 'g13_ser'];
+$g13_comp = ['g13_nep', 'g13_eng', 'g13_mat', 'g13_ser'];
+$g13_opt  = ['g13_loc'];
 foreach ($g13_classes as $cid) {
-    foreach ($g13_subs as $skey) {
+    // Compulsory
+    foreach ($g13_comp as $skey) {
         $s = $subjects_catalog[$skey];
         $sid = $subject_ids[$skey];
-        $stmt_map->execute([$cid, $sid, $s['cr'], 0, 1]);
+        $stmt_map->execute([$cid, $sid, $s['cr'], 0, 1]); // is_optional=0, is_active=1
+    }
+    // Optional / Local Component (active by default, can be unticked to hide)
+    foreach ($g13_opt as $skey) {
+        $s = $subjects_catalog[$skey];
+        $sid = $subject_ids[$skey];
+        $stmt_map->execute([$cid, $sid, $s['cr'], 1, 1]); // is_optional=1, is_active=1
     }
 }
-echo " - Mapped 4 Integrated Compulsory Subjects to Grades 1-3 (Classes 1, 2, 3)\n";
+echo " - Mapped 4 Compulsory + 1 Optional/Local Subject to Grades 1-3 (Classes 1, 2, 3)\n";
 
 // Grades 4-5: Class 4 (8), Class 5 (9)
+// Compulsory: Nepali, English, Mathematics, Science and Technology, Social Studies and Human Values Education, Health, Physical and Creative Arts
+// Local Component: Local Curriculum / Mother Tongue
 $g45_classes = [8, 9];
-$g45_subs = ['g45_nep', 'g45_eng', 'g45_mat', 'g45_sci', 'g45_soc', 'g45_hpc'];
+$g45_comp = ['g45_nep', 'g45_eng', 'g45_mat', 'g45_sci', 'g45_soc', 'g45_hpc'];
+$g45_opt  = ['g45_loc'];
 foreach ($g45_classes as $cid) {
-    foreach ($g45_subs as $skey) {
+    foreach ($g45_comp as $skey) {
         $s = $subjects_catalog[$skey];
         $sid = $subject_ids[$skey];
-        $stmt_map->execute([$cid, $sid, $s['cr'], 0, 1]);
+        $stmt_map->execute([$cid, $sid, $s['cr'], 0, 1]); // is_optional=0, is_active=1
+    }
+    foreach ($g45_opt as $skey) {
+        $s = $subjects_catalog[$skey];
+        $sid = $subject_ids[$skey];
+        $stmt_map->execute([$cid, $sid, $s['cr'], 1, 1]); // is_optional=1, is_active=1
     }
 }
-echo " - Mapped 6 Compulsory Subjects to Grades 4-5 (Classes 4, 5)\n";
+echo " - Mapped 6 Compulsory + 1 Local Subject to Grades 4-5 (Classes 4, 5)\n";
 
 // Grades 6-8: Class 6 (10), Class 7 (11), Class 8 (12)
+// Main Subjects: Nepali, English, Mathematics, Science and Technology, Social Studies and Human Values Education, Health and Physical Education, Local/Mother-Tongue subject
 $g68_classes = [10, 11, 12];
-$g68_subs = ['g68_nep', 'g68_eng', 'g68_mat', 'g68_sci', 'g68_soc', 'g68_hpc', 'g68_loc'];
+$g68_main = ['g68_nep', 'g68_eng', 'g68_mat', 'g68_sci', 'g68_soc', 'g68_hpe', 'g68_loc'];
 foreach ($g68_classes as $cid) {
-    foreach ($g68_subs as $skey) {
+    foreach ($g68_main as $skey) {
         $s = $subjects_catalog[$skey];
         $sid = $subject_ids[$skey];
-        $stmt_map->execute([$cid, $sid, $s['cr'], 0, 1]);
+        $stmt_map->execute([$cid, $sid, $s['cr'], 0, 1]); // is_optional=0, is_active=1
     }
 }
-echo " - Mapped 7 Compulsory Subjects to Grades 6-8 (Classes 6, 7, 8)\n";
+echo " - Mapped 7 Main Subjects to Grades 6-8 (Classes 6, 7, 8)\n";
 
 // Grades 9-10: Class 9 (13), Class 10 (14)
+// Compulsory: Nepali, English, Mathematics, Science and Technology, Social Studies
+// Electives: Optional Subject I, Optional Subject II, and specific electives
 $g910_classes = [13, 14];
 $g910_comp = ['g910_nep', 'g910_eng', 'g910_mat', 'g910_sci', 'g910_soc'];
-$g910_opt  = ['opt_mat', 'opt_com', 'opt_acc', 'opt_eco', 'opt_hpe', 'opt_geo', 'opt_agr', 'opt_edu'];
+$g910_opt  = [
+    'opt_sub1', 'opt_sub2',
+    'opt_mat', 'opt_com', 'opt_acc', 'opt_eco', 'opt_hpe', 'opt_geo', 'opt_agr', 'opt_edu'
+];
 foreach ($g910_classes as $cid) {
-    // Compulsory (always active, not optional)
+    // Compulsory
     foreach ($g910_comp as $skey) {
         $s = $subjects_catalog[$skey];
         $sid = $subject_ids[$skey];
         $stmt_map->execute([$cid, $sid, $s['cr'], 0, 1]); // is_optional=0, is_active=1
     }
-    // Optional (active by default, can be unticked to hide)
+    // Electives / Optionals (active by default, can be unticked to hide)
     foreach ($g910_opt as $skey) {
         $s = $subjects_catalog[$skey];
         $sid = $subject_ids[$skey];
         $stmt_map->execute([$cid, $sid, $s['cr'], 1, 1]); // is_optional=1, is_active=1
     }
 }
-echo " - Mapped 5 Compulsory + 8 Optional Subjects to Grades 9-10 (Classes 9, 10)\n";
+echo " - Mapped 5 Compulsory + 10 Elective/Optional Subjects to Grades 9-10 (Classes 9, 10)\n";
 
 // Grades 11-12: Class 11 (15), Class 12 (16)
 $g1112_classes = [15, 16];

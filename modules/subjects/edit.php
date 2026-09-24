@@ -61,32 +61,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (empty($name_en)) {
         $error = 'Subject name in English is required';
     } else {
-        try {
-            $db->beginTransaction();
-            
-            // 1. Update Subject
-            $stmt = $db->prepare("UPDATE subjects SET code = ?, name_en = ?, name_np = ?, type = ?, full_marks = ?, pass_marks = ?, credit_hours = ? WHERE id = ? AND school_id = ?");
-            $stmt->execute([$code, $name_en, $name_np, $type, $full_marks, $pass_marks, $credit_hours, $id, $school_id]);
-            
-            // 2. Update mapping in class_subjects
-            $teacher_id_str = !empty($teacher_ids) ? implode(',', array_map('intval', $teacher_ids)) : null;
-            if ($mapping) {
-                $stmt_up = $db->prepare("UPDATE class_subjects SET class_id = ?, credit_hours = ?, teacher_id = ? WHERE id = ?");
-                $stmt_up->execute([$class_id, $credit_hours, $teacher_id_str, $mapping['id']]);
-            } else {
-                $stmt_ins = $db->prepare("INSERT INTO class_subjects (class_id, subject_id, credit_hours, teacher_id, school_id) VALUES (?, ?, ?, ?, ?)");
-                $stmt_ins->execute([$class_id, $id, $credit_hours, $teacher_id_str, $school_id]);
+        // Check if another subject in this class already has the same name or code
+        $stmt_check = $db->prepare("
+            SELECT s.name_en, s.code FROM class_subjects cs
+            JOIN subjects s ON cs.subject_id = s.id
+            WHERE cs.class_id = ? AND cs.subject_id != ? AND (
+                LOWER(TRIM(s.name_en)) = LOWER(TRIM(?))
+                OR (? != '' AND s.name_np != '' AND s.name_np IS NOT NULL AND TRIM(s.name_np) = TRIM(?))
+                OR (? != '' AND LOWER(TRIM(s.code)) = LOWER(TRIM(?)))
+            )
+        ");
+        $stmt_check->execute([$class_id, $id, $name_en, $name_np, $name_np, $code, $code]);
+        $existing = $stmt_check->fetch();
+
+        if ($existing) {
+            $error = "Duplicate Subject Blocked: Another subject with name '" . htmlspecialchars($existing['name_en']) . "' (Code: " . htmlspecialchars($existing['code']) . ") is already assigned to the selected class. Duplicate subjects for each class are not allowed.";
+        } else {
+            try {
+                $db->beginTransaction();
+                
+                // 1. Update Subject
+                $stmt = $db->prepare("UPDATE subjects SET code = ?, name_en = ?, name_np = ?, type = ?, full_marks = ?, pass_marks = ?, credit_hours = ? WHERE id = ? AND school_id = ?");
+                $stmt->execute([$code, $name_en, $name_np, $type, $full_marks, $pass_marks, $credit_hours, $id, $school_id]);
+                
+                // 2. Update mapping in class_subjects
+                $teacher_id_str = !empty($teacher_ids) ? implode(',', array_map('intval', $teacher_ids)) : null;
+                if ($mapping) {
+                    $stmt_up = $db->prepare("UPDATE class_subjects SET class_id = ?, credit_hours = ?, teacher_id = ? WHERE id = ?");
+                    $stmt_up->execute([$class_id, $credit_hours, $teacher_id_str, $mapping['id']]);
+                } else {
+                    $stmt_ins = $db->prepare("INSERT INTO class_subjects (class_id, subject_id, credit_hours, teacher_id, school_id) VALUES (?, ?, ?, ?, ?)");
+                    $stmt_ins->execute([$class_id, $id, $credit_hours, $teacher_id_str, $school_id]);
+                }
+                
+                $db->commit();
+                
+                Auth::logActivity(Auth::getUserId(), 'Edit Subject and Class Mapping', 'subjects', $id);
+                redirect(APP_URL . '/modules/subjects/index.php', 'Subject updated successfully');
+            } catch (PDOException $e) {
+                if ($db->inTransaction()) {
+                    $db->rollBack();
+                }
+                if (strpos($e->getMessage(), 'UNIQUE constraint failed') !== false) {
+                    $error = 'Duplicate Subject Blocked: This subject is already assigned to this class.';
+                } else {
+                    $error = 'Database error: ' . $e->getMessage();
+                }
             }
-            
-            $db->commit();
-            
-            Auth::logActivity(Auth::getUserId(), 'Edit Subject and Class Mapping', 'subjects', $id);
-            redirect(APP_URL . '/modules/subjects/index.php', 'Subject updated successfully');
-        } catch (PDOException $e) {
-            if ($db->inTransaction()) {
-                $db->rollBack();
-            }
-            $error = 'Database error: ' . $e->getMessage();
         }
     }
 }

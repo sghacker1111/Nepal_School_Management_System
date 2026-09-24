@@ -5,6 +5,7 @@
  */
 
 class Database {
+    private const SCHEMA_VERSION = 7;
     private static $instance = null;
     private $conn;
     
@@ -36,6 +37,11 @@ class Database {
                 $this->conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
                 $this->conn->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
                 
+                // Concurrency and lock timeout optimization to eliminate OpenResty 502 Bad Gateway
+                $this->conn->exec("PRAGMA journal_mode = WAL;");
+                $this->conn->exec("PRAGMA synchronous = NORMAL;");
+                $this->conn->exec("PRAGMA busy_timeout = 5000;");
+                
                 // Register custom SUBSTRING_INDEX function for compatibility with MySQL
                 @$this->conn->sqliteCreateFunction('SUBSTRING_INDEX', function($string, $delim, $count) {
                     if ($string === null) return null;
@@ -55,19 +61,6 @@ class Database {
                 
                 // Run silent migrations if any schema modifications are pending
                 $this->checkAndRunMigrations();
-                
-                // Restore standard classes to school_id = 0 (universal) so all schools can see them
-                try {
-                    $stmt_c = $this->conn->query("SELECT COUNT(*) FROM classes WHERE school_id = 0");
-                    if ($stmt_c->fetchColumn() <= 1) { // 1 because of 'Test Class'
-                        $std_names = ['Nursery', 'Class 1', 'Class 2', 'Class 3', 'Class 4', 'Class 5', 'Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10', 'Class 11', 'Class 12'];
-                        $placeholders = implode(',', array_fill(0, count($std_names), '?'));
-                        $stmt_restore = $this->conn->prepare("UPDATE classes SET school_id = 0 WHERE name IN ($placeholders) AND school_id = 1");
-                        $stmt_restore->execute($std_names);
-                    }
-                } catch (PDOException $e) {
-                    // Suppress
-                }
             } catch (PDOException $sqlite_err) {
                 die("Database connection failed: (MySQL) " . (!empty($mysql_err) ? $mysql_err : 'forced') . " | (SQLite fallback) " . $sqlite_err->getMessage());
             }
@@ -91,6 +84,15 @@ class Database {
      * Check if database schema has all current columns/tables, if not, execute migrations.
      */
     private function checkAndRunMigrations() {
+        try {
+            $ver = (int)$this->conn->query("PRAGMA user_version")->fetchColumn();
+            if ($ver >= self::SCHEMA_VERSION) {
+                return; // Schema already verified, avoid expensive PRAGMA checks on every page load
+            }
+        } catch (PDOException $e) {
+            // Proceed with checks if query fails
+        }
+        
         $run_migrations = false;
         
         // List of checks: [table, column] or [table, null] to check table existence
@@ -165,6 +167,10 @@ class Database {
         if ($run_migrations) {
             $this->runAllMigrations();
         }
+        
+        try {
+            $this->conn->exec("PRAGMA user_version = " . self::SCHEMA_VERSION);
+        } catch (PDOException $e) {}
     }
 
     /**

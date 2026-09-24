@@ -93,8 +93,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_subject'])) {
                 // Automatically map class if selected
                 $map_class_id = (int)($_POST['map_class_id'] ?? 0);
                 if ($map_class_id) {
-                    $stmt_map = $db->prepare("INSERT INTO class_subjects (class_id, subject_id, credit_hours, school_id) VALUES (?, ?, ?, 0)");
-                    $stmt_map->execute([$map_class_id, $new_subject_id, $credit_hours]);
+                    $stmt_map_check = $db->prepare("
+                        SELECT s.name_en FROM class_subjects cs
+                        JOIN subjects s ON cs.subject_id = s.id
+                        WHERE cs.class_id = ? AND (
+                            LOWER(TRIM(s.name_en)) = LOWER(TRIM(?))
+                            OR (? != '' AND s.name_np != '' AND s.name_np IS NOT NULL AND TRIM(s.name_np) = TRIM(?))
+                            OR (? != '' AND LOWER(TRIM(s.code)) = LOWER(TRIM(?)))
+                        )
+                    ");
+                    $stmt_map_check->execute([$map_class_id, $name_en, $name_np, $name_np, $code, $code]);
+                    if (!$stmt_map_check->fetch()) {
+                        $stmt_map = $db->prepare("INSERT INTO class_subjects (class_id, subject_id, credit_hours, school_id) VALUES (?, ?, ?, 0)");
+                        $stmt_map->execute([$map_class_id, $new_subject_id, $credit_hours]);
+                    }
                 }
                 
                 $success = "Universal subject added and mapped successfully.";
@@ -136,18 +148,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_map'])) {
         $error = "Please select both Class and Subject to map.";
     } else {
         try {
-            // Check if already mapped
-            $stmt = $db->prepare("SELECT COUNT(*) FROM class_subjects WHERE class_id = ? AND subject_id = ? AND school_id = 0");
-            $stmt->execute([$class_id, $subject_id]);
-            if ($stmt->fetchColumn() > 0) {
-                $error = "This mapping already exists.";
+            // Check if already mapped by ID or by matching name
+            $stmt = $db->prepare("
+                SELECT s.name_en FROM class_subjects cs
+                JOIN subjects s ON cs.subject_id = s.id
+                WHERE cs.class_id = ? AND (
+                    cs.subject_id = ?
+                    OR LOWER(TRIM(s.name_en)) = LOWER(TRIM((SELECT name_en FROM subjects WHERE id = ?)))
+                )
+            ");
+            $stmt->execute([$class_id, $subject_id, $subject_id]);
+            $existing_map = $stmt->fetch();
+            if ($existing_map) {
+                $error = "Duplicate Subject Blocked: A subject with name '" . htmlspecialchars($existing_map['name_en']) . "' is already mapped to this class. Duplicate subjects for each class are not allowed.";
             } else {
                 $stmt = $db->prepare("INSERT INTO class_subjects (class_id, subject_id, credit_hours, school_id) VALUES (?, ?, ?, 0)");
                 $stmt->execute([$class_id, $subject_id, $hours]);
                 $success = "Subject mapped to class successfully.";
             }
         } catch (PDOException $e) {
-            $error = "Database error: " . $e->getMessage();
+            if (strpos($e->getMessage(), 'UNIQUE constraint failed') !== false) {
+                $error = "Duplicate Subject Blocked: This subject is already assigned to this class.";
+            } else {
+                $error = "Database error: " . $e->getMessage();
+            }
         }
     }
 }

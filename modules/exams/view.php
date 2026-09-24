@@ -155,7 +155,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['initialize_defaults']
                     SELECT cs.*, s.name_en as subject_name, s.full_marks as s_full, s.pass_marks as s_pass, s.credit_hours as s_credit 
                     FROM class_subjects cs
                     JOIN subjects s ON cs.subject_id = s.id
-                    WHERE cs.class_id = ?
+                    WHERE cs.class_id = ? AND (cs.is_optional = 0 OR cs.is_active = 1)
                 ");
                 $stmt->execute([$class_id]);
                 $class_subs = $stmt->fetchAll();
@@ -277,7 +277,7 @@ $stmt_cs_map = $db->prepare("
     FROM class_subjects cs
     JOIN subjects s ON cs.subject_id = s.id
     JOIN classes c ON cs.class_id = c.id
-    WHERE cs.school_id = ? AND c.is_active = 1
+    WHERE (cs.school_id = ? OR cs.school_id = 0) AND c.is_active = 1 AND (cs.is_optional = 0 OR cs.is_active = 1)
 ");
 $stmt_cs_map->execute([$school_id]);
 $class_subject_mappings = $stmt_cs_map->fetchAll(PDO::FETCH_ASSOC);

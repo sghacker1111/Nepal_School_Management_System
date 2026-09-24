@@ -68,26 +68,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $error = "Subject is required.";
     } else {
         try {
-            // Check if already mapped to this class/section combo
-            $stmt = $db->prepare("
-                SELECT COUNT(*) FROM class_subjects 
-                WHERE class_id = ? AND subject_id = ? AND (
-                    (section_id IS NULL AND ? IS NULL)
-                    OR
-                    (section_id = ?)
-                )
-            ");
-            $stmt->execute([$class_id, $subject_id, $section_id, $section_id]);
-            if ($stmt->fetchColumn() > 0) {
-                $error = "This subject is already mapped to this class / section.";
+            // 1. Check if subject_id is already mapped to this class
+            $stmt_check_id = $db->prepare("SELECT COUNT(*) FROM class_subjects WHERE class_id = ? AND subject_id = ?");
+            $stmt_check_id->execute([$class_id, $subject_id]);
+            if ($stmt_check_id->fetchColumn() > 0) {
+                $error = "Duplicate Subject Blocked: This subject is already assigned to this class.";
             } else {
-                $stmt = $db->prepare("INSERT INTO class_subjects (class_id, subject_id, section_id, credit_hours, teacher_id, school_id, is_optional, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, 1)");
-                $stmt->execute([$class_id, $subject_id, $section_id, $credit_hours, $teacher_id_str, $school_id, $is_optional]);
-                Auth::logActivity(Auth::getUserId(), 'Map Subject to Class', 'class_subjects', $db->lastInsertId());
-                $success = "Subject mapped successfully.";
+                // 2. Check if a subject with the same name (English or Nepali) is already assigned to this class
+                $stmt_target_subj = $db->prepare("SELECT name_en, name_np, code FROM subjects WHERE id = ?");
+                $stmt_target_subj->execute([$subject_id]);
+                $target_sub = $stmt_target_subj->fetch();
+
+                $stmt_check_name = $db->prepare("
+                    SELECT s.name_en FROM class_subjects cs
+                    JOIN subjects s ON cs.subject_id = s.id
+                    WHERE cs.class_id = ? AND (
+                        LOWER(TRIM(s.name_en)) = LOWER(TRIM(?))
+                        OR (? != '' AND s.name_np != '' AND s.name_np IS NOT NULL AND TRIM(s.name_np) = TRIM(?))
+                    )
+                ");
+                $target_en = $target_sub['name_en'] ?? '';
+                $target_np = $target_sub['name_np'] ?? '';
+                $stmt_check_name->execute([$class_id, $target_en, $target_np, $target_np]);
+                $existing_sub = $stmt_check_name->fetch();
+
+                if ($existing_sub) {
+                    $error = "Duplicate Subject Blocked: A subject with the name '" . htmlspecialchars($existing_sub['name_en']) . "' is already assigned to this class. Creating or mapping duplicate subjects for the same class is not allowed.";
+                } else {
+                    $stmt = $db->prepare("INSERT INTO class_subjects (class_id, subject_id, section_id, credit_hours, teacher_id, school_id, is_optional, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, 1)");
+                    $stmt->execute([$class_id, $subject_id, $section_id, $credit_hours, $teacher_id_str, $school_id, $is_optional]);
+                    Auth::logActivity(Auth::getUserId(), 'Map Subject to Class', 'class_subjects', $db->lastInsertId());
+                    $success = "Subject mapped successfully.";
+                }
             }
         } catch (PDOException $e) {
-            $error = "Database error: " . $e->getMessage();
+            if (strpos($e->getMessage(), 'UNIQUE constraint failed') !== false) {
+                $error = "Duplicate Subject Blocked: This subject is already assigned to this class.";
+            } else {
+                $error = "Database error: " . $e->getMessage();
+            }
         }
     }
 }
@@ -145,13 +164,20 @@ foreach ($all_mapped as $m) {
     }
 }
 
-// Fetch all available subjects for mapping (excluding already mapped ones)
+// Fetch all available subjects for mapping (excluding already mapped ones or subjects with identical names)
 $stmt = $db->prepare("
     SELECT * FROM subjects 
-    WHERE (school_id = ? OR school_id = 0) AND id NOT IN (SELECT subject_id FROM class_subjects WHERE class_id = ?) 
+    WHERE (school_id = ? OR school_id = 0) 
+      AND id NOT IN (SELECT subject_id FROM class_subjects WHERE class_id = ?)
+      AND LOWER(TRIM(name_en)) NOT IN (
+          SELECT LOWER(TRIM(s_m.name_en)) 
+          FROM class_subjects cs_m 
+          JOIN subjects s_m ON cs_m.subject_id = s_m.id 
+          WHERE cs_m.class_id = ?
+      )
     ORDER BY type ASC, name_en ASC
 ");
-$stmt->execute([$school_id, $class_id]);
+$stmt->execute([$school_id, $class_id, $class_id]);
 $available_subjects = $stmt->fetchAll();
 
 // Fetch all class sections

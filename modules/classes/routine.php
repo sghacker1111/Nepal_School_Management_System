@@ -157,7 +157,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         SELECT cs.subject_id, cs.teacher_id, cs.credit_hours, s.name_en, s.name_np
                         FROM class_subjects cs
                         JOIN subjects s ON cs.subject_id = s.id
-                        WHERE cs.class_id = ? AND cs.school_id = ?
+                        WHERE cs.class_id = ? AND (cs.school_id = ? OR cs.school_id = 0) AND (cs.is_optional = 0 OR cs.is_active = 1)
                         ORDER BY s.id ASC
                     ");
                     $stmt_cs->execute([$c_id, $school_id]);
@@ -620,7 +620,7 @@ ob_start();
             SELECT s.id, s.name_en, s.name_np
             FROM class_subjects cs
             JOIN subjects s ON cs.subject_id = s.id
-            WHERE cs.class_id = ? AND cs.school_id = ?
+            WHERE cs.class_id = ? AND (cs.school_id = ? OR cs.school_id = 0) AND (cs.is_optional = 0 OR cs.is_active = 1)
             ORDER BY s.name_en ASC
         ");
         $stmt_cs->execute([$selected_class_id, $school_id]);
