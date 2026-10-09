@@ -36,6 +36,8 @@ Recovery requires a known-good database backup or the original student/exam reco
 
 ## CDC review boundary
 
+Subsequent workbook integration supersedes the starter grading/roster data for supported entries. See [CDC 2083 integration](cdc-2083-integration.md) for the actual database import, source flags, calculated examples, tests and preserved-record verification. The limitations below still matter for complete national-stream certification.
+
 References consulted:
 
 - [Letter Grading Directive 2078, fourth amendment 2081](https://www.moecdc.gov.np/content/22/letter-gradinging-directory--2078--fourth-amendment-2081-/).

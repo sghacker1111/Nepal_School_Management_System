@@ -141,6 +141,7 @@ if (isset($_GET['delete_mapping'])) {
 // Handle Edit Mapping
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'edit_mapping') {
     $mapping_id = (int)$_POST['mapping_id'];
+    $methodQuery=$db->prepare('SELECT assessment_method,credit_hours FROM class_subjects WHERE id=? AND class_id=? AND school_id=?');$methodQuery->execute([$mapping_id,$class_id,$school_id]);$existingScheme=$methodQuery->fetch()?:[];
     $th_credit_hours = round((float)($_POST['th_credit_hours'] ?? 0), 2);
     $in_credit_hours = round((float)($_POST['in_credit_hours'] ?? 0), 2);
     $credit_hours = round((float)($_POST['credit_hours'] ?? ($th_credit_hours + $in_credit_hours)), 2);
@@ -157,6 +158,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $teacher_id_str = !empty($teacher_ids) ? implode(',', array_map('intval', $teacher_ids)) : null;
     
     try {
+        if(($existingScheme['assessment_method']??'')==='THEMATIC_CONTINUOUS'){$th_credit_hours=$in_credit_hours=$th_full_marks=$th_pass_marks=$in_full_marks=$in_pass_marks=null;$credit_hours=(float)$existingScheme['credit_hours'];}
         $stmt = $db->prepare("
             UPDATE class_subjects 
             SET credit_hours = ?, th_credit_hours = ?, in_credit_hours = ?,
@@ -180,12 +182,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 $stmt = $db->prepare("
     SELECT cs.*, s.name_en as subject_name_en, s.name_np as subject_name_np, s.code as subject_code, s.type as subject_catalog_type,
            s.is_hidden as is_catalog_hidden,
-           COALESCE(cs.th_credit_hours, s.th_credit_hours, 0) as th_credit_hours,
-           COALESCE(cs.in_credit_hours, s.in_credit_hours, 0) as in_credit_hours,
-           COALESCE(cs.th_full_marks, s.th_full_marks, 75) as th_full_marks,
-           COALESCE(cs.th_pass_marks, s.th_pass_marks, 26.25) as th_pass_marks,
-           COALESCE(cs.in_full_marks, s.in_full_marks, 25) as in_full_marks,
-           COALESCE(cs.in_pass_marks, s.in_pass_marks, 10) as in_pass_marks,
+           CASE WHEN cs.assessment_method='THEMATIC_CONTINUOUS' THEN NULL ELSE COALESCE(cs.th_credit_hours, s.th_credit_hours, 0) END as th_credit_hours,
+           CASE WHEN cs.assessment_method='THEMATIC_CONTINUOUS' THEN NULL ELSE COALESCE(cs.in_credit_hours, s.in_credit_hours, 0) END as in_credit_hours,
+           CASE WHEN cs.assessment_method='THEMATIC_CONTINUOUS' THEN NULL ELSE COALESCE(cs.th_full_marks, s.th_full_marks, 75) END as th_full_marks,
+           CASE WHEN cs.assessment_method='THEMATIC_CONTINUOUS' THEN NULL ELSE COALESCE(cs.th_pass_marks, s.th_pass_marks, 26.25) END as th_pass_marks,
+           CASE WHEN cs.assessment_method='THEMATIC_CONTINUOUS' THEN NULL ELSE COALESCE(cs.in_full_marks, s.in_full_marks, 25) END as in_full_marks,
+           CASE WHEN cs.assessment_method='THEMATIC_CONTINUOUS' THEN NULL ELSE COALESCE(cs.in_pass_marks, s.in_pass_marks, 10) END as in_pass_marks,
            sec.name as section_name
     FROM class_subjects cs 
     JOIN subjects s ON cs.subject_id = s.id 
@@ -319,15 +321,15 @@ ob_start();
                                     </td>
                                     <td>
                                         <span class="badge bg-primary bg-opacity-10 text-primary border border-primary font-monospace">
-                                            <?= (float)$cs['th_credit_hours'] ?> CH
+                                            <?= $cs['th_credit_hours']===null?'Not specified':sanitize($cs['th_credit_hours']).' CH' ?>
                                         </span>
-                                        <div class="small text-muted font-monospace"><?= (float)$cs['th_full_marks'] ?> FM / <?= (float)$cs['th_pass_marks'] ?> PM</div>
+                                        <div class="small text-muted font-monospace"><?= $cs['th_full_marks']===null?'Achievement assessment':sanitize($cs['th_full_marks']).' FM / '.sanitize($cs['th_pass_marks']).' PM' ?></div>
                                     </td>
                                     <td>
                                         <span class="badge bg-warning bg-opacity-10 text-dark border border-warning font-monospace">
-                                            <?= (float)$cs['in_credit_hours'] ?> CH
+                                            <?= $cs['in_credit_hours']===null?'Not specified':sanitize($cs['in_credit_hours']).' CH' ?>
                                         </span>
-                                        <div class="small text-muted font-monospace"><?= (float)$cs['in_full_marks'] ?> FM / <?= (float)$cs['in_pass_marks'] ?> PM</div>
+                                        <div class="small text-muted font-monospace"><?= $cs['in_full_marks']===null?'No specified IN split':sanitize($cs['in_full_marks']).' FM / '.sanitize($cs['in_pass_marks']).' PM' ?></div>
                                     </td>
                                     <td><strong class="font-monospace"><?= $cs['credit_hours'] ?></strong> CH</td>
                                     <td>
@@ -822,6 +824,9 @@ function editMapping(item) {
     document.getElementById('editInPm').value = parseFloat(item.in_pass_marks || 10).toFixed(2);
     
     calculateEditTotals();
+    const thematic=item.assessment_method==='THEMATIC_CONTINUOUS';
+    ['editThCh','editInCh','editThFm','editThPm','editInFm','editInPm'].forEach(id=>{const field=document.getElementById(id);field.disabled=thematic;field.required=!thematic;if(thematic){field.value='';field.placeholder='Not specified';}});
+    if(thematic){document.getElementById('editCreditHours').value=item.credit_hours;document.getElementById('edit_total_ch_display').innerText=item.credit_hours+' CH';document.getElementById('edit_total_fm_display').innerText='Achievement 0–100%';}
     
     // Uncheck all edit checkboxes
     const checkboxes = document.querySelectorAll('.edit-teacher-check');

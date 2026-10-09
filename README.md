@@ -40,7 +40,11 @@ Archiving students or teachers preserves their records. Exams with marks cannot 
 
 ## CDC and assessment scope
 
-The subject catalog is a configurable starter, **not a certified implementation of every current CDC/NEB stream and assessment directive**. Schools must review local subjects, elective combinations, credit allocations, component marks and pass thresholds against their applicable curriculum before creating exams.
+The supplied `CDC_Nepal_2083_School_ERP_Grading_Master.xlsx` is integrated as the versioned data package in `config/data/cdc_2083.json`. Schema upgrade 4 stores all 76 class-subject source rows, current grade bands, legacy references, assessment components, policies and audit notes in the database. The importer reuses existing class/subject IDs, updates supported class-specific credits and marks, and leaves saved exam schemes and student marks unchanged. SQLite is backed up automatically before the upgrade.
+
+Run `php config/import_cdc_2083.php` to apply and report the idempotent import; normal startup also applies it once. Administrators can use **CDC 2083 grading** in the sidebar to inspect each class and confirm uncertain school offerings. Grades 1–3 use achievement percentage with unspecified TH/IN splits. Grades 4–8 use the workbook's 50/50 scheme; annual exams have four internal contribution fields. Overall GPA uses unrounded weighted section totals before two-decimal display rounding.
+
+The workbook itself is **not a complete national catalogue**: Class 11 is a six-subject example; Class 12 is illustrative; elective II has a 202/206 code conflict. These entries retain source flags and require school confirmation. Existing extra courses remain available, rather than being deleted or mislabeled as official. This is not a certified implementation of every CDC/NEB stream, attendance/certificate policy or historical cohort. Review school-specific electives, exceptions and approval/effective dates before issuing official reports. See `docs/cdc-2083-integration.md`.
 
 The shared grade bands are A+ 90+, A 80+, B+ 70+, B 60+, C+ 50+, C 40+, D 35+, otherwise NG. Independent component pass thresholds come from the saved exam scheme. Missing required marks remain incomplete. Grade 11–12 enrollment supports three elective slots; official subject-group combination validation is not yet automated. Primary continuous assessment is not a full competency-report implementation.
 

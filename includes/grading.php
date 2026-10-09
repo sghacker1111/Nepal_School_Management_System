@@ -1,13 +1,16 @@
 <?php
+require_once __DIR__.'/cdc_2083.php';
 /** Assessment uses the saved exam scheme, not today's catalog values. */
 function erpGradeForPercentage(float $percentage): array {
     if (!is_finite($percentage) || $percentage<0 || $percentage>100.000001) return ['NG',0.0];
-    foreach ([[90,'A+',4.0],[80,'A',3.6],[70,'B+',3.2],[60,'B',2.8],[50,'C+',2.4],[40,'C',2.0],[35,'D',1.6]] as [$min,$grade,$gp]) if($percentage>=$min) return [$grade,$gp];
+    foreach (($GLOBALS['erp_cdc_percentage_bands']??cdc2083Data()['GRADE_2083']) as $band) if($percentage>=$band['minimum_percent_inclusive'] && ($band['maximum_percent_exclusive']===null||$percentage<$band['maximum_percent_exclusive'])) return [$band['letter_grade'],(float)($band['grade_point']??0)];
     return ['NG',0.0];
 }
 function erpFinalGrade(float $gp): string {
-    foreach ([[3.6,'A+'],[3.2,'A'],[2.8,'B+'],[2.4,'B'],[2.0,'C+'],[1.6,'C']] as [$min,$grade]) if($gp>$min+0.000001)return $grade;
-    return $gp>=1.6?'D':'NG';
+    $gp=round($gp,2);
+    if(!is_finite($gp)||$gp<1.6||$gp>4)return 'NG';
+    foreach(cdc2083Data()['FINAL_GP_BANDS'] as $band)if($band['lower_GP_2dp']!==null&&$gp>=$band['lower_GP_2dp']&&$gp<=$band['upper_GP_2dp'])return $band['final_grade'];
+    return 'NG';
 }
 function erpMarkValue($value, float $full): ?float {
     if ($value === '' || $value === null) return null;
@@ -15,11 +18,14 @@ function erpMarkValue($value, float $full): ?float {
     return round((float)$value,2);
 }
 function erpCalculateSubjectResult(array $scheme, array $mark, array $exam): array {
+    $thematic=($scheme['assessment_method']??'')==='THEMATIC_CONTINUOUS';
     $tf=(float)($scheme['theory_full']??100);
-    $pf=!empty($exam['has_internal']) && ($exam['type']??'')!=='unit'?(float)($scheme['practical_full']??0):0.0;
+    $pf=!$thematic && !empty($exam['has_internal']) && ($exam['type']??'')!=='unit'?(float)($scheme['practical_full']??0):0.0;
+    $tp=(float)($scheme['theory_pass']??0);$pp=(float)($scheme['practical_pass']??0);
+    if(!empty($scheme['curriculum_version'])){$tp=max($tp,$tf*0.35);$pp=max($pp,$pf*0.4);}
     $th=$mark['theory_obtained']??null; $pr=$pf>0?($mark['practical_obtained']??null):0.0;
     $incomplete=($tf>0 && $th===null)||($pf>0 && $pr===null);
-    $failed=$incomplete || ($tf>0 && (float)$th<(float)($scheme['theory_pass']??0)) || ($pf>0 && (float)$pr<(float)($scheme['practical_pass']??0));
+    $failed=$incomplete || ($tf>0 && (float)$th<$tp) || ($pf>0 && (float)$pr<$pp);
     [$tg,$tgp]=erpGradeForPercentage($tf>0?(float)$th/$tf*100:0);
     [$pg,$pgp]=erpGradeForPercentage($pf>0?(float)$pr/$pf*100:0);
     $credit=(float)($scheme['exam_credit_hours']??$scheme['credit_hours']??$scheme['default_credit_hours']??4);
@@ -30,16 +36,17 @@ function erpCalculateSubjectResult(array $scheme, array $mark, array $exam): arr
     elseif($tf<=0){$tc=0;$pc=$credit;}
     elseif($tc+$pc<=0){$tc=$credit*$tf/($tf+$pf);$pc=$credit-$tc;}
     $weight=$tc+$pc;
-    $gp=$failed?0:round($weight>0?($tc*$tgp+$pc*$pgp)/$weight:0,2);
+    $unroundedGp=$failed?0:($weight>0?($tc*$tgp+$pc*$pgp)/$weight:0);
+    $gp=round($unroundedGp,2);
     $pct=$tf+$pf>0?round(((float)$th+(float)$pr)/($tf+$pf)*100,2):0;
     $grade=$failed?'NG':erpFinalGrade($gp);
-    return ['theory_obtained'=>$th,'practical_obtained'=>$pr,'theory_full'=>$tf,'practical_full'=>$pf,'theory_pass'=>(float)($scheme['theory_pass']??0),'practical_pass'=>(float)($scheme['practical_pass']??0),'internal_credit_hours'=>$pc,'external_credit_hours'=>$tc,'credit_hours'=>$credit,'internal_gp'=>$pgp,'external_gp'=>$tgp,'internal_grade'=>$pf<=0?'—':(($pr===null || (float)$pr<(float)($scheme['practical_pass']??0))?'NG':$pg),'external_grade'=>$tf<=0?'—':(($th===null || (float)$th<(float)($scheme['theory_pass']??0))?'NG':$tg),'grade'=>$grade,'grade_point'=>$gp,'percentage'=>$pct,'failed'=>$failed,'incomplete'=>$incomplete,'remarks'=>$incomplete?'Incomplete':($failed?'NG':'Pass')];
+    return ['theory_obtained'=>$th,'practical_obtained'=>$pr,'theory_full'=>$tf,'practical_full'=>$pf,'theory_pass'=>$tp,'practical_pass'=>$pp,'internal_credit_hours'=>$thematic?null:$pc,'external_credit_hours'=>$thematic?null:$tc,'credit_hours'=>$credit,'internal_gp'=>$pgp,'external_gp'=>$tgp,'internal_grade'=>$pf<=0?'—':(($pr===null || (float)$pr<$pp)?'NG':$pg),'external_grade'=>$tf<=0?'—':(($th===null || (float)$th<$tp)?'NG':$tg),'grade'=>$grade,'grade_point'=>$gp,'grade_point_unrounded'=>$unroundedGp,'percentage'=>$pct,'failed'=>$failed,'incomplete'=>$incomplete,'remarks'=>$incomplete?'Incomplete':($failed?'NG':'Pass')];
 }
 function erpReportSummary(array $marks, array $exam, string $system): array {
     $rows=[];$credits=0;$weighted=0;$full=0;$obtained=0;$failed=false;$incomplete=false;
     foreach($marks as $m){
         $result=erpCalculateSubjectResult($m,$m,$exam);$rows[]=array_merge($m,$result);
-        $credits+=$result['credit_hours'];$weighted+=$result['credit_hours']*$result['grade_point'];
+        $credits+=$result['credit_hours'];$weighted+=$result['credit_hours']*$result['grade_point_unrounded'];
         $full+=$result['theory_full']+$result['practical_full'];$obtained+=(float)$result['theory_obtained']+(float)$result['practical_obtained'];
         $failed=$failed||$result['failed'];$incomplete=$incomplete||$result['incomplete'];
     }

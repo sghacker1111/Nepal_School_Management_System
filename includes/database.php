@@ -30,7 +30,7 @@ class Database {
         if (DB_TYPE==='sqlite' && !$freshDatabase) {
             $hasMeta=$this->conn->query("SELECT name FROM sqlite_master WHERE type='table' AND name='app_meta'")->fetchColumn();
             $version=$hasMeta?$this->conn->query("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'")->fetchColumn():false;
-            if($version!=='3') {
+            if($version!=='4') {
                 $backupDir=dirname(DB_SQLITE_PATH).'/.backups';
                 if(!is_dir($backupDir)&&!mkdir($backupDir,0750,true))throw new RuntimeException('Cannot create pre-upgrade database backup directory.');
                 $backup=$backupDir.'/school-before-upgrade-'.date('Ymd-His').'-'.bin2hex(random_bytes(3)).'.sqlite';
@@ -38,6 +38,9 @@ class Database {
             }
         }
         migrateSchoolSchema($this->conn);
+        require_once __DIR__.'/cdc_2083.php';
+        // Read once per request. Percentage grading uses the stored current scheme.
+        $GLOBALS['erp_cdc_percentage_bands']=array_map(static fn($r)=>json_decode($r['payload'],true,512,JSON_THROW_ON_ERROR),$this->conn->query("SELECT payload FROM cdc_reference WHERE category='GRADE_2083' ORDER BY CAST(item_key AS UNSIGNED)")->fetchAll());
     }
     public static function getInstance() { return self::$instance ??= new self(); }
     public function getConnection() { return $this->conn; }

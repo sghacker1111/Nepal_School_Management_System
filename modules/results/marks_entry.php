@@ -304,7 +304,7 @@ ob_start();
                             <th rowspan="2" class="align-middle px-2" style="min-width: 90px; background-color: #34495e;">Attendance</th>
                             
                             <?php foreach ($subjects as $sub): ?>
-                                <?php $colspan = (($selected_exam && $selected_exam['type'] === 'unit') || empty($selected_exam['has_internal'])) ? 1 : 4; ?>
+                                <?php $components = (($selected_exam['type']??'')==='unit'||empty($selected_exam['has_internal'])||($sub['assessment_method']??'')==='THEMATIC_CONTINUOUS')?[]:cdc2083InternalComponents($sub,$selected_exam); $colspan=1+count($components); ?>
                                 <th colspan="<?= $colspan ?>" class="px-2 small text-uppercase">
                                     <?= sanitize($sub['subject_name']) ?> 
                                     <span class="d-block text-warning small font-monospace"><?= sanitize($sub['subject_code']) ?></span>
@@ -313,20 +313,11 @@ ob_start();
                         </tr>
                         <tr>
                             <?php foreach ($subjects as $sub): ?>
-                                <?php if ($selected_exam && $selected_exam['type'] === 'unit'): ?>
-                                    <th style="min-width: 100px; font-size: 0.75rem;">Marks (<?= $sub['theory_full'] ?>)</th>
-                                <?php elseif (empty($selected_exam['has_internal'])): ?>
-                                    <th style="min-width: 100px; font-size: 0.75rem;">Theory (<?= $sub['theory_full'] ?>)</th>
-                                <?php else: ?>
-                                    <?php $max_prt = $selected_exam['has_internal'] ? (float)$sub['practical_full'] : 0; ?>
-                                    <?php $max_prj = $max_prt; ?>
-                                    <?php $max_prv = $max_prt; ?>
-                                    <?php $max_trm = (float)$sub['theory_full']; ?>
-                                    <th style="min-width: 60px; font-size: 0.7rem; background-color: #2c3e50;">PRT (<?= $max_prt ?>)</th>
-                                    <th style="min-width: 60px; font-size: 0.7rem; background-color: #2c3e50;">PRJ (<?= $max_prj ?>)</th>
-                                    <th style="min-width: 60px; font-size: 0.7rem; background-color: #2c3e50;">PRV (<?= $max_prv ?>)</th>
-                                    <th style="min-width: 60px; font-size: 0.7rem; background-color: #16a085;">TRM (<?= $max_trm ?>)</th>
-                                <?php endif; ?>
+                                <?php $components=(($selected_exam['type']??'')==='unit'||empty($selected_exam['has_internal'])||($sub['assessment_method']??'')==='THEMATIC_CONTINUOUS')?[]:cdc2083InternalComponents($sub,$selected_exam); ?>
+                                <?php foreach($components as $component): ?>
+                                    <th style="min-width: 100px; font-size: 0.7rem;" title="Enter scaled contribution marks, not raw test scores."><?= sanitize($component['label']) ?><br>IN (<?= $component['max'] ?>)</th>
+                                <?php endforeach; ?>
+                                <th style="min-width: 100px; font-size: 0.75rem;"><?= ($sub['assessment_method']??'')==='THEMATIC_CONTINUOUS'?'Achievement (%)':'Theory ('.$sub['theory_full'].')' ?></th>
                             <?php endforeach; ?>
                         </tr>
                     </thead>
@@ -358,7 +349,7 @@ ob_start();
                                     }
                                     
                                     if (!$is_selected): 
-                                        $colspan = (($selected_exam && $selected_exam['type'] === 'unit') || empty($selected_exam['has_internal'])) ? 1 : 4;
+                                        $components = (($selected_exam['type']??'')==='unit'||empty($selected_exam['has_internal'])||($sub['assessment_method']??'')==='THEMATIC_CONTINUOUS')?[]:cdc2083InternalComponents($sub,$selected_exam); $colspan=1+count($components);
                                     ?>
                                         <td colspan="<?= $colspan ?>" style="background-color: #eaeded; color: #a6acaf; font-size: 0.75rem;" class="text-center font-monospace">N/A</td>
                                     <?php else: ?>
@@ -376,40 +367,18 @@ ob_start();
                                         // Previous-exam allocation depends on the approved school scheme.
                                         // Do not silently scale or overwrite an incomplete component.
                                         ?>
-                                        <?php if ($selected_exam && $selected_exam['type'] === 'unit'): ?>
-                                            <td>
-                                                <input type="number" step="0.01" min="0" max="<?= $sub['theory_full'] ?>" class="form-control form-control-sm text-center font-monospace" name="marks[<?= $student['id'] ?>][<?= $sub['subject_id'] ?>][theory]" value="<?= $theory_obtained ?>">
-                                            </td>
-                                        <?php elseif (empty($selected_exam['has_internal'])): ?>
-                                            <td>
-                                                <input type="number" step="0.01" min="0" max="<?= $sub['theory_full'] ?>" class="form-control form-control-sm text-center font-monospace" name="marks[<?= $student['id'] ?>][<?= $sub['subject_id'] ?>][theory]" value="<?= $theory_obtained ?>">
-                                            </td>
-                                        <?php else: ?>
-                                            <?php $max_prt = !empty($selected_exam['has_internal']) ? (float)$sub['practical_full'] : 0; ?>
-                                            <?php $max_prj = $max_prt; ?>
-                                            <?php $max_prv = $max_prt; ?>
-                                            <?php $max_trm = (float)$sub['theory_full']; ?>
-                                            
-                                            <td>
-                                                <input type="number" step="0.01" min="0" max="<?= $max_prt ?>" class="form-control form-control-sm text-center font-monospace" name="marks[<?= $student['id'] ?>][<?= $sub['subject_id'] ?>][participation]" value="<?= $prt_val ?>">
-                                            </td>
-                                            <td>
-                                                <input type="number" step="0.01" min="0" max="<?= $max_prj ?>" class="form-control form-control-sm text-center font-monospace" name="marks[<?= $student['id'] ?>][<?= $sub['subject_id'] ?>][project_work]" value="<?= $prj_val ?>">
-                                            </td>
-                                            <td>
-                                                <input type="number" step="0.01" min="0" max="<?= $max_prv ?>" class="form-control form-control-sm text-center font-monospace" name="marks[<?= $student['id'] ?>][<?= $sub['subject_id'] ?>][previous_exam]" value="<?= $prv_val ?>">
-                                            </td>
-                                            <td style="background-color: #e8f8f5;">
-                                                <input type="number" step="0.01" min="0" max="<?= $max_trm ?>" class="form-control form-control-sm text-center font-monospace fw-bold" name="marks[<?= $student['id'] ?>][<?= $sub['subject_id'] ?>][theory]" value="<?= $theory_obtained ?>">
-                                            </td>
-                                        <?php endif; ?>
+                                        <?php $components=(($selected_exam['type']??'')==='unit'||empty($selected_exam['has_internal'])||($sub['assessment_method']??'')==='THEMATIC_CONTINUOUS')?[]:cdc2083InternalComponents($sub,$selected_exam); ?>
+                                        <?php foreach($components as $key=>$component): ?>
+                                            <td><input type="number" step="0.01" min="0" max="<?= $component['max'] ?>" class="form-control form-control-sm text-center font-monospace" name="marks[<?= $student['id'] ?>][<?= $sub['subject_id'] ?>][<?= $key ?>]" value="<?= sanitize($breakdown[$key]??'') ?>" aria-label="<?= sanitize($student['first_name_en'].' '.$sub['subject_name'].' '.$component['label']) ?>"></td>
+                                        <?php endforeach; ?>
+                                        <td style="background-color: #e8f8f5;"><input type="number" step="0.01" min="0" max="<?= $sub['theory_full'] ?>" class="form-control form-control-sm text-center font-monospace" name="marks[<?= $student['id'] ?>][<?= $sub['subject_id'] ?>][theory]" value="<?= $theory_obtained ?>" aria-label="<?= sanitize($student['first_name_en'].' '.$sub['subject_name'].' '.(($sub['assessment_method']??'')==='THEMATIC_CONTINUOUS'?'achievement percentage':'theory marks')) ?>"></td>
                                     <?php endif; ?>
                                 <?php endforeach; ?>
                             </tr>
                             <?php endforeach; ?>
                         <?php else: ?>
                             <tr>
-                                <td colspan="<?= 4 + count($subjects) * (($classType === '1-3') ? 1 : 4) ?>" class="text-center text-muted py-5">
+                                <td colspan="<?= 4+array_sum(array_map(static fn($s)=>1+(($selected_exam['type']??'')==='unit'||empty($selected_exam['has_internal'])?0:count(cdc2083InternalComponents($s,$selected_exam))),$subjects)) ?>" class="text-center text-muted py-5">
                                     <i class="fas fa-user-slash fa-2x mb-2"></i>
                                     <p class="mb-0">No active students found in this class/section.</p>
                                 </td>

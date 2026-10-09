@@ -92,8 +92,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_subject'])) {
     $is_optional = !empty($_POST['is_optional']) ? 1 : 0;
     $type = $is_optional ? 'optional' : 'compulsory';
     
-    if (empty($name_en) || empty($code)) {
-        $error = "Subject Name (EN) and Code are required.";
+    $sourceSubject=[];
+    if($action==='edit'){$q=$db->prepare('SELECT * FROM subjects WHERE id=? AND school_id=0');$q->execute([(int)($_POST['subject_id']??0)]);$sourceSubject=$q->fetch()?:[];}
+    if(($sourceSubject['assessment_method']??'')==='THEMATIC_CONTINUOUS'){$th_credit_hours=$in_credit_hours=$th_full_marks=$th_pass_marks=$in_full_marks=$in_pass_marks=null;$credit_hours=(float)$sourceSubject['credit_hours'];$full_marks=100;$pass_marks=35;}
+    if (empty($name_en)) {
+        $error = "Subject Name (EN) is required. Leave the code blank when the source does not specify one.";
     } else {
         try {
             if ($action === 'add') {
@@ -332,15 +335,15 @@ ob_start();
                                 </td>
                                 <td>
                                     <span class="badge bg-primary bg-opacity-10 text-primary border border-primary font-monospace">
-                                        <?= (float)($s['th_credit_hours'] ?? 0) ?> CH
+                                        <?= $s['th_credit_hours']===null?'Not specified':sanitize($s['th_credit_hours']).' CH' ?>
                                     </span>
-                                    <div class="small text-muted font-monospace"><?= (float)($s['th_full_marks'] ?? 75) ?> FM</div>
+                                    <div class="small text-muted font-monospace"><?= $s['th_full_marks']===null?'Achievement assessment':sanitize($s['th_full_marks']).' FM' ?></div>
                                 </td>
                                 <td>
                                     <span class="badge bg-warning bg-opacity-10 text-dark border border-warning font-monospace">
-                                        <?= (float)($s['in_credit_hours'] ?? 0) ?> CH
+                                        <?= $s['in_credit_hours']===null?'Not specified':sanitize($s['in_credit_hours']).' CH' ?>
                                     </span>
-                                    <div class="small text-muted font-monospace"><?= (float)($s['in_full_marks'] ?? 25) ?> FM</div>
+                                    <div class="small text-muted font-monospace"><?= $s['in_full_marks']===null?'No specified IN split':sanitize($s['in_full_marks']).' FM' ?></div>
                                 </td>
                                 <td><strong class="font-monospace"><?= $s['credit_hours'] ?></strong> CH</td>
                                 <td>
@@ -418,7 +421,7 @@ ob_start();
                                 <td><strong><?= sanitize($m['subject_name']) ?></strong></td>
                                 <td>
                                     <span class="font-monospace fw-bold"><?= $m['credit_hours'] ?> CH</span>
-                                    <small class="text-muted">(TH: <?= (float)($m['th_credit_hours'] ?? 0) ?> | IN: <?= (float)($m['in_credit_hours'] ?? 0) ?>)</small>
+                                    <small class="text-muted">(TH: <?= $m['th_credit_hours']===null?'Not specified':sanitize($m['th_credit_hours']) ?> | IN: <?= $m['in_credit_hours']===null?'Not specified':sanitize($m['in_credit_hours']) ?>)</small>
                                 </td>
                                 <td>
                                     <?php if (!empty($m['is_active'])): ?>
@@ -514,8 +517,8 @@ ob_start();
             <div class="modal-body p-4">
                 <div class="row g-3">
                     <div class="col-md-6">
-                        <label class="form-label fw-semibold">Subject Code *</label>
-                        <input type="text" name="code" id="subjectCode" class="form-control font-monospace" required placeholder="e.g. nep01">
+                        <label class="form-label fw-semibold">Subject Code (if specified)</label>
+                        <input type="text" name="code" id="subjectCode" class="form-control font-monospace" placeholder="Leave blank if not specified">
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Subject Classification *</label>
@@ -629,6 +632,7 @@ function calculateModalTotals() {
 }
 
 function showAddSubjectForm() {
+    ['subjectThCh','subjectInCh','subjectThFm','subjectThPm','subjectInFm','subjectInPm'].forEach(id=>document.getElementById(id).disabled=false);
     document.getElementById('subjectAction').value = 'add';
     document.getElementById('subjectId').value = '';
     document.getElementById('subjectModalTitle').innerHTML = '<i class="fas fa-book"></i> Add Universal Subject';
@@ -675,6 +679,9 @@ function editSubject(s) {
     document.getElementById('subjectInPm').value = parseFloat(s.in_pass_marks || 10).toFixed(2);
     
     calculateModalTotals();
+    const thematic=s.assessment_method==='THEMATIC_CONTINUOUS';
+    ['subjectThCh','subjectInCh','subjectThFm','subjectThPm','subjectInFm','subjectInPm'].forEach(id=>{const el=document.getElementById(id);el.disabled=thematic;if(thematic){el.value='';el.placeholder='Not specified';}});
+    if(thematic){document.getElementById('modal_total_ch_display').innerText=s.credit_hours+' CH';document.getElementById('modal_total_fm_display').innerText='Achievement 0–100%';}
     
     // Hide and don't require class selection for editing
     document.getElementById('subjectMapClassWrapper').style.display = 'none';

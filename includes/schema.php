@@ -6,7 +6,8 @@ function dbColumns(PDO $db, string $table): array {
 }
 function migrateSchoolSchema(PDO $db): void {
     $db->exec('CREATE TABLE IF NOT EXISTS app_meta (meta_key VARCHAR(100) PRIMARY KEY, meta_value VARCHAR(255) NOT NULL)');
-    if ($db->query("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'")->fetchColumn() === '3') return;
+    if ($db->query("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'")->fetchColumn() === '4') return;
+    $db->exec('CREATE TABLE IF NOT EXISTS cdc_reference (category VARCHAR(50) NOT NULL,item_key VARCHAR(50) NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(category,item_key))');
     $pk = DB_TYPE === 'sqlite' ? 'INTEGER PRIMARY KEY AUTOINCREMENT' : 'INT AUTO_INCREMENT PRIMARY KEY';
     $tables = [
         'class_subjects' => 'class_id INTEGER NOT NULL, subject_id INTEGER NOT NULL, teacher_id VARCHAR(255), credit_hours DECIMAL(6,2) DEFAULT 4',
@@ -28,13 +29,13 @@ function migrateSchoolSchema(PDO $db): void {
         'schools' => ['principal_name'=>'VARCHAR(100)', 'principal_mobile'=>'VARCHAR(20)', 'technical_person'=>'VARCHAR(100)', 'class_teacher_signature'=>'VARCHAR(255)', 'routine_periods_per_day'=>'INTEGER DEFAULT 8', 'routine_include_sunday'=>'INTEGER DEFAULT 1', 'subscription_type'=>"VARCHAR(30) DEFAULT 'full'", 'question_permission_status'=>"VARCHAR(20) DEFAULT 'none'", 'question_view_permission'=>"VARCHAR(20) DEFAULT 'none'", 'learning_hub_permission_status'=>"VARCHAR(20) DEFAULT 'none'", 'workflow_version'=>'INTEGER DEFAULT 0'],
         'users' => ['school_id'=>'INTEGER DEFAULT 1', 'signature'=>'VARCHAR(255)'],
         'classes' => ['school_id'=>'INTEGER DEFAULT 1', 'source_id'=>'INTEGER', 'class_teacher_id'=>'INTEGER', 'class_teacher_name'=>'VARCHAR(100)', 'class_teacher_signature'=>'VARCHAR(255)', 'is_active'=>'INTEGER DEFAULT 1', 'is_grading_teaching'=>'INTEGER DEFAULT 0'],
-        'subjects' => ['school_id'=>'INTEGER DEFAULT 1', 'source_id'=>'INTEGER', 'is_hidden'=>'INTEGER DEFAULT 0'] + $evaluation,
+        'subjects' => ['school_id'=>'INTEGER DEFAULT 1', 'source_id'=>'INTEGER', 'is_hidden'=>'INTEGER DEFAULT 0', 'assessment_method'=>'VARCHAR(50)', 'curriculum_version'=>'VARCHAR(50)'] + $evaluation,
         'sections' => ['school_id'=>'INTEGER DEFAULT 1'],
         'students' => ['school_id'=>'INTEGER DEFAULT 1', 'optional_subject_i'=>'INTEGER', 'optional_subject_ii'=>'INTEGER', 'optional_subject_iii'=>'INTEGER'],
         'exams' => ['school_id'=>'INTEGER DEFAULT 1', 'result_system'=>"VARCHAR(20) DEFAULT 'gpa'", 'has_internal'=>'INTEGER DEFAULT 0'],
         'academic_years' => ['school_id'=>'INTEGER DEFAULT 1', 'is_hidden'=>'INTEGER DEFAULT 0'],
-        'class_subjects' => ['school_id'=>'INTEGER DEFAULT 1', 'section_id'=>'INTEGER', 'is_optional'=>'INTEGER DEFAULT 0', 'is_active'=>'INTEGER DEFAULT 1'] + $evaluation,
-        'exam_subjects' => ['credit_hours'=>'DECIMAL(6,2)', 'internal_credit_hours'=>'DECIMAL(6,2)', 'external_credit_hours'=>'DECIMAL(6,2)', 'is_optional'=>'INTEGER'],
+        'class_subjects' => ['school_id'=>'INTEGER DEFAULT 1', 'section_id'=>'INTEGER', 'is_optional'=>'INTEGER DEFAULT 0', 'is_active'=>'INTEGER DEFAULT 1', 'assessment_method'=>'VARCHAR(50)', 'curriculum_version'=>'VARCHAR(50)', 'curriculum_key'=>'VARCHAR(50)', 'curriculum_status'=>'VARCHAR(50)', 'source_notes'=>'TEXT', 'subject_order'=>'INTEGER DEFAULT 0'] + $evaluation,
+        'exam_subjects' => ['credit_hours'=>'DECIMAL(6,2)', 'internal_credit_hours'=>'DECIMAL(6,2)', 'external_credit_hours'=>'DECIMAL(6,2)', 'is_optional'=>'INTEGER', 'assessment_method'=>'VARCHAR(50)', 'curriculum_version'=>'VARCHAR(50)'],
         'marks' => ['internal_breakdown'=>'TEXT'],
         'questions' => ['school_id'=>'INTEGER DEFAULT 1', 'answer'=>'TEXT', 'question_text_np'=>'TEXT', 'answer_np'=>'TEXT', 'options_np'=>'TEXT', 'topic_id'=>'INTEGER', 'cognitive_domain'=>"VARCHAR(50) DEFAULT 'Knowledge'"]
     ];
@@ -56,6 +57,8 @@ function migrateSchoolSchema(PDO $db): void {
         require_once __DIR__ . '/curriculum.php';
         if (!(int)$db->query('SELECT COUNT(*) FROM class_subjects WHERE school_id=0')->fetchColumn()) seedUniversalCurriculum($db);
         foreach ($db->query('SELECT id FROM schools')->fetchAll(PDO::FETCH_COLUMN) as $schoolId) provisionSchool($db, (int)$schoolId);
+        require_once __DIR__.'/cdc_2083.php';
+        importCdc2083($db);
         $db->exec("UPDATE exam_subjects SET is_optional=COALESCE((SELECT MAX(cs.is_optional) FROM class_subjects cs WHERE cs.class_id=exam_subjects.class_id AND cs.subject_id=exam_subjects.subject_id),(SELECT CASE WHEN s.type='optional' THEN 1 ELSE 0 END FROM subjects s WHERE s.id=exam_subjects.subject_id),0) WHERE is_optional IS NULL");
         $db->exec("UPDATE classes SET class_teacher_id = (SELECT MIN(u.id) FROM users u WHERE u.school_id=classes.school_id AND u.full_name=classes.class_teacher_name AND u.role='teacher') WHERE class_teacher_id IS NULL AND class_teacher_name IS NOT NULL");
         $db->commit();
@@ -71,7 +74,7 @@ function migrateSchoolSchema(PDO $db): void {
     $db->beginTransaction();
     try {
         $db->prepare('DELETE FROM app_meta WHERE meta_key=?')->execute(['workflow_schema']);
-        $db->prepare('INSERT INTO app_meta (meta_key, meta_value) VALUES (?, ?)')->execute(['workflow_schema','3']);
+        $db->prepare('INSERT INTO app_meta (meta_key, meta_value) VALUES (?, ?)')->execute(['workflow_schema','4']);
         $db->commit();
     } catch (Throwable $e) { if ($db->inTransaction()) $db->rollBack(); throw $e; }
 }

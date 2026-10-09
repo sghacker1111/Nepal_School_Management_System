@@ -33,7 +33,7 @@ function saveExamMarks(PDO $db,int $school,int $user,string $role,array $input):
             $practical=0.0;$breakdown=null;
             if($exam['has_internal'] && $exam['type']!=='unit' && (float)$scheme['practical_full']>0){
                 $parts=[];
-                foreach(['participation','project_work','previous_exam'] as $key)$parts[$key]=erpMarkValue($fields[$key]??null,(float)$scheme['practical_full']);
+                foreach(cdc2083InternalComponents($scheme,$exam) as $key=>$component)$parts[$key]=erpMarkValue($fields[$key]??null,(float)$component['max']);
                 $practical=in_array(null,$parts,true)?null:erpMarkValue(array_sum($parts),(float)$scheme['practical_full']);
                 $breakdown=json_encode($parts);
             }

@@ -1,0 +1,43 @@
+<?php
+require_once __DIR__.'/../../config/config.php';
+require_once __DIR__.'/../../includes/database.php';
+require_once __DIR__.'/../../includes/auth.php';
+require_once __DIR__.'/../../includes/functions.php';
+Auth::requireRole(['super_admin','school_admin']);
+$db=getDB();$school=(int)Auth::getSchoolId();$data=cdc2083Data();$error='';
+if($_SERVER['REQUEST_METHOD']==='POST'){
+    try{
+        if(!Auth::verifyCSRFToken($_POST[CSRF_TOKEN_NAME]??''))throw new InvalidArgumentException('Invalid security token.');
+        if(empty($_POST['confirmed']))throw new InvalidArgumentException('Confirm that this course and code are approved for your school.');
+        $key=(string)($_POST['curriculum_key']??'');$source=null;
+        foreach($data['CLASS_SUBJECTS'] as $row)if(cdc2083Key($row)===$key)$source=$row;
+        if(!$source)throw new InvalidArgumentException('Unknown workbook row.');
+        $code=trim((string)($_POST['subject_code']??''));
+        if($code!==''&&!preg_match('/^[A-Za-z0-9_-]{1,30}$/',$code))throw new InvalidArgumentException('Use a valid course code.');
+        $db->beginTransaction();
+        importCdc2083Scope($db,$school,true,$key,$code);
+        $db->commit();
+        Auth::logActivity(Auth::getUserId(),'Confirmed CDC workbook course '.$key,'class_subjects');
+        redirect(APP_URL.'/modules/settings/cdc.php?grade='.$source['class_grade'],'School course confirmed. Saved exam settings were not changed.');
+    }catch(Throwable $e){if($db->inTransaction())$db->rollBack();$error=$e instanceof InvalidArgumentException?$e->getMessage():'The course could not be saved. Please try again.';}
+}
+$grade=max(1,min(12,(int)($_GET['grade']??4)));
+$q=$db->prepare('SELECT cs.*,s.name_en,s.code,c.name class_name FROM class_subjects cs JOIN subjects s ON s.id=cs.subject_id JOIN classes c ON c.id=cs.class_id WHERE cs.school_id=? AND c.name=? ORDER BY cs.subject_order,cs.id');$q->execute([$school,'Class '.$grade]);$current=[];
+foreach($q as $row)if($row['curriculum_key'])$current[$row['curriculum_key']]=$row;
+$pageTitle='CDC 2083 curriculum & grading';$activePage='cdc_grading';ob_start();
+$show=static fn($v)=>$v===null?'Not specified':sanitize($v);
+?>
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3"><div><h2>CDC 2083 curriculum & grading</h2><p class="text-muted mb-0">Imported workbook values, school offerings and grading rules in one place.</p></div><a class="btn btn-outline-primary" href="<?= APP_URL ?>/modules/classes/index.php">Class subject settings</a></div>
+<?php if($error):?><div class="alert alert-danger"><?= sanitize($error) ?></div><?php endif;?>
+<div class="alert alert-info">The workbook is a source-aligned reference, not a complete national course catalogue. Class 11 is a sample; Class 12 is illustrative. Existing offerings and historical exams are retained. Electives still require individual student selection.</div>
+<div class="card mb-3"><div class="card-body"><form method="GET" class="d-flex align-items-center gap-3"><label for="grade" class="form-label mb-0">Class</label><select id="grade" name="grade" class="form-select w-auto" onchange="this.form.submit()"><?php foreach(range(1,12) as $g):?><option value="<?= $g ?>" <?= $g===$grade?'selected':'' ?>>Class <?= $g ?></option><?php endforeach;?></select><button class="btn btn-outline-secondary">View</button><span class="text-muted">1 credit hour = 32 working hours</span></form></div></div>
+<div class="card mb-3"><div class="card-body"><h3 class="h5">Class <?= $grade ?> source values</h3><div class="table-responsive"><table class="table align-middle"><thead><tr><th>Subject / code</th><th>Credit hours<br>TH / IN / Total</th><th>Marks maximum<br>TH / IN / Total</th><th>School status</th><th>Source & review</th></tr></thead><tbody>
+<?php $total=0;foreach($data['CLASS_SUBJECTS'] as $row):if((int)$row['class_grade']!==$grade)continue;$key=cdc2083Key($row);$live=$current[$key]??null;$total+=$row['total_credit_hours'];$review=!in_array($row['import_flag'],['YES','REVIEW_LOCAL'],true);?>
+<tr><td><strong><?= sanitize($row['subject_name_en']) ?></strong><br><small>Source code: <?= $show($row['source_subject_code']) ?></small><br><small><?= sanitize($row['subject_type']) ?></small></td><td><?= $show($row['th_credit_hours']) ?> / <?= $show($row['in_credit_hours']) ?> / <strong><?= $row['total_credit_hours'] ?></strong></td><td><?php if($row['method_id']==='THEMATIC_CONTINUOUS'):?>Achievement 0–100%<br><small>No TH/IN marks split</small><?php else:?><?= $row['th_marks_max'] ?> / <?= $row['in_marks_max'] ?> / <?= $row['th_marks_max']+$row['in_marks_max'] ?><?php endif;?></td><td><span class="badge <?= $live&&$live['is_active']?'bg-success':'bg-secondary' ?>"><?= $live&&$live['is_active']?'Available':'Staged' ?></span><br><small><?= sanitize($live['curriculum_status']??'Not imported') ?></small><?php if($live):?><br><small>Current CH: <?= $live['credit_hours'] ?><br>Current code: <?= $show($live['code']) ?></small><?php endif;?></td><td><small><?= sanitize($row['source_doc_section']) ?><br><?= sanitize($row['verification_notes']??'') ?></small>
+<?php if($review&&($live['curriculum_status']??'')!=='SCHOOL_CONFIRMED'):?><details class="mt-2"><summary>Confirm school offering</summary><form method="POST" class="mt-2"><input type="hidden" name="curriculum_key" value="<?= $key ?>"><label class="form-label" for="code<?= $row['subject_order'] ?>">Approved subject code</label><input id="code<?= $row['subject_order'] ?>" name="subject_code" class="form-control form-control-sm" value="<?= sanitize($row['source_subject_code']??'') ?>" maxlength="30"><label class="d-block my-2 small"><input type="checkbox" name="confirmed" value="1" required> I have verified this course, code and credit/marks split for this school.</label><button class="btn btn-sm btn-outline-primary">Apply to this school</button></form></details><?php endif;?></td></tr>
+<?php endforeach;?></tbody></table></div><p class="text-muted mb-0">Workbook example roster: <?= $total ?> CH (<?= $total*32 ?> hours). Actual student totals depend on selected electives. Additional existing courses have not been removed.</p></div></div>
+<div class="row g-3"><div class="col-lg-6"><div class="card h-100"><div class="card-body"><h3 class="h5">Current percentage grading (2083)</h3><table class="table table-sm"><thead><tr><th>Percentage</th><th>Grade</th><th>GP</th><th>Description</th></tr></thead><tbody><?php foreach($data['GRADE_2083'] as $b):?><tr><td><?= $b['minimum_percent_inclusive'] ?>–<?= $b['maximum_percent_exclusive']===null?'100 (inclusive)':'< '.$b['maximum_percent_exclusive'] ?></td><td><?= $b['letter_grade'] ?></td><td><?= $b['grade_point']??'—' ?></td><td><?= sanitize($b['english_descriptor']) ?> / <?= sanitize($b['nepali_descriptor']) ?></td></tr><?php endforeach;?></tbody></table><p class="small">TH minimum: 35%; IN minimum: 40%. Subject GP uses independently graded sections weighted by their credits. Overall GPA uses unrounded weighted totals, displayed to two decimals. NG/incomplete subjects cannot produce a passing GPA. Legacy 2079 data is stored separately and is not the current grading scheme.</p></div></div></div>
+<div class="col-lg-6"><div class="card h-100"><div class="card-body"><h3 class="h5">Internal assessment contributions</h3><p class="small">Enter scaled contribution marks, not the raw trimester exam score. Contribution = raw score ÷ raw maximum × contribution maximum. Annual assessment has four components.</p><table class="table table-sm"><thead><tr><th>Grades</th><th>Period</th><th>Component</th><th>Maximum</th></tr></thead><tbody><?php foreach($data['ASSESSMENT'] as $a):if($a['section']!=='IN')continue;?><tr><td><?= $a['grade_band'] ?></td><td><?= sanitize($a['period']) ?></td><td><?= sanitize($a['assessment_component']) ?></td><td><?= sanitize($a['contribution_max']) ?></td></tr><?php endforeach;?></tbody></table></div></div></div></div>
+<details class="card mt-3"><summary class="card-header">Source conflicts and limitations (<?= count($data['AUDIT']) ?>)</summary><div class="card-body"><?php foreach($data['AUDIT'] as $a):?><p class="small"><strong><?= sanitize($a['severity'].' — '.$a['issue']) ?></strong><br><?= sanitize($a['what_the_sources_say']) ?> <span class="text-muted"><?= sanitize($a['source']) ?></span></p><?php endforeach;?></div></details>
+<p class="small text-muted mt-3">Source: <?= sanitize($data['source_file']) ?> · Version <?= sanitize($data['version']) ?> · <a href="<?= sanitize($data['official_directive_url']) ?>" target="_blank" rel="noopener">CDC directive publication</a></p>
+<?php $content=ob_get_clean();require __DIR__.'/../../includes/header.php';?>

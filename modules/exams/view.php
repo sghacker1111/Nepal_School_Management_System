@@ -111,8 +111,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['map_subject']) && Aut
         $credit_hours = ($exam['type'] === 'unit' || $_POST['credit_hours'] === '') ? null : (float)$_POST['credit_hours'];
         $internal_credit_hours = ($exam['type'] === 'unit' || $_POST['internal_credit_hours'] === '') ? null : (float)$_POST['internal_credit_hours'];
         $external_credit_hours = ($exam['type'] === 'unit' || $_POST['external_credit_hours'] === '') ? null : (float)$_POST['external_credit_hours'];
-        $optionalQuery=$db->prepare('SELECT MAX(is_optional) FROM class_subjects WHERE class_id=? AND subject_id=?');
-        $optionalQuery->execute([$class_id,$subject_id]);$is_optional=(int)$optionalQuery->fetchColumn();
+        $optionalQuery=$db->prepare('SELECT * FROM class_subjects WHERE class_id=? AND subject_id=? AND school_id=? ORDER BY id LIMIT 1');
+        $optionalQuery->execute([$class_id,$subject_id,$school_id]);$catalogScheme=$optionalQuery->fetch()?:[];$is_optional=(int)($catalogScheme['is_optional']??0);
+        $assessmentMethod=$catalogScheme['assessment_method']??null;$curriculumVersion=$catalogScheme['curriculum_version']??null;
+        if($assessmentMethod==='THEMATIC_CONTINUOUS'){$theory_full=100;$theory_pass=35;$practical_full=0;$practical_pass=0;$credit_hours=(float)$catalogScheme['credit_hours'];$internal_credit_hours=null;$external_credit_hours=null;}
         $form_edit_id = (int)($_POST['edit_mapping_id'] ?? 0);
         
         if (empty($class_id) || empty($subject_id)) {
@@ -120,8 +122,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['map_subject']) && Aut
         } else {
             try {
                 if ($form_edit_id > 0) {
-                    $stmt = $db->prepare("UPDATE exam_subjects SET class_id = ?, subject_id = ?, theory_full = ?, theory_pass = ?, practical_full = ?, practical_pass = ?, credit_hours = ?, internal_credit_hours = ?, external_credit_hours = ?, is_optional = ? WHERE id = ? AND exam_id = ?");
-                    $stmt->execute([$class_id, $subject_id, $theory_full, $theory_pass, $practical_full, $practical_pass, $credit_hours, $internal_credit_hours, $external_credit_hours, $is_optional, $form_edit_id, $exam_id]);
+                    $stmt = $db->prepare("UPDATE exam_subjects SET class_id = ?, subject_id = ?, theory_full = ?, theory_pass = ?, practical_full = ?, practical_pass = ?, credit_hours = ?, internal_credit_hours = ?, external_credit_hours = ?, is_optional = ?, assessment_method=?, curriculum_version=? WHERE id = ? AND exam_id = ?");
+                    $stmt->execute([$class_id, $subject_id, $theory_full, $theory_pass, $practical_full, $practical_pass, $credit_hours, $internal_credit_hours, $external_credit_hours, $is_optional, $assessmentMethod, $curriculumVersion, $form_edit_id, $exam_id]);
                     Auth::logActivity(Auth::getUserId(), "Updated Exam Subject Configuration", 'exam_subjects', $form_edit_id);
                     $success = 'Subject configuration updated successfully!';
                     redirect(APP_URL . "/modules/exams/view.php?id=$exam_id", $success);
@@ -132,8 +134,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['map_subject']) && Aut
                     if ($stmt->fetch()) {
                         $error = 'This subject is already configured for the selected class in this exam.';
                     } else {
-                        $stmt = $db->prepare("INSERT INTO exam_subjects (exam_id, subject_id, class_id, theory_full, theory_pass, practical_full, practical_pass, credit_hours, internal_credit_hours, external_credit_hours, is_optional) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                        $stmt->execute([$exam_id, $subject_id, $class_id, $theory_full, $theory_pass, $practical_full, $practical_pass, $credit_hours, $internal_credit_hours, $external_credit_hours, $is_optional]);
+                        $stmt = $db->prepare("INSERT INTO exam_subjects (exam_id, subject_id, class_id, theory_full, theory_pass, practical_full, practical_pass, credit_hours, internal_credit_hours, external_credit_hours, is_optional, assessment_method, curriculum_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                        $stmt->execute([$exam_id, $subject_id, $class_id, $theory_full, $theory_pass, $practical_full, $practical_pass, $credit_hours, $internal_credit_hours, $external_credit_hours, $is_optional, $assessmentMethod, $curriculumVersion]);
                         Auth::logActivity(Auth::getUserId(), "Mapped Subject ID $subject_id to Class ID $class_id in Exam ID $exam_id", 'exam_subjects');
                         $success = 'Subject mapped successfully!';
                     }
@@ -206,8 +208,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['initialize_defaults']
                             }
                         }
                         
-                        $ins = $db->prepare("INSERT INTO exam_subjects (exam_id, subject_id, class_id, theory_full, theory_pass, practical_full, practical_pass, credit_hours, internal_credit_hours, external_credit_hours, is_optional) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                        $ins->execute([$exam_id, $cs['subject_id'], $class_id, $theory_full, $theory_pass, $practical_full, $practical_pass, $credit_hours, $int_ch, $ext_ch, (int)$cs['is_optional']]);
+                        if(($cs['assessment_method']??'')==='THEMATIC_CONTINUOUS'){$theory_full=100;$theory_pass=35;$practical_full=0;$practical_pass=0;$credit_hours=(float)$cs['credit_hours'];$int_ch=null;$ext_ch=null;}
+                        $ins = $db->prepare("INSERT INTO exam_subjects (exam_id, subject_id, class_id, theory_full, theory_pass, practical_full, practical_pass, credit_hours, internal_credit_hours, external_credit_hours, is_optional, assessment_method, curriculum_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                        $ins->execute([$exam_id, $cs['subject_id'], $class_id, $theory_full, $theory_pass, $practical_full, $practical_pass, $credit_hours, $int_ch, $ext_ch, (int)$cs['is_optional'], $cs['assessment_method'], $cs['curriculum_version']]);
                         $inserted++;
                     }
                 }

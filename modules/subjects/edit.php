@@ -70,6 +70,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $credit_hours = round($th_credit_hours + $in_credit_hours, 2);
     $full_marks = round($th_full_marks + $in_full_marks, 2);
     $pass_marks = round($th_pass_marks + $in_pass_marks, 2);
+    if(($subject['assessment_method']??'')==='THEMATIC_CONTINUOUS'){
+        $th_credit_hours=$in_credit_hours=$th_full_marks=$th_pass_marks=$in_full_marks=$in_pass_marks=null;
+        $credit_hours=(float)$subject['credit_hours'];$full_marks=100;$pass_marks=35;
+    }
     
     $teacher_ids = $_POST['teacher_ids'] ?? [];
     
@@ -179,6 +183,7 @@ ob_start();
         <h5 class="mb-0"><i class="fas fa-book"></i> Edit Subject Configuration</h5>
     </div>
     <div class="card-body p-4">
+        <?php if(($subject['assessment_method']??'')==='THEMATIC_CONTINUOUS'):?><div class="alert alert-info">Continuous achievement assessment (Grades 1–3). The source specifies total credits, not a Theory/Internal split or exam full marks. These unspecified fields remain blank; enter achievement percentage on the marks screen.</div><?php endif;?>
         <form method="POST" action="" class="needs-validation" novalidate>
             <div class="row g-3">
                 <div class="col-md-6 mb-3">
@@ -331,6 +336,7 @@ ob_start();
 
 <script>
 function calcTotals() {
+    if(<?= json_encode(($subject['assessment_method']??'')==='THEMATIC_CONTINUOUS') ?>) return;
     var th_ch = parseFloat(document.getElementById('th_credit_hours').value) || 0;
     var in_ch = parseFloat(document.getElementById('in_credit_hours').value) || 0;
     document.getElementById('total_credit_hours').value = (th_ch + in_ch).toFixed(2);
@@ -345,6 +351,9 @@ function calcTotals() {
 }
 
 // Bootstrap form validation
+<?php if(($subject['assessment_method']??'')==='THEMATIC_CONTINUOUS'):?>
+['th_credit_hours','in_credit_hours','th_full_marks','in_full_marks','th_pass_marks','in_pass_marks'].forEach(id=>{const el=document.getElementById(id);el.value='';el.disabled=true;el.required=false;el.placeholder='Not specified (achievement assessment)';});
+<?php endif;?>
 (function () {
   'use strict'
   var forms = document.querySelectorAll('.needs-validation')

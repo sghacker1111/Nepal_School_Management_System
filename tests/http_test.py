@@ -133,10 +133,54 @@ with tempfile.TemporaryDirectory(prefix='erp-http-') as tmp:
         db.execute('UPDATE marks SET theory_obtained=NULL WHERE subject_id=?',(second_subject,));db.commit()
         for route in [f"/modules/results/report_card.php?student={f['student']}&exam={f['exam']}&system=percentage",'/modules/results/print_bulk.php?'+query+'&system=gpa']:
             body=request(route);assert 'Incomplete' in body and 'Passed (Incomplete)' not in body and 'Graded (GPA Incomplete)' not in body
+        # Source-aware CDC import UI and real annual/achievement workflows.
+        for grade in [1,4,9,11,12]:
+            body=request('/modules/settings/cdc.php?grade='+str(grade))
+            assert 'CDC 2083 curriculum' in body and 'Class 12 is illustrative' in body
+        saved_schemes=db.execute('SELECT * FROM exam_subjects ORDER BY id').fetchall()
+        request('/modules/settings/cdc.php',{'curriculum_key':'11:4','subject_code':'101','confirmed':'1'})
+        assert db.execute("SELECT curriculum_status FROM class_subjects WHERE school_id=1 AND curriculum_key='11:4'").fetchone()[0]=='SCHOOL_CONFIRMED'
+        assert db.execute('SELECT * FROM exam_subjects ORDER BY id').fetchall()==saved_schemes
+        mapping_count=db.execute('SELECT COUNT(*) FROM class_subjects').fetchone()[0]
+        request('/modules/settings/cdc.php',{'curriculum_key':'11:4','subject_code':'101','confirmed':'1'})
+        assert db.execute('SELECT COUNT(*) FROM class_subjects').fetchone()[0]==mapping_count
+        request('/modules/settings/cdc.php',{'curriculum_key':'11:4','subject_code':'101','confirmed':'1'},expected=419,csrf=False)
+        for grade in [1,4]:
+            c=db.execute('SELECT id FROM classes WHERE school_id=1 AND name=?',('Class '+str(grade),)).fetchone()[0]
+            request('/modules/classes/subjects.php?class_id='+str(c))
+            student=db.execute("INSERT INTO students(student_id,academic_year_id,class_id,first_name_en,last_name_en,gender,school_id,status) VALUES (?,1,?,'CDC','Example','Male',1,'active')",('CDC-'+str(grade),c)).lastrowid
+            exam=db.execute("INSERT INTO exams(name,type,academic_year_id,school_id,has_internal,result_system) VALUES ('CDC Annual','final',1,1,1,'gpa')").lastrowid
+            db.commit()
+            request('/modules/exams/view.php?id='+str(exam),{'initialize_defaults':'1','init_class_id':c})
+            schemes=db.execute('SELECT subject_id,assessment_method,internal_credit_hours,external_credit_hours FROM exam_subjects WHERE exam_id=?',(exam,)).fetchall()
+            assert len(schemes)==(5 if grade==1 else 7)
+            assert all(s[1]==('THEMATIC_CONTINUOUS' if grade==1 else 'DUAL_50_50') for s in schemes)
+            q=urlencode({'exam':exam,'class':c})
+            body=request('/modules/results/marks_entry.php?'+q)
+            assert ('Achievement (%)' if grade==1 else 'Second trimester contribution') in body
+            values={'save_marks':'1','exam_id':exam,'class_id':c}
+            for subject,*_ in schemes:
+                parts={'theory':80} if grade==1 else {'theory':40,'participation':4,'project_work':36,'first_trimester':5,'second_trimester':5}
+                for k,v in parts.items():values[f'marks[{student}][{subject}][{k}]']=v
+            body=request('/modules/results/marks_entry.php?'+q,values);assert 'saved successfully' in body
+            points=db.execute('SELECT DISTINCT grade_point FROM marks WHERE exam_id=?',(exam,)).fetchall()
+            assert points==[(3.6 if grade==1 else 3.8,)],points
+            for route in [f'/modules/results/report_card.php?student={student}&exam={exam}','/modules/results/print_bulk.php?'+q,'/modules/results/ledger.php?'+q]:
+                body=request(route);assert ('3.60' if grade==1 else '3.80') in body and 'Incomplete' not in body
+            subject=schemes[0][0]
+            if grade==4:
+                bad=dict(values);bad[f'marks[{student}][{subject}][participation]']=5
+                body=request('/modules/results/marks_entry.php?'+q,bad);assert 'Marks must be between' in body
+            else:
+                assert all(s[2] is None and s[3] is None for s in schemes),'Achievement split must remain unspecified'
+                row=db.execute('SELECT id,credit_hours FROM class_subjects WHERE school_id=1 AND class_id=? AND subject_id=?',(c,subject)).fetchone()
+                request('/modules/classes/subjects.php?class_id='+str(c),{'action':'edit_mapping','mapping_id':row[0],'credit_hours':row[1],'is_optional':'0'})
+                assert db.execute('SELECT th_credit_hours,in_credit_hours,th_full_marks,in_full_marks FROM class_subjects WHERE id=?',(row[0],)).fetchone()==(None,None,None,None)
+                request('/modules/subjects/edit.php?id='+str(subject))
         for path in ['/database.sqlite','/database_sqlite.sql','/config/migrate.php','/.git/config','/tests/http_fixture.php']:request(path,expected=404)
-        login('teacher');request('/modules/settings/users.php',expected=403);request('/modules/classes/routine.php',{'action':'generate'},expected=403)
+        login('teacher');request('/modules/settings/users.php',expected=403);request('/modules/settings/cdc.php',expected=403);request('/modules/classes/routine.php',{'action':'generate'},expected=403)
         login('admin')
-        for path in ['/modules/super_admin/index.php','/modules/super_admin/schools.php','/modules/super_admin/users.php','/modules/super_admin/subjects.php','/modules/classes/index.php','/modules/learning/questions.php']:request(path)
+        for path in ['/modules/super_admin/index.php','/modules/super_admin/schools.php','/modules/super_admin/users.php','/modules/super_admin/subjects.php','/modules/classes/index.php','/modules/learning/questions.php','/modules/settings/cdc.php']:request(path)
         request('/modules/super_admin/switch_school.php?school_id=1')
         request('/modules/settings/school.php',{'name_en':'Unauthorized change'},expected=403)
         print(f'HTTP integration passed: {count} requests; marks, reports, attendance, users, tenant isolation, CSRF, archive preservation and private-file protection.')

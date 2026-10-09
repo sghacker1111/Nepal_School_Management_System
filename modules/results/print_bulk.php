@@ -190,7 +190,7 @@ ob_start();
                            sub.name_en as subject_name, sub.name_np as subject_name_np, sub.code as subject_code, COALESCE(es.is_optional,CASE WHEN sub.type='optional' THEN 1 ELSE 0 END) as is_optional, sub.id as subject_id,
                            es.credit_hours as exam_credit_hours, sub.credit_hours as default_credit_hours,
                            es.theory_full, es.theory_pass, es.practical_full, es.practical_pass,
-                           es.internal_credit_hours, es.external_credit_hours
+                           es.internal_credit_hours, es.external_credit_hours, es.assessment_method, es.curriculum_version
                     FROM exam_subjects es
                     JOIN subjects sub ON es.subject_id = sub.id
                     LEFT JOIN marks m ON m.exam_id = es.exam_id AND m.subject_id = es.subject_id AND m.student_id = ?

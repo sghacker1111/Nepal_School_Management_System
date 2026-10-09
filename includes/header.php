@@ -18,6 +18,7 @@ if ($layoutRole === 'super_admin') {
         ['super_admin_schools','Schools','school','/modules/super_admin/schools.php',''],
         ['super_admin_users','User management','users-gear','/modules/super_admin/users.php',''],
         ['super_admin_subjects','CDC catalog','book-open','/modules/super_admin/subjects.php',''],
+        ['cdc_grading','CDC 2083 grading','graduation-cap','/modules/settings/cdc.php',''],
     ];
 }
 if ($layoutRole !== 'super_admin' || $layoutSchoolId) {
@@ -49,6 +50,7 @@ if ($layoutSchoolId && in_array($layoutRole,$adminRoles,true)) {
         ['users','Staff accounts','users-gear','/modules/settings/users.php','settings'],
         ['school_settings','School settings','sliders','/modules/settings/school.php','settings'],
         ['settings','Academic years','calendar','/modules/settings/years.php','settings'],
+        ['cdc_grading','CDC 2083 grading','graduation-cap','/modules/settings/cdc.php','settings'],
     ];
 }
 ?>
