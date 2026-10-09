@@ -29,7 +29,7 @@ if (isset($_POST['add_class'])) {
     if (empty($name)) {
         $error = 'Class name is required';
     } else {
-        $stmt_check = $db->prepare("SELECT COUNT(*) FROM classes WHERE LOWER(name) = LOWER(?) AND (school_id = ? OR school_id = 0)");
+        $stmt_check = $db->prepare("SELECT COUNT(*) FROM classes WHERE LOWER(name) = LOWER(?) AND (school_id = ?)");
         $stmt_check->execute([$name, $school_id]);
         if ($stmt_check->fetchColumn() > 0) {
             $error = 'Class with this name already exists. Class names must be unique.';
@@ -117,7 +117,7 @@ if (isset($_POST['add_section'])) {
 }
 
 // Fetch classes for dropdown
-$stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ? OR school_id = 0) ORDER BY id ASC");
+$stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ?) ORDER BY id ASC");
 $stmt->execute([$school_id]);
 $classes = $stmt->fetchAll();
 

@@ -28,7 +28,7 @@ if (isset($_GET['action'])) {
                 SELECT s.id, s.name_en, s.code 
                 FROM subjects s
                 JOIN class_subjects cs ON s.id = cs.subject_id
-                WHERE cs.class_id = ? AND (cs.school_id = ? OR cs.school_id = 0) AND cs.is_active = 1 AND (s.is_hidden = 0 OR s.is_hidden IS NULL)
+                WHERE cs.class_id = ? AND (cs.school_id = ?) AND cs.is_active = 1 AND (s.is_hidden = 0 OR s.is_hidden IS NULL)
                 ORDER BY s.name_en
             ");
             $stmt->execute([$class_id, $school_id]);
@@ -43,7 +43,7 @@ if (isset($_GET['action'])) {
     if ($action === 'get_all_subjects') {
         // Return all subjects to map to class
         try {
-            $stmt = $db->prepare("SELECT id, name_en, code FROM subjects WHERE (school_id = ? OR school_id = 0) AND (is_hidden = 0 OR is_hidden IS NULL) ORDER BY name_en");
+            $stmt = $db->prepare("SELECT id, name_en, code FROM subjects WHERE school_id = ? AND (is_hidden = 0 OR is_hidden IS NULL) ORDER BY name_en");
             $stmt->execute([$school_id]);
             $subjects = $stmt->fetchAll(PDO::FETCH_ASSOC);
             echo json_encode(['success' => true, 'subjects' => $subjects]);
@@ -59,7 +59,7 @@ if (isset($_GET['action'])) {
         try {
             $stmt = $db->prepare("
                 SELECT * FROM chapters 
-                WHERE class_id = ? AND subject_id = ? AND (school_id = ? OR school_id = 0)
+                WHERE class_id = ? AND subject_id = ? AND school_id = ?
                 ORDER BY sort_order, id
             ");
             $stmt->execute([$class_id, $subject_id, $school_id]);
@@ -76,7 +76,7 @@ if (isset($_GET['action'])) {
         try {
             $stmt = $db->prepare("
                 SELECT * FROM topics 
-                WHERE chapter_id = ? AND (school_id = ? OR school_id = 0)
+                WHERE chapter_id = ? AND school_id = ?
                 ORDER BY sort_order, id
             ");
             $stmt->execute([$chapter_id, $school_id]);
@@ -130,7 +130,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $stmt = $db->prepare("
                 UPDATE chapters 
                 SET name = ?, name_np = ?, sort_order = ? 
-                WHERE id = ? AND (school_id = ? OR school_id = 0)
+                WHERE id = ? AND school_id = ?
             ");
             $stmt->execute([$name, $name_np, $sort_order, $id, $school_id]);
             echo json_encode(['success' => true]);
@@ -139,7 +139,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
         if ($action === 'delete_chapter') {
             $id = (int)$_POST['id'];
-            $stmt = $db->prepare("DELETE FROM chapters WHERE id = ? AND (school_id = ? OR school_id = 0)");
+            $stmt = $db->prepare("DELETE FROM chapters WHERE id = ? AND school_id = ?");
             $stmt->execute([$id, $school_id]);
             echo json_encode(['success' => true]);
             exit;
@@ -181,7 +181,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $stmt = $db->prepare("
                 UPDATE topics 
                 SET name = ?, name_np = ?, sort_order = ? 
-                WHERE id = ? AND (school_id = ? OR school_id = 0)
+                WHERE id = ? AND school_id = ?
             ");
             $stmt->execute([$name, $name_np, $sort_order, $id, $school_id]);
             echo json_encode(['success' => true]);
@@ -190,7 +190,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
         if ($action === 'delete_topic') {
             $id = (int)$_POST['id'];
-            $stmt = $db->prepare("DELETE FROM topics WHERE id = ? AND (school_id = ? OR school_id = 0)");
+            $stmt = $db->prepare("DELETE FROM topics WHERE id = ? AND school_id = ?");
             $stmt->execute([$id, $school_id]);
             echo json_encode(['success' => true]);
             exit;
@@ -220,7 +220,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 }
 
 // Fetch all classes for filter
-$stmt = $db->prepare("SELECT * FROM classes WHERE school_id = ? OR school_id = 0 ORDER BY level, name");
+$stmt = $db->prepare("SELECT * FROM classes WHERE school_id = ? ORDER BY level, name");
 $stmt->execute([$school_id]);
 $classes = $stmt->fetchAll();
 

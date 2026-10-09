@@ -1,421 +1,88 @@
-# INSTALLATION GUIDE
+# Installation and upgrade
 
-## Nepal Mathematics Learning & School Result Management System
+## Requirements
 
-### Quick Start Guide for Nepali Schools
+- PHP 8.1+; tested locally on PHP 8.5.1.
+- PDO SQLite (default), or PDO MySQL with an existing imported `database.sql` schema.
+- DOM, fileinfo, mbstring; writable PHP session directory.
+- For production, HTTPS and Apache with rewrite/access-control support. Other servers must provide equivalent private-file and upload-execution restrictions.
+- The UI and scanner use external CDN libraries. Offline operation and OCR accuracy are not guaranteed.
 
----
+## Configuration
 
-## Prerequisites
+Set environment values in your hosting control panel or server service, not in committed files:
 
-Before installing, ensure you have:
+| Variable | Meaning |
+| --- | --- |
+| ERP_DB_TYPE | sqlite (default) or mysql |
+| ERP_DB_PATH | Absolute SQLite filename; use a directory outside the public web root in production |
+| ERP_DB_HOST | MySQL host |
+| ERP_DB_NAME | MySQL database name |
+| ERP_DB_USER | Dedicated MySQL user |
+| ERP_DB_PASS | MySQL password |
+| ERP_DEBUG | 1 only for isolated development; omitted/0 in production |
 
-1. **Web Server**: Apache or Nginx
-2. **PHP**: Version 8.0 or higher
-3. **Database**: MySQL 5.7+ or MariaDB 10.3+
-4. **PHP Extensions**:
-   - pdo_mysql
-   - gd (for image processing)
-   - mbstring
-   - json
-   - zip (for Excel export)
+The PHP process needs write access only to uploads, the SQLite directory (including WAL and backups), and its session directory. Do not grant Everyone full control or use world-writable 777 permissions.
 
----
+A MySQL connection failure does not fall back to SQLite.
 
-## Step 1: Database Setup
+## Fresh install
 
-### Option A: Using phpMyAdmin
+1. Configure the database. SQLite creates its schema automatically; import `database.sql` into an empty MySQL database only.
+2. Set a private `ERP_ADMIN_PASSWORD` environment value, at least 12 characters.
+3. Run `php config/setup_admin.php` from the project directory.
+4. Remove `ERP_ADMIN_PASSWORD` from the environment.
+5. Start `php -S 127.0.0.1:8000 router.php` for local development or configure the production server.
+6. Sign in as `admin` with your private password.
+7. In User management, create a school administrator for your school, then sign in with that account to configure records. System-school preview is read-only.
 
-1. Open phpMyAdmin in your browser
-   ```
-   http://localhost/phpmyadmin
-   ```
+The setup command refuses to change an already configured account. There is no new-install default password.
 
-2. Create new database:
-   - Click "New" in left sidebar
-   - Database name: `nepal_school_erp`
-   - Collation: `utf8mb4_unicode_ci`
-   - Click "Create"
+## Existing installation upgrade
 
-3. Import database schema:
-   - Select `nepal_school_erp` database
-   - Click "Import" tab
-   - Choose file: `database.sql`
-   - Click "Go"
+1. Put the site into a maintenance window. Save a recoverable database and uploads backup.
+2. Work on a staging **copy** first. Set its `ERP_DB_PATH` or MySQL connection explicitly.
+3. Run `php config/migrate.php`. The legacy `migrate_multi_tenant.php` now calls the same additive upgrade.
+4. Confirm the retained student, mark, user, attendance and exam counts. Review school/class ownership.
+5. Test sign-in, academic years, enrollment, marks entry, report cards and publication with school staff.
+6. Repeat the approved upgrade in production during the maintenance window.
 
-### Option B: Using Command Line
+SQLite existing databases get a dated pre-upgrade snapshot in `.backups` beside the database. Automatic backups do not replace independent off-site backups. MySQL requires your own pre-upgrade backup. DDL and recovery behavior must be verified in MySQL staging; that engine was not available in this local repair run.
 
-```bash
-# Login to MySQL
-mysql -u root -p
+The migration adds missing columns, independent school mappings, indexes and curriculum starters without deleting records. Legacy records whose parents are already missing cannot be reconstructed by schema migration. Restore their true relationships from a known-good backup; never guess student identities or grades.
 
-# Create database
-CREATE DATABASE nepal_school_erp CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+Do not import either base SQL schema over an existing installation.
 
-# Exit MySQL
-EXIT;
+## Web-server restrictions
 
-# Import schema
-mysql -u root -p nepal_school_erp < /path/to/database.sql
-```
+Keep the supplied `.htaccess` active on Apache. It blocks private configuration/source directories, SQL/database files, dot directories and executable PHP uploads. Local development must use `router.php`, not a bare PHP server.
 
----
+For Nginx or hosts that ignore `.htaccess`, configure equivalent restrictions before making the site public. Verify that database.sqlite, database.sql, config/, includes/, tests/, scratch/, docs/, .git/ and .backups/ are inaccessible and that uploaded files cannot execute.
 
-## Step 2: File Configuration
+Use HTTPS, production-safe error logging, limited database credentials and restricted upload directory permissions. Enable OPcache using your host's supported configuration.
 
-### 2.1 Copy Files to Web Directory
+## Everyday workflow notes
 
-**For XAMPP (Windows/Mac):**
-```
-Copy nepal_school_erp folder to: C:\xampp\htdocs\
-```
-
-**For WAMP (Windows):**
-```
-Copy nepal_school_erp folder to: C:\wamp64\www\
-```
-
-**For Linux (Apache):**
-```bash
-sudo cp -r nepal_school_erp /var/www/html/
-```
-
-### 2.2 Configure Database Connection
-
-Edit `config/config.php`:
-
-```php
-// Update these values according to your database
-define('DB_HOST', 'localhost');
-define('DB_NAME', 'nepal_school_erp');
-define('DB_USER', 'root');
-define('DB_PASS', '');  // Your MySQL password
-
-// Update application URL
-define('APP_URL', 'http://localhost/nepal_school_erp');
-```
-
-### 2.3 Set Folder Permissions
-
-**Windows (XAMPP/WAMP):**
-- Right-click `uploads` folder
-- Properties → Security
-- Give full control to Everyone
-
-**Linux:**
-```bash
-cd /var/www/html/nepal_school_erp
-chmod -R 777 uploads/
-chown -R www-data:www-data uploads/
-```
-
----
-
-## Step 3: Verify PHP Configuration
-
-### Check PHP Version
-
-Create a file `test.php` with:
-```php
-<?php phpinfo(); ?>
-```
-
-Access it: `http://localhost/nepal_school_erp/test.php`
-
-Ensure:
-- PHP Version ≥ 8.0
-- PDO MySQL extension enabled
-- GD library enabled
-- max_execution_time ≥ 30
-- upload_max_filesize ≥ 5M
-- post_max_size ≥ 10M
-
-### Update php.ini if needed
-
-**XAMPP:** `C:\xampp\php\php.ini`
-**WAMP:** `C:\wamp64\bin\php\php[version]\php.ini`
-**Linux:** `/etc/php/8.0/apache2/php.ini`
-
-```ini
-max_execution_time = 300
-max_input_time = 300
-memory_limit = 256M
-upload_max_filesize = 10M
-post_max_size = 20M
-```
-
-Restart Apache after changes.
-
----
-
-## Step 4: First Login
-
-1. Open browser and navigate to:
-   ```
-   http://localhost/nepal_school_erp
-   ```
-
-2. You will be redirected to login page
-
-3. Use default credentials:
-   ```
-   Username: admin
-   Password: admin123
-   ```
-
-4. **IMPORTANT**: Change password immediately after first login!
-
----
-
-## Step 5: Initial Setup
-
-### 5.1 Configure School Profile
-
-1. Go to Settings → School Profile
-2. Fill in school information:
-   - School Name (English & Nepali)
-   - EMIS Code
-   - Address
-   - Phone, Email
-3. Upload:
-   - School Logo (recommended: 200x200px)
-   - Principal Signature (recommended: 150x50px)
-   - Exam Coordinator Signature (recommended: 150x50px)
-4. Save
-
-### 5.2 Verify Academic Year
-
-1. Go to Settings → Academic Years
-2. Ensure current year is active (e.g., 2081/2024)
-3. Add new years as needed
-
-### 5.3 Setup Classes
-
-Classes are pre-loaded, but you can:
-1. Go to Classes module
-2. Edit existing classes
-3. Add sections (A, B, C...)
-4. Assign class teachers
-
-### 5.4 Configure Subjects
-
-1. Go to Subjects module
-2. Review pre-loaded subjects
-3. Add/edit subjects per class
-4. Set full marks, pass marks, credit hours
-
----
+- CSV dates: YYYY-MM-DD preferred. Missing dates remain unknown; invalid rows are skipped.
+- Teacher imports create disabled accounts. Set individual passwords and activate through Staff accounts.
+- Archive is reversible through the profile/status control; saved marks are not erased.
+- Existing exams retain their assessment scheme. Once any marks exist, configuration changes are blocked.
+- To correct marks: Reopen marks, correct, review, lock and republish. Reopening withdraws publication.
+- Results lists include historical academic years. Marks entry uses the current year's active students.
+- Third elective is available only in Grades 11 and 12.
+- Timetable generation can leave unplaced periods when available teachers/slots cannot satisfy the requests. Review the reported count.
 
 ## Troubleshooting
 
-### Error: Database Connection Failed
+- Security token expired: reload the page before resubmitting. Check session storage if this repeats.
+- Database connection failed: check the selected database and environment values; do not switch engines to hide the error.
+- Upload failed: use PNG/JPEG images below 5 MB. Check PHP upload limits and directory permissions. Local server-path uploads are intentionally disabled.
+- Blank page: inspect server logs. Set ERP_DEBUG=1 only in an isolated test environment.
+- Missing old marks: check the selected exam/year and database integrity. Do not reseed or reimport a base schema.
+- No active academic year: create and activate one using the school administrator account.
 
-**Solution:**
-1. Verify MySQL is running
-2. Check database credentials in `config/config.php`
-3. Ensure database exists
-4. Check user permissions
+## Verification and release
 
-```sql
--- Grant privileges
-GRANT ALL PRIVILEGES ON nepal_school_erp.* TO 'root'@'localhost';
-FLUSH PRIVILEGES;
-```
+Run the commands in README. Do not point test fixtures at a real database. Browser checks should use a temporary fixture database.
 
-### Error: Session Not Working
-
-**Solution:**
-1. Check PHP session configuration
-2. Ensure temp directory is writable
-3. Clear browser cookies/cache
-
-### Error: File Upload Fails
-
-**Solution:**
-```bash
-# Linux
-chmod 777 uploads/
-chmod 777 uploads/students/
-chmod 777 uploads/staff/
-
-# Check php.ini settings
-upload_max_filesize = 10M
-post_max_size = 20M
-```
-
-### Error: Blank White Page
-
-**Solution:**
-1. Enable error display temporarily
-2. In `config/config.php`:
-   ```php
-   ini_set('display_errors', 1);
-   error_reporting(E_ALL);
-   ```
-3. Check error logs
-4. Fix reported errors
-
-### Error: CSRF Token Mismatch
-
-**Solution:**
-1. Clear browser cache
-2. Delete session cookies
-3. Try incognito/private mode
-4. Check session configuration
-
----
-
-## Security Recommendations
-
-### For Production Deployment:
-
-1. **Change Default Password**
-   - Immediately after installation
-   - Use strong password (min 12 characters)
-
-2. **Enable HTTPS**
-   ```bash
-   # Install SSL certificate
-   # Update APP_URL to https://
-   ```
-
-3. **Disable Error Display**
-   ```php
-   // In config/config.php
-   ini_set('display_errors', 0);
-   error_reporting(0);
-   ```
-
-4. **Secure Database**
-   ```sql
-   -- Create dedicated user
-   CREATE USER 'school_user'@'localhost' IDENTIFIED BY 'strong_password';
-   GRANT ALL PRIVILEGES ON nepal_school_erp.* TO 'school_user'@'localhost';
-   FLUSH PRIVILEGES;
-   ```
-
-5. **Regular Backups**
-   ```bash
-   # Daily backup script
-   mysqldump -u root -p nepal_school_erp > backup_$(date +%Y%m%d).sql
-   ```
-
-6. **Update Regularly**
-   - Monitor for security patches
-   - Update PHP version
-   - Keep MySQL updated
-
----
-
-## Data Migration from Existing System
-
-If migrating from another system:
-
-1. **Export Data** from old system to CSV/Excel
-2. **Map Fields** to new database structure
-3. **Use Import Tools** (available in Student/Teacher modules)
-4. **Verify Data** after import
-5. **Test All Modules** before going live
-
----
-
-## Support & Training
-
-### For School Administrators:
-
-1. **Watch Tutorial Videos** (if available)
-2. **Read User Manual** (separate document)
-3. **Practice in Demo Mode** first
-4. **Contact Support** for issues
-
-### Common Tasks:
-
-- Adding Students: See Student Module Guide
-- Creating Exams: See Exam Module Guide
-- Entering Marks: See Result Module Guide
-- Printing Reports: See Report Module Guide
-
----
-
-## Backup & Restore
-
-### Create Backup
-
-**Database:**
-```bash
-mysqldump -u root -p nepal_school_erp > backup.sql
-```
-
-**Files:**
-```bash
-tar -czf backup_files.tar.gz nepal_school_erp/
-```
-
-### Restore from Backup
-
-**Database:**
-```bash
-mysql -u root -p nepal_school_erp < backup.sql
-```
-
-**Files:**
-```bash
-tar -xzf backup_files.tar.gz
-```
-
----
-
-## Performance Optimization
-
-### For Large Schools (1000+ students):
-
-1. **Database Indexing**
-   ```sql
-   ALTER TABLE students ADD INDEX idx_class (class_id);
-   ALTER TABLE marks ADD INDEX idx_exam (exam_id);
-   ```
-
-2. **PHP OPcache**
-   Enable in php.ini:
-   ```ini
-   opcache.enable=1
-   opcache.memory_consumption=128
-   ```
-
-3. **Query Caching**
-   ```sql
-   SET GLOBAL query_cache_size = 67108864;
-   ```
-
----
-
-## Checklist Before Going Live
-
-- [ ] Database installed and configured
-- [ ] School profile completed
-- [ ] Academic year set
-- [ ] Classes and sections created
-- [ ] Subjects configured
-- [ ] Teachers added
-- [ ] Students enrolled
-- [ ] Admin password changed
-- [ ] HTTPS enabled (production)
-- [ ] Backup system in place
-- [ ] Staff trained on system
-- [ ] Test all major functions
-- [ ] Print test admit cards
-- [ ] Test result publishing
-
----
-
-## Contact & Support
-
-For technical support and queries, refer to the main README.md file.
-
----
-
-**Installation Completed! 🎉**
-
-You're now ready to use the Nepal School ERP system.
-
-*Built with ❤️ for Nepali Education System*
+Before pushing main, remember that the configured GitHub workflow deploys via FTP. Review the deployment file list, keep secrets/databases/uploads out of source, back up production, and validate CDC configurations with the school. No production deployment was performed by this repair.

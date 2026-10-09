@@ -22,10 +22,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $status = isset($_POST['status']) ? 1 : 0;
     
     // Extra details
-    $dob_ad = $_POST['dob_ad'] ?: null;
-    $join_date = $_POST['join_date'] ?: null;
-    $perm_issue_date = $_POST['perm_issue_date'] ?: null;
-    $temp_issue_date = $_POST['temp_issue_date'] ?: null;
+    $dob_ad = ($_POST['dob_ad'] ?? '') ?: null;
+    $join_date = ($_POST['join_date'] ?? '') ?: null;
+    $perm_issue_date = ($_POST['perm_issue_date'] ?? '') ?: null;
+    $temp_issue_date = ($_POST['temp_issue_date'] ?? '') ?: null;
     $cit_no = sanitize($_POST['cit_no'] ?? '');
     $bank_name = sanitize($_POST['bank_name'] ?? '');
     $bank_account = sanitize($_POST['bank_account'] ?? '');
@@ -39,6 +39,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (empty($full_name) || empty($username) || empty($password)) {
         $error = 'Full name, username, and password are required';
+    } elseif ($password !== '' && strlen($password) < 8) {
+        $error = 'Passwords must contain at least 8 characters.';
+    } elseif (!preg_match('/^[A-Za-z0-9_.@-]{3,50}$/', $username) || ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL))) {
+        $error = 'Enter a valid username (3–50 characters) and email address.';
     } else {
         try {
             $db->beginTransaction();
@@ -153,7 +157,7 @@ ob_start();
                         </div>
                         <div class="col-md-6">
                             <label for="password" class="form-label">Password *</label>
-                            <input type="password" class="form-control" id="password" name="password" required placeholder="e.g. SecurePass123">
+                            <input type="password" class="form-control" id="password" name="password" minlength="8" required placeholder="e.g. SecurePass123">
                         </div>
                     </div>
                 </div>

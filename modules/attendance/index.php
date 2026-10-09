@@ -22,8 +22,8 @@ $section_id = $_GET['section'] ?? '';
 
 // Authorize class selection for teachers
 if ($class_id && Auth::getRole() === 'teacher') {
-    $stmt_chk_class = $db->prepare("SELECT COUNT(*) FROM classes WHERE id = ? AND class_teacher_name = ? AND school_id = ?");
-    $stmt_chk_class->execute([$class_id, $_SESSION['full_name'] ?? '', $school_id]);
+    $stmt_chk_class = $db->prepare("SELECT COUNT(*) FROM classes WHERE id = ? AND class_teacher_id = ? AND school_id = ?");
+    $stmt_chk_class->execute([$class_id, Auth::getUserId(), $school_id]);
     if ($stmt_chk_class->fetchColumn() == 0) {
         $class_id = '';
     }
@@ -41,8 +41,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_attendance'])) {
     } else {
         // Authorize class selection for teachers in POST
         if (Auth::getRole() === 'teacher') {
-            $stmt_chk_class = $db->prepare("SELECT COUNT(*) FROM classes WHERE id = ? AND class_teacher_name = ? AND school_id = ?");
-            $stmt_chk_class->execute([$class_id_post, $_SESSION['full_name'] ?? '', $school_id]);
+            $stmt_chk_class = $db->prepare("SELECT COUNT(*) FROM classes WHERE id = ? AND class_teacher_id = ? AND school_id = ?");
+            $stmt_chk_class->execute([$class_id_post, Auth::getUserId(), $school_id]);
             if ($stmt_chk_class->fetchColumn() == 0) {
                 redirect(APP_URL . "/modules/attendance/index.php", "Unauthorized access to class data.", "error");
             }
@@ -78,7 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_attendance'])) {
                 
                 // Simplified date conversion helper for SQLite/MySQL (can add real Nepali BS date library later)
                 // For now, let's keep date_bs as the same or simple string
-                $date_bs = $date_ad_post; 
+                $date_bs = null; // An AD date is not a BS date.
                 
                 // Fetch all active student IDs in this class to verify they belong to this school
                 $stmt_student_ids = $db->prepare("SELECT id FROM students WHERE class_id = ? AND school_id = ? AND status = 'active'");
@@ -124,14 +124,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_attendance'])) {
 }
 
 // Fetch classes
-$classes_stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ? OR school_id = 0) AND is_active = 1 ORDER BY id ASC");
+$classes_stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ?) AND is_active = 1 ORDER BY id ASC");
 $classes_stmt->execute([$school_id]);
 $classes = $classes_stmt->fetchAll();
 
 if (Auth::getRole() === 'teacher') {
-    $teacher_name = $_SESSION['full_name'] ?? '';
+    $teacher_name = Auth::getUserId();
     $classes = array_filter($classes, function($c) use ($teacher_name) {
-        return $c['class_teacher_name'] === $teacher_name;
+        return (int)$c['class_teacher_id'] === (int)$teacher_name;
     });
 }
 

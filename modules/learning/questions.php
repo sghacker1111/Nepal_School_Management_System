@@ -645,7 +645,7 @@ $query = "
 $params = [$school_id];
 
 if ($filter_class && $filter_subject) {
-    $stmt = $db->prepare("SELECT level FROM classes WHERE id = ?");
+    $stmt = $db->prepare("SELECT name FROM classes WHERE id = ?");
     $stmt->execute([$filter_class]);
     $lvl = $stmt->fetchColumn();
 
@@ -664,12 +664,12 @@ if ($filter_class && $filter_subject) {
         WHERE (
             (q.school_id = ? AND q.class_id = ? AND q.subject_id = ?)
             OR
-            (q.school_id = 0 AND c.level = ? AND (s.code = ? OR s.name_en = ?))
+            (q.school_id = 0 AND c.name = ? AND (s.code = ? OR s.name_en = ?))
         )
     ";
     $params = [$school_id, $filter_class, $filter_subject, $lvl, $sub_code, $sub_name];
 } elseif ($filter_class) {
-    $stmt = $db->prepare("SELECT level FROM classes WHERE id = ?");
+    $stmt = $db->prepare("SELECT name FROM classes WHERE id = ?");
     $stmt->execute([$filter_class]);
     $lvl = $stmt->fetchColumn();
 
@@ -682,7 +682,7 @@ if ($filter_class && $filter_subject) {
         WHERE (
             (q.school_id = ? AND q.class_id = ?)
             OR
-            (q.school_id = 0 AND c.level = ?)
+            (q.school_id = 0 AND c.name = ?)
         )
     ";
     $params = [$school_id, $filter_class, $lvl];
@@ -726,19 +726,19 @@ $questions = $stmt->fetchAll();
 
 // Fetch classes and subjects for selects (natural grade order)
 if ($is_admin && !$school_id) {
-    $classes_stmt = $db->prepare("SELECT * FROM classes WHERE is_active = 1 GROUP BY name ORDER BY id ASC");
+    $classes_stmt = $db->prepare("SELECT * FROM classes WHERE school_id=0 AND is_active=1 ORDER BY id ASC");
     $classes_stmt->execute();
     $classes = $classes_stmt->fetchAll();
 
-    $subjects_stmt = $db->prepare("SELECT * FROM subjects GROUP BY name_en ORDER BY name_en");
+    $subjects_stmt = $db->prepare("SELECT * FROM subjects WHERE school_id=0 ORDER BY name_en");
     $subjects_stmt->execute();
     $subjects = $subjects_stmt->fetchAll();
 } else {
-    $classes_stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ? OR school_id = 0) AND is_active = 1 ORDER BY id ASC");
+    $classes_stmt = $db->prepare("SELECT * FROM classes WHERE school_id = ? AND is_active = 1 ORDER BY id ASC");
     $classes_stmt->execute([$school_id]);
     $classes = $classes_stmt->fetchAll();
 
-    $subjects_stmt = $db->prepare("SELECT * FROM subjects WHERE (school_id = ? OR school_id = 0) AND (is_hidden = 0 OR is_hidden IS NULL) ORDER BY name_en");
+    $subjects_stmt = $db->prepare("SELECT * FROM subjects WHERE school_id = ? AND (is_hidden = 0 OR is_hidden IS NULL) ORDER BY name_en");
     $subjects_stmt->execute([$school_id]);
     $subjects = $subjects_stmt->fetchAll();
 }

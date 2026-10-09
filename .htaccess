@@ -1,0 +1,7 @@
+Options -Indexes
+<FilesMatch "(?i)\.(sqlite(-wal|-shm)?|db|sql|log|env|bak|bat|md)$">
+    Require all denied
+</FilesMatch>
+RewriteEngine On
+RewriteRule (^|/)(\.[^/]+|config|includes|scratch|tests|docs)(/|$) - [F,L]
+RewriteRule ^uploads/.*\.(php[0-9]*|phtml|phar)$ - [F,L,NC]

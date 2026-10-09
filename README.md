@@ -1,357 +1,68 @@
-# Nepal Mathematics Learning & School Result Management System
+# Nepal School ERP
 
-## Complete Web-Based ERP for Nepali Schools
+PHP school administration application with SQLite or MySQL, Bootstrap, and Nepali/English content.
 
-A comprehensive school management system built with PHP, MySQL/MariaDB, Bootstrap 5, and JavaScript. Designed specifically for Nepali schools following IEMIS/EMIS structure and CDC/NEB grading standards.
+## Supported workflows
 
----
+- School-scoped classes, sections, subject assignments, teacher assignments, and enrollment.
+- Student and teacher profiles, CSV import/export, and record-preserving archiving.
+- Daily attendance and conflict-aware weekly routines.
+- Exam configuration, marks entry, shared GPA/percentage calculations, ledgers, report cards, and admit cards.
+- Question banks, curriculum topics, learning notes, specification grids, and paper generation.
+- Staff account management, academic years, school settings, and system administration.
+- Searchable, role-aware navigation with mobile offcanvas and responsive forms.
 
-## 📋 Features
+See [INSTALL.md](INSTALL.md) for safe setup, migration, and production precautions, and [the repair report](docs/repair-report-2026-10-09.md) for verified coverage and remaining limits.
 
-### Core Modules
-1. **Authentication & User Management** - Multi-role login system with secure password hashing
-2. **School Profile Management** - Complete school information with logo and signature uploads
-3. **Academic Year System** - BS/AD date support with year switching
-4. **Class & Section Management** - ECD to Class 10 support
-5. **Student Management** - IEMIS-style student profiles with comprehensive fields
-6. **Teacher/Staff Management** - Complete staff profiles with assignments
-7. **Subject Management** - Flexible subject configuration per class
-8. **Mathematics Learning Portal** - Class-wise lessons, quizzes, and practice
-9. **Attendance System** - Daily attendance with BS/AD dates
-10. **Exam Management** - Terminal exams, unit tests, practicals
-11. **Result System** - Both percentage-based and GPA-based grading
-12. **Progress Reports** - A4 printable report cards
-13. **Public Result Check** - Online result verification portal
-14. **Admit Card Generation** - 4 cards per A4 page with signatures
+## Quick local start
 
-### User Roles
-- Super Admin
-- School Admin
-- Principal
-- Teacher
-- Administrative Officer
-- Exam Officer
-- Accountant
-- Student
-- Parent/Guardian
+Requires PHP 8.1+ with PDO SQLite, DOM, fileinfo and mbstring. This revision was tested with PHP 8.5.1 and SQLite. MySQL needs its PDO driver and a separate staging verification.
 
----
+For an existing database, back it up before running. Start the local server with:
 
-## 🚀 Installation
-
-### Prerequisites
-- PHP 8.0 or higher
-- MySQL 5.7+ or MariaDB 10.3+
-- Apache/Nginx web server
-- Composer (optional)
-
-### Step-by-Step Installation
-
-1. **Clone/Copy Files**
-   ```bash
-   Copy all files to your web server directory
-   Example: /var/www/html/nepal_school_erp
-   ```
-
-2. **Create Database**
-   ```sql
-   CREATE DATABASE nepal_school_erp CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-   ```
-
-3. **Import Database Schema**
-   ```bash
-   mysql -u root -p nepal_school_erp < database.sql
-   ```
-
-4. **Configure Database Connection**
-   Edit `config/config.php`:
-   ```php
-   define('DB_HOST', 'localhost');
-   define('DB_NAME', 'nepal_school_erp');
-   define('DB_USER', 'root');
-   define('DB_PASS', 'your_password');
-   ```
-
-5. **Set Permissions**
-   ```bash
-   chmod 777 uploads/
-   chmod 777 uploads/students/
-   chmod 777 uploads/staff/
-   chmod 777 uploads/school/
-   ```
-
-6. **Access Application**
-   ```
-   http://localhost/nepal_school_erp
-   ```
-
-7. **Default Login Credentials**
-   ```
-   Username: admin
-   Password: admin123
-   ```
-   **⚠️ Change this immediately after first login!**
-
----
-
-## 📁 Project Structure
-
-```
-nepal_school_erp/
-├── config/
-│   └── config.php              # Configuration settings
-├── includes/
-│   ├── database.php            # Database connection class
-│   ├── auth.php                # Authentication functions
-│   ├── functions.php           # Helper functions
-│   └── header.php              # Common header/layout
-├── modules/
-│   ├── auth/
-│   │   ├── login.php           # Login page
-│   │   ├── logout.php          # Logout handler
-│   │   └── profile.php         # User profile
-│   ├── students/
-│   │   ├── index.php           # Student list
-│   │   ├── add.php             # Add student
-│   │   ├── edit.php            # Edit student
-│   │   ├── view.php            # View student profile
-│   │   └── admit_card.php      # Generate admit card
-│   ├── teachers/
-│   ├── classes/
-│   ├── subjects/
-│   ├── exams/
-│   ├── results/
-│   ├── attendance/
-│   ├── learning/
-│   └── reports/
-├── assets/
-│   ├── css/
-│   │   └── style.css           # Custom styles
-│   ├── js/
-│   │   └── main.js             # JavaScript functions
-│   └── images/
-├── uploads/                     # File upload directory
-├── database.sql                 # Database schema
-└── index.php                    # Dashboard
+```powershell
+php -S 127.0.0.1:8000 router.php
 ```
 
----
+A fresh database has a **disabled** administrator, not a shared password. Set a private `ERP_ADMIN_PASSWORD` environment value (at least 12 characters), then run `php config/setup_admin.php`. Remove that environment value afterward. Existing administrator passwords are never reset by setup.
 
-## 🔒 Security Features
+## School setup order
 
-- **Password Hashing**: bcrypt using `password_hash()`
-- **SQL Injection Prevention**: PDO prepared statements
-- **XSS Protection**: Input sanitization with `htmlspecialchars()`
-- **CSRF Protection**: Token-based validation
-- **Session Management**: Timeout and secure session handling
-- **Role-Based Access Control**: Permission-based page access
-- **Audit Logging**: Track all critical actions
-- **File Upload Validation**: Type and size restrictions
+1. System administrator: create a school administrator assigned to the correct school.
+2. School administrator: choose the academic year and enable the school's classes.
+3. Add teachers; assign class teachers and subject teachers.
+4. Review class-subject mappings, compulsory/elective status, credits and assessment components.
+5. Enroll students in that year, class and section, selecting their offered electives.
+6. Create an exam and initialize/configure its class subjects **before** entering marks.
+7. Review marks, lock, then publish. Reopen explicitly withdraws publication for corrections.
 
----
+Archiving students or teachers preserves their records. Exams with marks cannot be deleted. Class/elective enrollment cannot change after marks exist; retain the enrollment for historical reports.
 
-## 📊 Database Tables
+## CDC and assessment scope
 
-### Core Tables
-- `schools` - School information
-- `users` - User accounts
-- `roles` - User roles
-- `activity_logs` - Audit trail
+The subject catalog is a configurable starter, **not a certified implementation of every current CDC/NEB stream and assessment directive**. Schools must review local subjects, elective combinations, credit allocations, component marks and pass thresholds against their applicable curriculum before creating exams.
 
-### Academic Structure
-- `academic_years` - BS/AD academic years
-- `classes` - Class definitions
-- `sections` - Class sections
-- `subjects` - Subject catalog
+The shared grade bands are A+ 90+, A 80+, B+ 70+, B 60+, C+ 50+, C 40+, D 35+, otherwise NG. Independent component pass thresholds come from the saved exam scheme. Missing required marks remain incomplete. Grade 11–12 enrollment supports three elective slots; official subject-group combination validation is not yet automated. Primary continuous assessment is not a full competency-report implementation.
 
-### Student Data
-- `students` - Student profiles (IEMIS-style)
-- `student_documents` - Document uploads
-- `attendances` - Daily attendance
+## Verification
 
-### Exam & Results
-- `exams` - Exam definitions
-- `exam_subjects` - Exam-subject configuration
-- `marks` - Student marks
-- `grading_scales` - Grade boundaries
+All tests below create temporary databases:
 
----
-
-## 🎯 Key Features Explained
-
-### 1. Student Management
-- Comprehensive IEMIS-inspired fields
-- Photo upload support
-- Parent/guardian information
-- Address details (Province, District, Municipality, Ward)
-- Caste/ethnicity, religion, scholarship tracking
-- Disability status
-- EMIS ID support
-
-### 2. Exam Admit Card
-- **4 cards per A4 page** layout
-- Student photo inclusion
-- Automatic school logo and signatures
-- Exam details display
-- Terms and conditions
-- Signature lines for student, coordinator, and principal
-
-### 3. Result System
-- **Two modes**: Percentage-based and GPA-based
-- Configurable grading scales
-- Credit hour support
-- Theory/practical separation
-- Auto-calculation of GPA
-- Nepal CDC/NEB compliant (editable)
-
-### 4. Mathematics Learning
-- Class-wise lessons (Nursery to Class 10)
-- Chapter and topic organization
-- Quiz system with auto-grading
-- Practice questions
-- Progress tracking
-
-### 5. Attendance
-- Daily marking (Present, Absent, Late, Leave)
-- BS/AD date support
-- Monthly summaries
-- Percentage calculations
-
----
-
-## 🛠️ Customization
-
-### Adding New Classes
-1. Go to Classes module
-2. Click "Add Class"
-3. Enter name (English and Nepali)
-4. Select level (ECD/Basic/Secondary)
-5. Choose grading type
-
-### Configuring Grading Scale
-1. Navigate to Settings > Grading Scale
-2. Edit percentage ranges
-3. Set grade letters and grade points
-4. Configure pass/fail rules
-
-### School Profile Setup
-1. Go to Settings > School Profile
-2. Upload school logo
-3. Upload principal signature
-4. Upload exam coordinator signature
-5. Set school information
-
----
-
-## 📱 Responsive Design
-
-- Desktop optimized dashboard
-- Tablet-friendly forms
-- Mobile-responsive tables
-- Print-friendly layouts
-
----
-
-## 🔧 Technology Stack
-
-| Component | Technology |
-|-----------|-----------|
-| Backend | PHP 8+ |
-| Database | MySQL/MariaDB |
-| Frontend | HTML5, CSS3, Bootstrap 5 |
-| JavaScript | Vanilla JS, jQuery |
-| Charts | Chart.js (optional) |
-| Tables | DataTables |
-| Alerts | SweetAlert2 |
-| Icons | Font Awesome |
-
----
-
-## 📝 Default Data
-
-### Pre-loaded Classes
-- Nursery, LKG, UKG
-- Class 1 to Class 10
-
-### Sample Subjects
-- Nepali, English, Mathematics
-- Science, Social Studies
-- Optional subjects for Class 9-10
-
-### Grading Scale (Secondary)
-- A+ (80-100%) = 4.0 GPA
-- A (70-79%) = 3.6 GPA
-- B+ (60-69%) = 3.2 GPA
-- B (50-59%) = 2.8 GPA
-- C (40-49%) = 2.4 GPA
-- D (30-39%) = 2.0 GPA
-- F (0-29%) = 0.0 GPA
-
----
-
-## ⚠️ Important Notes
-
-1. **Backup Regularly**: Export database frequently
-2. **Secure Admin Account**: Change default password immediately
-3. **File Uploads**: Ensure `uploads/` directory is writable
-4. **Production Settings**: Disable error display in production
-5. **HTTPS**: Use SSL certificate for production deployment
-6. **PHP Version**: Minimum PHP 8.0 required
-
----
-
-## 🆘 Troubleshooting
-
-### Database Connection Error
-- Check `config/config.php` credentials
-- Verify MySQL service is running
-- Ensure database exists
-
-### Permission Denied
-```bash
-chmod -R 777 uploads/
-chown -R www-data:www-data uploads/
+```powershell
+php tests/security_test.php
+php tests/workflow_test.php
+php tests/grading_test.php
+php tests/content_test.php
+php tests/operations_test.php
+python tests/http_test.py
 ```
 
-### Session Issues
-- Check PHP session configuration
-- Ensure `/tmp` or session path is writable
+The HTTP suite drives real PHP requests and database persistence. `tests/upgrade_test.php` accepts only a disposable existing-database copy in the OS temporary directory through `ERP_DB_PATH`.
 
-### File Upload Fails
-- Check `MAX_FILE_SIZE` in config
-- Verify upload_max_filesize in php.ini
-- Ensure destination folder exists and is writable
+## Deployment boundary
 
----
+Nothing deploys automatically from local edits, but **pushing this repository's main branch triggers the existing FTP deployment workflow**. Back up production, review the diff and test a staging copy before publishing. Do not run development servers on public interfaces.
 
-## 📞 Support & Credits
+## License
 
-Developed for Nepali schools following CDC/NEB guidelines and IEMIS structure.
-
-### Future Enhancements
-- SMS integration
-- Email notifications
-- Online fee management
-- Library management
-- Transport management
-- Hostel management
-- Mobile app
-- API for third-party integration
-
----
-
-## 📄 License
-
-This project is proprietary software developed for educational institutions.
-
----
-
-## 🎓 Version Information
-
-**Version**: 1.0.0  
-**Release Date**: 2024  
-**Last Updated**: Current
-
----
-
-*Built with ❤️ for Nepali Education System*
+Proprietary software for educational institutions.

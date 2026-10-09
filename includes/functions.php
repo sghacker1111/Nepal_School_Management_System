@@ -1,4 +1,25 @@
 <?php
+require_once __DIR__ . '/grading.php';
+
+/** Explicit CSV escaping for PHP 8.4+; neutralize spreadsheet formula cells. */
+function writeCsvRow($stream, array $fields): int|false {
+    $fields=array_map(static function($value) {
+        $value=(string)($value??'');
+        return preg_match('/^[\s]*[=+@-]/u',$value) ? "'".$value : $value;
+    },$fields);
+    return fputcsv($stream,$fields,',','"','');
+}
+
+function importDateValue(?string $value): ?string {
+    if($value===null || trim($value)==='')return null;
+    $value=trim($value);
+    foreach(['!Y-m-d','!Y/m/d','!m/d/Y'] as $format) {
+        $date=DateTimeImmutable::createFromFormat($format,$value);
+        $errors=DateTimeImmutable::getLastErrors();
+        if($date && (!$errors || (!$errors['warning_count'] && !$errors['error_count'])))return $date->format('Y-m-d');
+    }
+    throw new InvalidArgumentException('Use YYYY-MM-DD for imported dates.');
+}
 /**
  * Common Functions Helper
  */
@@ -10,7 +31,7 @@ function sanitize($data) {
     if (is_array($data)) {
         return array_map('sanitize', $data);
     }
-    return htmlspecialchars(trim($data), ENT_QUOTES, 'UTF-8');
+    return htmlspecialchars(trim((string)($data ?? '')), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8', false);
 }
 
 /**
@@ -54,16 +75,7 @@ function displayFlashMessage() {
  * Generate unique student ID
  */
 function generateStudentId($classId, $academicYearId) {
-    $db = getDB();
-    $year = date('Y');
-    $prefix = 'STU/' . $year . '/';
-    
-    $stmt = $db->prepare("SELECT MAX(CAST(SUBSTRING_INDEX(student_id, '/', -1) AS UNSIGNED)) as max_id FROM students WHERE academic_year_id = ?");
-    $stmt->execute([$academicYearId]);
-    $result = $stmt->fetch();
-    
-    $nextId = ($result['max_id'] ?? 0) + 1;
-    return $prefix . str_pad($nextId, 5, '0', STR_PAD_LEFT);
+    return 'STU/' . (int)Auth::getSchoolId() . '/' . date('Y') . '/' . strtoupper(bin2hex(random_bytes(4)));
 }
 
 /**
@@ -109,44 +121,17 @@ function uploadFile($file, $subDir = '') {
 /**
  * Calculate GPA from percentage
  */
-function calculateGPA($percentage, $classId = null) {
-    $db = getDB();
-    
-    // Get grading scale (could be class-specific in future)
-    $stmt = $db->prepare("SELECT grade_point FROM grading_scales WHERE ? BETWEEN min_percentage AND max_percentage LIMIT 1");
-    $stmt->execute([$percentage]);
-    $result = $stmt->fetch();
-    
-    return $result ? $result['grade_point'] : 0;
-}
+function calculateGPA($percentage, $classId = null) { return erpGradeForPercentage((float)$percentage)[1]; }
 
 /**
  * Calculate Grade from percentage
  */
-function calculateGrade($percentage, $classId = null) {
-    $db = getDB();
-    
-    $stmt = $db->prepare("SELECT grade FROM grading_scales WHERE ? BETWEEN min_percentage AND max_percentage LIMIT 1");
-    $stmt->execute([$percentage]);
-    $result = $stmt->fetch();
-    
-    return $result ? $result['grade'] : 'F';
-}
+function calculateGrade($percentage, $classId = null) { return erpGradeForPercentage((float)$percentage)[0]; }
 
 /**
  * Calculate subject final letter grade from final GPA (Table 14)
  */
-function calculateSubjectFinalGrade($gp) {
-    $gp = (float)$gp;
-    if ($gp >= 3.61) return 'A+';
-    if ($gp >= 3.21) return 'A';
-    if ($gp >= 2.81) return 'B+';
-    if ($gp >= 2.41) return 'B';
-    if ($gp >= 2.01) return 'C+';
-    if ($gp >= 1.61) return 'C';
-    if ($gp >= 1.60) return 'D';
-    return 'NG';
-}
+function calculateSubjectFinalGrade($gp) { return erpFinalGrade((float)$gp); }
 
 /**
  * Get remarks/descriptor based on grade (Table 5)
@@ -202,6 +187,7 @@ function isNepali($string) {
  * so MathJax renders complex ligatures, matras, and conjuncts properly without breaking.
  */
 function fixNepaliInLatex($tex) {
+    $tex = safeRichHtml((string)$tex);
     if (empty($tex) || !is_string($tex)) return $tex;
     if (!preg_match('/[\x{0900}-\x{097F}]/u', $tex)) return $tex;
     
@@ -215,6 +201,37 @@ function fixNepaliInLatex($tex) {
         },
         $tex
     );
+}
+
+/** Allow formatted lesson content without executing stored scripts or event handlers. */
+function safeRichHtml(string $html): string {
+    if ($html==='') return '';
+    $doc=new DOMDocument('1.0','UTF-8');
+    $previous=libxml_use_internal_errors(true);
+    $doc->loadHTML('<?xml encoding="UTF-8"><div id="erp-rich-root">'.$html.'</div>',LIBXML_HTML_NOIMPLIED|LIBXML_HTML_NODEFDTD|LIBXML_NONET);
+    libxml_clear_errors();libxml_use_internal_errors($previous);
+    $allowed=['div','span','p','br','strong','b','em','i','u','s','sub','sup','table','thead','tbody','tfoot','tr','td','th','ol','ul','li','blockquote','pre','code','h1','h2','h3','h4','h5','h6','img','a'];
+    $clean=function(DOMNode $node) use (&$clean,$allowed){
+        foreach(iterator_to_array($node->childNodes) as $child){
+            if($child instanceof DOMElement){
+                $tag=strtolower($child->tagName);
+                if(in_array($tag,['script','style','iframe','object','embed','form','input','button','svg','math','meta','link'],true)){$node->removeChild($child);continue;}
+                $clean($child);
+                if(!in_array($tag,$allowed,true)){while($child->firstChild)$node->insertBefore($child->firstChild,$child);$node->removeChild($child);continue;}
+                foreach(iterator_to_array($child->attributes) as $attribute){
+                    $name=strtolower($attribute->name);$value=trim($attribute->value);
+                    $ok=in_array($name,['title','alt','colspan','rowspan','lang'],true);
+                    if($name==='class')$ok=(bool)preg_match('/^[\w\s-]*$/u',$value);
+                    if(($tag==='a'&&$name==='href')||($tag==='img'&&$name==='src'))$ok=(bool)preg_match('~^(https?://|/(?!/)|\./|\.\./|data:image/(png|jpeg|gif|webp);base64,)~i',$value);
+                    if(!$ok)$child->removeAttribute($attribute->name);
+                }
+                if($tag==='a')$child->setAttribute('rel','noopener noreferrer');
+            }elseif($child instanceof DOMComment || $child instanceof DOMProcessingInstruction)$node->removeChild($child);
+        }
+    };
+    $root=$doc->getElementById('erp-rich-root');$clean($doc);$output='';
+    if($root)foreach($root->childNodes as $child)$output.=$doc->saveHTML($child);
+    return $output;
 }
 
 /**

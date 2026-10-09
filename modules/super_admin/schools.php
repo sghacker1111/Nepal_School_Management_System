@@ -88,6 +88,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     
     if (empty($name_en) || empty($name_np) || empty($emis_code) || empty($address) || empty($phone) || empty($email) || empty($principal_name) || empty($principal_mobile) || empty($technical_person) || empty($admin_full_name) || empty($admin_username)) {
         $error = "All fields are required.";
+    } elseif (!in_array($subscription_type, ['full','exam_generator','result_system'], true)) {
+        $error = 'Choose a valid subscription package.';
+    } elseif (($action === 'add' || $admin_password !== '') && strlen($admin_password) < 8) {
+        $error = 'Administrator passwords must contain at least 8 characters.';
+    } elseif (!preg_match('/^(\d{4})\/(\d{4})$/', $academic_year_current, $year_parts)) {
+        $error = 'Enter the academic year as BS/AD, for example 2083/2026.';
     } else {
         try {
             if ($action === 'add') {
@@ -110,11 +116,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         $new_school_id = $db->lastInsertId();
                         
                         // Add default academic years for this new school automatically!
-                        $stmt = $db->prepare("INSERT INTO academic_years (year_bs, year_ad, is_active, school_id) VALUES ('2081', '2024', 1, ?)");
-                        $stmt->execute([$new_school_id]);
-                        
-                        $stmt = $db->prepare("INSERT INTO academic_years (year_bs, year_ad, is_active, school_id) VALUES ('2083', '2026', 0, ?)");
-                        $stmt->execute([$new_school_id]);
+                        $stmt = $db->prepare("INSERT INTO academic_years (year_bs, year_ad, is_active, school_id) VALUES (?, ?, 1, ?)");
+                        $stmt->execute([$year_parts[1], $year_parts[2], $new_school_id]);
+                        provisionSchool($db, (int)$new_school_id);
                         
                         // Create admin user
                         $pass_hash = password_hash($admin_password, PASSWORD_DEFAULT);
@@ -180,7 +184,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         }
                     } else {
                         // Create one since it was missing
-                        $pass_hash = password_hash(!empty($admin_password) ? $admin_password : 'admin123', PASSWORD_DEFAULT);
+                        if (strlen($admin_password)<8) throw new InvalidArgumentException('Set a password of at least 8 characters for the missing school administrator.');
+                        $pass_hash = password_hash($admin_password, PASSWORD_DEFAULT);
                         $stmt = $db->prepare("
                             INSERT INTO users (username, password, role, full_name, email, phone, school_id, status) 
                             VALUES (?, ?, 'school_admin', ?, ?, ?, ?, 1)
@@ -193,7 +198,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $success = "School details and administrator account updated successfully.";
                 }
             }
-        } catch (PDOException $e) {
+        } catch (Exception $e) {
             if ($db->inTransaction()) {
                 $db->rollBack();
             }

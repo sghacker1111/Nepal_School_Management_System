@@ -70,7 +70,7 @@ if ($is_admin) {
 }
 
 // 3. Classes and subjects configuration based on active school context
-$classes_stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ? OR school_id = 0) AND is_active = 1 ORDER BY id ASC");
+$classes_stmt = $db->prepare("SELECT * FROM classes WHERE school_id = ? AND is_active = 1 ORDER BY id ASC");
 $classes_stmt->execute([$school_id]);
 $classes = $classes_stmt->fetchAll();
 
@@ -88,7 +88,7 @@ if ($class_id) {
     $stmt = $db->prepare("
         SELECT s.* FROM subjects s 
         JOIN class_subjects cs ON cs.subject_id = s.id 
-        WHERE cs.class_id = ? AND (cs.school_id = ? OR cs.school_id = 0)
+        WHERE cs.class_id = ? AND (cs.school_id = ?)
         ORDER BY s.name_en
     ");
     $stmt->execute([$class_id, $school_id]);
@@ -99,7 +99,7 @@ $subject_id = $_GET['subject_id'] ?? ($subjects[0]['id'] ?? '');
 
 $selected_subject = null;
 if ($subject_id) {
-    $stmt = $db->prepare("SELECT * FROM subjects WHERE id = ? AND (school_id = ? OR school_id = 0)");
+    $stmt = $db->prepare("SELECT * FROM subjects WHERE id = ? AND school_id = ?");
     $stmt->execute([$subject_id, $school_id]);
     $selected_subject = $stmt->fetch();
 }
@@ -135,7 +135,7 @@ if ($class_id && $subject_id && $selected_chapter && ($is_admin || $permission_s
         WHERE q.chapter = ? AND (
             (q.school_id = ? AND q.class_id = ? AND q.subject_id = ?)
             OR
-            (q.school_id = 0 AND c.level = ? AND (s.code = ? OR s.name_en = ?))
+            (q.school_id = 0 AND c.name = ? AND (s.code = ? OR s.name_en = ?))
         )
         ORDER BY q.id DESC
     ");
@@ -144,7 +144,7 @@ if ($class_id && $subject_id && $selected_chapter && ($is_admin || $permission_s
         $school_id, 
         $class_id, 
         $subject_id, 
-        $class_lvl, 
+        $selected_class['name'] ?? '',
         $selected_subject ? $selected_subject['code'] : '', 
         $sub_name
     ]);
@@ -306,7 +306,7 @@ window.MathJax = {
                                         <?php endif; ?>
                                     </div>
                                     <div class="text-muted small mb-2"><i class="fas fa-tag"></i> Topic: <?= sanitize($note['topic']) ?></div>
-                                    <div style="font-size:0.9rem; line-height: 1.6;" class="mathjax-render text-dark"><?= nl2br($note['content']) ?></div>
+                                    <div style="font-size:0.9rem; line-height: 1.6;" class="mathjax-render text-dark"><?= nl2br(safeRichHtml($note['content'])) ?></div>
                                 </div>
                             </div>
                             <?php endforeach; ?>
@@ -334,9 +334,9 @@ window.MathJax = {
                                 <div class="card-body p-3">
                                     <span class="badge bg-secondary mb-2"><?= sanitize($q['type']) ?> (<?= $q['marks'] ?> Marks)</span>
                                     
-                                    <div class="fw-bold mb-2">Q. <span class="mathjax-render"><?= $q['question_text'] ?></span></div>
+                                    <div class="fw-bold mb-2">Q. <span class="mathjax-render"><?= safeRichHtml($q['question_text']) ?></span></div>
                                     <?php if ($q['question_text_np']): ?>
-                                    <div class="text-muted mb-2 font-nepali">Q. <span class="mathjax-render"><?= $q['question_text_np'] ?></span></div>
+                                    <div class="text-muted mb-2 font-nepali">Q. <span class="mathjax-render"><?= safeRichHtml($q['question_text_np']) ?></span></div>
                                     <?php endif; ?>
 
                                     <!-- MCQ Options -->

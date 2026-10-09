@@ -21,7 +21,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = sanitize($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
     
-    if (empty($username) || empty($password)) {
+    if (!Auth::verifyCSRFToken($_POST[CSRF_TOKEN_NAME] ?? null)) {
+        $error = 'Your sign-in form expired. Please try again.';
+    } elseif (empty($username) || empty($password)) {
         $error = 'Please enter both username and password';
     } else {
         if (Auth::login($username, $password)) {
@@ -96,6 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <?php endif; ?>
             
             <form method="POST" action="">
+                <input type="hidden" name="<?= CSRF_TOKEN_NAME ?>" value="<?= Auth::generateCSRFToken() ?>">
                 <div class="mb-3">
                     <label for="username" class="form-label">Username</label>
                     <div class="input-group">
@@ -117,7 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </button>
                 
                 <div class="text-center mt-3">
-                    <a href="#" class="text-decoration-none small">Forgot Password?</a>
+                    <span class="text-muted small">Forgot your password? Contact your school administrator.</span>
                 </div>
             </form>
             <!-- Demo credentials section removed -->

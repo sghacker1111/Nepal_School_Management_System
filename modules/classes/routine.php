@@ -8,6 +8,7 @@ require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
 
 Auth::requireLogin();
+require_once __DIR__ . '/../../includes/routine_service.php';
 
 $db = getDB();
 $school_id = Auth::getSchoolId();
@@ -27,7 +28,7 @@ $include_sunday = isset($school['routine_include_sunday']) ? (int)$school['routi
 $active_tab = $_POST['tab'] ?? $_GET['tab'] ?? 'view';
 
 // Fetch classes
-$stmt = $db->prepare("SELECT id, name, class_teacher_name, is_grading_teaching FROM classes WHERE (school_id = ? OR school_id = 0) AND is_active = 1 ORDER BY id ASC");
+$stmt = $db->prepare("SELECT id, name, class_teacher_name, class_teacher_id, is_grading_teaching FROM classes WHERE (school_id = ?) AND is_active = 1 ORDER BY id ASC");
 $stmt->execute([$school_id]);
 $classes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -157,7 +158,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         SELECT cs.subject_id, cs.teacher_id, cs.credit_hours, s.name_en, s.name_np
                         FROM class_subjects cs
                         JOIN subjects s ON cs.subject_id = s.id
-                        WHERE cs.class_id = ? AND (cs.school_id = ? OR cs.school_id = 0) AND cs.is_active = 1 AND (s.is_hidden = 0 OR s.is_hidden IS NULL)
+                        WHERE cs.class_id = ? AND (cs.school_id = ?) AND cs.is_active = 1 AND (s.is_hidden = 0 OR s.is_hidden IS NULL)
                         ORDER BY s.id ASC
                     ");
                     $stmt_cs->execute([$c_id, $school_id]);
@@ -167,103 +168,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         continue; // skip if no subjects mapped
                     }
                     
-                    // Identify Class Teacher user id
-                    $class_teacher_user_id = null;
-                    if (!empty($ct_name)) {
-                        $stmt_ct = $db->prepare("SELECT id FROM users WHERE full_name = ? AND role = 'teacher' AND school_id = ? LIMIT 1");
-                        $stmt_ct->execute([$ct_name, $school_id]);
-                        $class_teacher_user_id = $stmt_ct->fetchColumn() ?: null;
-                    }
-                    
-                    $is_grading = (isset($class_item['is_grading_teaching']) && $class_item['is_grading_teaching'] == 1);
-                    
-                    // Determine Class Teacher's subject for Period 1
-                    $class_teacher_sub_id = null;
-                    if ($class_teacher_user_id) {
-                        foreach ($mapped_subjects as $ms) {
-                            $t_ids = explode(',', $ms['teacher_id']);
-                            if (in_array($class_teacher_user_id, $t_ids)) {
-                                $class_teacher_sub_id = $ms['subject_id'];
-                                break;
-                            }
-                        }
-                    }
-                    if (!$class_teacher_sub_id) {
-                        $class_teacher_sub_id = $mapped_subjects[0]['subject_id'];
-                    }
-                    
-                    // Track remaining credit hours per subject
-                    $remaining_credits = [];
-                    foreach ($mapped_subjects as $ms) {
-                        $remaining_credits[$ms['subject_id']] = (int)($ms['credit_hours'] ?? 4);
-                    }
-                    
-                    // Grid structure
-                    $grid = [];
-                    
-                    // Fill Period 1 with class teacher's subject
-                    foreach ($days as $day) {
-                        $teach_id = null;
-                        if ($is_grading) {
-                            $teach_id = $class_teacher_user_id;
-                        } else {
-                            // Find teacher mapped to $class_teacher_sub_id
-                            foreach ($mapped_subjects as $ms) {
-                                if ($ms['subject_id'] == $class_teacher_sub_id) {
-                                    $t_ids = explode(',', $ms['teacher_id']);
-                                    $teach_id = !empty($t_ids[0]) ? (int)$t_ids[0] : null;
-                                    break;
-                                }
-                            }
-                        }
-                        
-                        $grid[$day][1] = [
-                            'subject_id' => $class_teacher_sub_id,
-                            'teacher_id' => $teach_id
-                        ];
-                        if (isset($remaining_credits[$class_teacher_sub_id])) {
-                            $remaining_credits[$class_teacher_sub_id]--;
-                        }
-                    }
-                    
-                    // Pool of remaining subjects based on their credit hours
-                    $pool = [];
-                    foreach ($mapped_subjects as $ms) {
-                        $sub_id = $ms['subject_id'];
-                        $rem = $remaining_credits[$sub_id] ?? 0;
-                        
-                        $sub_teacher_id = null;
-                        if ($is_grading) {
-                            $sub_teacher_id = $class_teacher_user_id;
-                        } else {
-                            $t_ids = explode(',', $ms['teacher_id']);
-                            $sub_teacher_id = !empty($t_ids[0]) ? (int)$t_ids[0] : null;
-                        }
-                        
-                        for ($i = 0; $i < $rem; $i++) {
-                            $pool[] = [
-                                'subject_id' => $sub_id,
-                                'teacher_id' => $sub_teacher_id
-                            ];
-                        }
-                    }
-                    
-                    // Fill remaining periods sequentially
-                    $pool_idx = 0;
-                    for ($period = 2; $period <= $periods_count; $period++) {
-                        foreach ($days as $day) {
-                            if (isset($pool[$pool_idx])) {
-                                $grid[$day][$period] = $pool[$pool_idx];
-                                $pool_idx++;
-                            } else {
-                                $grid[$day][$period] = [
-                                    'subject_id' => null,
-                                    'teacher_id' => null
-                                ];
-                            }
-                        }
-                    }
-                    
+                    $built=buildClassRoutine($db,(int)$school_id,$class_item,$mapped_subjects,$days,$periods_count);
+                    $grid=$built['grid'];
+                    $unplaced_total=($unplaced_total??0)+$built['unplaced'];
+
                     // Save grid to database
                     $stmt_ins = $db->prepare("
                         INSERT INTO class_routines (class_id, day_of_week, period_number, subject_id, teacher_id, school_id)
@@ -280,7 +188,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 
                 $db->commit();
-                $success = 'Weekly routines automatically generated successfully based on class teacher assignments and credit hours!';
+                $success = 'Routines generated without teacher conflicts. '.($unplaced_total??0).' weekly periods could not be placed; review available teachers and slots.';
                 $active_tab = 'view';
             } catch (Exception $e) {
                 $db->rollBack();
@@ -322,6 +230,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $sub_id = $_POST["p_{$period}_sub"] !== '' ? (int)$_POST["p_{$period}_sub"] : null;
                     $teach_id = $_POST["p_{$period}_teach"] !== '' ? (int)$_POST["p_{$period}_teach"] : null;
                     
+                    validateRoutineSlot($db,(int)$school_id,$c_id,$day,$period,$sub_id,$teach_id);
                     $stmt_ins->execute([$c_id, $day, $period, $sub_id, $teach_id, $school_id]);
                 }
                 
@@ -352,17 +261,14 @@ $period_times = [
 
 // Helper to aggregate cells
 function getPeriodCellContent($db, $class_id, $period_number, $include_sunday = 0) {
-    $stmt = $db->prepare("
-        SELECT r.day_of_week, s.name_en as sub_name, s.name_np as sub_name_np, u.full_name as teacher_name
-        FROM class_routines r
-        LEFT JOIN subjects s ON r.subject_id = s.id
-        LEFT JOIN users u ON r.teacher_id = u.id
-        WHERE r.class_id = ? AND r.period_number = ?
-        ORDER BY r.day_of_week
-    ");
-    $stmt->execute([$class_id, $period_number]);
-    $days = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
+    static $cache=null;
+    if($cache===null){
+        $stmt=$db->prepare('SELECT r.class_id,r.period_number,r.day_of_week,s.name_en sub_name,s.name_np sub_name_np,u.full_name teacher_name FROM class_routines r LEFT JOIN subjects s ON s.id=r.subject_id LEFT JOIN users u ON u.id=r.teacher_id WHERE r.school_id=? ORDER BY r.day_of_week');
+        $stmt->execute([Auth::getSchoolId()]);$cache=[];
+        foreach($stmt as $row)$cache[$row['class_id']][$row['period_number']][]=$row;
+    }
+    $days=$cache[$class_id][$period_number]??[];
+
     if (empty($days)) {
         return '<span class="text-muted font-monospace fw-bold">X</span>';
     }
@@ -414,7 +320,7 @@ function getPeriodCellContent($db, $class_id, $period_number, $include_sunday = 
 }
 
 $pageTitle = 'Weekly Class Routine';
-$activePage = 'classes';
+$activePage = 'routine';
 
 ob_start();
 ?>
@@ -620,7 +526,7 @@ ob_start();
             SELECT s.id, s.name_en, s.name_np
             FROM class_subjects cs
             JOIN subjects s ON cs.subject_id = s.id
-            WHERE cs.class_id = ? AND (cs.school_id = ? OR cs.school_id = 0) AND cs.is_active = 1 AND (s.is_hidden = 0 OR s.is_hidden IS NULL)
+            WHERE cs.class_id = ? AND (cs.school_id = ?) AND cs.is_active = 1 AND (s.is_hidden = 0 OR s.is_hidden IS NULL)
             ORDER BY s.name_en ASC
         ");
         $stmt_cs->execute([$selected_class_id, $school_id]);

@@ -1,0 +1,43 @@
+<?php
+$testFile=tempnam(sys_get_temp_dir(),'erp-ops-');
+putenv('ERP_DB_TYPE=sqlite');putenv('ERP_DB_PATH='.$testFile);
+ob_start();require __DIR__.'/http_fixture.php';$fixture=json_decode(ob_get_clean(),true,512,JSON_THROW_ON_ERROR);
+require __DIR__.'/../includes/exam_service.php';
+require __DIR__.'/../includes/marks_service.php';
+require __DIR__.'/../includes/routine_service.php';
+require __DIR__.'/../includes/user_management.php';
+require __DIR__.'/../includes/functions.php';
+function opsCheck(bool $ok,string $message): void {if(!$ok)throw new RuntimeException($message);}
+function opsReject(callable $call,string $message): void {try{$call();}catch(InvalidArgumentException $e){return;}throw new RuntimeException($message);}
+$f=$fixture;$exam=$f['exam'];$student=$f['student'];$subject=$f['subject'];$class=$f['class'];
+opsReject(fn()=>changeExamState($db,1,$exam,'publish'),'Unlocked exam must not publish');
+changeExamState($db,1,$exam,'lock');
+opsReject(fn()=>changeExamState($db,1,$exam,'publish'),'Incomplete exam must not publish');
+opsCheck((int)$db->query("SELECT is_published FROM exams WHERE id=$exam")->fetchColumn()===0,'Failed publication must roll back');
+changeExamState($db,1,$exam,'reopen');
+$input=['exam_id'=>$exam,'class_id'=>$class,'section_id'=>$f['section'],'marks'=>[$student=>[$subject=>['theory'=>60,'participation'=>3,'project_work'=>12,'previous_exam'=>5]]]];
+saveExamMarks($db,1,$f['ids']['teacher'],'teacher',$input);
+opsReject(fn()=>saveExamMarks($db,1,$f['ids']['principal'],'principal',$input),'Principal cannot write marks');
+opsReject(fn()=>changeExamState($db,1,$exam,'delete'),'Saved marks must survive delete attempts');
+changeExamState($db,1,$exam,'lock');changeExamState($db,1,$exam,'publish');
+opsCheck((int)$db->query("SELECT is_published FROM exams WHERE id=$exam")->fetchColumn()===1,'Complete exam should publish');
+opsReject(fn()=>saveExamMarks($db,1,$f['ids']['teacher'],'teacher',$input),'Published marks must be immutable');
+changeExamState($db,1,$exam,'reopen');
+opsCheck((int)$db->query("SELECT is_published+is_locked FROM exams WHERE id=$exam")->fetchColumn()===0,'Reopen must withdraw publication');
+$other=(int)$db->query("SELECT id FROM classes WHERE school_id=1 AND name='Class 10'")->fetchColumn();
+$teacher=$f['ids']['teacher'];
+$db->prepare('INSERT INTO class_routines(class_id,school_id,day_of_week,period_number,subject_id,teacher_id) VALUES (?,1,1,1,?,?)')->execute([$other,$subject,$teacher]);
+opsReject(fn()=>validateRoutineSlot($db,1,$class,1,1,$subject,$teacher),'Teacher conflicts must be rejected');
+validateRoutineSlot($db,1,$class,1,2,$subject,$teacher);
+$built=buildClassRoutine($db,1,['id'=>$class,'is_grading_teaching'=>0],[['subject_id'=>$subject,'credit_hours'=>2,'teacher_id'=>(string)$teacher]],[1,2],2);
+$placed=0;foreach($built['grid'] as $slots)foreach($slots as $slot)if($slot['subject_id'])$placed++;
+opsCheck($placed===2 && $built['unplaced']===0,'Routine must honor requested weekly periods');
+opsCheck(!$built['grid'][1][1]['teacher_id'],'Generator must avoid other-class teacher conflict');
+$account=['user_id'=>$f['ids']['school_admin'],'school_id'=>1,'full_name'=>'Test Admin','username'=>'school_admin','role'=>'teacher','status'=>1];
+opsReject(fn()=>saveSchoolUser($db,1,'super_admin',0,$account),'Last school administrator cannot be demoted');
+opsReject(fn()=>saveSchoolUser($db,$f['ids']['school_admin'],'school_admin',1,$account),'Cannot remove own administrator role');
+opsCheck(importDateValue('')===null,'Missing birthdays must remain unknown');
+opsReject(fn()=>importDateValue('2026-02-30'),'Invalid dates must not normalize to another day');
+$stream=fopen('php://temp','r+');writeCsvRow($stream,['=1+1','राम','normal']);rewind($stream);$csv=stream_get_contents($stream);fclose($stream);
+opsCheck(str_contains($csv,"'=1+1") && str_contains($csv,'राम'),'CSV must neutralize formulas and preserve Nepali');
+echo "Operations checks passed: exam lifecycle, marks protection, timetable conflicts, account safeguards and imports.\n";

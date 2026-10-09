@@ -46,23 +46,17 @@ if (isset($_GET['delete']) && Auth::hasRole(['super_admin', 'school_admin'])) {
         try {
             $db->beginTransaction();
             
-            // Set teacher_id to NULL in class_subjects
-            $db->prepare("UPDATE class_subjects SET teacher_id = NULL WHERE teacher_id = ?")->execute([$id]);
-            
-            // Delete from teacher_details
-            $db->prepare("DELETE FROM teacher_details WHERE user_id = ?")->execute([$id]);
-            
-            // Delete teacher user record
-            $db->prepare("DELETE FROM users WHERE id = ? AND role = 'teacher' AND school_id = ?")->execute([$id, $school_id]);
+            // Keep teaching assignments and historical results; disable sign-in.
+            $db->prepare("UPDATE users SET status=0 WHERE id=? AND role='teacher' AND school_id=?")->execute([$id,$school_id]);
             
             $db->commit();
-            Auth::logActivity(Auth::getUserId(), 'Delete Teacher', 'users', $id);
-            redirect(APP_URL . '/modules/teachers/index.php', 'Teacher deleted successfully');
+            Auth::logActivity(Auth::getUserId(), 'Archive Teacher', 'users', $id);
+            redirect(APP_URL . '/modules/teachers/index.php', 'Teacher archived; assignments and history retained.');
         } catch (PDOException $e) {
             if ($db->inTransaction()) {
                 $db->rollBack();
             }
-            redirect(APP_URL . '/modules/teachers/index.php', 'Error deleting teacher: ' . $e->getMessage(), 'error');
+            redirect(APP_URL . '/modules/teachers/index.php', 'Error archiving teacher: ' . $e->getMessage(), 'error');
         }
     } else {
         redirect(APP_URL . '/modules/teachers/index.php', 'Teacher not found or unauthorized', 'error');
@@ -149,7 +143,7 @@ ob_start();
                                    title="<?= $teacher['status'] == 1 ? 'Deactivate' : 'Activate' ?>">
                                     <i class="fas <?= $teacher['status'] == 1 ? 'fa-ban' : 'fa-check' ?>"></i>
                                 </a>
-                                <button onclick="confirmDeleteTeacher(<?= $teacher['id'] ?>)" class="btn btn-sm btn-outline-danger" title="Delete">
+                                <button onclick="confirmDeleteTeacher(<?= $teacher['id'] ?>)" class="btn btn-sm btn-outline-danger" title="Archive">
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </td>
@@ -177,7 +171,7 @@ $(document).ready(function() {
 function confirmDeleteTeacher(id) {
     verifyPasswordAndProceed(function() {
         window.location.href = '<?= APP_URL ?>/modules/teachers/index.php?delete=' + id;
-    }, 'Confirm Deletion', 'Please enter your administrator password to permanently delete this teacher:');
+    }, 'Confirm Deletion', 'Please enter your administrator password to permanently archive this teacher:');
 }
 </script>
 

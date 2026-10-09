@@ -20,7 +20,7 @@ $num_short = isset($_GET['short_count']) ? (int)$_GET['short_count'] : 5;
 $num_long = isset($_GET['long_count']) ? (int)$_GET['long_count'] : 3;
 $exam_title = sanitize($_GET['exam_title'] ?? 'Terminal Examination - 2083');
 
-$classes_stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ? OR school_id = 0) AND is_active = 1 ORDER BY id ASC");
+$classes_stmt = $db->prepare("SELECT * FROM classes WHERE school_id = ? AND is_active = 1 ORDER BY id ASC");
 $classes_stmt->execute([$school_id]);
 $classes = $classes_stmt->fetchAll();
 
@@ -30,7 +30,7 @@ if ($class_id) {
     $stmt = $db->prepare("
         SELECT s.* FROM subjects s 
         JOIN class_subjects cs ON cs.subject_id = s.id 
-        WHERE cs.class_id = ? AND (cs.school_id = ? OR cs.school_id = 0) AND cs.is_active = 1 AND (s.is_hidden = 0 OR s.is_hidden IS NULL)
+        WHERE cs.class_id = ? AND (cs.school_id = ?) AND cs.is_active = 1 AND (s.is_hidden = 0 OR s.is_hidden IS NULL)
         ORDER BY s.name_en
     ");
     $stmt->execute([$class_id, $school_id]);

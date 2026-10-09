@@ -35,7 +35,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'template') {
     // Add UTF-8 BOM for Excel compatibility
     fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
     
-    fputcsv($output, [
+    writeCsvRow($output, [
         'EMIS ID',
         'Student ID',
         'Roll Number',
@@ -67,7 +67,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'export') {
     // Add UTF-8 BOM for Excel compatibility
     fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
     
-    fputcsv($output, [
+    writeCsvRow($output, [
         'EMIS ID',
         'Student ID',
         'Roll Number',
@@ -101,7 +101,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'export') {
     $stmt->execute([$school_id]);
     
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        fputcsv($output, [
+        writeCsvRow($output, [
             $row['emis_id'],
             $row['student_id'],
             $row['roll_number'],
@@ -140,7 +140,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
             $error = 'Please upload a valid CSV file.';
         } else {
             // Load classes & sections mapping
-            $stmt_cl = $db->prepare("SELECT id, name FROM classes WHERE (school_id = ? OR school_id = 0) AND is_active = 1");
+            $stmt_cl = $db->prepare("SELECT id, name FROM classes WHERE (school_id = ?) AND is_active = 1");
             $stmt_cl->execute([$school_id]);
             $classes_db = $stmt_cl->fetchAll(PDO::FETCH_ASSOC);
             
@@ -181,7 +181,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                 }
                 
                 // Read headings
-                $headings = fgetcsv($handle);
+                $headings = fgetcsv($handle, 0, ',', '"', '');
                 if (!$headings) {
                     $error = 'CSV file is empty.';
                 } else {
@@ -219,7 +219,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                         $skipped_count = 0;
                         $line_num = 1;
                         
-                        while (($row = fgetcsv($handle)) !== FALSE) {
+                        while (($row = fgetcsv($handle, 0, ',', '"', '')) !== FALSE) {
                             $line_num++;
                             
                             // Map values according to indices
@@ -245,7 +245,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                                     $first_name_en = implode(' ', $parts);
                                 } else {
                                     $first_name_en = $full_name_raw;
-                                    $last_name_en = 'Student'; // Default fallback
+                                    $last_name_en = ''; // Do not invent a family name.
                                 }
                             } else {
                                 $first_name_en = $full_name_raw;
@@ -270,6 +270,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                                 }
                             }
                             
+                            if (!$class_id) { $skipped_count++; continue; }
+
                             // Section matching
                             $sec_val = $get_val('section');
                             $section_id = null;
@@ -286,34 +288,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                                 }
                             }
                             
-                            // Gender normalize
-                            $gender = $get_val('gender') ?: 'Male';
-                            if (strtolower($gender) === 'm') $gender = 'Male';
-                            if (strtolower($gender) === 'f') $gender = 'Female';
-                            if (strtolower($gender) === 'o') $gender = 'Other';
-                            
-                            // DOB format safety check
-                            $dob_ad = $get_val('dob_ad');
-                            if (!empty($dob_ad)) {
-                                $time = strtotime($dob_ad);
-                                if ($time) {
-                                    $dob_ad = date('Y-m-d', $time);
-                                } else {
-                                    $dob_ad = date('Y-m-d');
-                                }
-                            } else {
-                                $dob_ad = date('Y-m-d'); // Default fallback
-                            }
-                            
-                            $dob_bs = $get_val('dob_bs') ?: '';
-                            
-                            $status = $get_val('status') ?: 'active';
-                            if (empty($status)) $status = 'active';
+                            $gender=strtolower($get_val('gender')??'');
+                            $gender=['m'=>'Male','male'=>'Male','f'=>'Female','female'=>'Female','o'=>'Other','other'=>'Other'][$gender]??null;
+                            $status=strtolower($get_val('status')?:'active');
+                            if(!$gender || !in_array($status,['active','inactive','transferred','dropout','passed'],true) || (!empty($sec_val) && !$section_id)) { $skipped_count++; continue; }
+                            try { $dob_ad=importDateValue($get_val('dob_ad')); }
+                            catch(InvalidArgumentException $e) { $skipped_count++; continue; }
+                            $dob_bs=$get_val('dob_bs')?:'';
                             
                             try {
                                 $stmt_ins->execute([
                                     ':emis_id' => $get_val('emis_id'),
-                                    ':student_id' => $get_val('student_id') ?: ('STU-' . rand(100000, 999999)),
+                                    ':student_id' => $get_val('student_id') ?: generateStudentId($class_id, $academic_year_id),
                                     ':academic_year_id' => $academic_year_id,
                                     ':class_id' => $class_id,
                                     ':section_id' => $section_id,

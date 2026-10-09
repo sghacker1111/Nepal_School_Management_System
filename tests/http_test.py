@@ -1,0 +1,147 @@
+"""Real HTTP + SQLite regression checks. A fresh temporary database is always used."""
+import os, sys, tempfile, subprocess, socket, time, re, json, sqlite3
+from pathlib import Path
+from urllib.request import build_opener, HTTPCookieProcessor, Request
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
+from http.cookiejar import CookieJar
+
+root=Path(__file__).resolve().parents[1]
+with tempfile.TemporaryDirectory(prefix='erp-http-') as tmp:
+    env={**os.environ,'ERP_DB_TYPE':'sqlite','ERP_DB_PATH':str(Path(tmp)/'test.sqlite'),'ERP_DEBUG':'1'}
+    fixture=subprocess.run(['php','tests/http_fixture.php'],cwd=root,env=env,capture_output=True,text=True,check=True)
+    f=json.loads(fixture.stdout)
+    with socket.socket() as sock: sock.bind(('127.0.0.1',0)); port=sock.getsockname()[1]
+    log=open(Path(tmp)/'server.log','w+',encoding='utf-8')
+    server=subprocess.Popen(['php','-S',f'127.0.0.1:{port}','router.php'],cwd=root,env=env,stdout=log,stderr=log)
+    base=f'http://127.0.0.1:{port}';opener=build_opener(HTTPCookieProcessor(CookieJar())); token=''
+    count=0; db=None
+    def request(path,data=None,expected=200,csrf=True):
+        global count
+        if data is not None:
+            data=dict(data)
+            if csrf:data['csrf_token']=token
+        req=Request(base+path,data=urlencode(data).encode() if data is not None else None)
+        try:
+            with opener.open(req,timeout=25) as response: status=response.status; body=response.read().decode()
+        except HTTPError as error: status=error.code;body=error.read().decode()
+        assert status==expected,(path,status,body[:700])
+        assert not re.search(r'(Fatal error|Warning:|Deprecated:|Parse error|Uncaught)',body),(path,body[:1200])
+        count+=1
+        return body
+    def login(username):
+        global token,opener
+        opener=build_opener(HTTPCookieProcessor(CookieJar()))
+        body=request('/modules/auth/login.php')
+        token=re.search(r'name="csrf_token" value="([^"]+)"',body).group(1)
+        body=request('/modules/auth/login.php',{'username':username,'password':'TestPassword123!'})
+        assert 'Invalid username' not in body
+        token=re.search(r'name="csrf-token" content="([^"]+)"',body).group(1)
+    def upload_csv(path,content):
+        global count
+        boundary='ERPTestBoundary28101'
+        body=(f'--{boundary}\r\nContent-Disposition: form-data; name="csrf_token"\r\n\r\n{token}\r\n'
+              f'--{boundary}\r\nContent-Disposition: form-data; name="csv_file"; filename="test.csv"\r\nContent-Type: text/csv\r\n\r\n{content}\r\n--{boundary}--\r\n').encode()
+        req=Request(base+path,data=body,headers={'Content-Type':f'multipart/form-data; boundary={boundary}'})
+        with opener.open(req,timeout=25) as response: result=response.read().decode();assert response.status==200
+        assert not re.search(r'(Fatal error|Warning:|Deprecated:|Parse error|Uncaught)',result)
+        count+=1
+        return result
+    try:
+        for _ in range(50):
+            try: opener.open(base+'/modules/auth/login.php',timeout=1);break
+            except (URLError,ConnectionError): time.sleep(.1)
+        login('school_admin')
+        routes=['/index.php','/modules/students/index.php','/modules/students/add.php','/modules/students/import_export.php','/modules/teachers/index.php','/modules/teachers/add.php','/modules/teachers/import_export.php','/modules/classes/index.php','/modules/classes/add.php','/modules/classes/routine.php','/modules/subjects/index.php','/modules/subjects/add.php','/modules/exams/index.php','/modules/exams/add.php','/modules/results/index.php','/modules/results/marks_entry.php','/modules/results/ledger.php','/modules/attendance/index.php','/modules/reports/index.php','/modules/settings/school.php','/modules/settings/years.php','/modules/settings/users.php','/modules/auth/profile.php','/modules/auth/change_password.php','/modules/learning/index.php','/modules/learning/questions.php','/modules/learning/paper_generator.php','/modules/learning/curriculum.php','/modules/learning/specification_grids.php','/modules/learning/ocr_scanner.php']
+        for route in routes:request(route)
+        for route in [f"/modules/students/edit.php?id={f['student']}",f"/modules/students/view.php?id={f['student']}",f"/modules/classes/edit.php?class_id={f['class']}",f"/modules/classes/subjects.php?class_id={f['class']}",f"/modules/teachers/edit.php?id={f['ids']['teacher']}",f"/modules/exams/view.php?id={f['exam']}",f"/modules/exams/edit.php?id={f['exam']}",f"/modules/subjects/edit.php?id={f['subject']}"]:request(route)
+        query=urlencode({'exam':f['exam'],'class':f['class'],'section':f['section']})
+        marks={'save_marks':'1','exam_id':f['exam'],'class_id':f['class'],'section_id':f['section'],f"attendance[{f['student']}]":'120'}
+        for key,val in [('theory','60'),('participation','3'),('project_work','12'),('previous_exam','5')]:marks[f"marks[{f['student']}][{f['subject']}][{key}]"]=val
+        body=request('/modules/results/marks_entry.php?'+query,marks)
+        assert 'saved successfully' in body
+        db=sqlite3.connect(env['ERP_DB_PATH'])
+        body=request('/modules/results/index.php?'+query);assert 'Graded' in body
+        # Saved scheme, rather than grade-based constants, controls rendered inputs.
+        db.execute('UPDATE exam_subjects SET theory_full=100, practical_full=40 WHERE exam_id=?',(f['exam'],));db.commit()
+        body=request('/modules/results/marks_entry.php?'+query)
+        theory_input=re.search(r'<input[^>]+name="marks\['+str(f['student'])+r'\]\['+str(f['subject'])+r'\]\[theory\]"[^>]*>',body).group(0)
+        assert 'max="100"' in theory_input, 'Marks UI must use configured theory maximum'
+        db.execute('UPDATE exam_subjects SET theory_full=75, practical_full=25 WHERE exam_id=?',(f['exam'],));db.commit()
+        row=db.execute('SELECT theory_obtained,practical_obtained,grade_point FROM marks WHERE student_id=? AND subject_id=?',(f['student'],f['subject'])).fetchone()
+        assert row==(60,20,3.6),row
+        for route in ['/modules/results/ledger.php?'+query,'/modules/results/print_bulk.php?'+query,f"/modules/results/report_card.php?student={f['student']}&exam={f['exam']}"]:
+            body=request(route);assert '3.60' in body,(route,'GPA missing')
+        bad=dict(marks);bad[f"marks[{f['student']}][{f['subject']}][theory]"]='76'
+        body=request('/modules/results/marks_entry.php?'+query,bad);assert 'Marks must be between' in body
+        assert db.execute('SELECT theory_obtained FROM marks').fetchone()[0]==60
+        body=request(f"/modules/exams/index.php?delete={f['exam']}",{});assert 'cannot be deleted' in body
+        body=request(f"/modules/exams/edit.php?id={f['exam']}",{'name':'Exam','type':'unit','start_date':'','end_date':'','result_system':'gpa'})
+        assert 'grading system cannot change' in body
+        body=request(f"/modules/exams/view.php?id={f['exam']}",{'initialize_defaults':'1','init_class_id':f['class']})
+        assert 'configuration is frozen' in body
+        request(f"/modules/exams/index.php?lock={f['exam']}",{})
+        request(f"/modules/exams/index.php?publish={f['exam']}",{})
+        assert db.execute('SELECT is_published,is_locked FROM exams').fetchone()==(1,1)
+        body=request('/modules/results/marks_entry.php?'+query,marks);assert 'locked or published' in body
+        request(f"/modules/exams/index.php?reopen={f['exam']}",{})
+        assert db.execute('SELECT is_published,is_locked FROM exams').fetchone()==(0,0)
+        request('/modules/settings/users.php',{'full_name':'No token'},expected=419,csrf=False)
+        request('/modules/students/add.php',{'first_name_en':'Invalid','gender':'Male','class_id':f['otherClass']},expected=422)
+        request(f"/modules/results/marks_entry.php?class={f['otherClass']}",expected=404)
+        request('/modules/super_admin/users.php',expected=403)
+        attendance={'save_attendance':'1','class_id':f['class'],'date_ad':'2026-10-09',f"attendance[{f['student']}]":'P'}
+        request(f"/modules/attendance/index.php?class={f['class']}&date=2026-10-09",attendance)
+        assert db.execute('SELECT status,date_bs FROM attendances').fetchone()==('P',None)
+        request('/modules/settings/users.php',{'user_id':'','full_name':'New Staff','username':'newstaff','password':'TestPassword123!','role':'exam_officer','status':'1'})
+        assert db.execute("SELECT role FROM users WHERE username='newstaff'").fetchone()[0]=='exam_officer'
+        class11=db.execute("SELECT id FROM classes WHERE school_id=1 AND name='Class 11'").fetchone()[0]
+        electives=[r[0] for r in db.execute('SELECT subject_id FROM class_subjects WHERE school_id=1 AND class_id=? AND is_optional=1 LIMIT 3',(class11,))]
+        enrollment={'first_name_en':'Higher','last_name_en':'Secondary','gender':'Female','class_id':class11,'optional_subject_i':electives[0],'optional_subject_ii':electives[1],'optional_subject_iii':electives[2]}
+        request('/modules/students/add.php',enrollment)
+        assert db.execute("SELECT optional_subject_iii FROM students WHERE first_name_en='Higher'").fetchone()[0]==electives[2]
+        request('/modules/classes/routine.php',{'action':'generate','target_class_id':f['class'],'password':'TestPassword123!'})
+        assert db.execute('SELECT COUNT(*) FROM class_routines WHERE class_id=?',(f['class'],)).fetchone()[0]>0
+        upload_csv('/modules/teachers/import_export.php','Full Name,Username,Email,Phone,DOB\nImport Teacher,importteacher,teacher@example.test,9800000000,1990-01-01')
+        assert db.execute("SELECT status FROM users WHERE username='importteacher'").fetchone()[0]==0
+        upload_csv('/modules/students/import_export.php','First Name,Last Name,Gender,Class,DOB\nImported,Student,Female,Class 11,\nInvalid,Date,Male,Class 11,2026-02-30')
+        assert db.execute("SELECT dob_ad FROM students WHERE first_name_en='Imported'").fetchone()==(None,)
+        assert db.execute("SELECT COUNT(*) FROM students WHERE first_name_en='Invalid'").fetchone()[0]==0
+        for module in ['teachers','students']:
+            request(f'/modules/{module}/import_export.php?action=export')
+            request(f'/modules/{module}/import_export.php?action=template')
+        # GET action URLs render confirmation and must not mutate records.
+        request(f"/modules/students/index.php?delete={f['student']}")
+        assert db.execute('SELECT status FROM students WHERE id=?',(f['student'],)).fetchone()[0]=='active'
+        request(f"/modules/students/index.php?delete={f['student']}",{})
+        assert db.execute('SELECT status FROM students WHERE id=?',(f['student'],)).fetchone()[0]=='inactive'
+        assert db.execute('SELECT COUNT(*) FROM marks').fetchone()[0]==1
+        # Old academic years and archived students remain available for reports.
+        request('/modules/settings/years.php',{'action':'add','year_bs':'2084','year_ad':'2027/28'})
+        newyear=db.execute("SELECT id FROM academic_years WHERE school_id=1 AND year_bs='2084'").fetchone()[0]
+        request('/modules/settings/years.php',{'action':'set_active','id':newyear,'password':'TestPassword123!'})
+        for report in ['index','ledger','print_bulk']:
+            body=request('/modules/results/'+report+'.php?'+query);assert 'Test Student' in body
+        # Distinct subjects may have blank codes: report rows must retain their own marks.
+        db.execute("UPDATE subjects SET code=NULL WHERE id=?",(f['subject'],))
+        second_subject=db.execute("INSERT INTO subjects(name_en,type,school_id) VALUES ('Distinct custom subject','compulsory',1)").lastrowid
+        db.execute('INSERT INTO exam_subjects(exam_id,class_id,subject_id,theory_full,theory_pass,practical_full,practical_pass,credit_hours,is_optional) VALUES (?,?,?,75,26.25,25,10,4,0)',(f['exam'],f['class'],second_subject))
+        db.execute('INSERT INTO marks(exam_id,student_id,subject_id,theory_obtained,practical_obtained) VALUES (?,?,?,37,11)',(f['exam'],f['student'],second_subject));db.commit()
+        for route in [f"/modules/results/report_card.php?student={f['student']}&exam={f['exam']}&system=percentage",'/modules/results/print_bulk.php?'+query+'&system=percentage']:
+            body=request(route)
+            assert re.search(r'<td[^>]*>37</td>',body),'Blank-code subjects must not repeat the first subject marks'
+        db.execute('UPDATE marks SET theory_obtained=NULL WHERE subject_id=?',(second_subject,));db.commit()
+        for route in [f"/modules/results/report_card.php?student={f['student']}&exam={f['exam']}&system=percentage",'/modules/results/print_bulk.php?'+query+'&system=gpa']:
+            body=request(route);assert 'Incomplete' in body and 'Passed (Incomplete)' not in body and 'Graded (GPA Incomplete)' not in body
+        for path in ['/database.sqlite','/database_sqlite.sql','/config/migrate.php','/.git/config','/tests/http_fixture.php']:request(path,expected=404)
+        login('teacher');request('/modules/settings/users.php',expected=403);request('/modules/classes/routine.php',{'action':'generate'},expected=403)
+        login('admin')
+        for path in ['/modules/super_admin/index.php','/modules/super_admin/schools.php','/modules/super_admin/users.php','/modules/super_admin/subjects.php','/modules/classes/index.php','/modules/learning/questions.php']:request(path)
+        request('/modules/super_admin/switch_school.php?school_id=1')
+        request('/modules/settings/school.php',{'name_en':'Unauthorized change'},expected=403)
+        print(f'HTTP integration passed: {count} requests; marks, reports, attendance, users, tenant isolation, CSRF, archive preservation and private-file protection.')
+    finally:
+        if db is not None: db.close()
+        server.terminate();server.wait(timeout=10);log.flush();log.seek(0);logs=log.read();log.close()
+        issues=[line for line in logs.splitlines() if re.search(r'PHP (Warning|Deprecated|Fatal|Parse)',line)]
+        if issues:raise AssertionError('\n'.join(issues))

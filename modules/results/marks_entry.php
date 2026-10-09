@@ -21,236 +21,16 @@ $section_id = $_GET['section'] ?? '';
 $prev_exam_id = $_GET['prev_exam'] ?? '';
 $filter_subject_id = $_GET['subject'] ?? '';
 
-// Handle POST - Save Marks
+// Save through one transactional, school-scoped validation service.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_marks'])) {
-    $exam_id_post = (int)$_POST['exam_id'];
-    $class_id_post = (int)$_POST['class_id'];
-    $section_id_post = $_POST['section_id'] ?? '';
-    
-    // Fetch exam details to verify lock status
-    $school_id = Auth::getSchoolId();
-    $stmt = $db->prepare("SELECT is_locked, type, result_system, has_internal FROM exams WHERE id = ? AND school_id = ?");
-    $stmt->execute([$exam_id_post, $school_id]);
-    $exam = $stmt->fetch();
-    
-    if (!$exam || $exam['is_locked']) {
-        $message = "Cannot enter marks. This exam is locked.";
-        $message_type = 'error';
-    } else {
-        try {
-            $db->beginTransaction();
-            
-            // 1. Save Attendance
-            if (isset($_POST['attendance'])) {
-                $stmt_att_check = $db->prepare("SELECT id FROM exam_student_attendance WHERE exam_id = ? AND student_id = ?");
-                $stmt_att_insert = $db->prepare("INSERT INTO exam_student_attendance (exam_id, student_id, present_days) VALUES (?, ?, ?)");
-                $stmt_att_update = $db->prepare("UPDATE exam_student_attendance SET present_days = ? WHERE exam_id = ? AND student_id = ?");
-                
-                foreach ($_POST['attendance'] as $student_id => $days) {
-                    $val_days = $days !== '' ? (int)$days : 0;
-                    $stmt_att_check->execute([$exam_id_post, $student_id]);
-                    if ($stmt_att_check->fetch()) {
-                        $stmt_att_update->execute([$val_days, $exam_id_post, $student_id]);
-                    } else {
-                        $stmt_att_insert->execute([$exam_id_post, $student_id, $val_days]);
-                    }
-                }
-            }
-            
-            // 2. Fetch class name
-            $stmt_c = $db->prepare("SELECT name FROM classes WHERE id = ?");
-            $stmt_c->execute([$class_id_post]);
-            $class_name = $stmt_c->fetchColumn();
-            $classType = getClassType($class_name);
-            
-            // 3. Fetch subjects configured for this exam-class
-            $stmt_es = $db->prepare("
-                SELECT es.*, sub.name_en as subject_name, sub.type as subject_type
-                FROM exam_subjects es
-                JOIN subjects sub ON es.subject_id = sub.id
-                WHERE es.exam_id = ? AND es.class_id = ? AND (sub.is_hidden = 0 OR sub.is_hidden IS NULL)
-            ");
-            $stmt_es->execute([$exam_id_post, $class_id_post]);
-            $exam_subjects = $stmt_es->fetchAll(PDO::FETCH_ASSOC);
-            $exam_subjects_mapped = [];
-            foreach ($exam_subjects as $es) {
-                $exam_subjects_mapped[$es['subject_id']] = $es;
-            }
-            
-            // 4. Fetch students mapping
-            $stmt_s = $db->prepare("SELECT id, optional_subject_i, optional_subject_ii FROM students WHERE class_id = ?");
-            $stmt_s->execute([$class_id_post]);
-            $students_raw = $stmt_s->fetchAll(PDO::FETCH_ASSOC);
-            $students_mapped = [];
-            foreach ($students_raw as $s) {
-                $students_mapped[$s['id']] = $s;
-            }
-            
-            // 5. Save marks
-            if (isset($_POST['marks'])) {
-                $stmt_mark_check = $db->prepare("SELECT id FROM marks WHERE exam_id = ? AND student_id = ? AND subject_id = ?");
-                $stmt_mark_insert = $db->prepare("
-                    INSERT INTO marks (exam_id, student_id, subject_id, theory_obtained, practical_obtained, internal_breakdown, grade, grade_point, remarks, entered_by)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ");
-                $stmt_mark_update = $db->prepare("
-                    UPDATE marks 
-                    SET theory_obtained = ?, practical_obtained = ?, internal_breakdown = ?, grade = ?, grade_point = ?, remarks = ?, entered_by = ?
-                    WHERE exam_id = ? AND student_id = ? AND subject_id = ?
-                ");
-                
-                foreach ($_POST['marks'] as $student_id => $subjects_data) {
-                    $student = $students_mapped[$student_id] ?? null;
-                    if (!$student) continue;
-                    
-                    foreach ($subjects_data as $sub_id => $fields) {
-                        $es_row = $exam_subjects_mapped[$sub_id] ?? null;
-                        if (!$es_row) continue;
-                        
-                        // Check optional subjects mapping
-                        if ($es_row['subject_type'] === 'optional') {
-                            if ($sub_id != $student['optional_subject_i'] && $sub_id != $student['optional_subject_ii']) {
-                                continue;
-                            }
-                        }
-                        
-                        // Check if empty
-                        $is_empty = false;
-                        if ($classType === '1-3' || $exam['type'] === 'unit') {
-                            $theory_val = $fields['theory'] ?? '';
-                            if ($theory_val === '') $is_empty = true;
-                        } else {
-                            $prt = $fields['participation'] ?? '';
-                            $prj = $fields['project_work'] ?? '';
-                            $prv = $fields['previous_exam'] ?? '';
-                            $trm = $fields['theory'] ?? '';
-                            if ($prt === '' && $prj === '' && $prv === '' && $trm === '') $is_empty = true;
-                        }
-                        
-                        if ($is_empty) {
-                            $theory_obtained = null;
-                            $practical_obtained = null;
-                            $internal_breakdown = null;
-                            $grade = null;
-                            $gp = null;
-                            $remarks = null;
-                        } else {
-                            if ($exam['type'] === 'unit') {
-                                $theory_obtained = (float)$theory_val;
-                                $practical_obtained = 0.0;
-                                $internal_breakdown = null;
-                                
-                                $theory_full = (float)$es_row['theory_full'];
-                                $theory_pass = (float)$es_row['theory_pass'];
-                                $pct = $theory_full > 0 ? ($theory_obtained / $theory_full) * 100 : 0.0;
-                                
-                                $is_fail = ($theory_obtained < $theory_pass);
-                                if (($exam['result_system'] ?? 'gpa') === 'percentage') {
-                                    $gp = 0.0;
-                                    $grade = '';
-                                    $remarks = $is_fail ? 'Fail' : 'Pass';
-                                } else {
-                                    if ($is_fail) {
-                                        $gp = 0.0;
-                                        $grade = 'NG';
-                                        $remarks = 'NG';
-                                    } else {
-                                        $gp = calculateGPA($pct);
-                                        $grade = calculateGrade($pct);
-                                        $remarks = 'Pass';
-                                    }
-                                }
-                            } elseif ($classType === '1-3') {
-                                $theory_obtained = (float)$theory_val;
-                                $practical_obtained = 0.0;
-                                $internal_breakdown = null;
-                                
-                                $grade = calculateGrade($theory_obtained);
-                                $gp = calculateGPA($theory_obtained);
-                                $remarks = 'Pass';
-                            } else {
-                                $val_prt = $prt !== '' ? (float)$prt : 0.0;
-                                $val_prj = $prj !== '' ? (float)$prj : 0.0;
-                                $val_prv = $prv !== '' ? (float)$prv : 0.0;
-                                $val_trm = $trm !== '' ? (float)$trm : 0.0;
-                                
-                                $theory_obtained = $val_trm;
-                                $practical_obtained = $val_prt + $val_prj + $val_prv;
-                                $internal_breakdown = json_encode([
-                                    'participation' => $val_prt,
-                                    'project_work' => $val_prj,
-                                    'previous_exam' => $val_prv
-                                ]);
-                                
-                                $theory_full = (float)$es_row['theory_full'];
-                                $theory_pass = (float)$es_row['theory_pass'];
-                                $practical_full = (float)$es_row['practical_full'];
-                                $practical_pass = (float)$es_row['practical_pass'];
-                                
-                                $int_ch = $es_row['internal_credit_hours'] !== null ? (float)$es_row['internal_credit_hours'] : ($classType === '4-8' ? 2.5 : 1.25);
-                                $ext_ch = $es_row['external_credit_hours'] !== null ? (float)$es_row['external_credit_hours'] : ($classType === '4-8' ? 2.5 : 3.75);
-                                $total_ch = $es_row['credit_hours'] !== null ? (float)$es_row['credit_hours'] : ($int_ch + $ext_ch);
-                                
-                                $int_pct = $practical_full > 0 ? ($practical_obtained / $practical_full) * 100 : 0;
-                                $int_gp = calculateGPA($int_pct);
-                                
-                                $ext_pct = $theory_full > 0 ? ($theory_obtained / $theory_full) * 100 : 0;
-                                $ext_gp = calculateGPA($ext_pct);
-                                
-                                $int_wgp = $int_ch * $int_gp;
-                                $ext_wgp = $ext_ch * $ext_gp;
-                                
-                                $final_gp = $total_ch > 0 ? ($int_wgp + $ext_wgp) / $total_ch : 0.0;
-                                
-                                // Theory below 35% or Practical/Internal below 40% = NG
-                                $is_fail = ($theory_obtained < $theory_pass) || ($practical_obtained < $practical_pass);
-                                
-                                if ($is_fail) {
-                                    $gp = 0.0;
-                                    $grade = 'NG';
-                                    $remarks = 'NG';
-                                } else {
-                                    $gp = round($final_gp, 2);
-                                    $grade = calculateSubjectFinalGrade($gp);
-                                    $remarks = 'Pass';
-                                }
-                            }
-                        }
-                        
-                        $stmt_mark_check->execute([$exam_id_post, $student_id, $sub_id]);
-                        $record = $stmt_mark_check->fetch();
-                        
-                        if ($record) {
-                            $stmt_mark_update->execute([
-                                $theory_obtained, $practical_obtained, $internal_breakdown, $grade, $gp, $remarks, Auth::getUserId(),
-                                $exam_id_post, $student_id, $sub_id
-                            ]);
-                        } else {
-                            $stmt_mark_insert->execute([
-                                $exam_id_post, $student_id, $sub_id,
-                                $theory_obtained, $practical_obtained, $internal_breakdown, $grade, $gp, $remarks, Auth::getUserId()
-                            ]);
-                        }
-                    }
-                }
-            }
-            
-            $db->commit();
-            $message = "Marks and attendance saved successfully.";
-            $message_type = 'success';
-            
-            $subject_id_post = $_POST['subject_id_hidden'] ?? '';
-            $prev_exam_param = $prev_exam_id ? "&prev_exam=" . $prev_exam_id : "";
-            $subject_param = $subject_id_post !== '' ? "&subject=" . $subject_id_post : "";
-            redirect(APP_URL . "/modules/results/marks_entry.php?exam=$exam_id_post&class=$class_id_post&section=$section_id_post" . $prev_exam_param . $subject_param, $message);
-        } catch (Exception $e) {
-            if ($db->inTransaction()) $db->rollBack();
-            $message = "Error: " . $e->getMessage();
-            $message_type = 'error';
-        }
-    }
+    require_once __DIR__ . '/../../includes/marks_service.php';
+    try {
+        saveExamMarks($db, (int)Auth::getSchoolId(), (int)Auth::getUserId(), Auth::getRole(), $_POST);
+        Auth::logActivity(Auth::getUserId(), 'Save exam marks', 'exams', (int)$_POST['exam_id']);
+        redirect(APP_URL.'/modules/results/marks_entry.php?'.http_build_query(['exam'=>(int)$_POST['exam_id'],'class'=>(int)$_POST['class_id'],'section'=>(int)($_POST['section_id']??0),'subject'=>$filter_subject_id]), 'Marks and attendance saved successfully.');
+    } catch (InvalidArgumentException $e) { $message=$e->getMessage();$message_type='error'; }
+    catch (PDOException $e) { error_log($e->getMessage());$message='Marks could not be saved. Please try again.';$message_type='error'; }
 }
-
 // Fetch active exams
 $school_id = Auth::getSchoolId();
 $selected_exam = null;
@@ -270,7 +50,7 @@ $stmt->execute([$school_id]);
 $exams = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Fetch classes
-$stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ? OR school_id = 0) AND is_active = 1 ORDER BY id ASC");
+$stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ?) AND is_active = 1 ORDER BY id ASC");
 $stmt->execute([$school_id]);
 $classes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -312,13 +92,18 @@ $subjects = [];
 $all_subjects = [];
 if ($exam_id && $class_id) {
     $stmt = $db->prepare("
-        SELECT es.*, sub.name_en as subject_name, sub.code as subject_code, sub.type as subject_type
+        SELECT es.*, sub.name_en as subject_name, sub.code as subject_code, COALESCE(es.is_optional,CASE WHEN sub.type='optional' THEN 1 ELSE 0 END) as is_optional
         FROM exam_subjects es
         JOIN subjects sub ON es.subject_id = sub.id
-        WHERE es.exam_id = ? AND es.class_id = ? AND (sub.is_hidden = 0 OR sub.is_hidden IS NULL)
+        WHERE es.exam_id = ? AND es.class_id = ?
     ");
     $stmt->execute([$exam_id, $class_id]);
     $subjects = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    if (Auth::getRole()==='teacher') {
+        $assigned=$db->prepare('SELECT subject_id,teacher_id FROM class_subjects WHERE school_id=? AND class_id=?');$assigned->execute([$school_id,$class_id]);$allowed=[];
+        foreach($assigned as $assignment)if(in_array((string)Auth::getUserId(),explode(',',(string)$assignment['teacher_id']),true))$allowed[]=$assignment['subject_id'];
+        $subjects=array_values(array_filter($subjects,static fn($s)=>in_array($s['subject_id'],$allowed)));
+    }
     
     // Sort subjects serially (English, Nepali, Math, Science, Social, Opt I, Opt II)
     usort($subjects, function($a, $b) {
@@ -344,11 +129,11 @@ $students = [];
 if ($exam_id && $class_id) {
     $query = "
         SELECT s.id, s.student_id, s.first_name_en, s.last_name_en, s.roll_number, s.exam_roll_number,
-               s.optional_subject_i, s.optional_subject_ii
+               s.optional_subject_i, s.optional_subject_ii, s.optional_subject_iii
         FROM students s
-        WHERE s.class_id = ? AND s.status = 'active'
+        WHERE s.class_id = ? AND s.status = 'active' AND s.school_id = ? AND s.academic_year_id = ?
     ";
-    $params = [$class_id];
+    $params = [$class_id, $school_id, $selected_exam['academic_year_id'] ?? 0];
     if ($section_id) {
         $query .= " AND s.section_id = ?";
         $params[] = $section_id;
@@ -499,7 +284,7 @@ ob_start();
 <div class="card shadow-sm border-0">
     <div class="card-header bg-white py-3">
         <h5 class="mb-0 text-primary fw-bold"><i class="fas fa-list-ol"></i> Marks Grid: <?= sanitize($class_name) ?></h5>
-        <small class="text-muted">Horizontal scrolling enabled. Gray cells are optional subjects not selected by the student.</small>
+        <small class="text-muted">Horizontal scrolling enabled. Gray cells are optional subjects not selected by the student. Internal components must sum to no more than the configured internal full marks. Enter zero for a component that does not apply.</small>
     </div>
     
     <div class="card-body p-0">
@@ -519,7 +304,7 @@ ob_start();
                             <th rowspan="2" class="align-middle px-2" style="min-width: 90px; background-color: #34495e;">Attendance</th>
                             
                             <?php foreach ($subjects as $sub): ?>
-                                <?php $colspan = (($selected_exam && $selected_exam['type'] === 'unit') || $classType === '1-3') ? 1 : 4; ?>
+                                <?php $colspan = (($selected_exam && $selected_exam['type'] === 'unit') || empty($selected_exam['has_internal'])) ? 1 : 4; ?>
                                 <th colspan="<?= $colspan ?>" class="px-2 small text-uppercase">
                                     <?= sanitize($sub['subject_name']) ?> 
                                     <span class="d-block text-warning small font-monospace"><?= sanitize($sub['subject_code']) ?></span>
@@ -530,13 +315,13 @@ ob_start();
                             <?php foreach ($subjects as $sub): ?>
                                 <?php if ($selected_exam && $selected_exam['type'] === 'unit'): ?>
                                     <th style="min-width: 100px; font-size: 0.75rem;">Marks (<?= $sub['theory_full'] ?>)</th>
-                                <?php elseif ($classType === '1-3'): ?>
-                                    <th style="min-width: 100px; font-size: 0.75rem;">Ach % (100)</th>
+                                <?php elseif (empty($selected_exam['has_internal'])): ?>
+                                    <th style="min-width: 100px; font-size: 0.75rem;">Theory (<?= $sub['theory_full'] ?>)</th>
                                 <?php else: ?>
-                                    <?php $max_prt = ($classType === '4-8') ? 4 : 3; ?>
-                                    <?php $max_prj = ($classType === '4-8') ? 36 : 16; ?>
-                                    <?php $max_prv = ($classType === '4-8') ? 10 : 6; ?>
-                                    <?php $max_trm = ($classType === '4-8') ? 50 : 75; ?>
+                                    <?php $max_prt = $selected_exam['has_internal'] ? (float)$sub['practical_full'] : 0; ?>
+                                    <?php $max_prj = $max_prt; ?>
+                                    <?php $max_prv = $max_prt; ?>
+                                    <?php $max_trm = (float)$sub['theory_full']; ?>
                                     <th style="min-width: 60px; font-size: 0.7rem; background-color: #2c3e50;">PRT (<?= $max_prt ?>)</th>
                                     <th style="min-width: 60px; font-size: 0.7rem; background-color: #2c3e50;">PRJ (<?= $max_prj ?>)</th>
                                     <th style="min-width: 60px; font-size: 0.7rem; background-color: #2c3e50;">PRV (<?= $max_prv ?>)</th>
@@ -566,19 +351,19 @@ ob_start();
                                 <?php foreach ($subjects as $sub): ?>
                                     <?php 
                                     // Check optional mapping
-                                    $is_optional = ($sub['subject_type'] === 'optional');
+                                    $is_optional = (!empty($sub['is_optional']));
                                     $is_selected = true;
                                     if ($is_optional) {
-                                        $is_selected = ($sub['id'] == $student['optional_subject_i'] || $sub['id'] == $student['optional_subject_ii']);
+                                        $is_selected = ($sub['subject_id'] == $student['optional_subject_i'] || $sub['subject_id'] == $student['optional_subject_ii'] || $sub['subject_id'] == ($student['optional_subject_iii']??null));
                                     }
                                     
                                     if (!$is_selected): 
-                                        $colspan = (($selected_exam && $selected_exam['type'] === 'unit') || $classType === '1-3') ? 1 : 4;
+                                        $colspan = (($selected_exam && $selected_exam['type'] === 'unit') || empty($selected_exam['has_internal'])) ? 1 : 4;
                                     ?>
                                         <td colspan="<?= $colspan ?>" style="background-color: #eaeded; color: #a6acaf; font-size: 0.75rem;" class="text-center font-monospace">N/A</td>
                                     <?php else: ?>
                                         <?php 
-                                        $m = $marks_matrix[$student['id']][$sub['id']] ?? null;
+                                        $m = $marks_matrix[$student['id']][$sub['subject_id']] ?? null;
                                         $theory_obtained = $m !== null && $m['theory_obtained'] !== null ? $m['theory_obtained'] : '';
                                         $practical_obtained = $m !== null && $m['practical_obtained'] !== null ? $m['practical_obtained'] : '';
                                         
@@ -588,45 +373,34 @@ ob_start();
                                         $prj_val = $breakdown['project_work'] ?? '';
                                         $prv_val = $breakdown['previous_exam'] ?? '';
                                         
-                                        // Auto scaling prefill logic if prv_val is empty and previous exam marks are loaded
-                                        if ($prv_val === '' && isset($prev_marks[$student['id']][$sub['id']])) {
-                                            $pm = $prev_marks[$student['id']][$sub['id']];
-                                            $pm_obt = $pm['theory'] + $pm['practical'];
-                                            $pm_full = $pm['theory_full'] + $pm['practical_full'];
-                                            if ($pm_full > 0) {
-                                                if ($classType === '4-8') {
-                                                    $prv_val = round(($pm_obt / $pm_full) * 10, 2);
-                                                } elseif ($classType === '9-12') {
-                                                    $prv_val = round(($pm_obt / $pm_full) * 6, 2);
-                                                }
-                                            }
-                                        }
+                                        // Previous-exam allocation depends on the approved school scheme.
+                                        // Do not silently scale or overwrite an incomplete component.
                                         ?>
                                         <?php if ($selected_exam && $selected_exam['type'] === 'unit'): ?>
                                             <td>
-                                                <input type="number" step="0.01" min="0" max="<?= $sub['theory_full'] ?>" class="form-control form-control-sm text-center font-monospace" name="marks[<?= $student['id'] ?>][<?= $sub['id'] ?>][theory]" value="<?= $theory_obtained ?>">
+                                                <input type="number" step="0.01" min="0" max="<?= $sub['theory_full'] ?>" class="form-control form-control-sm text-center font-monospace" name="marks[<?= $student['id'] ?>][<?= $sub['subject_id'] ?>][theory]" value="<?= $theory_obtained ?>">
                                             </td>
-                                        <?php elseif ($classType === '1-3'): ?>
+                                        <?php elseif (empty($selected_exam['has_internal'])): ?>
                                             <td>
-                                                <input type="number" step="0.01" min="0" max="100" class="form-control form-control-sm text-center font-monospace" name="marks[<?= $student['id'] ?>][<?= $sub['id'] ?>][theory]" value="<?= $theory_obtained ?>">
+                                                <input type="number" step="0.01" min="0" max="<?= $sub['theory_full'] ?>" class="form-control form-control-sm text-center font-monospace" name="marks[<?= $student['id'] ?>][<?= $sub['subject_id'] ?>][theory]" value="<?= $theory_obtained ?>">
                                             </td>
                                         <?php else: ?>
-                                            <?php $max_prt = ($classType === '4-8') ? 4 : 3; ?>
-                                            <?php $max_prj = ($classType === '4-8') ? 36 : 16; ?>
-                                            <?php $max_prv = ($classType === '4-8') ? 10 : 6; ?>
-                                            <?php $max_trm = ($classType === '4-8') ? 50 : 75; ?>
+                                            <?php $max_prt = !empty($selected_exam['has_internal']) ? (float)$sub['practical_full'] : 0; ?>
+                                            <?php $max_prj = $max_prt; ?>
+                                            <?php $max_prv = $max_prt; ?>
+                                            <?php $max_trm = (float)$sub['theory_full']; ?>
                                             
                                             <td>
-                                                <input type="number" step="0.01" min="0" max="<?= $max_prt ?>" class="form-control form-control-sm text-center font-monospace" name="marks[<?= $student['id'] ?>][<?= $sub['id'] ?>][participation]" value="<?= $prt_val ?>">
+                                                <input type="number" step="0.01" min="0" max="<?= $max_prt ?>" class="form-control form-control-sm text-center font-monospace" name="marks[<?= $student['id'] ?>][<?= $sub['subject_id'] ?>][participation]" value="<?= $prt_val ?>">
                                             </td>
                                             <td>
-                                                <input type="number" step="0.01" min="0" max="<?= $max_prj ?>" class="form-control form-control-sm text-center font-monospace" name="marks[<?= $student['id'] ?>][<?= $sub['id'] ?>][project_work]" value="<?= $prj_val ?>">
+                                                <input type="number" step="0.01" min="0" max="<?= $max_prj ?>" class="form-control form-control-sm text-center font-monospace" name="marks[<?= $student['id'] ?>][<?= $sub['subject_id'] ?>][project_work]" value="<?= $prj_val ?>">
                                             </td>
                                             <td>
-                                                <input type="number" step="0.01" min="0" max="<?= $max_prv ?>" class="form-control form-control-sm text-center font-monospace" name="marks[<?= $student['id'] ?>][<?= $sub['id'] ?>][previous_exam]" value="<?= $prv_val ?>">
+                                                <input type="number" step="0.01" min="0" max="<?= $max_prv ?>" class="form-control form-control-sm text-center font-monospace" name="marks[<?= $student['id'] ?>][<?= $sub['subject_id'] ?>][previous_exam]" value="<?= $prv_val ?>">
                                             </td>
                                             <td style="background-color: #e8f8f5;">
-                                                <input type="number" step="0.01" min="0" max="<?= $max_trm ?>" class="form-control form-control-sm text-center font-monospace fw-bold" name="marks[<?= $student['id'] ?>][<?= $sub['id'] ?>][theory]" value="<?= $theory_obtained ?>">
+                                                <input type="number" step="0.01" min="0" max="<?= $max_trm ?>" class="form-control form-control-sm text-center font-monospace fw-bold" name="marks[<?= $student['id'] ?>][<?= $sub['subject_id'] ?>][theory]" value="<?= $theory_obtained ?>">
                                             </td>
                                         <?php endif; ?>
                                     <?php endif; ?>
@@ -645,7 +419,7 @@ ob_start();
                 </table>
             </div>
             
-            <?php if (count($students) > 0 && Auth::hasRole(['super_admin', 'school_admin', 'teacher'])): ?>
+            <?php if (count($students) > 0 && Auth::hasRole(['super_admin', 'school_admin', 'teacher', 'exam_officer'])): ?>
             <div class="text-end p-4 bg-light border-top no-print">
                 <button type="submit" name="save_marks" class="btn btn-primary btn-lg px-5 shadow-sm">
                     <i class="fas fa-save me-2"></i> Save & Compute Results

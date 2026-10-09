@@ -23,14 +23,14 @@ $stmt = $db->prepare("
     SELECT e.*, y.year_bs 
     FROM exams e 
     JOIN academic_years y ON e.academic_year_id = y.id 
-    WHERE y.is_active = 1 AND e.school_id = ?
+    WHERE e.school_id = ?
     ORDER BY e.id DESC
 ");
 $stmt->execute([$school_id]);
 $exams = $stmt->fetchAll();
 
 // Fetch classes
-$stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ? OR school_id = 0) AND is_active = 1 ORDER BY id ASC");
+$stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ?) ORDER BY id ASC");
 $stmt->execute([$school_id]);
 $classes = $stmt->fetchAll();
 
@@ -63,26 +63,16 @@ if ($exam_id) {
     }
 }
 
-$is_gpa_format = true;
-if ($selected_exam) {
-    if ($selected_exam['type'] === 'unit') {
-        $is_gpa_format = (($selected_exam['result_system'] ?? 'gpa') === 'gpa');
-    } else {
-        $is_gpa_format = ($selected_class && $selected_class['grading_type'] === 'gpa');
-    }
-}
-
+$is_gpa_format = ($selected_exam['result_system']??'gpa')==='gpa';
 // Fetch students for results list
 $students = [];
 if ($class_id && $exam_id) {
     $query = "
-        SELECT s.id, s.student_id, s.first_name_en, s.last_name_en, s.roll_number,
-               (SELECT SUM(theory_obtained + practical_obtained) FROM marks WHERE student_id = s.id AND exam_id = ?) as total_obtained,
-               (SELECT COUNT(id) FROM marks WHERE student_id = s.id AND exam_id = ? AND (remarks = 'NG' OR remarks = 'Fail')) as failed_subjects_count
+        SELECT s.*
         FROM students s
-        WHERE s.class_id = ? AND s.status = 'active'
+        WHERE s.class_id = ? AND s.school_id=? AND s.academic_year_id=? AND (s.status='active' OR EXISTS(SELECT 1 FROM marks historical WHERE historical.student_id=s.id AND historical.exam_id=?))
     ";
-    $params = [$exam_id, $exam_id, $class_id];
+    $params = [$class_id,$school_id,$selected_exam['academic_year_id']??0,$exam_id];
     
     if ($section_id) {
         $query .= " AND s.section_id = ?";
@@ -94,6 +84,23 @@ if ($class_id && $exam_id) {
     $stmt = $db->prepare($query);
     $stmt->execute($params);
     $students = $stmt->fetchAll();
+    $q=$db->prepare('SELECT * FROM exam_subjects WHERE exam_id=? AND class_id=?');$q->execute([$exam_id,$class_id]);$schemes=$q->fetchAll();
+    $q=$db->prepare('SELECT * FROM marks WHERE exam_id=?');$q->execute([$exam_id]);$matrix=[];
+    foreach($q as $mark)$matrix[$mark['student_id']][$mark['subject_id']]=$mark;
+    foreach($students as &$student) {
+        $rows=[];$failed=0;
+        foreach($schemes as $scheme) {
+            if(!empty($scheme['is_optional']) && !in_array($scheme['subject_id'],[$student['optional_subject_i'],$student['optional_subject_ii'],$student['optional_subject_iii']],true))continue;
+            $row=array_merge($scheme,$matrix[$student['id']][$scheme['subject_id']]??[]);
+            $rows[]=$row;
+            if(erpCalculateSubjectResult($row,$row,$selected_exam)['failed'])$failed++;
+        }
+        $summary=erpReportSummary($rows,$selected_exam,$selected_exam['result_system']??'gpa');
+        $student['total_obtained']=empty($matrix[$student['id']])?null:$summary['grand_obtained'];
+        $student['failed_subjects_count']=$failed;
+        $student['incomplete']=$summary['remarks_summary']==='Incomplete';
+    }
+    unset($student);
 }
 
 $pageTitle = 'Student Results';
@@ -198,6 +205,8 @@ ob_start();
                             <td class="text-center">
                                 <?php if ($student['total_obtained'] === null): ?>
                                     <span class="badge bg-secondary">No Marks</span>
+                                <?php elseif ($student['incomplete']): ?>
+                                    <span class="badge bg-warning text-dark">Incomplete</span>
                                 <?php elseif ($student['failed_subjects_count'] > 0): ?>
                                     <span class="badge bg-danger"><?= $is_gpa_format ? 'Not Graded' : 'Failed' ?> (<?= $student['failed_subjects_count'] ?> Sub)</span>
                                 <?php else: ?>

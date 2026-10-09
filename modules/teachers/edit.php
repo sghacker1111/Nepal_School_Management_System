@@ -40,10 +40,10 @@ $stmt = $db->prepare("
     FROM class_subjects cs 
     JOIN classes c ON cs.class_id = c.id 
     JOIN subjects s ON cs.subject_id = s.id 
-    WHERE cs.teacher_id = ? AND c.is_active = 1 AND cs.is_active = 1 AND (s.is_hidden = 0 OR s.is_hidden IS NULL)
+    WHERE cs.school_id = ? AND c.is_active = 1 AND cs.is_active = 1 AND (s.is_hidden = 0 OR s.is_hidden IS NULL)
 ");
-$stmt->execute([$id]);
-$teaching_subjects = $stmt->fetchAll();
+$stmt->execute([$school_id]);
+$teaching_subjects = array_values(array_filter($stmt->fetchAll(), static fn($row)=>in_array((string)$id,explode(',',(string)$row['teacher_id']),true)));
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $full_name = sanitize($_POST['full_name'] ?? '');
@@ -54,10 +54,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $status = isset($_POST['status']) ? 1 : 0;
     
     // Extra details
-    $dob_ad = $_POST['dob_ad'] ?: null;
-    $join_date = $_POST['join_date'] ?: null;
-    $perm_issue_date = $_POST['perm_issue_date'] ?: null;
-    $temp_issue_date = $_POST['temp_issue_date'] ?: null;
+    $dob_ad = ($_POST['dob_ad'] ?? '') ?: null;
+    $join_date = ($_POST['join_date'] ?? '') ?: null;
+    $perm_issue_date = ($_POST['perm_issue_date'] ?? '') ?: null;
+    $temp_issue_date = ($_POST['temp_issue_date'] ?? '') ?: null;
     $cit_no = sanitize($_POST['cit_no'] ?? '');
     $bank_name = sanitize($_POST['bank_name'] ?? '');
     $bank_account = sanitize($_POST['bank_account'] ?? '');
@@ -71,6 +71,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (empty($full_name) || empty($username)) {
         $error = 'Full name and username are required';
+    } elseif ($password !== '' && strlen($password) < 8) {
+        $error = 'Passwords must contain at least 8 characters.';
+    } elseif (!preg_match('/^[A-Za-z0-9_.@-]{3,50}$/', $username) || ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL))) {
+        $error = 'Enter a valid username (3–50 characters) and email address.';
     } else {
         try {
             $db->beginTransaction();
@@ -129,14 +133,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 
                 // Clear teacher's old name from any classes
-                $stmt_clear = $db->prepare("UPDATE classes SET class_teacher_name = NULL WHERE class_teacher_name = ? AND (school_id = ? OR school_id = 0)");
-                $stmt_clear->execute([$teacher['full_name'], $school_id]);
+                $stmt_clear = $db->prepare("UPDATE classes SET class_teacher_name = NULL, class_teacher_id = NULL WHERE class_teacher_id = ? AND (school_id = ?)");
+                $stmt_clear->execute([$id, $school_id]);
 
                 // Assign to new class if selected
                 $assigned_class_id = isset($_POST['assigned_class_id']) ? (int)$_POST['assigned_class_id'] : 0;
                 if ($assigned_class_id > 0) {
-                    $stmt_set = $db->prepare("UPDATE classes SET class_teacher_name = ? WHERE id = ? AND (school_id = ? OR school_id = 0)");
-                    $stmt_set->execute([$full_name, $assigned_class_id, $school_id]);
+                    $stmt_set = $db->prepare("UPDATE classes SET class_teacher_name = ?, class_teacher_id = ? WHERE id = ? AND (school_id = ?)");
+                    $stmt_set->execute([$full_name, $id, $assigned_class_id, $school_id]);
                     
                     // Handle signature file upload
                     $class_teacher_signature = null;
@@ -250,7 +254,7 @@ ob_start();
                         </div>
                         <div class="col-md-6">
                             <label for="password" class="form-label">New Password</label>
-                            <input type="password" class="form-control" id="password" name="password" placeholder="Fill only to change">
+                            <input type="password" class="form-control" id="password" name="password" minlength="8" placeholder="Fill only to change">
                         </div>
                     </div>
                 </div>
@@ -361,13 +365,13 @@ ob_start();
                 <div class="card-body p-4">
                     <?php
                     // Fetch all classes
-                    $stmt_cls = $db->prepare("SELECT id, name FROM classes WHERE (school_id = ? OR school_id = 0) AND is_active = 1 ORDER BY id ASC");
+                    $stmt_cls = $db->prepare("SELECT id, name FROM classes WHERE (school_id = ?) AND is_active = 1 ORDER BY id ASC");
                     $stmt_cls->execute([$school_id]);
                     $classes_list = $stmt_cls->fetchAll();
                     
                     // Find if this teacher is currently assigned to a class
-                    $stmt_curr = $db->prepare("SELECT id FROM classes WHERE class_teacher_name = ? AND (school_id = ? OR school_id = 0)");
-                    $stmt_curr->execute([$teacher['full_name'], $school_id]);
+                    $stmt_curr = $db->prepare("SELECT id FROM classes WHERE class_teacher_id = ? AND (school_id = ?)");
+                    $stmt_curr->execute([$id, $school_id]);
                     $assigned_class_id = $stmt_curr->fetchColumn();
                     ?>
                     <div class="mb-3">

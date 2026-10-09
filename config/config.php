@@ -5,11 +5,12 @@
  */
 
 // Database credentials
-define('DB_TYPE', 'sqlite'); // Options: 'mysql' or 'sqlite'. Currently set to 'sqlite' so it works locally without a MySQL server!
-define('DB_HOST', 'localhost');
-define('DB_NAME', 'nepal_school_erp');
-define('DB_USER', 'root');
-define('DB_PASS', '');
+define('DB_TYPE', getenv('ERP_DB_TYPE') ?: 'sqlite');
+define('DB_HOST', getenv('ERP_DB_HOST') ?: 'localhost');
+define('DB_NAME', getenv('ERP_DB_NAME') ?: 'nepal_school_erp');
+define('DB_USER', getenv('ERP_DB_USER') ?: 'root');
+define('DB_PASS', getenv('ERP_DB_PASS') ?: '');
+define('DB_SQLITE_PATH', getenv('ERP_DB_PATH') ?: dirname(__DIR__) . '/database.sqlite');
 define('DB_CHARSET', 'utf8mb4');
 
 // Application settings
@@ -23,7 +24,7 @@ if (!defined('APP_URL')) {
         (!empty($_SERVER['HTTP_X_FORWARDED_SSL']) && $_SERVER['HTTP_X_FORWARDED_SSL'] === 'on')) {
         $protocol = "https://";
     }
-    $host = $_SERVER['HTTP_HOST'] ?? 'localhost:8000';
+    $host = preg_replace('/[^a-zA-Z0-9.\-:\[\]]/', '', $_SERVER['HTTP_HOST'] ?? 'localhost:8000');
     
     // Detect subdirectory path (e.g. for XAMPP /nepal_school_erp/)
     $doc_root = str_replace('\\', '/', realpath($_SERVER['DOCUMENT_ROOT'] ?? ''));
@@ -63,4 +64,5 @@ date_default_timezone_set(TIMEZONE);
 
 // Error reporting (disable in production)
 error_reporting(E_ALL);
-ini_set('display_errors', 1);
+ini_set('display_errors', getenv('ERP_DEBUG') === '1' ? '1' : '0');
+ini_set('log_errors', '1');

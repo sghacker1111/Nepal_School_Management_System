@@ -23,14 +23,14 @@ $stmt = $db->prepare("
     SELECT e.*, y.year_bs 
     FROM exams e 
     JOIN academic_years y ON e.academic_year_id = y.id 
-    WHERE e.school_id = ? AND y.is_active = 1
+    WHERE e.school_id = ?
     ORDER BY e.id DESC
 ");
 $stmt->execute([$school_id]);
 $exams = $stmt->fetchAll();
 
 // Fetch classes
-$classes_stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ? OR school_id = 0) AND is_active = 1 ORDER BY id ASC");
+$classes_stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ?) ORDER BY id ASC");
 $classes_stmt->execute([$school_id]);
 $classes = $classes_stmt->fetchAll();
 
@@ -64,7 +64,7 @@ if ($exam_id && $class_id) {
     if (!$exam) {
         die("Unauthorized access to exam data.");
     }
-    $chk_class = $db->prepare("SELECT id FROM classes WHERE id = ? AND school_id = ? AND is_active = 1");
+    $chk_class = $db->prepare("SELECT id FROM classes WHERE id = ? AND school_id = ?");
     $chk_class->execute([$class_id, $school_id]);
     if (!$chk_class->fetch()) {
         die("Unauthorized access to class data.");
@@ -72,13 +72,13 @@ if ($exam_id && $class_id) {
 
     // 1. Fetch subjects configured for this exam-class
     $stmt = $db->prepare("
-        SELECT es.*, s.name_en as subject_name, s.code as subject_code, s.type as subject_type,
+        SELECT es.*, s.name_en as subject_name, s.code as subject_code, COALESCE(es.is_optional,CASE WHEN s.type='optional' THEN 1 ELSE 0 END) as is_optional,
                es.credit_hours as exam_credit_hours, cs.credit_hours as class_credit_hours, 
                s.credit_hours as default_credit_hours
         FROM exam_subjects es
         JOIN subjects s ON es.subject_id = s.id
-        LEFT JOIN class_subjects cs ON cs.class_id = es.class_id AND cs.subject_id = es.subject_id
-        WHERE es.exam_id = ? AND es.class_id = ? AND (s.is_hidden = 0 OR s.is_hidden IS NULL)
+        LEFT JOIN class_subjects cs ON cs.id=(SELECT MIN(cm.id) FROM class_subjects cm WHERE cm.class_id=es.class_id AND cm.subject_id=es.subject_id)
+        WHERE es.exam_id = ? AND es.class_id = ?
         ORDER BY s.type DESC, s.name_en ASC
     ");
     $stmt->execute([$exam_id, $class_id]);
@@ -94,8 +94,8 @@ if ($exam_id && $class_id) {
     }
 
     // 2. Fetch active students in class
-    $query = "SELECT id, student_id, first_name_en, last_name_en, roll_number, optional_subject_i, optional_subject_ii FROM students WHERE class_id = ? AND status = 'active'";
-    $params = [$class_id];
+    $query = "SELECT id, student_id, first_name_en, last_name_en, roll_number, optional_subject_i, optional_subject_ii, optional_subject_iii FROM students WHERE class_id = ? AND (status = 'active' OR EXISTS(SELECT 1 FROM marks historical WHERE historical.student_id=students.id AND historical.exam_id=?)) AND school_id=? AND academic_year_id=?";
+    $params = [$class_id,$exam_id,$school_id,$exam['academic_year_id']];
     if ($section_id) {
         $query .= " AND section_id = ?";
         $params[] = $section_id;
@@ -108,7 +108,7 @@ if ($exam_id && $class_id) {
     // 3. Fetch marks matrix
     $stmt = $db->prepare("
         SELECT * FROM marks WHERE exam_id = ? AND student_id IN (
-            SELECT id FROM students WHERE class_id = ? AND status = 'active'
+            SELECT id FROM students WHERE class_id = ?
         )
     ");
     $stmt->execute([$exam_id, $class_id]);
@@ -128,79 +128,19 @@ if ($exam_id && $class_id) {
     // 4. Compute Ledger Matrix
     foreach ($students as $student) {
         $row_subs = [];
-        $total_credit_hours = 0;
-        $total_weighted_gp = 0;
-        $has_ng = false;
-        $total_obtained = 0;
-        
-        $expected_subjects_count = 0;
-        $subjects_count = 0;
-
-        foreach ($subjects as $sub) {
-            $sub_id = $sub['subject_id'];
-            $ch = $sub['exam_credit_hours'] ?? $sub['class_credit_hours'] ?? $sub['default_credit_hours'] ?? 4;
-            
-            // Check if optional
-            $is_optional = ($sub['subject_type'] === 'optional');
-            if ($is_optional) {
-                if ($sub_id != $student['optional_subject_i'] && $sub_id != $student['optional_subject_ii']) {
-                    $row_subs[$sub_id] = 'N/A';
-                    continue;
-                }
-            }
-            
-            $expected_subjects_count++;
-            $m = $marks[$student['id']][$sub_id] ?? null;
-
-            if ($m) {
-                $th_obt = (float)$m['theory_obtained'];
-                $pr_obt = (float)$m['practical_obtained'];
-                $tot = $th_obt + $pr_obt;
-                $gp = (float)$m['grade_point'];
-                $grade = $m['grade'] ?: 'NG';
-                $remarks = $m['remarks'];
-
-                if ($remarks === 'NG' || $remarks === 'Fail' || $grade === 'NG') {
-                    $has_ng = true;
-                }
-
-                $row_subs[$sub_id] = [
-                    'theory' => $th_obt,
-                    'practical' => $pr_obt,
-                    'total' => $tot,
-                    'gp' => $gp,
-                    'grade' => $grade,
-                    'remarks' => $remarks
-                ];
-
-                $total_credit_hours += $ch;
-                $total_weighted_gp += ($gp * $ch);
-                $total_obtained += $tot;
-                $subjects_count++;
-            } else {
-                $row_subs[$sub_id] = null;
-                $has_ng = true; // missing subject is a fail/NG by default
-            }
+        $studentMarks=[];
+        foreach($subjects as $sub) {
+            $sub_id=$sub['subject_id'];
+            if(!empty($sub['is_optional']) && $sub_id!=$student['optional_subject_i'] && $sub_id!=$student['optional_subject_ii'] && $sub_id!=($student['optional_subject_iii']??null)) {$row_subs[$sub_id]='N/A';continue;}
+            $m=$marks[$student['id']][$sub_id]??[];
+            $result=erpCalculateSubjectResult($sub,$m,$exam);
+            $studentMarks[]=array_merge($sub,$m);
+            $row_subs[$sub_id]=['theory'=>$result['theory_obtained'],'practical'=>$result['practical_obtained'],'total'=>(float)$result['theory_obtained']+(float)$result['practical_obtained'],'gp'=>$result['grade_point'],'grade'=>$result['grade'],'remarks'=>$result['remarks']];
         }
-
-        if ($exam['type'] === 'unit' && ($exam['result_system'] ?? 'gpa') === 'percentage') {
-            $total_full_marks = 0;
-            foreach ($subjects as $sub) {
-                $sub_id = $sub['subject_id'];
-                if (isset($row_subs[$sub_id]) && $row_subs[$sub_id] !== 'N/A') {
-                    $total_full_marks += (float)$sub['theory_full'];
-                }
-            }
-            $pct = $total_full_marks > 0 ? round(($total_obtained / $total_full_marks) * 100, 2) : 0.00;
-            $gpa = $pct;
-            $status = ($has_ng || $subjects_count < $expected_subjects_count) ? 'Fail' : 'Pass';
-        } else {
-            $gpa = $total_credit_hours > 0 ? round($total_weighted_gp / $total_credit_hours, 2) : 0.00;
-            $status = ($has_ng || $subjects_count < $expected_subjects_count) ? 'Fail/NG' : 'Pass';
-            if ($status === 'Fail/NG') {
-                $gpa = 0.00; // Force 0.00 GPA for failed/NG candidates
-            }
-        }
+        $summary=erpReportSummary($studentMarks,$exam,$exam['result_system']??'gpa');
+        $total_obtained=$summary['grand_obtained'];
+        $gpa=$summary['average_gpa'];
+        $status=$summary['remarks_summary']==='Incomplete'?'Incomplete':($summary['has_failed_subject']?'Fail/NG':'Pass');
 
         $ledger_data[] = [
             'id' => $student['id'],

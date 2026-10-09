@@ -7,7 +7,7 @@ require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
 
-Auth::requireRole(['super_admin', 'school_admin', 'principal']);
+Auth::requireRole(['super_admin', 'school_admin', 'principal', 'teacher', 'exam_officer']);
 
 $school_id = Auth::getSchoolId();
 if (Auth::getRole() === 'super_admin' && !$school_id) {
@@ -18,14 +18,16 @@ $db = getDB();
 // Handle deletes
 if (isset($_GET['delete_class']) && Auth::hasRole(['super_admin', 'school_admin'])) {
     $id = (int)$_GET['delete_class'];
-    $stmt = $db->prepare("DELETE FROM classes WHERE id = ? AND school_id = ?");
+    $stmt = $db->prepare("UPDATE classes SET is_active=0 WHERE id = ? AND school_id = ?");
     $stmt->execute([$id, $school_id]);
-    Auth::logActivity(Auth::getUserId(), 'Delete Class', 'classes', $id);
-    redirect(APP_URL . '/modules/classes/index.php', 'Class deleted successfully');
+    Auth::logActivity(Auth::getUserId(), 'Archive Class', 'classes', $id);
+    redirect(APP_URL . '/modules/classes/index.php', 'Class archived. Its records are retained.');
 }
 
 if (isset($_GET['delete_section']) && Auth::hasRole(['super_admin', 'school_admin'])) {
     $id = (int)$_GET['delete_section'];
+    $used=$db->prepare('SELECT COUNT(*) FROM students WHERE section_id=? AND school_id=?');$used->execute([$id,$school_id]);
+    if($used->fetchColumn())redirect(APP_URL.'/modules/classes/index.php','This section has student records and cannot be deleted.','error');
     $stmt = $db->prepare("DELETE FROM sections WHERE id = ? AND school_id = ?");
     $stmt->execute([$id, $school_id]);
     Auth::logActivity(Auth::getUserId(), 'Delete Section', 'sections', $id);
@@ -33,7 +35,7 @@ if (isset($_GET['delete_section']) && Auth::hasRole(['super_admin', 'school_admi
 }
 
 // Fetch classes
-$stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ? OR school_id = 0) ORDER BY id ASC");
+$stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ?) ORDER BY id ASC");
 $stmt->execute([$school_id]);
 $classes = $stmt->fetchAll();
 
@@ -43,7 +45,7 @@ $stmt = $db->prepare("
     FROM sections s 
     JOIN classes c ON s.class_id = c.id 
     LEFT JOIN users u ON s.class_teacher_id = u.id AND u.role = 'teacher'
-    WHERE (s.school_id = ? OR s.school_id = 0)
+    WHERE (s.school_id = ?)
     ORDER BY c.id, s.name
 ");
 $stmt->execute([$school_id]);

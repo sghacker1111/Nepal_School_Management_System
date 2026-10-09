@@ -10,6 +10,8 @@ class Auth {
      */
     public static function startSession() {
         if (session_status() === PHP_SESSION_NONE) {
+            ini_set('session.use_strict_mode', '1');
+            session_set_cookie_params(['httponly' => true, 'secure' => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off', 'samesite' => 'Lax', 'path' => '/']);
             session_start();
         }
     }
@@ -21,11 +23,19 @@ class Auth {
         self::startSession();
         
         $db = getDB();
+        $identity = hash('sha256', strtolower(trim($username)) . '|' . ($_SERVER['REMOTE_ADDR'] ?? 'local'));
+        $db->prepare('DELETE FROM login_attempts WHERE attempted_at < ?')->execute([time() - 900]);
+        $attempts = $db->prepare('SELECT COUNT(*) FROM login_attempts WHERE identity_key=?');
+        $attempts->execute([$identity]);
+        if ((int)$attempts->fetchColumn() >= 10) return false;
         $stmt = $db->prepare("SELECT * FROM users WHERE username = ? AND status = 1");
         $stmt->execute([$username]);
         $user = $stmt->fetch();
         
         if ($user && password_verify($password, $user['password'])) {
+            session_regenerate_id(true);
+            $_SESSION = [];
+            $db->prepare('DELETE FROM login_attempts WHERE identity_key=?')->execute([$identity]);
             $_SESSION['user_id'] = $user['id'];
             $_SESSION['username'] = $user['username'];
             $_SESSION['role'] = $user['role'];
@@ -39,6 +49,7 @@ class Auth {
             return true;
         }
         
+        $db->prepare('INSERT INTO login_attempts (identity_key, attempted_at) VALUES (?, ?)')->execute([$identity, time()]);
         return false;
     }
     
@@ -47,6 +58,11 @@ class Auth {
      */
     public static function logout() {
         self::startSession();
+        $_SESSION = [];
+        if (ini_get('session.use_cookies')) {
+            $cookie = session_get_cookie_params();
+            setcookie(session_name(), '', ['expires'=>time()-42000, 'path'=>$cookie['path'], 'secure'=>$cookie['secure'], 'httponly'=>true, 'samesite'=>'Lax']);
+        }
         session_destroy();
         header("Location: " . APP_URL . "/index.php");
         exit;
@@ -88,7 +104,7 @@ class Auth {
         if (self::getRole() === 'super_admin' && isset($_SESSION['viewing_school_id'])) {
             return $_SESSION['viewing_school_id'];
         }
-        return $_SESSION['school_id'] ?? null;
+        return self::getRole() === 'super_admin' ? 0 : ($_SESSION['school_id'] ?? null);
     }
 
     /**
@@ -129,21 +145,22 @@ class Auth {
      * Require login - redirect if not logged in
      */
     public static function requireLogin() {
+        static $checked = false;
+        if ($checked) return;
         if (!self::isLoggedIn()) {
             header("Location: " . APP_URL . "/modules/auth/login.php");
             exit;
         }
         self::checkTimeout();
-        
-        // Write blocker for read-only sessions
-        if (self::isReadOnly()) {
-            if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['delete']) || isset($_GET['action'])) {
-                $script = $_SERVER['SCRIPT_NAME'];
-                if (strpos($script, 'switch_school.php') === false && strpos($script, 'logout.php') === false) {
-                    die("<div style='font-family:sans-serif;padding:30px;text-align:center;'><h2 style='color:#e74c3c;'>Access Denied</h2><p>You are viewing this school's ERP in read-only mode as the System Administrator.</p><p><a href='javascript:history.back()'>Go Back</a></p></div>");
-                }
-            }
-        }
+        $stmt = getDB()->prepare('SELECT id, role, school_id, full_name, status FROM users WHERE id=?');
+        $stmt->execute([self::getUserId()]);
+        $current = $stmt->fetch();
+        if (!$current || !(int)$current['status']) self::logout();
+        foreach (['role','school_id','full_name'] as $key) $_SESSION[$key] = $current[$key];
+        unset($_SESSION['school_subscription_type']);
+        require_once __DIR__ . '/request_guard.php';
+        guardSchoolRequest();
+        $checked = true;
     }
     
     /**
@@ -152,6 +169,7 @@ class Auth {
     public static function requireRole($roles) {
         self::requireLogin();
         if (!self::hasRole($roles)) {
+            http_response_code(403);
             die("Access denied. You don't have permission to access this page.");
         }
     }
@@ -183,7 +201,7 @@ class Auth {
      */
     public static function verifyCSRFToken($token) {
         self::startSession();
-        return hash_equals($_SESSION[CSRF_TOKEN_NAME] ?? '', $token);
+        return is_string($token) && !empty($_SESSION[CSRF_TOKEN_NAME]) && $token !== '' && hash_equals($_SESSION[CSRF_TOKEN_NAME], $token);
     }
 
     /**
@@ -228,7 +246,7 @@ class Auth {
         }
         
         // Modules mapped to Result System
-        $result_modules = ['students', 'teachers', 'results', 'attendance', 'reports', 'settings', 'classes', 'subjects', 'exams'];
+        $result_modules = ['students', 'teachers', 'results', 'attendance', 'reports', 'exams'];
         // Modules mapped to Exam Generator
         $exam_modules = ['paper_generator', 'questions', 'learning', 'specification_grids'];
         
@@ -252,4 +270,3 @@ class Auth {
         }
     }
 }
-

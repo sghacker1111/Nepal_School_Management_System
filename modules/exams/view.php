@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/exam_service.php';
 
 Auth::requireRole(['super_admin', 'school_admin', 'principal', 'teacher', 'exam_officer']);
 
@@ -24,6 +25,8 @@ if (!$exam) {
     redirect(APP_URL . '/modules/exams/index.php', 'Exam not found', 'error');
 }
 
+$configurationFrozen = $exam['is_locked'] || $exam['is_published'] || examHasMarks($db,$exam_id);
+
 // Fetch school details for signatures
 $stmt = $db->prepare("SELECT * FROM schools WHERE id = ?");
 $stmt->execute([$school_id]);
@@ -31,8 +34,8 @@ $school = $stmt->fetch();
 
 // Handle Signature Uploads
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_signatures']) && Auth::hasRole(['super_admin', 'school_admin', 'exam_officer'])) {
-    if ($exam['is_locked']) {
-        $error = "This exam is locked. You cannot modify configuration.";
+    if ($configurationFrozen) {
+        $error = "The grading configuration is frozen because this exam is locked, published, or already has marks.";
     } else {
         $sig_dir = UPLOAD_DIR;
         if (!file_exists($sig_dir)) {
@@ -96,8 +99,8 @@ if ($edit_mapping_id > 0) {
 
 // Handle Subject Mapping Submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['map_subject']) && Auth::hasRole(['super_admin', 'school_admin', 'exam_officer'])) {
-    if ($exam['is_locked']) {
-        $error = "This exam is locked. You cannot modify configuration.";
+    if ($configurationFrozen) {
+        $error = "The grading configuration is frozen because this exam is locked, published, or already has marks.";
     } else {
         $class_id = (int)$_POST['class_id'];
         $subject_id = (int)$_POST['subject_id'];
@@ -108,6 +111,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['map_subject']) && Aut
         $credit_hours = ($exam['type'] === 'unit' || $_POST['credit_hours'] === '') ? null : (float)$_POST['credit_hours'];
         $internal_credit_hours = ($exam['type'] === 'unit' || $_POST['internal_credit_hours'] === '') ? null : (float)$_POST['internal_credit_hours'];
         $external_credit_hours = ($exam['type'] === 'unit' || $_POST['external_credit_hours'] === '') ? null : (float)$_POST['external_credit_hours'];
+        $optionalQuery=$db->prepare('SELECT MAX(is_optional) FROM class_subjects WHERE class_id=? AND subject_id=?');
+        $optionalQuery->execute([$class_id,$subject_id]);$is_optional=(int)$optionalQuery->fetchColumn();
         $form_edit_id = (int)($_POST['edit_mapping_id'] ?? 0);
         
         if (empty($class_id) || empty($subject_id)) {
@@ -115,8 +120,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['map_subject']) && Aut
         } else {
             try {
                 if ($form_edit_id > 0) {
-                    $stmt = $db->prepare("UPDATE exam_subjects SET class_id = ?, subject_id = ?, theory_full = ?, theory_pass = ?, practical_full = ?, practical_pass = ?, credit_hours = ?, internal_credit_hours = ?, external_credit_hours = ? WHERE id = ? AND exam_id = ?");
-                    $stmt->execute([$class_id, $subject_id, $theory_full, $theory_pass, $practical_full, $practical_pass, $credit_hours, $internal_credit_hours, $external_credit_hours, $form_edit_id, $exam_id]);
+                    $stmt = $db->prepare("UPDATE exam_subjects SET class_id = ?, subject_id = ?, theory_full = ?, theory_pass = ?, practical_full = ?, practical_pass = ?, credit_hours = ?, internal_credit_hours = ?, external_credit_hours = ?, is_optional = ? WHERE id = ? AND exam_id = ?");
+                    $stmt->execute([$class_id, $subject_id, $theory_full, $theory_pass, $practical_full, $practical_pass, $credit_hours, $internal_credit_hours, $external_credit_hours, $is_optional, $form_edit_id, $exam_id]);
                     Auth::logActivity(Auth::getUserId(), "Updated Exam Subject Configuration", 'exam_subjects', $form_edit_id);
                     $success = 'Subject configuration updated successfully!';
                     redirect(APP_URL . "/modules/exams/view.php?id=$exam_id", $success);
@@ -127,8 +132,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['map_subject']) && Aut
                     if ($stmt->fetch()) {
                         $error = 'This subject is already configured for the selected class in this exam.';
                     } else {
-                        $stmt = $db->prepare("INSERT INTO exam_subjects (exam_id, subject_id, class_id, theory_full, theory_pass, practical_full, practical_pass, credit_hours, internal_credit_hours, external_credit_hours) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                        $stmt->execute([$exam_id, $subject_id, $class_id, $theory_full, $theory_pass, $practical_full, $practical_pass, $credit_hours, $internal_credit_hours, $external_credit_hours]);
+                        $stmt = $db->prepare("INSERT INTO exam_subjects (exam_id, subject_id, class_id, theory_full, theory_pass, practical_full, practical_pass, credit_hours, internal_credit_hours, external_credit_hours, is_optional) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                        $stmt->execute([$exam_id, $subject_id, $class_id, $theory_full, $theory_pass, $practical_full, $practical_pass, $credit_hours, $internal_credit_hours, $external_credit_hours, $is_optional]);
                         Auth::logActivity(Auth::getUserId(), "Mapped Subject ID $subject_id to Class ID $class_id in Exam ID $exam_id", 'exam_subjects');
                         $success = 'Subject mapped successfully!';
                     }
@@ -142,8 +147,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['map_subject']) && Aut
 
 // Handle Bulk Initialization from Class Mappings
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['initialize_defaults']) && Auth::hasRole(['super_admin', 'school_admin', 'exam_officer'])) {
-    if ($exam['is_locked']) {
-        $error = "This exam is locked. You cannot modify configuration.";
+    if ($configurationFrozen) {
+        $error = "The grading configuration is frozen because this exam is locked, published, or already has marks.";
     } else {
         $class_id = (int)$_POST['init_class_id'];
         if (empty($class_id)) {
@@ -201,8 +206,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['initialize_defaults']
                             }
                         }
                         
-                        $ins = $db->prepare("INSERT INTO exam_subjects (exam_id, subject_id, class_id, theory_full, theory_pass, practical_full, practical_pass, credit_hours, internal_credit_hours, external_credit_hours) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                        $ins->execute([$exam_id, $cs['subject_id'], $class_id, $theory_full, $theory_pass, $practical_full, $practical_pass, $credit_hours, $int_ch, $ext_ch]);
+                        $ins = $db->prepare("INSERT INTO exam_subjects (exam_id, subject_id, class_id, theory_full, theory_pass, practical_full, practical_pass, credit_hours, internal_credit_hours, external_credit_hours, is_optional) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                        $ins->execute([$exam_id, $cs['subject_id'], $class_id, $theory_full, $theory_pass, $practical_full, $practical_pass, $credit_hours, $int_ch, $ext_ch, (int)$cs['is_optional']]);
                         $inserted++;
                     }
                 }
@@ -218,8 +223,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['initialize_defaults']
 
 // Handle deleting mapping
 if (isset($_GET['delete_mapping']) && Auth::hasRole(['super_admin', 'school_admin', 'exam_officer'])) {
-    if ($exam['is_locked']) {
-        redirect(APP_URL . "/modules/exams/view.php?id=$exam_id", "Cannot modify locked exam configuration", 'error');
+    if ($configurationFrozen) {
+        redirect(APP_URL . "/modules/exams/view.php?id=$exam_id", "Cannot modify configuration after marks have been entered or results have been locked.", 'error');
     } else {
         $mapping_id = (int)$_GET['delete_mapping'];
         try {
@@ -243,12 +248,12 @@ if (isset($_GET['delete_mapping']) && Auth::hasRole(['super_admin', 'school_admi
 }
 
 // Fetch classes
-$stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ? OR school_id = 0) AND is_active = 1 ORDER BY id ASC");
+$stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ?) AND is_active = 1 ORDER BY id ASC");
 $stmt->execute([$school_id]);
 $classes = $stmt->fetchAll();
 
 // Fetch subjects
-$stmt = $db->prepare("SELECT * FROM subjects WHERE (school_id = ? OR school_id = 0) AND (is_hidden = 0 OR is_hidden IS NULL) ORDER BY code, name_en");
+$stmt = $db->prepare("SELECT * FROM subjects WHERE (school_id = ?) AND (is_hidden = 0 OR is_hidden IS NULL) ORDER BY code, name_en");
 $stmt->execute([$school_id]);
 $subjects = $stmt->fetchAll();
 
@@ -260,7 +265,7 @@ $stmt_cs_map = $db->prepare("
     FROM class_subjects cs
     JOIN subjects s ON cs.subject_id = s.id
     JOIN classes c ON cs.class_id = c.id
-    WHERE (cs.school_id = ? OR cs.school_id = 0) AND c.is_active = 1 AND cs.is_active = 1 AND (s.is_hidden = 0 OR s.is_hidden IS NULL)
+    WHERE (cs.school_id = ?) AND c.is_active = 1 AND cs.is_active = 1 AND (s.is_hidden = 0 OR s.is_hidden IS NULL)
 ");
 $stmt_cs_map->execute([$school_id]);
 $class_subject_mappings = $stmt_cs_map->fetchAll(PDO::FETCH_ASSOC);
@@ -285,7 +290,7 @@ $mapped_subjects = $db->prepare("
     FROM exam_subjects es
     JOIN classes c ON es.class_id = c.id
     JOIN subjects sub ON es.subject_id = sub.id
-    WHERE es.exam_id = ? AND c.is_active = 1 AND (sub.is_hidden = 0 OR sub.is_hidden IS NULL)
+    WHERE es.exam_id = ?
     ORDER BY c.name, sub.name_en
 ");
 $mapped_subjects->execute([$exam_id]);

@@ -36,14 +36,14 @@ $stmt = $db->prepare("
     SELECT e.*, y.year_bs 
     FROM exams e 
     JOIN academic_years y ON e.academic_year_id = y.id 
-    WHERE e.school_id = ? AND y.is_active = 1
+    WHERE e.school_id = ?
     ORDER BY e.id DESC
 ");
 $stmt->execute([$school_id]);
 $exams = $stmt->fetchAll();
 
 // Fetch classes
-$classes_stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ? OR school_id = 0) AND is_active = 1 ORDER BY id ASC");
+$classes_stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ?) ORDER BY id ASC");
 $classes_stmt->execute([$school_id]);
 $classes = $classes_stmt->fetchAll();
 
@@ -69,7 +69,7 @@ if ($exam_id && $class_id) {
     if (!isset($_GET['system']) && !empty($exam['result_system'])) {
         $grading_system = $exam['result_system'];
     }
-    $chk_class = $db->prepare("SELECT id FROM classes WHERE id = ? AND school_id = ? AND is_active = 1");
+    $chk_class = $db->prepare("SELECT id FROM classes WHERE id = ? AND school_id = ?");
     $chk_class->execute([$class_id, $school_id]);
     if (!$chk_class->fetch()) {
         die("Unauthorized access to class data.");
@@ -87,9 +87,9 @@ if ($exam_id && $class_id) {
         JOIN classes c ON s.class_id = c.id
         LEFT JOIN sections sc ON s.section_id = sc.id
         JOIN academic_years y ON s.academic_year_id = y.id
-        WHERE s.school_id = ? AND s.class_id = ? AND s.status = 'active' AND c.is_active = 1
+        WHERE s.school_id = ? AND s.class_id = ? AND s.academic_year_id = ? AND (s.status='active' OR EXISTS(SELECT 1 FROM marks historical WHERE historical.student_id=s.id AND historical.exam_id=?))
     ";
-    $params = [$school_id, $class_id];
+    $params = [$school_id, $class_id, $exam['academic_year_id'], $exam_id];
     if ($section_id) {
         $query .= " AND s.section_id = ?";
         $params[] = $section_id;
@@ -187,14 +187,14 @@ ob_start();
                 // Fetch student marks for this exam with subject weightages
                 $stmt = $db->prepare("
                     SELECT m.theory_obtained, m.practical_obtained, m.grade, m.grade_point, m.remarks,
-                           sub.name_en as subject_name, sub.name_np as subject_name_np, sub.code as subject_code, sub.type as subject_type, sub.id as subject_id,
+                           sub.name_en as subject_name, sub.name_np as subject_name_np, sub.code as subject_code, COALESCE(es.is_optional,CASE WHEN sub.type='optional' THEN 1 ELSE 0 END) as is_optional, sub.id as subject_id,
                            es.credit_hours as exam_credit_hours, sub.credit_hours as default_credit_hours,
                            es.theory_full, es.theory_pass, es.practical_full, es.practical_pass,
                            es.internal_credit_hours, es.external_credit_hours
                     FROM exam_subjects es
                     JOIN subjects sub ON es.subject_id = sub.id
                     LEFT JOIN marks m ON m.exam_id = es.exam_id AND m.subject_id = es.subject_id AND m.student_id = ?
-                    WHERE es.exam_id = ? AND es.class_id = ? AND (sub.is_hidden = 0 OR sub.is_hidden IS NULL)
+                    WHERE es.exam_id = ? AND es.class_id = ?
                 ");
                 $stmt->execute([$student['id'], $exam_id, $class_id]);
                 $marks = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -206,8 +206,8 @@ ob_start();
                 // Filter unregistered optional subjects
                 $filtered_marks = [];
                 foreach ($marks as $mark) {
-                    if ($mark['subject_type'] === 'optional') {
-                        if ($mark['subject_id'] != $student['optional_subject_i'] && $mark['subject_id'] != $student['optional_subject_ii']) {
+                    if (!empty($mark['is_optional'])) {
+                        if ($mark['subject_id'] != $student['optional_subject_i'] && $mark['subject_id'] != $student['optional_subject_ii'] && $mark['subject_id'] != ($student['optional_subject_iii'] ?? null)) {
                             continue;
                         }
                     }
@@ -228,174 +228,8 @@ ob_start();
                 $stmt_att->execute([$exam_id, $student['id']]);
                 $attendance_days = $stmt_att->fetchColumn();
 
-                // Calculate GPA metrics (Nepal CDC Standards)
-                $total_credit_hours = 0;
-                $weighted_gp_sum = 0;
-                $has_failed_subject = false;
-
-                // If exam has no internal, force practical components to 0
-                if (!$exam['has_internal']) {
-                    foreach ($marks as &$mark) {
-                        $mark['practical_full'] = 0;
-                        $mark['practical_pass'] = 0;
-                        $mark['practical_obtained'] = 0;
-                    }
-                    unset($mark);
-                }
-
-                $marks_elaborated = [];
-                foreach ($marks as $mark) {
-                    if ($exam['type'] === 'unit') {
-                        $ch = (float)($mark['exam_credit_hours'] ?? $mark['default_credit_hours'] ?? 4);
-                        $gp = (float)$mark['grade_point'];
-                        $grade = $mark['grade'] ?: '';
-                        $remarks = $mark['remarks'] ?: '';
-                        
-                        $is_fail = ($remarks === 'NG' || $remarks === 'Fail' || $grade === 'NG');
-                        if ($is_fail) {
-                            $has_failed_subject = true;
-                        }
-                        
-                        $total_credit_hours += $ch;
-                        $weighted_gp_sum += ($gp * $ch);
-                        
-                        $marks_elaborated[] = [
-                            'subject_code' => $mark['subject_code'],
-                            'subject_name' => $mark['subject_name'],
-                            'subject_name_np' => $mark['subject_name_np'],
-                            'credit_hours' => $ch,
-                            'theory_obtained' => $mark['theory_obtained'] !== null ? (float)$mark['theory_obtained'] : 0.0,
-                            'theory_full' => (float)$mark['theory_full'],
-                            'theory_pass' => (float)$mark['theory_pass'],
-                            'grade' => $grade,
-                            'grade_point' => $gp,
-                            'remarks' => $remarks
-                        ];
-                    } elseif ($classType === '1-3') {
-                        $ch = (float)($mark['exam_credit_hours'] ?? $mark['default_credit_hours'] ?? 4);
-                        $gp = (float)$mark['grade_point'];
-                        $grade = $mark['grade'] ?: 'NG';
-                        
-                        $is_fail = ($grade === 'NG' || $mark['remarks'] === 'NG');
-                        if ($is_fail) {
-                            $remarks = ($student['grading_type'] === 'percentage') ? 'Fail' : 'Not Graded';
-                            $has_failed_subject = true;
-                        } else {
-                            $remarks = $mark['remarks'] ?: (($student['grading_type'] === 'percentage') ? 'Pass' : 'Graded');
-                        }
-                        
-                        $total_credit_hours += $ch;
-                        $weighted_gp_sum += ($gp * $ch);
-                        
-                        $marks_elaborated[] = [
-                            'subject_code' => $mark['subject_code'],
-                            'subject_name' => $mark['subject_name'],
-                            'subject_name_np' => $mark['subject_name_np'],
-                            'credit_hours' => $ch,
-                            'grade' => $grade,
-                            'grade_point' => $gp,
-                            'remarks' => $remarks
-                        ];
-                    } else {
-                        // Class 4-8 or Class 9-12 (Secondary)
-                        $int_ch = $mark['internal_credit_hours'] !== null ? (float)$mark['internal_credit_hours'] : ($classType === '4-8' ? 2.5 : 1.25);
-                        $ext_ch = $mark['external_credit_hours'] !== null ? (float)$mark['external_credit_hours'] : ($classType === '4-8' ? 2.5 : 3.75);
-                        $total_ch = $mark['exam_credit_hours'] !== null ? (float)$mark['exam_credit_hours'] : ($int_ch + $ext_ch);
-                        
-                        $theory_obtained = $mark['theory_obtained'] !== null ? (float)$mark['theory_obtained'] : 0.0;
-                        $practical_obtained = $mark['practical_obtained'] !== null ? (float)$mark['practical_obtained'] : 0.0;
-                        
-                        $int_full = (float)$mark['practical_full'];
-                        $int_pass = (float)$mark['practical_pass'];
-                        $ext_full = (float)$mark['theory_full'];
-                        $ext_pass = (float)$mark['theory_pass'];
-                        
-                        // Component percentages
-                        $int_pct = $int_full > 0 ? ($practical_obtained / $int_full) * 100 : 0;
-                        $ext_pct = $ext_full > 0 ? ($theory_obtained / $ext_full) * 100 : 0;
-                        
-                        $int_gp = calculateGPA($int_pct);
-                        $int_grade = $practical_obtained < $int_pass ? 'NG' : calculateGrade($int_pct);
-                        
-                        $ext_gp = calculateGPA($ext_pct);
-                        $ext_grade = $theory_obtained < $ext_pass ? 'NG' : calculateGrade($ext_pct);
-                        
-                        $int_wgp = $int_ch * $int_gp;
-                        $ext_wgp = $ext_ch * $ext_gp;
-                        
-                        $final_gp = $total_ch > 0 ? ($int_wgp + $ext_wgp) / $total_ch : 0.0;
-                        $is_fail = ($theory_obtained < $ext_pass) || ($practical_obtained < $int_pass);
-                        
-                        if ($is_fail) {
-                            $gp = 0.0;
-                            $grade = 'NG';
-                            $remarks = ($student['grading_type'] === 'percentage') ? 'Fail' : 'Not Graded';
-                            $has_failed_subject = true;
-                        } else {
-                            $gp = round($final_gp, 2);
-                            $grade = calculateSubjectFinalGrade($gp);
-                            $remarks = ($student['grading_type'] === 'percentage') ? 'Pass' : 'Graded';
-                        }
-                        
-                        $total_credit_hours += $total_ch;
-                        $weighted_gp_sum += ($gp * $total_ch);
-                        
-                        $marks_elaborated[] = [
-                            'subject_code' => $mark['subject_code'],
-                            'subject_name' => $mark['subject_name'],
-                            'subject_name_np' => $mark['subject_name_np'],
-                            'credit_hours' => $total_ch,
-                            'internal_credit_hours' => $int_ch,
-                            'external_credit_hours' => $ext_ch,
-                            'theory_obtained' => $theory_obtained,
-                            'practical_obtained' => $practical_obtained,
-                            'theory_full' => $ext_full,
-                            'practical_full' => $int_full,
-                            'internal_gp' => $int_gp,
-                            'internal_grade' => $int_grade,
-                            'external_gp' => $ext_gp,
-                            'external_grade' => $ext_grade,
-                            'grade' => $grade,
-                            'grade_point' => $gp,
-                            'remarks' => $remarks
-                        ];
-                    }
-                }
-
-                $grand_full = 0;
-                $grand_obtained = 0;
-                if ($exam['type'] === 'unit') {
-                    foreach ($marks_elaborated as $m) {
-                        $grand_full += $m['theory_full'];
-                        $grand_obtained += $m['theory_obtained'];
-                    }
-                    $average_gpa = $grand_full > 0 ? round(($grand_obtained / $grand_full) * 100, 2) : 0.00;
-                } else {
-                    $average_gpa = $total_credit_hours > 0 ? round($weighted_gp_sum / $total_credit_hours, 2) : 0.00;
-                }
-
-                if ($has_failed_subject) {
-                    if ($grading_system === 'percentage') {
-                        $final_gpa_text = number_format($average_gpa, 2) . '%';
-                        $final_grade = 'F';
-                        $remarks_summary = 'Failed';
-                    } else {
-                        $final_gpa_text = 'NG';
-                        $final_grade = 'NG';
-                        $remarks_summary = 'Not Graded';
-                    }
-                } else {
-                    if ($grading_system === 'percentage') {
-                        $final_gpa_text = number_format($average_gpa, 2) . '%';
-                        $final_grade = getPercentageDivision($average_gpa, false);
-                        $remarks_summary = 'Passed';
-                    } else {
-                        $final_gpa_text = number_format($average_gpa, 2);
-                        $final_grade = calculateSubjectFinalGrade($average_gpa);
-                        $remarks_summary = 'Graded';
-                    }
-                }
-            ?>
+                extract(erpReportSummary($marks, $exam, $grading_system));
+?>
             
             <!-- Individual Progress Report Card -->
             <div class="report-container-bulk">
@@ -498,7 +332,7 @@ ob_start();
                                 <td class="text-center font-monospace"><?= $m['theory_full'] ?></td>
                                 <td class="text-center font-monospace"><?= $m['theory_pass'] ?></td>
                                 <td class="text-center font-monospace fw-bold"><?= $m['theory_obtained'] ?></td>
-                                <td class="text-center font-monospace"><?= round($sub_pct, 1) ?>%</td>
+                                <td class="text-center font-monospace"><?= $m['incomplete'] ? '—' : round($sub_pct, 1).'%' ?></td>
                                 <td class="text-center fw-bold <?= $is_sub_fail ? 'text-danger' : 'text-success' ?>"><?= $is_sub_fail ? 'Fail' : 'Pass' ?></td>
                             </tr>
                             <?php endforeach; ?>
@@ -570,46 +404,17 @@ ob_start();
                     <tbody>
                         <?php 
                         $sn = 0;
-                        $grand_full = 0;
-                        $grand_obtained = 0;
-                        $has_failed_sub = false;
+
                         foreach ($marks_elaborated as $m): 
                             $sn++;
-                            $orig = null;
-                            foreach ($marks as $mark) {
-                                if ($mark['subject_code'] == $m['subject_code']) {
-                                    $orig = $mark;
-                                    break;
-                                }
-                            }
-                            if (!$orig) continue;
-                            
-                            $th_full = (float)($orig['theory_full'] ?? 0);
-                            $pr_full = (float)($orig['practical_full'] ?? 0);
-                            $th_pass = (float)($orig['theory_pass'] ?? 0);
-                            $pr_pass = (float)($orig['practical_pass'] ?? 0);
-                            
-                            $th_obtained = $orig['theory_obtained'] !== null ? (float)$orig['theory_obtained'] : 0;
-                            $pr_obtained = $orig['practical_obtained'] !== null ? (float)$orig['practical_obtained'] : 0;
-                            
-                            $sub_full = $th_full + $pr_full;
-                            $sub_obtained = $th_obtained + $pr_obtained;
-                            
-                            $sub_pct = $sub_full > 0 ? ($sub_obtained / $sub_full) * 100 : 0;
-                            
-                            $is_sub_fail = false;
-                            if ($th_full > 0 && $th_obtained < $th_pass) $is_sub_fail = true;
-                            if ($pr_full > 0 && $pr_obtained < $pr_pass) $is_sub_fail = true;
-                            
-                            if ($is_sub_fail) {
-                                $has_failed_sub = true;
-                                $sub_remarks = 'Fail';
-                            } else {
-                                $sub_remarks = 'Pass';
-                            }
-                            
-                            $grand_full += $sub_full;
-                            $grand_obtained += $sub_obtained;
+                            $th_full=$m['theory_full']; $pr_full=$m['practical_full'];
+                $th_pass=$m['theory_pass']; $pr_pass=$pr_full>0?$m['practical_pass']:0;
+                $th_obtained=$m['theory_obtained']??'—'; $pr_obtained=$m['practical_obtained']??'—';
+                $sub_full=$th_full+$pr_full;
+                $sub_obtained=$m['incomplete']?'—':(float)$m['theory_obtained']+(float)$m['practical_obtained'];
+                $sub_pct=$m['percentage'];
+                $is_sub_fail=$m['failed'];
+                $sub_remarks=$m['incomplete']?'Incomplete':($is_sub_fail?'Fail':'Pass');
                         ?>
                         <tr>
                             <td class="text-center font-monospace"><?= $sn ?></td>
@@ -628,7 +433,7 @@ ob_start();
                         
                         <?php
                         $grand_pct = $grand_full > 0 ? ($grand_obtained / $grand_full) * 100 : 0;
-                        $division = getPercentageDivision($grand_pct, $has_failed_sub);
+                        $division = $final_grade;
                         ?>
                         <tr class="table-light fw-bold" style="border-top: 2px solid #333;">
                             <td colspan="2" class="text-end">Total Summary:</td>
@@ -829,7 +634,9 @@ ob_start();
                             <span class="d-block text-uppercase fw-bold text-muted small" style="font-size: 0.65rem;">Final Result</span>
                             <h5 class="mb-0 text-primary fw-bold font-monospace" style="font-size: 1.05rem;">
                                 <?php 
-                                if ($grading_system === 'percentage') {
+                                if ($final_gpa_text === 'Incomplete') {
+                        echo 'Incomplete';
+                    } elseif ($grading_system === 'percentage') {
                                     echo ($remarks_summary === 'Failed') ? 'Failed' : 'Passed (' . $final_gpa_text . ')';
                                 } else {
                                     echo ($final_gpa_text === 'NG') ? 'Not Graded' : 'Graded (GPA ' . $final_gpa_text . ')';

@@ -1,5 +1,10 @@
 # Ignore local SQLite database
 database.sqlite
+*.sqlite-wal
+*.sqlite-shm
+/.backups/
+.env
+.env.*
 
 # Ignore uploads directory content (uploaded signatures/logos)
 /uploads/*

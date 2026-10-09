@@ -18,7 +18,7 @@ $school_id = Auth::getSchoolId();
 if (Auth::getRole() === 'super_admin' && !$school_id) {
     $school_id = 0;
 }
-$stmt = $db->prepare("SELECT * FROM classes WHERE id = ? AND (school_id = ? OR school_id = 0)");
+$stmt = $db->prepare("SELECT * FROM classes WHERE id = ? AND (school_id = ?)");
 $stmt->execute([$class_id, $school_id]);
 $class = $stmt->fetch();
 
@@ -27,7 +27,7 @@ if (!$class) {
 }
 
 // Fetch active teachers
-$stmt_t = $db->prepare("SELECT id, full_name FROM users WHERE role = 'teacher' AND status = 1 AND (school_id = ? OR school_id = 0) ORDER BY full_name");
+$stmt_t = $db->prepare("SELECT id, full_name FROM users WHERE role = 'teacher' AND status = 1 AND (school_id = ?) ORDER BY full_name");
 $stmt_t->execute([$school_id]);
 $teachers_list = $stmt_t->fetchAll();
 
@@ -37,7 +37,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name_np = sanitize($_POST['name_np'] ?? '');
     $level = sanitize($_POST['level'] ?? 'Basic');
     $grading_type = $class['grading_type'] ?? 'gpa';
-    $class_teacher_name = sanitize($_POST['class_teacher_name'] ?? '');
+    $class_teacher_id = (int)($_POST['class_teacher_id'] ?? 0);
+    $class_teacher_name = '';
+    foreach($teachers_list as $teacher)if((int)$teacher['id']===$class_teacher_id)$class_teacher_name=$teacher['full_name'];
     
     $is_grading_teaching = isset($_POST['is_grading_teaching']) ? 1 : 0;
     
@@ -46,7 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($name)) {
         $error = 'Class name is required';
     } else {
-        $stmt_check = $db->prepare("SELECT COUNT(*) FROM classes WHERE LOWER(name) = LOWER(?) AND (school_id = ? OR school_id = 0) AND id != ?");
+        $stmt_check = $db->prepare("SELECT COUNT(*) FROM classes WHERE LOWER(name) = LOWER(?) AND (school_id = ?) AND id != ?");
         $stmt_check->execute([$name, $school_id, $class_id]);
         if ($stmt_check->fetchColumn() > 0) {
             $error = 'Class with this name already exists. Class names must be unique.';
@@ -105,8 +107,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             
             if (empty($error)) {
-                $stmt = $db->prepare("UPDATE classes SET name = ?, name_np = ?, level = ?, grading_type = ?, class_teacher_name = ?, class_teacher_signature = ?, is_grading_teaching = ? WHERE id = ?");
-                $stmt->execute([$name, $name_np, $level, $grading_type, $class_teacher_name, $class_teacher_signature, $is_grading_teaching, $class_id]);
+                $stmt = $db->prepare("UPDATE classes SET name = ?, name_np = ?, level = ?, grading_type = ?, class_teacher_name = ?, class_teacher_id = ?, class_teacher_signature = ?, is_grading_teaching = ? WHERE id = ?");
+                $stmt->execute([$name, $name_np, $level, $grading_type, $class_teacher_name, $class_teacher_id ?: null, $class_teacher_signature, $is_grading_teaching, $class_id]);
                 Auth::logActivity(Auth::getUserId(), 'Edit Class Details', 'classes', $class_id);
                 redirect(APP_URL . '/modules/classes/index.php', 'Class updated successfully');
             }
@@ -168,11 +170,11 @@ ob_start();
             <hr>
             <h5 class="text-secondary mb-3"><i class="fas fa-user-tie"></i> Class Teacher Settings</h5>
             <div class="mb-3">
-                <label for="class_teacher_name" class="form-label">Class Teacher Name</label>
-                <select class="form-select" id="class_teacher_name" name="class_teacher_name">
+                <label for="class_teacher_id" class="form-label">Class Teacher Name</label>
+                <select class="form-select" id="class_teacher_id" name="class_teacher_id">
                     <option value="">Select Class Teacher</option>
                     <?php foreach ($teachers_list as $t): ?>
-                    <option value="<?= sanitize($t['full_name']) ?>" <?= ($class['class_teacher_name'] ?? '') === $t['full_name'] ? 'selected' : '' ?>>
+                    <option value="<?= (int)$t['id'] ?>" <?= ($class['class_teacher_id'] ?? 0) == $t['id'] ? 'selected' : '' ?>>
                         <?= sanitize($t['full_name']) ?>
                     </option>
                     <?php endforeach; ?>

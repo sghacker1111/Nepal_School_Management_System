@@ -21,6 +21,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     
     if (empty($year_bs) || empty($year_ad)) {
         $error = "Both Year (BS) and Year (AD) are required";
+    } elseif (!preg_match('/^20[0-9]{2}(?:\/(?:[0-9]{2}|20[0-9]{2}))?$/', $year_bs) || !preg_match('/^(?:19|20)[0-9]{2}(?:[\/-](?:[0-9]{2}|(?:19|20)[0-9]{2}))?$/', $year_ad)) {
+        $error = 'Use a year such as 2083 (BS) and 2026 or 2026/27 (AD).';
     } else {
         try {
             // Check if exists
@@ -95,7 +97,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $stmt_deact->execute([$school_id]);
             
             // Activate target year
-            $stmt_act = $db->prepare("UPDATE academic_years SET is_active = 1 WHERE id = ? AND school_id = ?");
+            $stmt_act = $db->prepare("UPDATE academic_years SET is_active = 1, is_hidden = 0 WHERE id = ? AND school_id = ?");
             $stmt_act->execute([$id, $school_id]);
             
             // Fetch year details to update school table

@@ -19,26 +19,18 @@ if (isset($_GET['delete']) && Auth::hasRole(['super_admin', 'school_admin'])) {
     try {
         $db->beginTransaction();
         
-        // Delete related marks
-        $stmt_marks = $db->prepare("DELETE FROM marks WHERE student_id = ?");
-        $stmt_marks->execute([$id]);
-        
-        // Delete related attendances
-        $stmt_att = $db->prepare("DELETE FROM attendances WHERE student_id = ?");
-        $stmt_att->execute([$id]);
-        
-        // Delete student record
-        $stmt_stud = $db->prepare("DELETE FROM students WHERE id = ? AND school_id = ?");
-        $stmt_stud->execute([$id, $school_id]);
+        // Archive the student without destroying assessment or attendance history.
+        $stmt_stud = $db->prepare("UPDATE students SET status='inactive' WHERE id=? AND school_id=?");
+        $stmt_stud->execute([$id,$school_id]);
         
         $db->commit();
-        Auth::logActivity(Auth::getUserId(), 'Delete Student', 'students', $id);
-        redirect(APP_URL . '/modules/students/index.php', 'Student deleted successfully');
+        Auth::logActivity(Auth::getUserId(), 'Archive Student', 'students', $id);
+        redirect(APP_URL . '/modules/students/index.php', 'Student archived; marks and attendance retained.');
     } catch (PDOException $e) {
         if ($db->inTransaction()) {
             $db->rollBack();
         }
-        redirect(APP_URL . '/modules/students/index.php', 'Error deleting student: ' . $e->getMessage(), 'error');
+        redirect(APP_URL . '/modules/students/index.php', 'Error archiving student: ' . $e->getMessage(), 'error');
     }
 }
 
@@ -56,7 +48,7 @@ $stmt->execute([$school_id]);
 $students = $stmt->fetchAll();
 
 // Get classes for filter
-$stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ? OR school_id = 0) AND is_active = 1 ORDER BY id ASC");
+$stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ?) AND is_active = 1 ORDER BY id ASC");
 $stmt->execute([$school_id]);
 $classes = $stmt->fetchAll();
 
@@ -186,7 +178,7 @@ ob_start();
                                         <i class="fas fa-edit"></i>
                                     </a>
                                     <button onclick="confirmDeleteStudent(<?= $student['id'] ?>)" 
-                                             class="btn btn-danger" title="Delete">
+                                             class="btn btn-danger" title="Archive">
                                         <i class="fas fa-trash"></i>
                                     </button>
                                     <?php endif; ?>
@@ -246,7 +238,7 @@ $(document).ready(function() {
 function confirmDeleteStudent(id) {
     verifyPasswordAndProceed(function() {
         window.location.href = '<?= APP_URL ?>/modules/students/index.php?delete=' + id;
-    }, 'Confirm Deletion', 'Please enter your administrator password to permanently delete this student:');
+    }, 'Confirm Deletion', 'Please enter your administrator password to permanently archive this student:');
 }
 
 function exportToExcel(tableId) {

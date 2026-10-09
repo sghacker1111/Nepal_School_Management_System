@@ -51,9 +51,9 @@ CREATE TABLE `users` (
   UNIQUE KEY `username` (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Default Admin: username: admin, password: admin123
-INSERT INTO `users` (`username`, `password`, `role`, `full_name`) VALUES 
-('admin', '$2y$12$z/7Y8e4ptJUVtKH5VvjFwOld0Q.fESfS/1HSkBLs8pCZhg7sfco.m', 'super_admin', 'System Administrator');
+-- Disabled bootstrap account. Activate only through config/setup_admin.php.
+INSERT INTO `users` (`username`, `password`, `role`, `full_name`, `status`) VALUES
+('admin', 'SETUP_REQUIRED', 'super_admin', 'System Administrator', 0);
 
 CREATE TABLE `activity_logs` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -325,4 +325,3 @@ CREATE TABLE IF NOT EXISTS `learning_notes` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 COMMIT;
-

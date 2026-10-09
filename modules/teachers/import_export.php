@@ -23,7 +23,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'template') {
     // Add UTF-8 BOM for Excel compatibility
     fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
     
-    fputcsv($output, [
+    writeCsvRow($output, [
         'Full Name',
         'Username',
         'Email',
@@ -47,7 +47,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'export') {
     // Add UTF-8 BOM for Excel compatibility
     fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
     
-    fputcsv($output, [
+    writeCsvRow($output, [
         'Full Name',
         'Username',
         'Email',
@@ -69,7 +69,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'export') {
     $stmt->execute([$school_id]);
     
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        fputcsv($output, [
+        writeCsvRow($output, [
             $row['full_name'],
             $row['username'],
             $row['email'],
@@ -117,7 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                 }
                 
                 // Read headings
-                $headings = fgetcsv($handle);
+                $headings = fgetcsv($handle, 0, ',', '"', '');
                 if (!$headings) {
                     $error = 'CSV file is empty.';
                 } else {
@@ -140,9 +140,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                         $skipped_count = 0;
                         $line_num = 1;
                         
-                        $default_password_hash = password_hash('Teacher@123', PASSWORD_DEFAULT);
+                        // Imported accounts stay disabled until an administrator sets a private password.
                         
-                        while (($row = fgetcsv($handle)) !== FALSE) {
+                        while (($row = fgetcsv($handle, 0, ',', '"', '')) !== FALSE) {
                             $line_num++;
                             
                             // Map values according to indices
@@ -183,27 +183,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                             $email = $get_val('email') ?: '';
                             $phone = $get_val('phone') ?: '';
                             
-                            $status_val = $get_val('status');
-                            $status = 1;
-                            if ($status_val !== null && in_array(strtolower($status_val), ['inactive', '0', 'disabled', 'no', 'false'])) {
-                                $status = 0;
-                            }
-                            
-                            $join_date = $get_val('join_date');
-                            if (!empty($join_date)) {
-                                $join_time = strtotime($join_date);
-                                if ($join_time) {
-                                    $join_date = date('Y-m-d', $join_time);
-                                }
-                            }
-                            
-                            $dob = $get_val('dob');
-                            if (!empty($dob)) {
-                                $dob_time = strtotime($dob);
-                                if ($dob_time) {
-                                    $dob = date('Y-m-d', $dob_time);
-                                }
-                            }
+                            $status = 0;
+                            $default_password_hash = password_hash(bin2hex(random_bytes(24)), PASSWORD_DEFAULT);
+                            try {
+                                $join_date=importDateValue($get_val('join_date'));
+                                $dob=importDateValue($get_val('dob'));
+                            } catch(InvalidArgumentException $e) { $skipped_count++; continue; }
+                            if($email!=='' && !filter_var($email,FILTER_VALIDATE_EMAIL)) { $skipped_count++; continue; }
+                            if(strlen($username)<3)$username='teacher_'.bin2hex(random_bytes(4));
                             
                             $bank_name = $get_val('bank_name') ?: '';
                             $bank_account = $get_val('bank_account') ?: '';
@@ -237,7 +224,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                             }
                         }
                         
-                        $success = "CSV Import complete! Successfully registered {$imported_count} teachers. Default password for new accounts is <strong>Teacher@123</strong>. (Skipped/Failed: {$skipped_count})";
+                        $success = "CSV Import complete! Successfully registered {$imported_count} teachers. Accounts are disabled. Set a unique password and activate each account in Staff accounts. (Skipped/Failed: {$skipped_count})";
                         Auth::logActivity(Auth::getUserId(), 'EMIS Bulk Import Teachers', 'teachers');
                     }
                 }
@@ -292,7 +279,7 @@ ob_start();
                     <div class="alert alert-info border-start border-info border-4">
                         <h6 class="fw-bold mb-1"><i class="fas fa-info-circle me-1"></i> Tip: Auto-generated login profiles</h6>
                         <p class="mb-0 small text-dark">
-                            If the <em>Username</em> column is missing, the system will automatically generate a clean username from their name. Default passwords will be set to <strong>Teacher@123</strong>.
+                            If the <em>Username</em> column is missing, the system will automatically generate a clean username from their name. Imported accounts are disabled for safety. Set a unique password and activate each account in <a href="<?= APP_URL ?>/modules/settings/users.php">Staff accounts</a>.
                         </p>
                     </div>
                 </div>

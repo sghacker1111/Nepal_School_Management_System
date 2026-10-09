@@ -19,7 +19,7 @@ $school_id = Auth::getSchoolId();
 if (Auth::getRole() === 'super_admin' && !$school_id) {
     $school_id = 0;
 }
-$stmt = $db->prepare("SELECT * FROM classes WHERE id = ? AND (school_id = ? OR school_id = 0)");
+$stmt = $db->prepare("SELECT * FROM classes WHERE id = ? AND (school_id = ?)");
 $stmt->execute([$class_id, $school_id]);
 $class = $stmt->fetch();
 
@@ -180,12 +180,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 $stmt = $db->prepare("
     SELECT cs.*, s.name_en as subject_name_en, s.name_np as subject_name_np, s.code as subject_code, s.type as subject_catalog_type,
            s.is_hidden as is_catalog_hidden,
-           COALESCE(NULLIF(cs.th_credit_hours, 0), s.th_credit_hours, 0) as th_credit_hours,
-           COALESCE(NULLIF(cs.in_credit_hours, 0), s.in_credit_hours, 0) as in_credit_hours,
-           COALESCE(NULLIF(cs.th_full_marks, 0), s.th_full_marks, 75) as th_full_marks,
-           COALESCE(NULLIF(cs.th_pass_marks, 0), s.th_pass_marks, 26.25) as th_pass_marks,
-           COALESCE(NULLIF(cs.in_full_marks, 0), s.in_full_marks, 25) as in_full_marks,
-           COALESCE(NULLIF(cs.in_pass_marks, 0), s.in_pass_marks, 10) as in_pass_marks,
+           COALESCE(cs.th_credit_hours, s.th_credit_hours, 0) as th_credit_hours,
+           COALESCE(cs.in_credit_hours, s.in_credit_hours, 0) as in_credit_hours,
+           COALESCE(cs.th_full_marks, s.th_full_marks, 75) as th_full_marks,
+           COALESCE(cs.th_pass_marks, s.th_pass_marks, 26.25) as th_pass_marks,
+           COALESCE(cs.in_full_marks, s.in_full_marks, 25) as in_full_marks,
+           COALESCE(cs.in_pass_marks, s.in_pass_marks, 10) as in_pass_marks,
            sec.name as section_name
     FROM class_subjects cs 
     JOIN subjects s ON cs.subject_id = s.id 
@@ -209,7 +209,7 @@ foreach ($all_mapped as $m) {
 // Fetch all available subjects for mapping (excluding already mapped ones, identical names, or hidden subjects)
 $stmt = $db->prepare("
     SELECT * FROM subjects 
-    WHERE (school_id = ? OR school_id = 0) 
+    WHERE (school_id = ?)
       AND (is_hidden = 0 OR is_hidden IS NULL)
       AND id NOT IN (SELECT subject_id FROM class_subjects WHERE class_id = ?)
       AND LOWER(TRIM(name_en)) NOT IN (
@@ -224,12 +224,12 @@ $stmt->execute([$school_id, $class_id, $class_id]);
 $available_subjects = $stmt->fetchAll();
 
 // Fetch all class sections
-$stmt = $db->prepare("SELECT * FROM sections WHERE class_id = ? AND (school_id = ? OR school_id = 0) ORDER BY name");
+$stmt = $db->prepare("SELECT * FROM sections WHERE class_id = ? AND (school_id = ?) ORDER BY name");
 $stmt->execute([$class_id, $school_id]);
 $class_sections = $stmt->fetchAll();
 
 // Fetch all active teachers for dropdown
-$stmt = $db->prepare("SELECT id, full_name FROM users WHERE role = 'teacher' AND status = 1 AND (school_id = ? OR school_id = 0) ORDER BY full_name");
+$stmt = $db->prepare("SELECT id, full_name FROM users WHERE role = 'teacher' AND status = 1 AND (school_id = ?) ORDER BY full_name");
 $stmt->execute([$school_id]);
 $teachers = $stmt->fetchAll();
 
@@ -519,7 +519,7 @@ ob_start();
                                 <?php foreach ($available_subjects as $sub): ?>
                                 <option value="<?= $sub['id'] ?>" 
                                         data-type="<?= $sub['type'] ?? 'compulsory' ?>"
-                                        data-optional="<?= ($sub['type'] === 'optional' || $sub['is_optional']) ? 1 : 0 ?>"
+                                        data-optional="<?= ($sub['type'] === 'optional' || !empty($sub['is_optional'])) ? 1 : 0 ?>"
                                         data-th-ch="<?= (float)($sub['th_credit_hours'] ?? 3.0) ?>"
                                         data-in-ch="<?= (float)($sub['in_credit_hours'] ?? 1.0) ?>"
                                         data-th-fm="<?= (float)($sub['th_full_marks'] ?? 75.0) ?>"
@@ -904,4 +904,3 @@ document.addEventListener('DOMContentLoaded', function() {
 $content = ob_get_clean();
 include __DIR__ . '/../../includes/header.php';
 ?>
-

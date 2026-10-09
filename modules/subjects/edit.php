@@ -19,7 +19,7 @@ $error = '';
 $success = '';
 
 // Fetch subject details
-$stmt = $db->prepare("SELECT * FROM subjects WHERE id = ? AND (school_id = ? OR school_id = 0)");
+$stmt = $db->prepare("SELECT * FROM subjects WHERE id = ? AND (school_id = ?)");
 $stmt->execute([$id, $school_id]);
 $subject = $stmt->fetch();
 
@@ -28,17 +28,17 @@ if (!$subject) {
 }
 
 // Fetch current class mapping
-$stmt_map = $db->prepare("SELECT * FROM class_subjects WHERE subject_id = ? AND (school_id = ? OR school_id = 0) LIMIT 1");
+$stmt_map = $db->prepare("SELECT * FROM class_subjects WHERE subject_id = ? AND (school_id = ?) LIMIT 1");
 $stmt_map->execute([$id, $school_id]);
 $mapping = $stmt_map->fetch();
 
 // Fetch classes for dropdown
-$stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ? OR school_id = 0) AND is_active = 1 ORDER BY id ASC");
+$stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ?) AND is_active = 1 ORDER BY id ASC");
 $stmt->execute([$school_id]);
 $classes = $stmt->fetchAll();
 
 // Fetch active teachers for checklist
-$stmt = $db->prepare("SELECT id, full_name FROM users WHERE role = 'teacher' AND status = 1 AND (school_id = ? OR school_id = 0) ORDER BY full_name");
+$stmt = $db->prepare("SELECT id, full_name FROM users WHERE role = 'teacher' AND status = 1 AND (school_id = ?) ORDER BY full_name");
 $stmt->execute([$school_id]);
 $teachers = $stmt->fetchAll();
 
@@ -102,7 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     UPDATE subjects 
                     SET code = ?, name_en = ?, name_np = ?, type = ?, full_marks = ?, pass_marks = ?, credit_hours = ?,
                         th_credit_hours = ?, in_credit_hours = ?, th_full_marks = ?, th_pass_marks = ?, in_full_marks = ?, in_pass_marks = ?
-                    WHERE id = ? AND (school_id = ? OR school_id = 0)
+                    WHERE id = ? AND (school_id = ?)
                 ");
                 $stmt->execute([
                     $code, $name_en, $name_np, $type, $full_marks, $pass_marks, $credit_hours,

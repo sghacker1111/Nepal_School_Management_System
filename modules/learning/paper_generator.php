@@ -45,11 +45,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_save_grid'])) 
 
 // Fetch active classes for current school
 if ($is_admin && !$school_id) {
-    $classes_stmt = $db->prepare("SELECT * FROM classes WHERE is_active = 1 GROUP BY name ORDER BY id ASC");
+    $classes_stmt = $db->prepare("SELECT * FROM classes WHERE school_id=0 AND is_active=1 ORDER BY id ASC");
     $classes_stmt->execute();
     $classes = $classes_stmt->fetchAll();
 } else {
-    $classes_stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ? OR school_id = 0) AND is_active = 1 ORDER BY id ASC");
+    $classes_stmt = $db->prepare("SELECT * FROM classes WHERE school_id = ? AND is_active = 1 ORDER BY id ASC");
     $classes_stmt->execute([$school_id]);
     $classes = $classes_stmt->fetchAll();
 }
@@ -66,9 +66,9 @@ if ($is_admin && !$school_id) {
 }
 
 // Get filter inputs
-$class_id = $_GET['class_id'] ?? '';
-$subject_id = $_GET['subject_id'] ?? '';
-$exam_id = $_GET['exam_id'] ?? '';
+$class_id = $_POST['class_id'] ?? $_GET['class_id'] ?? '';
+$subject_id = $_POST['subject_id'] ?? $_GET['subject_id'] ?? '';
+$exam_id = $_POST['exam_id'] ?? $_GET['exam_id'] ?? '';
 $generation_mode = $_GET['generation_mode'] ?? 'auto';
 
 // Fetch school details for logo and print header
@@ -103,8 +103,7 @@ if ($class_id) {
             SELECT DISTINCT s.* FROM subjects s 
             JOIN class_subjects cs ON cs.subject_id = s.id 
             JOIN classes c ON cs.class_id = c.id
-            WHERE ((c.id = ? AND (cs.school_id = ? OR cs.school_id = 0)) 
-               OR (c.name = ? AND cs.school_id = 0 AND c.school_id = 0))
+            WHERE (c.id = ? AND cs.school_id = ? AND c.name = ?)
               AND cs.is_active = 1 AND (s.is_hidden = 0 OR s.is_hidden IS NULL)
             ORDER BY s.name_en
         ");
@@ -169,7 +168,7 @@ $chapter_filter = $_GET['chapter'] ?? '';
 $all_available_questions = [];
 if ($class_id && $subject_id) {
     // We need target class level and subject code/name to match Universal questions
-    $stmt = $db->prepare("SELECT level FROM classes WHERE id = ?");
+    $stmt = $db->prepare("SELECT name FROM classes WHERE id = ?");
     $stmt->execute([$class_id]);
     $lvl = $stmt->fetchColumn();
 
@@ -189,7 +188,7 @@ if ($class_id && $subject_id) {
             WHERE (
                 (q.school_id = ? AND q.class_id = ? AND q.subject_id = ?)
                 OR
-                (q.school_id = 0 AND c.level = ? AND (s.code = ? OR s.name_en = ?))
+                (q.school_id = 0 AND c.name = ? AND (s.code = ? OR s.name_en = ?))
             ) AND q.chapter = ?
             ORDER BY q.id DESC
         ");
@@ -203,7 +202,7 @@ if ($class_id && $subject_id) {
             WHERE (
                 (q.school_id = ? AND q.class_id = ? AND q.subject_id = ?)
                 OR
-                (q.school_id = 0 AND c.level = ? AND (s.code = ? OR s.name_en = ?))
+                (q.school_id = 0 AND c.name = ? AND (s.code = ? OR s.name_en = ?))
             )
             ORDER BY q.id DESC
         ");
@@ -536,7 +535,7 @@ window.MathJax = {
                         <select name="exam_id" class="form-select" onchange="document.getElementById('paramForm').submit();">
                             <option value="">Choose Exam (Optional)</option>
                             <?php foreach ($exams as $e): ?>
-                            <option value="<?= $e['id'] ?>" <?= $exam_id == $e['id'] ? 'selected' : '' ?>><?= sanitize($e['name']) ?> (<?= sanitize($e['term'] ?: '-') ?>)</option>
+                            <option value="<?= $e['id'] ?>" <?= $exam_id == $e['id'] ? 'selected' : '' ?>><?= sanitize($e['name']) ?> (<?= sanitize($e['type'] ?? '-') ?>)</option>
                             <?php endforeach; ?>
                         </select>
                     </div>
@@ -682,9 +681,9 @@ window.MathJax = {
                                         </td>
                                         <td>
                                             <div class="small">
-                                                <strong>EN:</strong> <?= $q['question_text'] ?><br>
+                                                <strong>EN:</strong> <?= safeRichHtml($q['question_text']) ?><br>
                                                 <?php if ($q['question_text_np']): ?>
-                                                <strong class="text-muted">NP:</strong> <?= $q['question_text_np'] ?>
+                                                <strong class="text-muted">NP:</strong> <?= safeRichHtml($q['question_text_np']) ?>
                                                 <?php endif; ?>
                                             </div>
                                         </td>

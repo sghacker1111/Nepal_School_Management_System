@@ -7,7 +7,7 @@ require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
 
-Auth::requireRole(['super_admin', 'school_admin', 'principal', 'teacher']);
+Auth::requireRole(['super_admin', 'school_admin', 'principal', 'teacher', 'exam_officer']);
 
 $db = getDB();
 $school_id = Auth::getSchoolId();
@@ -18,12 +18,12 @@ if (Auth::getRole() === 'super_admin' && !$school_id) {
 // Handle hide / unhide toggle
 if (isset($_GET['toggle_hide']) && Auth::hasRole(['super_admin', 'school_admin'])) {
     $id = (int)$_GET['toggle_hide'];
-    $stmt = $db->prepare("SELECT is_hidden, name_en FROM subjects WHERE id = ? AND (school_id = ? OR school_id = 0)");
+    $stmt = $db->prepare("SELECT is_hidden, name_en FROM subjects WHERE id = ? AND (school_id = ?)");
     $stmt->execute([$id, $school_id]);
     $curr = $stmt->fetch();
     if ($curr) {
         $new_state = empty($curr['is_hidden']) ? 1 : 0;
-        $stmt_up = $db->prepare("UPDATE subjects SET is_hidden = ? WHERE id = ? AND (school_id = ? OR school_id = 0)");
+        $stmt_up = $db->prepare("UPDATE subjects SET is_hidden = ? WHERE id = ? AND (school_id = ?)");
         $stmt_up->execute([$new_state, $id, $school_id]);
         
         $msg = $new_state ? ("Subject '" . htmlspecialchars($curr['name_en']) . "' is now hidden from lists and student forms.") : ("Subject '" . htmlspecialchars($curr['name_en']) . "' is now visible and active.");
@@ -43,21 +43,21 @@ $hidden_clause = $show_hidden ? "" : " AND (s.is_hidden = 0 OR s.is_hidden IS NU
 $stmt = $db->prepare("
     SELECT s.*, c.name as class_name, c.id as class_id, cs.teacher_id as teacher_ids, cs.id as mapping_id, cs.is_optional, cs.is_active
     FROM subjects s
-    LEFT JOIN class_subjects cs ON s.id = cs.subject_id AND (cs.school_id = ? OR cs.school_id = 0)
+    LEFT JOIN class_subjects cs ON s.id = cs.subject_id AND (cs.school_id = ?)
     LEFT JOIN classes c ON cs.class_id = c.id
-    WHERE (s.school_id = ? OR s.school_id = 0) $hidden_clause AND (c.is_active = 1 OR cs.class_id IS NULL)
+    WHERE (s.school_id = ?) $hidden_clause AND (c.is_active = 1 OR cs.class_id IS NULL)
     ORDER BY c.id ASC, s.code ASC, s.name_en ASC
 ");
 $stmt->execute([$school_id, $school_id]);
 $subjects = $stmt->fetchAll();
 
 // Fetch all school teachers to display their names
-$stmt_teachers = $db->prepare("SELECT id, full_name FROM users WHERE role = 'teacher' AND (school_id = ? OR school_id = 0)");
+$stmt_teachers = $db->prepare("SELECT id, full_name FROM users WHERE role = 'teacher' AND (school_id = ?)");
 $stmt_teachers->execute([$school_id]);
 $all_teachers = $stmt_teachers->fetchAll(PDO::FETCH_KEY_PAIR);
 
 // Fetch all classes for filter dropdown
-$stmt_classes = $db->prepare("SELECT DISTINCT name FROM classes WHERE (school_id = ? OR school_id = 0) AND is_active = 1 ORDER BY id ASC");
+$stmt_classes = $db->prepare("SELECT DISTINCT name FROM classes WHERE (school_id = ?) AND is_active = 1 ORDER BY id ASC");
 $stmt_classes->execute([$school_id]);
 $all_classes_filter = $stmt_classes->fetchAll(PDO::FETCH_COLUMN);
 

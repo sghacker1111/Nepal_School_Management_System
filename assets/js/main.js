@@ -4,6 +4,22 @@
  */
 
 document.addEventListener('DOMContentLoaded', function() {
+    // Keep automatic GET filters from submitting an old section with a new class.
+    document.addEventListener('change', event => {
+        if (!['class','class_id'].includes(event.target.name)) return;
+        const form=event.target.closest('form');
+        if (!form || form.method.toLowerCase()!=='get') return;
+        const section=form.querySelector('[name="section"], [name="section_id"]');
+        if(section)section.value='';
+        const subject=form.querySelector('[name="subject"], [name="subject_id"]');
+        if(subject)subject.value='';
+    }, true);
+    // Older forms used visible labels without associations. Link them for keyboards and readers.
+    document.querySelectorAll('label.form-label:not([for])').forEach((label,index)=>{
+        const control=label.parentElement.querySelector('input:not([type="hidden"]),select,textarea');
+        if(control){if(!control.id)control.id='erp-field-'+index;label.htmlFor=control.id;}
+    });
+    document.querySelectorAll('input[name$="_drive_path"]').forEach(input=>{input.disabled=true;input.placeholder='Use the file upload button above';});
     
     // Initialize tooltips
     const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
@@ -43,7 +59,7 @@ function confirmDelete(url, message = 'Are you sure?') {
         cancelButtonText: 'Cancel'
     }).then((result) => {
         if (result.isConfirmed) {
-            window.location.href = url;
+            window.postAction(url);
         }
     });
 }
@@ -197,7 +213,7 @@ function formatDate(dateString, format = 'DD MMM YYYY') {
 }
 
 // Initialize DataTables with default settings
-if (typeof $.fn.DataTable !== 'undefined') {
+if (window.jQuery && typeof $.fn.DataTable !== 'undefined') {
     $.extend(true, $.fn.dataTable.defaults, {
         responsive: true,
         language: {

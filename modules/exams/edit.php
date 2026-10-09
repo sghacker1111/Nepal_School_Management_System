@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/exam_service.php';
 
 Auth::requireRole(['super_admin', 'school_admin', 'exam_officer']);
 
@@ -24,7 +25,7 @@ if (!$exam) {
     redirect(APP_URL . '/modules/exams/index.php', 'Exam not found', 'error');
 }
 
-if ($exam['is_locked']) {
+if ($exam['is_locked'] || $exam['is_published']) {
     redirect(APP_URL . '/modules/exams/index.php', 'Locked exams cannot be edited.', 'error');
 }
 
@@ -36,7 +37,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $has_internal = isset($_POST['has_internal']) ? (int)$_POST['has_internal'] : 0;
     $result_system = sanitize($_POST['result_system'] ?? 'gpa');
     
-    if (empty($name)) {
+    $hasMarks = examHasMarks($db,$exam_id);
+    if ($hasMarks && ($type !== $exam['type'] || $has_internal !== (int)$exam['has_internal'] || $result_system !== $exam['result_system'])) {
+        $error = 'The grading system cannot change after marks have been entered. You may still correct the exam name and dates.';
+    } elseif (empty($name)) {
         $error = 'Exam name is required';
     } else {
         try {

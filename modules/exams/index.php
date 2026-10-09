@@ -12,49 +12,21 @@ Auth::requireRole(['super_admin', 'school_admin', 'principal', 'teacher', 'exam_
 $db = getDB();
 $school_id = Auth::getSchoolId();
 
+require_once __DIR__ . '/../../includes/exam_service.php';
+
 // Handle status updates
-if (isset($_GET['publish']) && Auth::hasRole(['super_admin', 'school_admin', 'exam_officer'])) {
-    $id = (int)$_GET['publish'];
-    $stmt = $db->prepare("UPDATE exams SET is_published = 1 WHERE id = ? AND school_id = ?");
-    $stmt->execute([$id, $school_id]);
-    Auth::logActivity(Auth::getUserId(), 'Publish Exam Results', 'exams', $id);
-    redirect(APP_URL . '/modules/exams/index.php', 'Exam results published successfully');
-}
-
-if (isset($_GET['lock']) && Auth::hasRole(['super_admin', 'school_admin', 'exam_officer'])) {
-    $id = (int)$_GET['lock'];
-    $stmt = $db->prepare("UPDATE exams SET is_locked = 1 WHERE id = ? AND school_id = ?");
-    $stmt->execute([$id, $school_id]);
-    Auth::logActivity(Auth::getUserId(), 'Lock Exam Marks Entry', 'exams', $id);
-    redirect(APP_URL . '/modules/exams/index.php', 'Exam marks locked successfully');
-}
-
-if (isset($_GET['delete']) && Auth::hasRole(['super_admin', 'school_admin', 'exam_officer'])) {
-    $id = (int)$_GET['delete'];
-    
-    // Verify first
-    $stmt = $db->prepare("SELECT id FROM exams WHERE id = ? AND school_id = ?");
-    $stmt->execute([$id, $school_id]);
-    if ($stmt->fetch()) {
-        try {
-            $db->beginTransaction();
-            // Delete child configurations
-            $db->prepare("DELETE FROM exam_subjects WHERE exam_id = ?")->execute([$id]);
-            $db->prepare("DELETE FROM marks WHERE exam_id = ?")->execute([$id]);
-            // Delete exam
-            $db->prepare("DELETE FROM exams WHERE id = ? AND school_id = ?")->execute([$id, $school_id]);
-            
-            $db->commit();
-            Auth::logActivity(Auth::getUserId(), 'Delete Exam', 'exams', $id);
-            redirect(APP_URL . '/modules/exams/index.php', 'Exam deleted successfully');
-        } catch (PDOException $e) {
-            if ($db->inTransaction()) {
-                $db->rollBack();
-            }
-            redirect(APP_URL . '/modules/exams/index.php', 'Error deleting exam: ' . $e->getMessage(), 'error');
-        }
-    } else {
-        redirect(APP_URL . '/modules/exams/index.php', 'Exam not found or unauthorized', 'error');
+foreach (['publish','lock','reopen','delete'] as $action) {
+    if (!isset($_GET[$action]) || !Auth::hasRole(['super_admin','school_admin','exam_officer'])) continue;
+    $id=(int)$_GET[$action];
+    try {
+        changeExamState($db,(int)$school_id,$id,$action);
+        Auth::logActivity(Auth::getUserId(),ucfirst($action).' Exam','exams',$id);
+        redirect(APP_URL.'/modules/exams/index.php', $action==='reopen' ? 'Results withdrawn and marks reopened for correction.' : 'Exam action completed successfully.');
+    } catch (InvalidArgumentException $e) {
+        redirect(APP_URL.'/modules/exams/index.php',$e->getMessage(),'error');
+    } catch (PDOException $e) {
+        error_log($e->getMessage());
+        redirect(APP_URL.'/modules/exams/index.php','The exam could not be updated. Please try again.','error');
     }
 }
 
@@ -175,6 +147,9 @@ ob_start();
                                             </a>
                                         <?php endif; ?>
                                         
+                                        <?php if ($exam['is_locked'] || $exam['is_published']): ?>
+                                        <a href="<?= APP_URL ?>/modules/exams/index.php?reopen=<?= $exam['id'] ?>" class="btn btn-outline-warning" title="Withdraw results and reopen marks"><i class="fas fa-unlock"></i> Reopen marks</a>
+                                        <?php endif; ?>
                                         <button onclick="confirmDeleteExam(<?= $exam['id'] ?>)" class="btn btn-danger" title="Delete Exam">
                                             <i class="fas fa-trash"></i>
                                         </button>

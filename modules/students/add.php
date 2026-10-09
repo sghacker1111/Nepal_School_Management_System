@@ -52,24 +52,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     caste_ethnicity, religion, disability_status, scholarship_type,
                     perm_province, perm_district, perm_municipality, perm_ward_no, perm_tole,
                     father_name, father_phone, mother_name, mother_phone, guardian_name, guardian_phone,
-                    status, school_id, optional_subject_i, optional_subject_ii
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                    status, school_id, optional_subject_i, optional_subject_ii, optional_subject_iii
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
                 
                 $stmt->execute([
                     $studentId,
                     sanitize($_POST['emis_id'] ?? ''),
                     $academicYear['id'],
                     $_POST['class_id'],
-                    $_POST['section_id'] ?: null,
-                    $_POST['roll_number'] ?: null,
-                    $_POST['exam_roll_number'] ?: null,
+                    ($_POST['section_id'] ?? '') ?: null,
+                    ($_POST['roll_number'] ?? '') ?: null,
+                    ($_POST['exam_roll_number'] ?? '') ?: null,
                     sanitize($_POST['first_name_en']),
                     sanitize($_POST['last_name_en'] ?? ''),
                     sanitize($_POST['first_name_np'] ?? ''),
                     sanitize($_POST['last_name_np'] ?? ''),
                     $_POST['gender'],
                     sanitize($_POST['dob_bs'] ?? ''),
-                    $_POST['dob_ad'] ?: null,
+                    ($_POST['dob_ad'] ?? '') ?: null,
                     sanitize($_POST['blood_group'] ?? ''),
                     $photoName,
                     sanitize($_POST['caste_ethnicity'] ?? ''),
@@ -89,8 +89,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     sanitize($_POST['guardian_phone'] ?? ''),
                     'active',
                     $school_id,
-                    $_POST['optional_subject_i'] ?: null,
-                    $_POST['optional_subject_ii'] ?: null
+                    ($_POST['optional_subject_i'] ?? '') ?: null,
+                    ($_POST['optional_subject_ii'] ?? '') ?: null,
+                    ($_POST['optional_subject_iii'] ?? '') ?: null
                 ]);
                 
                 $studentId_db = $db->lastInsertId();
@@ -106,7 +107,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // Get classes and sections
-$stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ? OR school_id = 0) AND is_active = 1 ORDER BY id ASC");
+$stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ?) AND is_active = 1 ORDER BY id ASC");
 $stmt->execute([$school_id]);
 $classes = $stmt->fetchAll();
 
@@ -114,7 +115,7 @@ $stmt = $db->prepare("SELECT * FROM sections WHERE school_id = ? ORDER BY name")
 $stmt->execute([$school_id]);
 $sections = $stmt->fetchAll();
 
-$stmt = $db->prepare("SELECT * FROM subjects WHERE (school_id = ? OR school_id = 0) AND (is_hidden = 0 OR is_hidden IS NULL) AND type = 'optional' ORDER BY name_en");
+$stmt = $db->prepare("SELECT * FROM subjects WHERE (school_id = ?) AND (is_hidden = 0 OR is_hidden IS NULL) AND type = 'optional' ORDER BY name_en");
 $stmt->execute([$school_id]);
 $optional_subjects = $stmt->fetchAll();
 
@@ -292,6 +293,7 @@ ob_start();
         </div>
     </div>
     
+    <div class="card mb-4 optional-third"><div class="card-body"><label class="form-label" for="optionalThird">Optional Subject III — Grades 11–12</label><select id="optionalThird" name="optional_subject_iii" class="form-select"><option value="">No optional subject</option><?php foreach($optional_subjects as $sub): ?><option value="<?= $sub['id'] ?>" <?= ($_POST['optional_subject_iii']??$student['optional_subject_iii']??'')==$sub['id']?'selected':'' ?>><?= sanitize($sub['name_en']) ?></option><?php endforeach; ?></select><small class="text-muted">Confirm the allowed subject group combination for your school's approved curriculum.</small></div></div>
     <!-- Address Information -->
     <div class="card mb-4">
         <div class="card-header bg-white">
@@ -368,23 +370,10 @@ ob_start();
     </div>
 </form>
 
-<script>
-function loadSections() {
-    const classId = document.getElementById('classSelect').value;
-    const sectionSelect = document.getElementById('sectionSelect');
-    
-    // Clear existing options
-    sectionSelect.innerHTML = '<option value="">Select Section</option>';
-    
-    if (!classId) return;
-    
-    // In a real application, you would fetch sections via AJAX based on class
-    // For now, we'll show all sections
-    console.log('Class selected:', classId);
-}
-</script>
+
 
 <?php
+include __DIR__ . '/../../includes/enrollment_selectors.php';
 $content = ob_get_clean();
 include __DIR__ . '/../../includes/header.php';
 ?>
