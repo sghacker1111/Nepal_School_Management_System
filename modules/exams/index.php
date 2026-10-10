@@ -17,6 +17,7 @@ require_once __DIR__ . '/../../includes/exam_service.php';
 // Handle status updates
 foreach (['publish','lock','reopen','delete'] as $action) {
     if (!isset($_GET[$action]) || !Auth::hasRole(['super_admin','school_admin','exam_officer'])) continue;
+    if($action==='reopen'&&!Auth::hasRole(['super_admin','school_admin']))denySchoolRequest('Only a school administrator may reopen marks.');
     $id=(int)$_GET[$action];
     try {
         changeExamState($db,(int)$school_id,$id,$action);
@@ -147,7 +148,7 @@ ob_start();
                                             </a>
                                         <?php endif; ?>
                                         
-                                        <?php if ($exam['is_locked'] || $exam['is_published']): ?>
+                                        <?php if (($exam['is_locked'] || $exam['is_published']) && Auth::hasRole(['super_admin','school_admin'])): ?>
                                         <a href="<?= APP_URL ?>/modules/exams/index.php?reopen=<?= $exam['id'] ?>" class="btn btn-outline-warning" title="Withdraw results and reopen marks"><i class="fas fa-unlock"></i> Reopen marks</a>
                                         <?php endif; ?>
                                         <button onclick="confirmDeleteExam(<?= $exam['id'] ?>)" class="btn btn-danger" title="Delete Exam">

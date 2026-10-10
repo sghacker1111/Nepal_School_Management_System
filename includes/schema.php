@@ -1,6 +1,6 @@
 <?php
 /** Additive upgrades: retain records, marks and uploaded files. */
-const SCHOOL_SCHEMA_VERSION = 8;
+const SCHOOL_SCHEMA_VERSION = 9;
 function dbColumns(PDO $db, string $table): array {
     $rows = $db->query(DB_TYPE === 'sqlite' ? "PRAGMA table_info(`$table`)" : "SHOW COLUMNS FROM `$table`")->fetchAll();
     return array_column($rows, DB_TYPE === 'sqlite' ? 'name' : 'Field');

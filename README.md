@@ -61,11 +61,32 @@ php tests/operations_test.php
 php tests/exam_enhancements_test.php
 php tests/exam_workflows_test.php
 php tests/cdc_2083_test.php
+php tests/assessment_test.php
+php tests/packages_test.php
+php tests/accounting_schema_test.php
+php tests/accounting_money_test.php
+php tests/accounting_test.php
+php tests/subscription_teaching_test.php
+node tests/accounting_preview_test.js
+node tests/date_controls_test.js
 python tests/http_test.py
 python tests/exam_http_test.py
+python tests/assessment_http_test.py
+python tests/packages_http_test.py
+python tests/accounting_http_test.py
+python tests/subscription_teaching_http_test.py
+python tests/deployment_test.py
 ```
 
 The HTTP suite drives real PHP requests and database persistence. `tests/upgrade_test.php` accepts only a disposable existing-database copy in the OS temporary directory through `ERP_DB_PATH`.
+
+## Subscriptions and teaching permissions
+
+System administrators use **School Management → Edit** to tick multiple purchased packages, activate/deactivate the account and choose yearly, custom-date or no-expiry access. Package access is combined; an explicitly empty selection does not restore Full ERP. Dated subscriptions include the expiry day in Nepal time, then block school accounts until renewed. Start/expiry dates accept AD or BS. **Renew for one year** extends a current term without interrupting it, or starts a new year today for an expired term. Removing access never deletes school records.
+
+Schema 9 adds subscription fields without assigning invented expiry dates to existing schools. Legacy schools retain their existing package and no expiry until the administrator configures a dated subscription.
+
+Teachers can manage chapters, topics and specification grids only for active subjects assigned to them in the selected class. Subject selectors remove duplicate section mappings and show the subject code. These permissions are enforced on submitted requests as well as in the interface. Locked/published exams show saved marks read-only; only school/system administrators may reopen marks. After reopening, a teacher can save only their own assigned subjects and sections.
 
 ## Deployment boundary
 

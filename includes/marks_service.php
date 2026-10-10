@@ -17,8 +17,7 @@ function saveExamMarks(PDO $db,int $school,int $user,string $role,array $input):
     $q->execute([$school,$class['id'],$exam['academic_year_id']]);$students=array_column($q->fetchAll(),null,'id');
     $allowed=[];
     if($role==='teacher') {
-        $q=$db->prepare('SELECT subject_id,teacher_id,section_id FROM class_subjects WHERE school_id=? AND class_id=? AND is_active=1');$q->execute([$school,$class['id']]);
-        foreach($q as $row)if(in_array((string)$user,explode(',',(string)$row['teacher_id']),true))$allowed[$row['subject_id']][]=$row['section_id'];
+        foreach(teacherTeachingAssignments($db,$school,$user) as $row)if((int)$row['class_id']===(int)$class['id'])$allowed[$row['subject_id']][]=$row['section_id'];
     }
     $changes=[];
     foreach(($input['marks']??[]) as $id=>$entries){

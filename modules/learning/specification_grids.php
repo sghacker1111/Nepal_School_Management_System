@@ -9,6 +9,7 @@ require_once __DIR__ . '/../../includes/functions.php';
 
 Auth::requireRole(['super_admin', 'school_admin', 'principal', 'teacher', 'exam_officer']);
 Auth::requireAccess('specification_grids');
+require_once __DIR__.'/../../includes/teaching_scope.php';
 
 $db = getDB();
 $school_id = Auth::getSchoolId();
@@ -135,25 +136,13 @@ if ($is_admin) {
     $grids = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-// Fetch classes and subjects for select elements
-$classes = [];
-$subjects = [];
-if ($is_admin && !$school_id) {
-    $stmt = $db->prepare("SELECT * FROM classes WHERE is_active = 1 GROUP BY name ORDER BY level, name");
-    $stmt->execute();
-    $classes = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    $stmt = $db->prepare("SELECT * FROM subjects WHERE school_id=0 ORDER BY name_en");
-    $stmt->execute();
-    $subjects = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} elseif ($school_id) {
-    $stmt = $db->prepare("SELECT * FROM classes WHERE school_id = ? AND is_active = 1 ORDER BY id ASC");
-    $stmt->execute([$school_id]);
-    $classes = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    $stmt = $db->prepare("SELECT * FROM subjects WHERE school_id = ? ORDER BY name_en");
-    $stmt->execute([$school_id]);
-    $subjects = $stmt->fetchAll(PDO::FETCH_ASSOC);
+// Class-scoped DISTINCT subjects remove duplicate section mappings and irrelevant catalogues.
+$classes=learningClasses($db,(int)$school_id,Auth::getRole(),(int)Auth::getUserId());
+$subjectsByClass=[];
+foreach($classes as $class)$subjectsByClass[$class['id']]=learningSubjects($db,(int)$school_id,(int)$class['id'],Auth::getRole(),(int)Auth::getUserId());
+if(Auth::getRole()==='teacher'){
+    $owned=[];foreach(teacherTeachingAssignments($db,(int)$school_id,(int)Auth::getUserId()) as $assignment)$owned[$assignment['class_id'].'-'.$assignment['subject_id']]=true;
+    $grids=array_values(array_filter($grids,static fn($grid)=>isset($owned[$grid['class_id'].'-'.$grid['subject_id']])));
 }
 
 $pageTitle = 'Specification Grids';
@@ -277,7 +266,7 @@ ob_start();
             </div>
             <div class="col-md-4">
                 <label class="form-label fw-semibold">Target Class *</label>
-                <select name="class_id" id="modalClass" class="form-select" required>
+                <select name="class_id" id="modalClass" class="form-select" required onchange="updateGridSubjects()">
                     <option value="">Choose Class</option>
                     <?php foreach ($classes as $c): ?>
                     <option value="<?= $c['id'] ?>"><?= sanitize($c['name']) ?></option>
@@ -286,12 +275,10 @@ ob_start();
             </div>
             <div class="col-md-4">
                 <label class="form-label fw-semibold">Subject *</label>
-                <select name="subject_id" id="modalSubject" class="form-select" required>
-                    <option value="">Choose Subject</option>
-                    <?php foreach ($subjects as $s): ?>
-                    <option value="<?= $s['id'] ?>"><?= sanitize($s['name_en']) ?></option>
-                    <?php endforeach; ?>
+                <select name="subject_id" id="modalSubject" class="form-select" required disabled>
+                    <option value="">Choose a class first</option>
                 </select>
+                <div class="form-text">Only active subjects for this class<?= Auth::getRole()==='teacher'?' assigned to you':'' ?> are listed.</div>
             </div>
             
             <div class="col-12 mt-4">
@@ -344,6 +331,15 @@ ob_start();
 </div>
 
 <script>
+const gridSubjectsByClass=<?= json_encode($subjectsByClass,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;
+function updateGridSubjects(selected='') {
+    const field=document.getElementById('modalSubject');
+    const rows=gridSubjectsByClass[document.getElementById('modalClass').value]||[];
+    field.replaceChildren(new Option(rows.length?'Choose Subject':'No assigned subjects for this class',''));
+    rows.forEach(subject=>field.add(new Option(subject.name_en+(subject.code?' ('+subject.code+')':''),subject.id)));
+    field.disabled=rows.length===0;
+    field.value=String(selected);
+}
 function showAddForm() {
     document.getElementById('gridsListSection').style.display = 'none';
     document.getElementById('gridsFormSection').style.display = 'block';
@@ -353,7 +349,7 @@ function showAddForm() {
     document.getElementById('formTitle').innerText = 'Create Specification Grid';
     document.getElementById('modalGridName').value = '';
     document.getElementById('modalClass').value = '';
-    document.getElementById('modalSubject').value = '';
+    updateGridSubjects();
     
     // Reset inputs
     document.querySelectorAll('.count-input').forEach(i => i.value = 0);
@@ -369,7 +365,7 @@ function editGrid(g) {
     document.getElementById('formTitle').innerText = 'Edit Specification Grid Blueprint';
     document.getElementById('modalGridName').value = g.name;
     document.getElementById('modalClass').value = g.class_id;
-    document.getElementById('modalSubject').value = g.subject_id;
+    updateGridSubjects(g.subject_id);
     
     // Parse config JSON
     let config = {};

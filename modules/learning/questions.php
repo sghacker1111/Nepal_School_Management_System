@@ -25,19 +25,8 @@ if ($is_admin) {
     $permission_status = 'approved';
     $view_permission_status = 'approved';
 } elseif ($school_id) {
-    $sub_type = Auth::getSubscriptionType();
-    if ($sub_type === 'full') {
-        $permission_status = 'approved';
-        $view_permission_status = 'approved';
-    } else {
-        $stmt = $db->prepare("SELECT question_permission_status, question_view_permission FROM schools WHERE id = ?");
-        $stmt->execute([$school_id]);
-        $school_perms = $stmt->fetch();
-        if ($school_perms) {
-            $permission_status = $school_perms['question_permission_status'] ?: 'none';
-            $view_permission_status = $school_perms['question_view_permission'] ?: 'none';
-        }
-    }
+    $permission_status = Auth::canAddQuestions()?'approved':'none';
+    $view_permission_status = Auth::hasAccess('questions')?'approved':'none';
 }
 
 // Handle Request Question Creation Permission (School Users only)

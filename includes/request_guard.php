@@ -37,13 +37,18 @@ function guardSchoolRequest(): void {
     $module = $parts[1] ?? '';
     $file = $parts[2] ?? '';
     $role = Auth::getRole();
+    if($role!=='super_admin'&&$module!=='auth'){
+        require_once __DIR__.'/packages.php';$subscriptionState=schoolSubscriptionState(Auth::getSubscription());
+        if($subscriptionState!=='active')denySchoolRequest('School subscription is '.str_replace('_',' ',$subscriptionState).'. Contact the system administrator to activate or renew the account.');
+    }
     if(in_array($role,['accountant','cashier','auditor'],true)&&!in_array($module,['accounting','auth'],true)&&$module!=='')denySchoolRequest('Your finance role can access Accounting & Billing only.');
     $write = ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST';
     $mutation = schoolMutationQuery($_GET);
     if ($module === 'super_admin' && $role !== 'super_admin') denySchoolRequest('System administrator access is required.');
     $accessModule=$module==='learning'?(['questions.php'=>'questions','paper_generator.php'=>'paper_generator','specification_grids.php'=>'specification_grids','curriculum.php'=>'curriculum','ocr_scanner.php'=>'ocr_scanner'][$file]??'learning'):$module;
     if ($module && !in_array($module, ['auth','super_admin'], true) && !Auth::hasAccess($accessModule)) denySchoolRequest('This module is not included in your school package.');
-    if($module==='learning'&&$file==='questions.php'&&($write||$mutation)&&in_array(Auth::getSubscriptionType(),['question_view','paper_generator'],true))denySchoolRequest('Your package allows question viewing, not adding or editing questions.');
+    if($module==='learning'&&$file==='questions.php'&&($write||$mutation)&&!Auth::canAddQuestions())denySchoolRequest('Your package allows question viewing, not adding or editing questions.');
+    if($module==='exams'&&isset($_GET['reopen'])&& !in_array($role,['super_admin','school_admin'],true))denySchoolRequest('Only a school administrator may reopen marks.');
     if ($role !== 'super_admin' && !(int)Auth::getSchoolId()) denySchoolRequest('Your account has no school assignment. Contact an administrator.');
     if (($write || $mutation) && !schoolRoleCanWrite($role, $module, $file)) denySchoolRequest('Your role does not allow changes in this section.');
     if($write&&$module==='accounting'){
@@ -60,7 +65,7 @@ function guardSchoolRequest(): void {
     }
     if (!$write) {
         require_once __DIR__ . '/school_validation.php';
-        try { validateSchoolReferences(getDB(), (int)(Auth::getSchoolId() ?? 0), $module, [], $_GET); }
+        try { validateSchoolReferences(getDB(), (int)(Auth::getSchoolId() ?? 0), $module, [], $_GET); validateTeacherLearningRequest(getDB(),(int)(Auth::getSchoolId()??0),$module,$file,[], $_GET); }
         catch (InvalidArgumentException $e) { denySchoolRequest($e->getMessage(), 404); }
         return;
     }
@@ -78,6 +83,6 @@ function guardSchoolRequest(): void {
         }
     }
     require_once __DIR__ . '/school_validation.php';
-    try { validateSchoolReferences(getDB(), (int)(Auth::getSchoolId() ?? 0), $module, $_POST, $_GET); }
+    try { validateSchoolReferences(getDB(), (int)(Auth::getSchoolId() ?? 0), $module, $_POST, $_GET); validateTeacherLearningRequest(getDB(),(int)(Auth::getSchoolId()??0),$module,$file,$_POST,$_GET); }
     catch (InvalidArgumentException $e) { denySchoolRequest($e->getMessage(), 422); }
 }

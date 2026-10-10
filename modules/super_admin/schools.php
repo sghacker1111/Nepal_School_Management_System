@@ -14,58 +14,9 @@ $db = getDB();
 $error = '';
 $success = '';
 
-// Handle Question Permission Action
-if (isset($_GET['perm_action']) && isset($_GET['school_id'])) {
-    $perm_action = sanitize($_GET['perm_action']);
-    $sch_id = (int)$_GET['school_id'];
-    
-    if ($perm_action === 'approve') {
-        $stmt = $db->prepare("UPDATE schools SET question_permission_status = 'approved' WHERE id = ?");
-        $stmt->execute([$sch_id]);
-        Auth::logActivity(Auth::getUserId(), 'Approve Question Creation', 'schools', $sch_id);
-        redirect(APP_URL . '/modules/super_admin/schools.php', 'Question creation permission granted.');
-    } elseif ($perm_action === 'revoke') {
-        $stmt = $db->prepare("UPDATE schools SET question_permission_status = 'none' WHERE id = ?");
-        $stmt->execute([$sch_id]);
-        Auth::logActivity(Auth::getUserId(), 'Revoke Question Creation', 'schools', $sch_id);
-        redirect(APP_URL . '/modules/super_admin/schools.php', 'Question creation permission revoked.');
-    }
-}
-
-// Handle Question View Permission Action
-if (isset($_GET['view_perm_action']) && isset($_GET['school_id'])) {
-    $view_perm_action = sanitize($_GET['view_perm_action']);
-    $sch_id = (int)$_GET['school_id'];
-    
-    if ($view_perm_action === 'approve') {
-        $stmt = $db->prepare("UPDATE schools SET question_view_permission = 'approved' WHERE id = ?");
-        $stmt->execute([$sch_id]);
-        Auth::logActivity(Auth::getUserId(), 'Approve Question View', 'schools', $sch_id);
-        redirect(APP_URL . '/modules/super_admin/schools.php', 'Question view permission granted.');
-    } elseif ($view_perm_action === 'revoke') {
-        $stmt = $db->prepare("UPDATE schools SET question_view_permission = 'none' WHERE id = ?");
-        $stmt->execute([$sch_id]);
-        Auth::logActivity(Auth::getUserId(), 'Revoke Question View', 'schools', $sch_id);
-        redirect(APP_URL . '/modules/super_admin/schools.php', 'Question view permission revoked.');
-    }
-}
-
-// Handle Learning Hub Permission Action
-if (isset($_GET['hub_perm_action']) && isset($_GET['school_id'])) {
-    $hub_perm_action = sanitize($_GET['hub_perm_action']);
-    $sch_id = (int)$_GET['school_id'];
-    
-    if ($hub_perm_action === 'approve') {
-        $stmt = $db->prepare("UPDATE schools SET learning_hub_permission_status = 'approved' WHERE id = ?");
-        $stmt->execute([$sch_id]);
-        Auth::logActivity(Auth::getUserId(), 'Approve Learning Hub Access', 'schools', $sch_id);
-        redirect(APP_URL . '/modules/super_admin/schools.php', 'Learning Hub access granted.');
-    } elseif ($hub_perm_action === 'revoke') {
-        $stmt = $db->prepare("UPDATE schools SET learning_hub_permission_status = 'none' WHERE id = ?");
-        $stmt->execute([$sch_id]);
-        Auth::logActivity(Auth::getUserId(), 'Revoke Learning Hub Access', 'schools', $sch_id);
-        redirect(APP_URL . '/modules/super_admin/schools.php', 'Learning Hub access revoked.');
-    }
+// Package checkboxes are the single source of access; keep legacy flags/data intact.
+if (isset($_GET['perm_action']) || isset($_GET['view_perm_action']) || isset($_GET['hub_perm_action'])) {
+    redirect(APP_URL . '/modules/super_admin/schools.php', 'Use Edit School to activate or remove packages and set their expiry.');
 }
 
 // Handle Add/Edit School Actions
@@ -81,16 +32,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $principal_name = sanitize($_POST['principal_name'] ?? '');
     $principal_mobile = sanitize($_POST['principal_mobile'] ?? '');
     $technical_person = sanitize($_POST['technical_person'] ?? '');
-    $subscription_type = sanitize($_POST['subscription_type'] ?? 'full');
+    try{$subscriptionConfig=schoolSubscriptionInput($_POST);$subscription_type=$subscriptionConfig['subscription_type'];}catch(InvalidArgumentException $e){$error=$e->getMessage();}
     
     $admin_full_name = sanitize($_POST['admin_full_name'] ?? '');
     $admin_username = sanitize($_POST['admin_username'] ?? '');
     $admin_password = $_POST['admin_password'] ?? '';
     
-    if (empty($name_en) || empty($name_np) || empty($emis_code) || empty($address) || empty($phone) || empty($email) || empty($principal_name) || empty($principal_mobile) || empty($technical_person) || empty($admin_full_name) || empty($admin_username)) {
+    if($error) {
+        // Keep the subscription validation message.
+    } elseif (empty($name_en) || empty($name_np) || empty($emis_code) || empty($address) || empty($phone) || empty($email) || empty($principal_name) || empty($principal_mobile) || empty($technical_person) || empty($admin_full_name) || empty($admin_username)) {
         $error = "All fields are required.";
-    } elseif (!array_key_exists($subscription_type, schoolPackages())) {
-        $error = 'Choose a valid subscription package.';
     } elseif (($action === 'add' || $admin_password !== '') && strlen($admin_password) < 8) {
         $error = 'Administrator passwords must contain at least 8 characters.';
     } elseif (!preg_match('/^(\d{4})\/(\d{4})$/', $academic_year_current, $year_parts)) {
@@ -115,6 +66,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         ");
                         $stmt->execute([$name_en, $name_np, $emis_code, $address, $phone, $email, $academic_year_current, $principal_name, $principal_mobile, $technical_person, $subscription_type]);
                         $new_school_id = $db->lastInsertId();
+                        saveSchoolSubscription($db,(int)$new_school_id,$subscriptionConfig);
                         
                         // Add default academic years for this new school automatically!
                         $stmt = $db->prepare("INSERT INTO academic_years (year_bs, year_ad, is_active, school_id) VALUES (?, ?, 1, ?)");
@@ -138,7 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $school_id = (int)$_POST['school_id'];
                 
                 // Find existing admin user ID for this school
-                $stmt_admin = $db->prepare("SELECT id FROM users WHERE school_id = ? AND role = 'school_admin' LIMIT 1");
+                $stmt_admin = $db->prepare("SELECT id FROM users WHERE school_id = ? AND role = 'school_admin' ORDER BY id LIMIT 1");
                 $stmt_admin->execute([$school_id]);
                 $admin_record = $stmt_admin->fetch();
                 $admin_user_id = $admin_record ? $admin_record['id'] : null;
@@ -165,6 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         WHERE id = ?
                     ");
                     $stmt->execute([$name_en, $name_np, $emis_code, $address, $phone, $email, $academic_year_current, $principal_name, $principal_mobile, $technical_person, $subscription_type, $school_id]);
+                    saveSchoolSubscription($db,$school_id,$subscriptionConfig);
                     
                     if ($admin_user_id) {
                         if (!empty($admin_password)) {
@@ -212,10 +165,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 $schools = $db->query("
     SELECT s.*, u.username as admin_username, u.full_name as admin_full_name 
     FROM schools s
-    LEFT JOIN users u ON u.school_id = s.id AND u.role = 'school_admin'
-    GROUP BY s.id
+    LEFT JOIN users u ON u.id=(SELECT MIN(a.id) FROM users a WHERE a.school_id=s.id AND a.role='school_admin')
     ORDER BY s.id DESC
 ")->fetchAll();
+
+// Restore a failed form without ever returning its administrator password.
+$formRecovery=null;
+if($error&&in_array($_POST['action']??'', ['add','edit'],true)){
+    $formRecovery=['action'=>$_POST['action'],'school_id'=>(int)($_POST['school_id']??0),'packages'=>array_values(array_intersect(array_filter((array)($_POST['packages']??[]),'is_string'),array_keys(schoolPackages()))),'subscription_enabled'=>isset($_POST['subscription_enabled'])];
+    foreach(['name_en','name_np','emis_code','address','phone','email','academic_year_current','principal_name','principal_mobile','technical_person','admin_full_name','admin_username','subscription_mode','subscription_start','subscription_end'] as $key)$formRecovery[$key]=is_scalar($_POST[$key]??null)?(string)$_POST[$key]:'';
+}
 
 $pageTitle = 'School Management';
 $activePage = 'super_admin_schools';
@@ -258,9 +217,7 @@ ob_start();
                         <th>Contact info</th>
                         <th>Address</th>
                         <th>Package</th>
-                        <th>Q. View Perm</th>
-                        <th>Q. Add Perm</th>
-                        <th>Learning Hub Perm</th>
+                        <th>Enabled Features</th>
                         <th>Current Year</th>
                         <th class="text-end">Actions</th>
                     </tr>
@@ -282,53 +239,19 @@ ob_start();
                             <td><?= sanitize($school['address'] ?: '-') ?></td>
                             <td>
                                 <?php
-                                $pkg = $school['subscription_type'] ?? '';
-                                echo '<span class="badge '.($pkg==='full'?'bg-success':'bg-secondary').'">'.sanitize(schoolPackages()[$pkg]??'Unknown package — access disabled').'</span>';
+                                foreach(schoolSelectedPackages($school) as $pkg)echo '<span class="badge bg-secondary me-1 mb-1">'.sanitize(schoolPackages()[$pkg]).'</span>';
+                                $state=schoolSubscriptionState($school);echo '<div><span class="badge '.($state==='active'?'bg-success':'bg-danger').'">'.sanitize(ucwords(str_replace('_',' ',$state))).'</span></div>';
+                                if($school['subscription_end'])echo '<small>Expires '.sanitize(schoolDateLabel($school['subscription_end'],'both','ymd')).'</small>';
+                                else echo '<small>No expiry (legacy or administrator choice)</small>';
                                 ?>
                             </td>
                             <td>
                                 <?php
-                                $v_perm = $school['question_view_permission'] ?? 'none';
-                                if ($v_perm === 'approved') {
-                                    echo '<span class="badge bg-success">Approved</span>';
-                                    echo ' <a href="?view_perm_action=revoke&school_id=' . $school['id'] . '" class="btn btn-xs btn-outline-danger" title="Revoke View" onclick="return confirm(\'Are you sure you want to revoke question view permission for this school?\')"><i class="fas fa-ban"></i></a>';
-                                } elseif ($v_perm === 'requested') {
-                                    echo '<span class="badge bg-warning text-dark animate-pulse">Requested</span>';
-                                    echo ' <a href="?view_perm_action=approve&school_id=' . $school['id'] . '" class="btn btn-xs btn-success text-white py-0 px-1" style="font-size:0.75rem;" title="Approve View"><i class="fas fa-check"></i> Approve</a>';
-                                } else {
-                                    echo '<span class="badge bg-secondary">None</span>';
-                                    echo ' <a href="?view_perm_action=approve&school_id=' . $school['id'] . '" class="btn btn-xs btn-outline-success py-0 px-1" style="font-size:0.75rem;" title="Grant View"><i class="fas fa-plus"></i> Grant</a>';
+                                foreach(['results'=>'Results','learning'=>'Learning','paper_generator'=>'Paper Generator','questions'=>'Question View','accounting'=>'Accounting'] as $feature=>$label) {
+                                    if(schoolSubscriptionAllows($school,$feature))echo '<div class="small text-success"><i class="fas fa-check"></i> '.sanitize($label).'</div>';
                                 }
-                                ?>
-                            </td>
-                            <td>
-                                <?php
-                                $perm = $school['question_permission_status'] ?? 'none';
-                                if ($perm === 'approved') {
-                                    echo '<span class="badge bg-success">Approved</span>';
-                                    echo ' <a href="?perm_action=revoke&school_id=' . $school['id'] . '" class="btn btn-xs btn-outline-danger" title="Revoke Creation" onclick="return confirm(\'Are you sure you want to revoke question creation permission for this school?\')"><i class="fas fa-ban"></i></a>';
-                                } elseif ($perm === 'requested') {
-                                    echo '<span class="badge bg-warning text-dark animate-pulse">Requested</span>';
-                                    echo ' <a href="?perm_action=approve&school_id=' . $school['id'] . '" class="btn btn-xs btn-success text-white py-0 px-1" style="font-size:0.75rem;" title="Approve Creation"><i class="fas fa-check"></i> Approve</a>';
-                                } else {
-                                    echo '<span class="badge bg-secondary">None</span>';
-                                    echo ' <a href="?perm_action=approve&school_id=' . $school['id'] . '" class="btn btn-xs btn-outline-success py-0 px-1" style="font-size:0.75rem;" title="Grant Creation"><i class="fas fa-plus"></i> Grant</a>';
-                                }
-                                ?>
-                            </td>
-                            <td>
-                                <?php
-                                $hub_perm = $school['learning_hub_permission_status'] ?? 'none';
-                                if ($hub_perm === 'approved') {
-                                    echo '<span class="badge bg-success">Approved</span>';
-                                    echo ' <a href="?hub_perm_action=revoke&school_id=' . $school['id'] . '" class="btn btn-xs btn-outline-danger" title="Revoke Access" onclick="return confirm(\'Are you sure you want to revoke Learning Hub access for this school?\')"><i class="fas fa-ban"></i></a>';
-                                } elseif ($hub_perm === 'requested') {
-                                    echo '<span class="badge bg-warning text-dark animate-pulse">Requested</span>';
-                                    echo ' <a href="?hub_perm_action=approve&school_id=' . $school['id'] . '" class="btn btn-xs btn-success text-white py-0 px-1" style="font-size:0.75rem;" title="Approve Access"><i class="fas fa-check"></i> Approve</a>';
-                                } else {
-                                    echo '<span class="badge bg-secondary">None</span>';
-                                    echo ' <a href="?hub_perm_action=approve&school_id=' . $school['id'] . '" class="btn btn-xs btn-outline-success py-0 px-1" style="font-size:0.75rem;" title="Grant Access"><i class="fas fa-plus"></i> Grant</a>';
-                                }
+                                if(schoolSubscriptionCanAddQuestions($school))echo '<div class="small text-success"><i class="fas fa-check"></i> Question Add</div>';
+                                if($state!=='active')echo '<span class="text-muted small">Access inactive</span>';
                                 ?>
                             </td>
                             <td><span class="badge bg-info"><?= sanitize($school['academic_year_current'] ?: '2081/2025') ?></span></td>
@@ -362,6 +285,7 @@ ob_start();
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body p-4" style="max-height: 70vh; overflow-y: auto;">
+                    <?php if($error): ?><div class="alert alert-danger" role="alert"><?= sanitize($error) ?> Your form is retained; re-enter a new administrator password only if needed.</div><?php endif; ?>
                     <div class="row g-3">
                         <!-- School Profile Details -->
                         <div class="col-12">
@@ -418,10 +342,24 @@ ob_start();
                             <h6 class="text-primary border-bottom pb-2 mb-1"><i class="fas fa-box-open"></i> Subscription & Access Details</h6>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Subscription Package *</label>
-                            <select name="subscription_type" id="modalSubscriptionType" class="form-select" required>
-                                <?php foreach(schoolPackages() as $package=>$label): ?><option value="<?= $package ?>"><?= sanitize($label) ?></option><?php endforeach; ?>
-                            </select>
+                            <fieldset><legend class="fs-6">Activate packages (tick all purchased)</legend>
+                                <?php foreach(schoolPackages() as $package=>$label): ?><div class="form-check"><input type="checkbox" class="form-check-input school-package" name="packages[]" id="package_<?= $package ?>" value="<?= $package ?>"><label class="form-check-label" for="package_<?= $package ?>"><?= sanitize($label) ?></label></div><?php endforeach; ?>
+                            </fieldset>
+                            <div class="form-text">Full ERP includes every module. Unticking a package removes access without deleting records.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="modalSubscriptionMode" class="form-label">Subscription duration</label>
+                            <select name="subscription_mode" id="modalSubscriptionMode" class="form-select" onchange="updateSubscriptionDates()"><option value="yearly">Yearly (one year from start date)</option><option value="custom">Custom start and expiry dates</option><option value="no_expiry">No expiry</option></select>
+                            <div class="form-check mt-3"><input type="checkbox" name="subscription_enabled" value="1" id="modalSubscriptionEnabled" class="form-check-input" checked><label for="modalSubscriptionEnabled" class="form-check-label">Activate school account</label></div>
+                            <div class="form-text">Expired schools cannot use modules until the system administrator renews them. Saved records are retained.</div>
+                        </div>
+                        <div class="col-md-6" id="subscriptionStartControl">
+                            <label for="modalSubscriptionStart" class="form-label">Subscription start</label><input type="date" name="subscription_start" id="modalSubscriptionStart" class="form-control" onchange="updateSubscriptionDates()">
+                        </div>
+                        <div class="col-md-6" id="subscriptionEndControl">
+                            <label for="modalSubscriptionEnd" class="form-label">Expiry date (inclusive)</label><input type="date" name="subscription_end" id="modalSubscriptionEnd" class="form-control">
+                            <div class="form-text">Yearly expiry is calculated by the server. Custom dates may also be entered in BS using the date calendar control.</div>
+                            <button type="button" class="btn btn-outline-success btn-sm mt-2" onclick="renewSubscription()">Renew for one year</button>
                         </div>
 
                         <!-- Administrator Credentials -->
@@ -453,11 +391,39 @@ ob_start();
 
 <script>
 let schoolModalObj;
+const schoolToday=<?= json_encode((new DateTimeImmutable('now',new DateTimeZone('Asia/Kathmandu')))->format('Y-m-d')) ?>;
+function subscriptionDateAd(field){const selector=field.parentElement.querySelector('[name^="calendar_fields"]');return window.schoolConvertDate?schoolConvertDate(field.value,selector?.value||'AD','AD'):field.value;}
+function subscriptionYearEnd(start){const [y,m,d]=start.split('-').map(Number);const last=new Date(Date.UTC(y+1,m,0)).getUTCDate();const expiry=new Date(Date.UTC(y+1,m-1,Math.min(d,last)));expiry.setUTCDate(expiry.getUTCDate()-1);return expiry.toISOString().slice(0,10);}
+function updateSubscriptionDates() {
+    const mode=document.getElementById('modalSubscriptionMode').value;
+    const start=document.getElementById('modalSubscriptionStart');const end=document.getElementById('modalSubscriptionEnd');
+    document.getElementById('subscriptionStartControl').hidden=mode==='no_expiry';document.getElementById('subscriptionEndControl').hidden=mode==='no_expiry';
+    start.required=mode!=='no_expiry';end.required=mode==='custom';end.readOnly=mode==='yearly';
+    if(mode==='yearly'&&start.value){try{const ad=subscriptionYearEnd(subscriptionDateAd(start));const selector=end.parentElement.querySelector('[name^="calendar_fields"]');end.value=window.schoolConvertDate?schoolConvertDate(ad,'AD',selector?.value||'AD'):ad;}catch(e){end.value='';}}
+}
+function resetSubscriptionCalendars(){['modalSubscriptionStart','modalSubscriptionEnd'].forEach(id=>{const field=document.getElementById(id);const select=field.parentElement.querySelector('[name^="calendar_fields"]');if(select){select.value='AD';select.dispatchEvent(new Event('change'));}});}
+function renewSubscription(){
+    resetSubscriptionCalendars();const start=document.getElementById('modalSubscriptionStart');const end=document.getElementById('modalSubscriptionEnd');
+    if(end.value&&end.value>=schoolToday){const next=new Date(end.value+'T00:00:00Z');next.setUTCDate(next.getUTCDate()+1);document.getElementById('modalSubscriptionMode').value='custom';end.value=subscriptionYearEnd(next.toISOString().slice(0,10));if(!start.value)start.value=schoolToday;}
+    else{document.getElementById('modalSubscriptionMode').value='yearly';start.value=schoolToday;}
+    document.getElementById('modalSubscriptionEnabled').checked=true;updateSubscriptionDates();
+}
 
 $(document).ready(function() {
     schoolModalObj = new bootstrap.Modal(document.getElementById('schoolModal'), {
         focus: false
     });
+    const recovery=<?= json_encode($formRecovery,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;
+    if(recovery){
+        showAddModal();
+        const form=document.getElementById('schoolForm');
+        Object.entries(recovery).forEach(([key,value])=>{const field=form.elements.namedItem(key);if(field&&typeof value==='string')field.value=value;});
+        document.getElementById('modalSchoolId').value=recovery.school_id;
+        document.querySelectorAll('.school-package').forEach(box=>box.checked=recovery.packages.includes(box.value));
+        document.getElementById('modalSubscriptionEnabled').checked=recovery.subscription_enabled;
+        if(recovery.action==='edit'){document.getElementById('modalTitle').innerText='Edit School Details';document.getElementById('modalAdminPassword').required=false;document.getElementById('adminPasswordLabel').innerText='Administrator Password (leave empty to keep current)';}
+        updateSubscriptionDates();
+    }
     
     $('#schoolForm').on('submit', function(e) {
         const form = this;
@@ -496,7 +462,8 @@ function showAddModal() {
     document.getElementById('modalPrincipalMobile').value = '';
     document.getElementById('modalTechnicalPerson').value = '';
     
-    document.getElementById('modalSubscriptionType').value = 'full';
+    resetSubscriptionCalendars();document.querySelectorAll('.school-package').forEach(box=>box.checked=box.value==='full');
+    document.getElementById('modalSubscriptionMode').value='yearly';document.getElementById('modalSubscriptionStart').value=schoolToday;document.getElementById('modalSubscriptionEnabled').checked=true;updateSubscriptionDates();
     document.getElementById('modalAdminFullName').value = '';
     document.getElementById('modalAdminUsername').value = '';
     document.getElementById('modalAdminPassword').value = '';
@@ -521,7 +488,8 @@ function editSchool(s) {
     document.getElementById('modalPrincipalMobile').value = s.principal_mobile || '';
     document.getElementById('modalTechnicalPerson').value = s.technical_person || '';
     
-    document.getElementById('modalSubscriptionType').value = s.subscription_type || 'full';
+    resetSubscriptionCalendars();let packages=[];try{packages=s.packages_json===null?[s.subscription_type]:JSON.parse(s.packages_json);if(!Array.isArray(packages))packages=[];}catch(e){}document.querySelectorAll('.school-package').forEach(box=>box.checked=packages.includes(box.value));
+    document.getElementById('modalSubscriptionMode').value=s.subscription_mode||'no_expiry';document.getElementById('modalSubscriptionStart').value=s.subscription_start||schoolToday;document.getElementById('modalSubscriptionEnd').value=s.subscription_end||'';document.getElementById('modalSubscriptionEnabled').checked=Number(s.subscription_enabled)!==0;updateSubscriptionDates();
     document.getElementById('modalAdminFullName').value = s.admin_full_name || '';
     document.getElementById('modalAdminUsername').value = s.admin_username || '';
     document.getElementById('modalAdminPassword').value = '';

@@ -5,7 +5,7 @@ $matrix=[
  'full'=>['students','teachers','attendance','exams','results','reports','learning','curriculum','specification_grids','paper_generator','questions','ocr_scanner','accounting'],
  'result_system'=>['students','teachers','attendance','exams','results','reports'],
  'learning_system'=>['learning','curriculum','specification_grids'],
- 'paper_generator'=>['paper_generator','questions','specification_grids','ocr_scanner'],
+ 'paper_generator'=>['paper_generator','questions','curriculum','specification_grids','ocr_scanner'],
  'question_view'=>['questions'],'question_add'=>['questions'],'accounting'=>['accounting','students'],
  'exam_generator'=>['learning','curriculum','paper_generator','questions','specification_grids','ocr_scanner']
 ];

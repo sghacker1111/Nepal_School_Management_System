@@ -40,6 +40,13 @@ if ($exam_id) {
     $stmt_sel->execute([$exam_id, $school_id]);
     $selected_exam = $stmt_sel->fetch(PDO::FETCH_ASSOC);
 }
+$marksEditable=$selected_exam&&!$selected_exam['is_locked']&&!$selected_exam['is_published']&&Auth::hasRole(['super_admin','school_admin','teacher','exam_officer'])&&!Auth::isReadOnly();
+require_once __DIR__.'/../../includes/teaching_scope.php';
+$teacherScopes=[];$teacherCanAttendance=true;
+if(Auth::getRole()==='teacher'){
+    foreach(teacherTeachingAssignments($db,(int)$school_id,(int)Auth::getUserId()) as $assignment)if((int)$assignment['class_id']===(int)$class_id)$teacherScopes[$assignment['subject_id']][]=$assignment['section_id'];
+    $q=$db->prepare('SELECT class_teacher_id FROM classes WHERE id=? AND school_id=?');$q->execute([$class_id,$school_id]);$teacherCanAttendance=(int)$q->fetchColumn()===(int)Auth::getUserId();
+}
 $stmt = $db->prepare("
     SELECT e.*, y.year_bs 
     FROM exams e 
@@ -86,8 +93,7 @@ if ($exam_id && $class_id) {
     $stmt->execute([$exam_id, $class_id]);
     $subjects = $stmt->fetchAll(PDO::FETCH_ASSOC);
     if (Auth::getRole()==='teacher') {
-        $assigned=$db->prepare('SELECT subject_id,teacher_id FROM class_subjects WHERE school_id=? AND class_id=?');$assigned->execute([$school_id,$class_id]);$allowed=[];
-        foreach($assigned as $assignment)if(in_array((string)Auth::getUserId(),explode(',',(string)$assignment['teacher_id']),true))$allowed[]=$assignment['subject_id'];
+        $allowed=[];foreach(teacherTeachingAssignments($db,(int)$school_id,(int)Auth::getUserId()) as $assignment)if((int)$assignment['class_id']===(int)$class_id&&(!$section_id||!$assignment['section_id']||(int)$assignment['section_id']===(int)$section_id))$allowed[]=$assignment['subject_id'];
         $subjects=array_values(array_filter($subjects,static fn($s)=>in_array($s['subject_id'],$allowed)));
     }
     
@@ -107,7 +113,7 @@ $students = [];
 if ($exam_id && $class_id) {
     $query = "
         SELECT s.id, s.student_id, s.first_name_en, s.last_name_en, s.roll_number, sy.symbol_no,
-               s.optional_subject_i, s.optional_subject_ii, s.optional_subject_iii
+               s.optional_subject_i, s.optional_subject_ii, s.optional_subject_iii, s.section_id
         FROM students s
         LEFT JOIN exam_symbols sy ON sy.student_id=s.id AND sy.exam_id=? AND sy.school_id=?
         WHERE s.class_id = ? AND s.status = 'active' AND s.school_id = ? AND s.academic_year_id = ?
@@ -154,7 +160,7 @@ if ($exam_id) {
 $previous_exams=$selected_exam?previousAssessmentExams($db,(int)$school_id,$selected_exam):[];
 $previous_ids=array_values((array)($_GET['prev_exams']??($prev_exam_id!==''?[$prev_exam_id]:[])));
 $previous_preview=[];
-if(isset($_GET['load_previous'])&&$selected_exam&&$class_id){
+if(isset($_GET['load_previous'])&&$selected_exam&&$class_id&&$marksEditable){
  try{
   $preview=previousContributionPreview($db,(int)$school_id,$selected_exam,(int)$class_id,$subjects,$students,$previous_ids);
   $previous_preview=$preview['values'];$message="Loaded {$preview['loaded']} converted contributions for preview; {$preview['skipped']} missing or incomplete contributions were left unchanged. Review and click Save Marks to save.";$message_type='info';
@@ -234,7 +240,7 @@ ob_start();
                 <select name="prev_exams[]" id="prev_exams" class="form-select" multiple size="3">
                     <?php foreach($previous_exams as $e): ?><option value="<?= $e['id'] ?>" <?= in_array((string)$e['id'],array_map('strval',$previous_ids),true)?'selected':'' ?>><?= sanitize($e['name']) ?> (<?= sanitize(ucfirst($e['type'])) ?>)</option><?php endforeach; ?>
                 </select>
-                <button class="btn btn-outline-primary btn-sm mt-2" type="submit" name="load_previous" value="1">Load Converted Marks</button>
+                <button class="btn btn-outline-primary btn-sm mt-2" type="submit" name="load_previous" value="1" <?= !$marksEditable?'disabled':'' ?>>Load Converted Marks</button>
                 <div class="form-text">Only earlier unit/terminal exams in this academic year are offered. Select one for Term 1 or 2, or multiple for Term 3 (Ctrl/Cmd-click). Contribution = sum of obtained marks ÷ sum of full marks × this field’s maximum. Missing marks are not zero. TH and other IN fields stay unchanged.</div>
             </div>
         </form>
@@ -242,6 +248,7 @@ ob_start();
 </div>
 
 <?php if ($exam_id && $class_id && !empty($subjects)): ?>
+<?php if(!$marksEditable): ?><div class="alert alert-warning" role="status">Marks are view-only. <?= ($selected_exam['is_locked']||$selected_exam['is_published'])?'This exam is locked or published. A school administrator must reopen marks before any entry or correction can be saved.':'Your role cannot change marks.' ?></div><?php endif; ?>
 <!-- Entry Grid Form -->
 <div class="card shadow-sm border-0">
     <div class="card-header bg-white py-3">
@@ -251,6 +258,7 @@ ob_start();
     
     <div class="card-body p-0">
         <form method="POST" action="">
+            <fieldset <?= !$marksEditable?'disabled':'' ?> class="border-0 p-0 m-0" id="marksFields">
             <input type="hidden" name="exam_id" value="<?= sanitize($exam_id) ?>">
             <input type="hidden" name="class_id" value="<?= sanitize($class_id) ?>">
             <input type="hidden" name="section_id" value="<?= sanitize($section_id) ?>">
@@ -298,12 +306,14 @@ ob_start();
                                 </td>
                                 <td><code><?= sanitize($student['symbol_no'] ?? '-') ?></code></td>
                                 <td style="background-color: #f8f9fa;">
-                                    <input type="number" min="0" class="form-control form-control-sm text-center font-monospace" name="attendance[<?= $student['id'] ?>]" value="<?= $student_att ?>" placeholder="Days">
+                                    <input <?= !$teacherCanAttendance?'disabled':'' ?> type="number" min="0" class="form-control form-control-sm text-center font-monospace" name="attendance[<?= $student['id'] ?>]" value="<?= $student_att ?>" placeholder="Days">
                                 </td>
                                 
                                 <?php foreach ($subjects as $sub): ?>
                                     <?php 
                                     // Check optional mapping
+                                    $canEditCell=$marksEditable;
+                                    if(Auth::getRole()==='teacher'){$assignedSection=false;foreach($teacherScopes[$sub['subject_id']]??[] as $scope)if(!$scope||(int)$scope===(int)$student['section_id'])$assignedSection=true;$canEditCell=$canEditCell&&$assignedSection;}
                                     $is_optional = (!empty($sub['is_optional']));
                                     $is_selected = true;
                                     if ($is_optional) {
@@ -316,7 +326,7 @@ ob_start();
                                         $savedParts=json_decode($savedElective['internal_breakdown']??'null',true);$savedParts=is_array($savedParts)?$savedParts:[];
                                     ?>
                                         <?php foreach($components as $key=>$component): ?><td><input disabled data-elective="<?= (int)$student['id'].'-'.(int)$sub['subject_id'] ?>" type="number" step="0.01" min="0" max="<?= $component['max'] ?>" class="form-control form-control-sm" name="marks[<?= $student['id'] ?>][<?= $sub['subject_id'] ?>][<?= $key ?>]" value="<?= sanitize($savedParts[$key]??'') ?>" aria-label="<?= sanitize($student['first_name_en'].' '.$sub['subject_name'].' '.$component['label']) ?>"></td><?php endforeach; ?>
-                                        <td><label class="small"><input type="checkbox" class="elective-select" data-elective="<?= (int)$student['id'].'-'.(int)$sub['subject_id'] ?>" name="optional_enrollment[<?= $student['id'] ?>][<?= $sub['subject_id'] ?>]" value="1"> Take this subject</label><input disabled data-elective="<?= (int)$student['id'].'-'.(int)$sub['subject_id'] ?>" type="number" step="0.01" min="0" max="<?= $sub['theory_full'] ?>" class="form-control form-control-sm" name="marks[<?= $student['id'] ?>][<?= $sub['subject_id'] ?>][theory]" value="<?= sanitize($savedElective['theory_obtained']??'') ?>" aria-label="<?= sanitize($student['first_name_en'].' '.$sub['subject_name'].' theory marks') ?>"><?php if($savedElective): ?><span class="d-block small text-warning">Saved marks retained. Confirm the subject selection to edit.</span><?php endif; ?></td>
+                                        <td><label class="small"><input <?= !$canEditCell?'disabled':'' ?> type="checkbox" class="elective-select" data-elective="<?= (int)$student['id'].'-'.(int)$sub['subject_id'] ?>" name="optional_enrollment[<?= $student['id'] ?>][<?= $sub['subject_id'] ?>]" value="1"> Take this subject</label><input disabled data-elective="<?= (int)$student['id'].'-'.(int)$sub['subject_id'] ?>" type="number" step="0.01" min="0" max="<?= $sub['theory_full'] ?>" class="form-control form-control-sm" name="marks[<?= $student['id'] ?>][<?= $sub['subject_id'] ?>][theory]" value="<?= sanitize($savedElective['theory_obtained']??'') ?>" aria-label="<?= sanitize($student['first_name_en'].' '.$sub['subject_name'].' theory marks') ?>"><?php if($savedElective): ?><span class="d-block small text-warning">Saved marks retained. Confirm the subject selection to edit.</span><?php endif; ?></td>
                                     <?php else: ?>
                                         <?php 
                                         $m = $marks_matrix[$student['id']][$sub['subject_id']] ?? null;
@@ -333,9 +343,9 @@ ob_start();
                                         ?>
                                         <?php $components=(($selected_exam['type']??'')==='unit'||empty($selected_exam['has_internal'])||($sub['assessment_method']??'')==='THEMATIC_CONTINUOUS')?[]:cdc2083InternalComponents($sub,$selected_exam); ?>
                                         <?php foreach($components as $key=>$component): ?>
-                                            <td><input type="number" step="0.01" min="0" max="<?= $component['max'] ?>" class="form-control form-control-sm text-center font-monospace" name="marks[<?= $student['id'] ?>][<?= $sub['subject_id'] ?>][<?= $key ?>]" value="<?= sanitize($breakdown[$key]??'') ?>" aria-label="<?= sanitize($student['first_name_en'].' '.$sub['subject_name'].' '.$component['label']) ?>"></td>
+                                            <td><input <?= !$canEditCell?'disabled':'' ?> type="number" step="0.01" min="0" max="<?= $component['max'] ?>" class="form-control form-control-sm text-center font-monospace" name="marks[<?= $student['id'] ?>][<?= $sub['subject_id'] ?>][<?= $key ?>]" value="<?= sanitize($breakdown[$key]??'') ?>" aria-label="<?= sanitize($student['first_name_en'].' '.$sub['subject_name'].' '.$component['label']) ?>"></td>
                                         <?php endforeach; ?>
-                                        <td style="background-color: #e8f8f5;"><input type="number" step="0.01" min="0" max="<?= $sub['theory_full'] ?>" class="form-control form-control-sm text-center font-monospace" name="marks[<?= $student['id'] ?>][<?= $sub['subject_id'] ?>][theory]" value="<?= $theory_obtained ?>" aria-label="<?= sanitize($student['first_name_en'].' '.$sub['subject_name'].' '.(($sub['assessment_method']??'')==='THEMATIC_CONTINUOUS'?'achievement percentage':'theory marks')) ?>"></td>
+                                        <td style="background-color: #e8f8f5;"><input <?= !$canEditCell?'disabled':'' ?> type="number" step="0.01" min="0" max="<?= $sub['theory_full'] ?>" class="form-control form-control-sm text-center font-monospace" name="marks[<?= $student['id'] ?>][<?= $sub['subject_id'] ?>][theory]" value="<?= $theory_obtained ?>" aria-label="<?= sanitize($student['first_name_en'].' '.$sub['subject_name'].' '.(($sub['assessment_method']??'')==='THEMATIC_CONTINUOUS'?'achievement percentage':'theory marks')) ?>"></td>
                                     <?php endif; ?>
                                 <?php endforeach; ?>
                             </tr>
@@ -352,7 +362,7 @@ ob_start();
                 </table>
             </div>
             
-            <?php if (count($students) > 0 && Auth::hasRole(['super_admin', 'school_admin', 'teacher', 'exam_officer'])): ?>
+            <?php if (count($students) > 0 && $marksEditable): ?>
             <div class="text-end p-4 bg-light border-top no-print">
                 <label class="d-block small mb-3"><input type="checkbox" name="confirm_optional_enrollment" value="1"> I confirm newly checked optional subjects are taken by these students. Saving updates their subject selection and report cards.</label>
                 <button type="submit" name="save_marks" class="btn btn-primary btn-lg px-5 shadow-sm">
@@ -360,6 +370,7 @@ ob_start();
                 </button>
             </div>
             <?php endif; ?>
+            </fieldset>
         </form>
         <script>document.querySelectorAll('.elective-select').forEach(box=>box.addEventListener('change',()=>{document.querySelectorAll('input[type="number"][data-elective="'+box.dataset.elective+'"]').forEach(field=>field.disabled=!box.checked);}));</script>
     </div>
