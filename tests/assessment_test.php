@@ -56,7 +56,9 @@ erpEqual((int)$db->query('SELECT COUNT(*) FROM marks WHERE subject_id='.$opt)->f
 $db->exec('UPDATE subjects SET is_hidden=1 WHERE id='.$opt);
 erpReject(fn()=>saveExamMarks($db,1,$f['ids']['school_admin'],'school_admin',$entry),'Hidden elective selection denied');
 $db->exec('UPDATE subjects SET is_hidden=0 WHERE id='.$opt);
-erpReject(fn()=>saveExamMarks($db,1,$f['ids']['teacher'],'teacher',$entry),'Unassigned teacher denied');
+$db->prepare('UPDATE classes SET class_teacher_id=NULL WHERE id=?')->execute([$f['class']]);
+erpReject(fn()=>saveExamMarks($db,1,$f['ids']['teacher'],'teacher',$entry),'Unassigned subject teacher denied');
+$db->prepare('UPDATE classes SET class_teacher_id=? WHERE id=?')->execute([$f['ids']['teacher'],$f['class']]);
 $foreign=$entry;$foreign['marks']=[$f['otherStudent']=>[$opt=>['theory'=>50]]];
 erpReject(fn()=>saveExamMarks($db,1,$f['ids']['school_admin'],'school_admin',$foreign),'Foreign student denied');
 saveExamMarks($db,1,$f['ids']['school_admin'],'school_admin',$entry);

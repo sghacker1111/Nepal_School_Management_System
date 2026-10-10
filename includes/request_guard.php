@@ -65,7 +65,7 @@ function guardSchoolRequest(): void {
     }
     if (!$write) {
         require_once __DIR__ . '/school_validation.php';
-        try { validateSchoolReferences(getDB(), (int)(Auth::getSchoolId() ?? 0), $module, [], $_GET); validateTeacherLearningRequest(getDB(),(int)(Auth::getSchoolId()??0),$module,$file,[], $_GET); }
+        try { validateSchoolReferences(getDB(), (int)(Auth::getSchoolId() ?? 0), $module, [], $_GET); validateTeacherLearningRequest(getDB(),(int)(Auth::getSchoolId()??0),$module,$file,[], $_GET); validateTeacherResultRequest(getDB(),(int)(Auth::getSchoolId()??0),$module,$file,[],$_GET); }
         catch (InvalidArgumentException $e) { denySchoolRequest($e->getMessage(), 404); }
         return;
     }
@@ -83,6 +83,6 @@ function guardSchoolRequest(): void {
         }
     }
     require_once __DIR__ . '/school_validation.php';
-    try { validateSchoolReferences(getDB(), (int)(Auth::getSchoolId() ?? 0), $module, $_POST, $_GET); validateTeacherLearningRequest(getDB(),(int)(Auth::getSchoolId()??0),$module,$file,$_POST,$_GET); }
+    try { validateSchoolReferences(getDB(), (int)(Auth::getSchoolId() ?? 0), $module, $_POST, $_GET); validateTeacherLearningRequest(getDB(),(int)(Auth::getSchoolId()??0),$module,$file,$_POST,$_GET); validateTeacherResultRequest(getDB(),(int)(Auth::getSchoolId()??0),$module,$file,$_POST,$_GET); }
     catch (InvalidArgumentException $e) { denySchoolRequest($e->getMessage(), 422); }
 }
