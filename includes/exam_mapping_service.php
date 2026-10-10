@@ -13,6 +13,7 @@ function saveExamMapping(PDO $db,int $school,int $examId,array $config,int $mapp
   if($mappingId){
    $q=$db->prepare('SELECT * FROM exam_subjects WHERE id=? AND exam_id=?');$q->execute([$mappingId,$examId]);$old=$q->fetch();
    if(!$old)throw new InvalidArgumentException('The subject mapping no longer exists.');
+   if(array_key_exists('mapping_revision',$confirmation)&&!hash_equals(examMappingRevision($old),(string)$confirmation['mapping_revision']))throw new InvalidArgumentException('This mapping changed since you opened it. Reload and review the warning again.');
    if(!array_key_exists('internal_components',$config))$config['internal_components']=$old['internal_components']??null;
    if($config['class_id']==$old['class_id']&&$config['subject_id']==$old['subject_id']){
     // Editing marks/credits is not an implicit migration to another assessment profile.

@@ -20,7 +20,7 @@ function schoolRoleCanWrite(string $role, string $module, string $file): bool {
     if (in_array($role, ['super_admin','school_admin'], true)) return true;
     if ($module === 'auth') return true;
     if ($module === 'accounting') return in_array($role,['accountant','cashier'],true);
-    if ($role === 'exam_officer') return in_array($module, ['exams','results','learning'], true);
+    if ($role === 'exam_officer') return in_array($module, ['exams','results','learning'], true) || ($module === 'subjects' && $file === 'internal.php');
     if ($role === 'teacher') return in_array($module, ['attendance','learning'], true) || ($module === 'results' && $file === 'marks_entry.php');
     if ($role === 'principal') return in_array($module, ['attendance','learning'], true);
     return false;

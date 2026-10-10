@@ -7,6 +7,7 @@ require_once __DIR__.'/../../includes/assessment_service.php';
 require_once __DIR__.'/../../includes/exam_mapping_service.php';
 Auth::requireRole(['super_admin','school_admin','exam_officer']);
 $db=getDB();$school=(int)Auth::getSchoolId();$mapping=(int)($_GET['mapping']??0);$examId=(int)($_GET['exam']??0);$error='';
+if(!$examId&&!Auth::hasRole(['super_admin','school_admin']))denySchoolRequest('Only administrators can change future class defaults.');
 if($examId){$exam=schoolRecord($db,'exams',$examId,$school);$q=$db->prepare('SELECT * FROM exam_subjects WHERE id=? AND exam_id=?');$q->execute([$mapping,$examId]);$row=$q->fetch();}
 else{$exam=['type'=>'terminal'];$row=schoolRecord($db,'class_subjects',$mapping,$school);$row['practical_full']=$row['in_full_marks'];}
 if(!$row)denySchoolRequest('Subject configuration not found.',404);
@@ -15,15 +16,7 @@ $subject=schoolRecord($db,'subjects',(int)$row['subject_id'],$school);
 $kinds=$examId?[in_array($exam['type'],['final','annual'],true)?'annual':'terminal']:['terminal','annual'];
 $profiles=[];foreach($kinds as $kind)$profiles[$kind]=cdc2083InternalComponents($row,['type'=>$kind==='annual'?'final':'terminal']);
 if(($_SERVER['REQUEST_METHOD']??'GET')==='POST')try{
-    if(empty($_POST['confirm_assessment_change']))throw new InvalidArgumentException('Confirm the warning before editing internal assessment.');
-    if(!hash_equals(examMappingRevision($row),(string)($_POST['revision']??'')))throw new InvalidArgumentException('This configuration changed. Reload and review it again.');
-    $total=(float)($_POST['total']??0);$pass=(float)($_POST['pass']??0);if($pass<0||$pass>$total)throw new InvalidArgumentException('IN pass marks cannot exceed IN full marks.');
-    $data=['total'=>$total];foreach($kinds as $kind)$data[$kind]=assessmentComponentsInput((array)($_POST['components'][$kind]??[]),$total);
-    if($examId){$config=$row;$config['practical_full']=$total;$config['practical_pass']=$pass;$config['internal_components']=json_encode($data,JSON_UNESCAPED_UNICODE);saveExamMapping($db,$school,$examId,$config,$mapping,(int)Auth::getUserId(),['confirm_grade_change'=>1,'mapping_revision'=>$_POST['revision']]);}
-    else{
-        if(!Auth::hasRole(['super_admin','school_admin']))throw new InvalidArgumentException('Only administrators can change future class defaults.');
-        $db->beginTransaction();try{$current=schoolRecord($db,'class_subjects',$mapping,$school,true);if(!hash_equals(examMappingRevision($current),$_POST['revision']))throw new InvalidArgumentException('The class default changed; reload.');$db->prepare('UPDATE class_subjects SET internal_components=?,in_full_marks=?,in_pass_marks=? WHERE id=? AND school_id=?')->execute([json_encode($data,JSON_UNESCAPED_UNICODE),$total,$pass,$mapping,$school]);Auth::logActivity(Auth::getUserId(),'Change internal assessment defaults','class_subjects',$mapping);$db->commit();}catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}
-    }
+    saveInternalAssessment($db,$school,(int)Auth::getUserId(),Auth::getRole(),$mapping,$examId?:null,$_POST);
     redirect(APP_URL.'/modules/subjects/internal.php?'.http_build_query(['mapping'=>$mapping,'exam'=>$examId]),'Internal assessment saved successfully. '.($examId?'Existing entered scores were preserved.':'Only future exam mappings use these defaults.'));
 }catch(InvalidArgumentException $e){$error=$e->getMessage();}catch(PDOException $e){error_log($e->getMessage());$error='Internal assessment could not be saved. Try again.';}
 $pageTitle='Internal assessment';$activePage=$examId?'exams':'subjects';ob_start();
@@ -31,7 +24,7 @@ $pageTitle='Internal assessment';$activePage=$examId?'exams':'subjects';ob_start
 <h2>Internal Assessment (IN) · <?= sanitize($subject['name_en']) ?></h2>
 <p class="text-muted"><?= $examId?'Exam-specific configuration':'Class subject defaults for future exams' ?>. Component keys identify saved scores; labels and maxima may be changed.</p>
 <?php if($error): ?><div class="alert alert-danger"><?= sanitize($error) ?></div><?php endif; ?>
-<form method="post" class="card card-body"><input type="hidden" name="revision" value="<?= examMappingRevision($row) ?>">
+<form method="post" class="card card-body"><input type="hidden" name="revision" value="<?= assessmentRevision($row,(bool)$examId) ?>">
 <div class="row mb-3"><label class="col-md-6">IN full marks<input class="form-control" type="number" step="0.01" min="0.01" max="1000" required name="total" value="<?= $row['practical_full'] ?>"></label><label class="col-md-6">IN pass marks<input class="form-control" type="number" step="0.01" min="0" required name="pass" value="<?= $row['practical_pass']??$row['in_pass_marks']??0 ?>"></label></div>
 <?php foreach($profiles as $kind=>$parts): ?><h4><?= ucfirst($kind) ?> components</h4><div class="table-responsive"><table class="table"><thead><tr><th>Stable key</th><th>Displayed field name</th><th>Full marks</th><th></th></tr></thead><tbody data-kind="<?= $kind ?>">
 <?php $i=0;foreach($parts as $key=>$part): ?><tr><td><input class="form-control" name="components[<?= $kind ?>][<?= $i ?>][key]" value="<?= sanitize($key) ?>" required></td><td><input class="form-control" name="components[<?= $kind ?>][<?= $i ?>][label]" value="<?= sanitize($part['label']) ?>" required maxlength="120"></td><td><input class="form-control" type="number" step="0.01" min="0" name="components[<?= $kind ?>][<?= $i++ ?>][max]" value="<?= $part['max'] ?>" required></td><td><button class="btn btn-outline-danger" type="button" onclick="this.closest('tr').remove()">Remove</button></td></tr><?php endforeach; ?></tbody></table></div><button class="btn btn-outline-secondary mb-4" type="button" data-add-component="<?= $kind ?>">Add field</button><?php endforeach; ?>

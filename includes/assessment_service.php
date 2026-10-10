@@ -3,17 +3,54 @@ require_once __DIR__.'/school_validation.php';
 require_once __DIR__.'/grading.php';
 
 function assessmentComponentsInput(array $input,float $total): array {
-    if($total<=0||$total>1000)throw new InvalidArgumentException('Internal full marks must be greater than zero and at most 1000.');
+    if(!is_finite($total)||$total<=0||$total>1000||round($total,2)!==$total)throw new InvalidArgumentException('Internal full marks must be greater than zero, at most 1000, and have at most two decimals.');
     $parts=[];$sum=0;
     foreach($input as $row){
         $key=trim((string)($row['key']??''));$label=trim((string)($row['label']??''));
         if($key===''&&$label==='')continue;
         if(!preg_match('/^[a-z][a-z0-9_]{0,39}$/',$key)||isset($parts[$key])||in_array($key,['theory','practical'],true))throw new InvalidArgumentException('Component keys must be distinct lowercase names; keep existing keys to preserve saved scores.');
         if($label===''||mb_strlen($label)>120||!is_numeric($row['max']??null)||!is_finite((float)$row['max'])||(float)$row['max']<0)throw new InvalidArgumentException('Every component needs a label and valid non-negative full marks.');
-        $max=round((float)$row['max'],2);$sum+=$max;$parts[$key]=['label'=>$label,'max'=>$max];
+        $max=(float)$row['max'];if(round($max,2)!==$max)throw new InvalidArgumentException('Component full marks may have at most two decimals.');$sum+=$max;$parts[$key]=['label'=>$label,'max'=>$max];
     }
     if(!$parts||count($parts)>15||abs($sum-$total)>0.005)throw new InvalidArgumentException('Component full marks must add up exactly to the Internal (IN) full marks.');
     return $parts;
+}
+/** Revision of persisted configuration only; projections must not change the token. */
+function assessmentRevision(array $row,bool $examScope):string {
+    if($examScope){require_once __DIR__.'/exam_mapping_service.php';return examMappingRevision($row);}
+    $config=[];
+    foreach(['id','school_id','class_id','subject_id','credit_hours','th_credit_hours','in_credit_hours','th_full_marks','th_pass_marks','in_full_marks','in_pass_marks','is_optional','assessment_method','curriculum_version','internal_components'] as $key)$config[$key]=$row[$key]??null;
+    return hash('sha256',json_encode($config,JSON_THROW_ON_ERROR));
+}
+/** Class changes affect only future mappings. Exam edits retain entered scores. */
+function saveInternalAssessment(PDO $db,int $school,int $actor,string $role,int $mappingId,?int $examId,array $input):void {
+    require_once __DIR__.'/exam_mapping_service.php';
+    $q=$db->prepare('SELECT * FROM users WHERE id=?');$q->execute([$actor]);$user=$q->fetch();
+    if(!$user||!(int)$user['status']||$user['role']!==$role||($role!=='super_admin'&&(int)$user['school_id']!==$school)||!in_array($role,['super_admin','school_admin','exam_officer'],true))throw new InvalidArgumentException('Your active account cannot edit this school assessment.');
+    if(!$examId&&!in_array($role,['super_admin','school_admin'],true))throw new InvalidArgumentException('Only administrators can change future class defaults.');
+    if(empty($input['confirm_assessment_change']))throw new InvalidArgumentException('Confirm the warning before editing internal assessment.');
+    $exam=$examId?schoolRecord($db,'exams',$examId,$school):['type'=>'terminal'];
+    if($examId){$q=$db->prepare('SELECT * FROM exam_subjects WHERE id=? AND exam_id=?');$q->execute([$mappingId,$examId]);$row=$q->fetch();}
+    else $row=schoolRecord($db,'class_subjects',$mappingId,$school);
+    if(!$row)throw new InvalidArgumentException('The subject configuration no longer exists.');
+    schoolRecord($db,'classes',(int)$row['class_id'],$school);schoolRecord($db,'subjects',(int)$row['subject_id'],$school);
+    if(($row['assessment_method']??'')==='THEMATIC_CONTINUOUS'||($examId&&(empty($exam['has_internal'])||$exam['type']==='unit')))throw new InvalidArgumentException('This assessment has no separate IN components.');
+    if(!hash_equals(assessmentRevision($row,(bool)$examId),(string)($input['revision']??'')))throw new InvalidArgumentException('This configuration changed. Reload and review it again.');
+    if(!is_numeric($input['total']??null)||!is_numeric($input['pass']??null))throw new InvalidArgumentException('Enter valid IN full and pass marks.');
+    $total=(float)$input['total'];$pass=(float)$input['pass'];
+    if(!is_finite($pass)||$pass<0||$pass>$total||round($pass,2)!==$pass)throw new InvalidArgumentException('IN pass marks must be valid and cannot exceed IN full marks.');
+    $kinds=$examId?[in_array($exam['type'],['annual','final'],true)?'annual':'terminal']:['terminal','annual'];$data=['total'=>$total];
+    foreach($kinds as $kind)$data[$kind]=assessmentComponentsInput((array)($input['components'][$kind]??[]),$total);
+    $encoded=json_encode($data,JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE);
+    if($examId){$config=$row;$config['practical_full']=$total;$config['practical_pass']=$pass;$config['internal_components']=$encoded;saveExamMapping($db,$school,$examId,$config,$mappingId,$actor,['confirm_grade_change'=>1,'mapping_revision'=>$input['revision']]);return;}
+    $db->beginTransaction();
+    try{
+        $current=schoolRecord($db,'class_subjects',$mappingId,$school,true);
+        if(!hash_equals(assessmentRevision($current,false),(string)$input['revision']))throw new InvalidArgumentException('The class default changed; reload and review it again.');
+        $db->prepare('UPDATE class_subjects SET internal_components=?,in_full_marks=?,in_pass_marks=? WHERE id=? AND school_id=?')->execute([$encoded,$total,$pass,$mappingId,$school]);
+        $db->prepare('INSERT INTO activity_logs(user_id,action,table_name,record_id,ip_address) VALUES(?,?,?,?,?)')->execute([$actor,'Change internal assessment defaults','class_subjects',$mappingId,$_SERVER['REMOTE_ADDR']??'local']);
+        $db->commit();
+    }catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}
 }
 function assessmentProfile(array $scheme,array $exam): array {
     $data=json_decode($scheme['internal_components']??'null',true);
