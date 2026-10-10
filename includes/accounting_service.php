@@ -2,22 +2,7 @@
 require_once __DIR__.'/school_validation.php';
 require_once __DIR__.'/nepali_dates.php';
 
-function acDecimalUnits($value,int $scale=2):int {
-    if(!is_string($value)&&!is_int($value))throw new InvalidArgumentException('Enter amounts as decimal numbers, not scientific notation.');
-    $value=trim((string)$value);
-    if(!preg_match('/^\d{1,10}(?:\.\d{1,'.$scale.'})?$/',$value))throw new InvalidArgumentException('Enter a non-negative number with at most '.$scale.' decimal places.');
-    $parts=explode('.',$value);$units=(int)$parts[0]*(10**$scale)+(int)str_pad($parts[1]??'',$scale,'0');
-    if($units>1000000000000)throw new InvalidArgumentException('Amount exceeds the supported limit.');
-    return $units;
-}
-function acAmount(int $minor):string{return ($minor<0?'-':'').intdiv(abs($minor),100).'.'.str_pad((string)(abs($minor)%100),2,'0',STR_PAD_LEFT);}
-function acMoney(int $minor):string{$raw=acAmount($minor);[$whole,$fraction]=explode('.',$raw);return 'Rs. '.preg_replace('/\B(?=(\d{3})+(?!\d))/',',',$whole).'.'.$fraction;}
-function acRoundRatio(int $numerator,int $denominator):int {if($numerator<0||$denominator<=0)throw new InvalidArgumentException('Invalid monetary calculation.');return intdiv($numerator+intdiv($denominator,2),$denominator);}
-function acWords(int $minor):string {
-    $small=['zero','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen'];$tens=['','','twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];
-    $say=function(int $n)use(&$say,$small,$tens):string{if($n<20)return $small[$n];if($n<100)return $tens[intdiv($n,10)].($n%10?' '.$small[$n%10]:'');foreach([10000000=>'crore',100000=>'lakh',1000=>'thousand',100=>'hundred'] as $v=>$word)if($n>=$v)return $say(intdiv($n,$v)).' '.$word.($n%$v?' '.$say($n%$v):'');return '';};
-    return ucfirst($say(intdiv(abs($minor),100))).' Nepalese rupees'.($minor%100?' and '.$say(abs($minor)%100).' paisa':'').' only';
-}
+require_once __DIR__.'/accounting_money.php';
 
 /** Shared action matrix: direct HTTP and service methods enforce the same capabilities. */
 function accountingActionAllowed(string $role,string $action,bool $preview=false):bool {
@@ -97,7 +82,7 @@ final class SchoolAccounting {
     }
     private function journal(string $type,int $id,string $date,string $description,array $lines,?int $reversal=null):int {
         $period=$this->period($date);$dr=0;$cr=0;$valid=[];
-        foreach($lines as $line){[$account,$debit,$credit,$student]=$line;$a=$this->record('ac_accounts',(int)$account);if(!$a['is_active']||!is_int($debit)||!is_int($credit)||$debit<0||$credit<0||($debit&&$credit))throw new InvalidArgumentException('Journal lines require active accounts and non-negative exact amounts on one side only.');if($student)schoolRecord($this->db,'students',(int)$student,$this->school);$dr+=$debit;$cr+=$credit;if($debit||$credit)$valid[]=$line;}
+        foreach($lines as $line){[$account,$debit,$credit,$student]=$line;$a=$this->record('ac_accounts',(int)$account);if(!$a['is_active']||!is_int($debit)||!is_int($credit)||$debit<0||$credit<0||($debit&&$credit))throw new InvalidArgumentException('Journal lines require active accounts and non-negative exact amounts on one side only.');if($student)schoolRecord($this->db,'students',(int)$student,$this->school);$dr=acCheckedAdd($dr,$debit);$cr=acCheckedAdd($cr,$credit);if($debit||$credit)$valid[]=$line;}
         if(!$valid||$dr!==$cr)throw new InvalidArgumentException('Journal debit and credit totals must balance exactly.');
         $this->db->prepare('INSERT INTO ac_journals(school_id,number,posting_date,period_id,reference_type,reference_id,description,created_by,reversal_of) VALUES(?,?,?,?,?,?,?,?,?)')->execute([$this->school,$this->number('journal',$date),$date,$period['id'],$type,$id,$description,$this->user,$reversal]);$journal=(int)$this->db->lastInsertId();
         foreach($valid as [$account,$debit,$credit,$student])$this->db->prepare('INSERT INTO ac_journal_lines(journal_id,account_id,debit_minor,credit_minor,student_id) VALUES(?,?,?,?,?)')->execute([$journal,$account,$debit,$credit,$student]);
@@ -157,20 +142,21 @@ final class SchoolAccounting {
             $item=!empty($r['item_id'])?$this->record('ac_items',(int)$r['item_id']):null;if($item&&!$item['is_active'])throw new InvalidArgumentException('This fee or product is inactive.');
             $name=trim($r['particular']??($item['name']??''));if(!$name||strlen($name)>200)throw new InvalidArgumentException('Every bill item needs a name up to 200 characters.');
             $quantity=acDecimalUnits($r['quantity']??'1',3);if(!$quantity||$quantity>1000000)throw new InvalidArgumentException('Quantity must be greater than zero and at most 1000.');
-            $rate=acDecimalUnits($r['rate']??($item?acAmount((int)$item['rate_minor']):'0'));$gross=acRoundRatio($rate*$quantity,1000);$discount=acDecimalUnits($r['discount']??'0');
+            $rate=acDecimalUnits($r['rate']??($item?acAmount((int)$item['rate_minor']):'0'));$gross=acMulDiv($rate,$quantity,1000);$discount=acDecimalUnits($r['discount']??'0');
             if($discount>$gross||($discount&&$item&&!$item['discount_eligible']))throw new InvalidArgumentException('Line discount is invalid or disabled for this item.');
             $tax=$item?(int)$item['tax_basis_points']:acDecimalUnits($r['tax_percent']??'0');if($tax>10000||($tax&&!$this->settings['tax_registered']))throw new InvalidArgumentException('Tax needs valid school tax registration and a configured rate.');
             $account=$this->record('ac_accounts',(int)($r['income_account_id']??$item['income_account_id']??$this->control('income')));if($account['type']!=='income'||!$account['is_active'])throw new InvalidArgumentException('Select an active income account.');
-            $items[]=['item_id'=>$item['id']??null,'particular'=>$name,'quantity_milli'=>$quantity,'rate_minor'=>$rate,'gross_minor'=>$gross,'discount_minor'=>$discount,'tax_basis_points'=>$tax,'income_account_id'=>$account['id'],'category_id'=>$item['category_id']??null,'fine_eligible'=>$item['fine_eligible']??0,'discount_eligible'=>$item['discount_eligible']??1];$subtotal+=$gross;$lineDiscount+=$discount;
+            $items[]=['item_id'=>$item['id']??null,'particular'=>$name,'quantity_milli'=>$quantity,'rate_minor'=>$rate,'gross_minor'=>$gross,'discount_minor'=>$discount,'tax_basis_points'=>$tax,'income_account_id'=>$account['id'],'category_id'=>$item['category_id']??null,'fine_eligible'=>$item['fine_eligible']??0,'discount_eligible'=>$item['discount_eligible']??1];$subtotal=acCheckedAdd($subtotal,$gross);$lineDiscount=acCheckedAdd($lineDiscount,$discount);
         }
         if(!$items||count($items)>100)throw new InvalidArgumentException('Add between 1 and 100 invoice items.');
         $billDiscount=acDecimalUnits($in['bill_discount']??'0');$net=$subtotal-$lineDiscount;$eligible=array_sum(array_map(fn($r)=>$r['discount_eligible']?$r['gross_minor']-$r['discount_minor']:0,$items));
         if($billDiscount>$eligible)throw new InvalidArgumentException('Bill discount exceeds discount-eligible items.');
-        if(($billDiscount+$lineDiscount)>(int)$this->settings['discount_approval_minor']&&!$this->can('approve')&&!$this->approvedGeneration)throw new InvalidArgumentException('This discount requires school administrator approval.');
+        $discountTotal=acCheckedAdd($billDiscount,$lineDiscount);
+        if($discountTotal>(int)$this->settings['discount_approval_minor']&&!$this->can('approve')&&!$this->approvedGeneration)throw new InvalidArgumentException('This discount requires school administrator approval.');
         $remaining=$billDiscount;$weight=$eligible;$taxTotal=0;$total=0;
-        foreach($items as &$r){$base=$r['gross_minor']-$r['discount_minor'];$portion=$r['discount_eligible']&&$weight>0?min($remaining,acRoundRatio($remaining*$base,$weight)):0;$r['discount_minor']+=$portion;$remaining-=$portion;if($r['discount_eligible'])$weight-=$base;$r['tax_minor']=acRoundRatio(($r['gross_minor']-$r['discount_minor'])*$r['tax_basis_points'],10000);$r['total_minor']=$r['gross_minor']-$r['discount_minor']+$r['tax_minor'];$taxTotal+=$r['tax_minor'];$total+=$r['total_minor'];unset($r['discount_eligible']);}unset($r);
+        foreach($items as &$r){$base=$r['gross_minor']-$r['discount_minor'];$portion=$r['discount_eligible']&&$weight>0?min($remaining,acMulDiv($remaining,$base,$weight)):0;$r['discount_minor']=acCheckedAdd($r['discount_minor'],$portion);$remaining-=$portion;if($r['discount_eligible'])$weight-=$base;$r['tax_minor']=acMulDiv($r['gross_minor']-$r['discount_minor'],(int)$r['tax_basis_points'],10000);$r['total_minor']=acCheckedAdd($r['gross_minor']-$r['discount_minor'],$r['tax_minor']);$taxTotal=acCheckedAdd($taxTotal,$r['tax_minor']);$total=acCheckedAdd($total,$r['total_minor']);unset($r['discount_eligible']);}unset($r);
         if($remaining!==0||$total<0)throw new InvalidArgumentException('Discount allocation failed.');
-        return ['student'=>$student,'customer_name'=>$customer,'customer_type'=>$student?'student':($in['customer_type']??'external'),'academic_year_id'=>$year['id']??($student['academic_year_id']??null),'bill_date'=>$date,'due_date'=>$due,'items'=>$items,'subtotal_minor'=>$subtotal,'discount_minor'=>$lineDiscount+$billDiscount,'tax_minor'=>$taxTotal,'total_minor'=>$total];
+        return ['student'=>$student,'customer_name'=>$customer,'customer_type'=>$student?'student':($in['customer_type']??'external'),'academic_year_id'=>$year['id']??($student['academic_year_id']??null),'bill_date'=>$date,'due_date'=>$due,'items'=>$items,'subtotal_minor'=>$subtotal,'discount_minor'=>$discountTotal,'tax_minor'=>$taxTotal,'total_minor'=>$total];
     }
     public function createInvoice(array $in,bool $issue=false):int {
         $this->authorize('invoice');$key=$this->key($in);$hash=hash('sha256',json_encode(['issue'=>$issue,'input'=>$in],JSON_UNESCAPED_UNICODE));
@@ -196,7 +182,7 @@ final class SchoolAccounting {
         return (int)$i['total_minor']-$paid-$credits-$advance;
     }
     public function invoiceStatus(array $i):string {if(in_array($i['status'],['draft','void'],true))return $i['status'];$balance=$this->invoiceBalance((int)$i['id']);if($balance===0)return 'paid';if($i['due_date']<date('Y-m-d'))return 'overdue';return $balance<(int)$i['total_minor']?'partially_paid':'unpaid';}
-    public function outstanding(?int $student=null):int{$ids=$this->rows("SELECT id FROM ac_invoices WHERE school_id=? AND status='issued'".($student!==null?' AND student_id=?':''),$student!==null?[$this->school,$student]:[$this->school]);$sum=0;foreach($ids as $r)$sum+=$this->invoiceBalance((int)$r['id']);return $sum;}
+    public function outstanding(?int $student=null):int{$ids=$this->rows("SELECT id FROM ac_invoices WHERE school_id=? AND status='issued'".($student!==null?' AND student_id=?':''),$student!==null?[$this->school,$student]:[$this->school]);$sum=0;foreach($ids as $r)$sum=acCheckedAdd($sum,$this->invoiceBalance((int)$r['id']));return $sum;}
     public function advanceBalance(int $student):int {schoolRecord($this->db,'students',$student,$this->school);return $this->scalar('SELECT COALESCE(SUM(amount_minor),0) FROM ac_advance_entries WHERE school_id=? AND student_id=?',[$this->school,$student]);}
     public function recordPayment(array $in):int {
         $this->authorize('payment');$key=$this->key($in);$hash=hash('sha256',json_encode($in));$amount=acDecimalUnits($in['amount']??'0');if(!$amount)throw new InvalidArgumentException('Payment amount must be positive.');$date=$this->date($in['payment_date']??'');
@@ -204,7 +190,7 @@ final class SchoolAccounting {
             $student=!empty($in['student_id'])?schoolRecord($this->db,'students',(int)$in['student_id'],$this->school):null;$method=$this->record('ac_methods',(int)($in['method_id']??0));$account=$this->record('ac_accounts',(int)$method['account_id']);if(!$method['is_active']||!$account['is_active']||$account['type']!=='asset')throw new InvalidArgumentException('Choose an active cash/bank payment method.');
             $reference=trim($in['reference']??'');if($method['requires_reference']&&($reference===''||empty($in['externally_confirmed'])))throw new InvalidArgumentException('Confirm the external bank/digital payment and enter its transaction reference; this form does not process an online gateway.');
             $allocations=[];$allocated=0;$customer=trim($in['customer_name']??'');
-            foreach((array)($in['allocations']??[]) as $invoice=>$v){if($v==='')continue;$value=acDecimalUnits($v);if(!$value)continue;$i=$this->record('ac_invoices',(int)$invoice,true);if($i['status']!=='issued'||($student&&(int)$i['student_id']!==(int)$student['id'])||(!$student&&!empty($i['student_id'])))throw new InvalidArgumentException('Select issued invoices for the chosen student/customer.');if(!$student&&$customer!==$i['customer_name'])throw new InvalidArgumentException('External invoice customer must match the payment customer.');if($value>$this->invoiceBalance((int)$invoice))throw new InvalidArgumentException('Payment allocation exceeds the current invoice balance. Reload balances.');$allocations[(int)$invoice]=$value;$allocated+=$value;}
+            foreach((array)($in['allocations']??[]) as $invoice=>$v){if($v==='')continue;$value=acDecimalUnits($v);if(!$value)continue;$i=$this->record('ac_invoices',(int)$invoice,true);if($i['status']!=='issued'||($student&&(int)$i['student_id']!==(int)$student['id'])||(!$student&&!empty($i['student_id'])))throw new InvalidArgumentException('Select issued invoices for the chosen student/customer.');if(!$student&&$customer!==$i['customer_name'])throw new InvalidArgumentException('External invoice customer must match the payment customer.');if($value>$this->invoiceBalance((int)$invoice))throw new InvalidArgumentException('Payment allocation exceeds the current invoice balance. Reload balances.');$allocations[(int)$invoice]=$value;$allocated=acCheckedAdd($allocated,$value);}
             if($allocated>$amount)throw new InvalidArgumentException('Invoice allocations exceed the payment amount.');$excess=$amount-$allocated;if($excess&&(!$student||empty($in['allow_advance'])))throw new InvalidArgumentException('Explicitly allow the unallocated student amount as an advance, or allocate the entire payment.');
             if($student)$customer=trim($student['first_name_en'].' '.$student['last_name_en']);if(!$customer)throw new InvalidArgumentException('Choose a student or enter the invoice customer name.');
             $number=$this->number('receipt',$date);$this->db->prepare('INSERT INTO ac_payments(school_id,number,student_id,customer_name,payment_date,amount_minor,method_id,account_id,reference,remarks,idempotency_key,request_hash,received_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)')->execute([$this->school,$number,$student['id']??null,$customer,$date,$amount,$method['id'],$account['id'],$reference,trim($in['remarks']??''),$key,$hash,$this->user]);$id=(int)$this->db->lastInsertId();
@@ -227,7 +213,7 @@ final class SchoolAccounting {
             $i=$this->record('ac_invoices',(int)$in['invoice_id'],true);if($i['status']!=='issued'||$amount>$this->invoiceBalance((int)$i['id']))throw new InvalidArgumentException('Credit cannot exceed the unpaid invoice balance. Reverse/refund payments explicitly when required.');
             $void=!empty($in['void']);if($void&&($amount!==(int)$i['total_minor']||$this->invoiceBalance((int)$i['id'])!==(int)$i['total_minor']))throw new InvalidArgumentException('Only a completely unpaid, unadjusted invoice can be voided. Use a credit note otherwise.');
             $this->db->prepare('INSERT INTO ac_credits(school_id,number,invoice_id,credit_date,amount_minor,reason,kind,created_by,idempotency_key) VALUES(?,?,?,?,?,?,?,?,?)')->execute([$this->school,$this->number('credit',$date),$i['id'],$date,$amount,$reason,$void?'void':'credit',$this->user,$key]);$id=(int)$this->db->lastInsertId();
-            $remaining=$amount;$base=(int)$i['total_minor'];$tax=(int)$i['tax_minor'];$taxCredit=$base>0?acRoundRatio($amount*$tax,$base):0;$lines=[[$this->control('discount'),$amount-$taxCredit,0,$i['student_id']],[$this->control('receivable'),0,$amount,$i['student_id']]];if($taxCredit)$lines[]=[$this->control('tax'),$taxCredit,0,$i['student_id']];$this->journal('credit',$id,$date,$reason,$lines);
+            $remaining=$amount;$base=(int)$i['total_minor'];$tax=(int)$i['tax_minor'];$taxCredit=$base>0?acMulDiv($amount,$tax,$base):0;$lines=[[$this->control('discount'),$amount-$taxCredit,0,$i['student_id']],[$this->control('receivable'),0,$amount,$i['student_id']]];if($taxCredit)$lines[]=[$this->control('tax'),$taxCredit,0,$i['student_id']];$this->journal('credit',$id,$date,$reason,$lines);
             if($void)$this->db->prepare("UPDATE ac_invoices SET status='void' WHERE id=? AND school_id=?")->execute([$i['id'],$this->school]);$this->audit($void?'Void invoice':'Approve credit note','ac_credits',$id,$i,['amount_minor'=>$amount],$reason);return $id;
         });
     }
@@ -303,9 +289,9 @@ final class SchoolAccounting {
             $amount=(int)$r['amount_minor'];$effectiveStart=max($start,$r['effective_from']);$effectiveEnd=min($end,$r['effective_to']?:$end);
             // Student creation is the existing admission timestamp; effective fee dates can restrict it further.
             $admission=substr($s['created_at']??$start,0,10);if($admission>$end)continue;$effectiveStart=max($effectiveStart,$admission);
-            if($this->settings['prorate']&&$frequency==='monthly'){$all=(int)(new DateTimeImmutable($start))->diff(new DateTimeImmutable($end))->days+1;$days=(int)(new DateTimeImmutable($effectiveStart))->diff(new DateTimeImmutable($effectiveEnd))->days+1;$amount=acRoundRatio($amount*$days,$all);}
-            $discount=min($amount,(int)$r['discount_minor']+acRoundRatio($amount*(int)$r['discount_basis_points'],10000));
-            foreach($this->rows('SELECT * FROM ac_scholarships WHERE school_id=? AND student_id=? AND academic_year_id=? AND (item_id IS NULL OR item_id=?) AND effective_from<=? AND (effective_to IS NULL OR effective_to>=?)',[$this->school,$s['id'],$year,$r['item_id'],$effectiveEnd,$effectiveStart]) as $sch)$discount=min($amount,$discount+(int)$sch['amount_minor']+acRoundRatio($amount*(int)$sch['basis_points'],10000));
+            if($this->settings['prorate']&&$frequency==='monthly'){$all=(int)(new DateTimeImmutable($start))->diff(new DateTimeImmutable($end))->days+1;$days=(int)(new DateTimeImmutable($effectiveStart))->diff(new DateTimeImmutable($effectiveEnd))->days+1;$amount=acMulDiv($amount,$days,$all);}
+            $discount=min($amount,acCheckedAdd((int)$r['discount_minor'],acMulDiv($amount,(int)$r['discount_basis_points'],10000)));
+            foreach($this->rows('SELECT * FROM ac_scholarships WHERE school_id=? AND student_id=? AND academic_year_id=? AND (item_id IS NULL OR item_id=?) AND effective_from<=? AND (effective_to IS NULL OR effective_to>=?)',[$this->school,$s['id'],$year,$r['item_id'],$effectiveEnd,$effectiveStart]) as $sch)$discount=min($amount,acCheckedAdd(acCheckedAdd($discount,(int)$sch['amount_minor']),acMulDiv($amount,(int)$sch['basis_points'],10000)));
             $items[]=['item_id'=>(int)$r['item_id'],'particular'=>$r['name'],'quantity'=>'1','rate'=>acAmount($amount),'discount'=>acAmount($discount)];
         }return $items;
     }
@@ -356,8 +342,8 @@ final class SchoolAccounting {
         return $this->rows('SELECT j.posting_date,j.number,j.description,a.name,l.debit_minor,l.credit_minor,a.control_key FROM ac_journal_lines l JOIN ac_journals j ON j.id=l.journal_id JOIN ac_accounts a ON a.id=l.account_id WHERE j.school_id=? AND l.student_id=? AND a.control_key IN (\'receivable\',\'advance\') ORDER BY j.posting_date,j.id,l.id',[$this->school,$student]);
     }
     public function dashboard(string $from,string $to):array {
-        $balances=$this->balances($from,$to);$income=0;$expense=0;foreach($balances as $a){if(in_array($a['type'],['income','contra_income'],true))$income+=(int)$a['credit_minor']-(int)$a['debit_minor'];if($a['type']==='expense')$expense+=(int)$a['debit_minor']-(int)$a['credit_minor'];}
+        $balances=$this->balances($from,$to);$income=0;$expense=0;foreach($balances as $a){if(in_array($a['type'],['income','contra_income'],true))$income=acCheckedAdd($income,(int)$a['credit_minor']-(int)$a['debit_minor']);if($a['type']==='expense')$expense=acCheckedAdd($expense,(int)$a['debit_minor']-(int)$a['credit_minor']);}
         $collected=$this->scalar("SELECT COALESCE(SUM(amount_minor),0) FROM ac_payments WHERE school_id=? AND status='posted' AND payment_date>=? AND payment_date<=?",[$this->school,$from,$to]);$refunds=$this->scalar('SELECT COALESCE(SUM(amount_minor),0) FROM ac_refunds WHERE school_id=? AND refund_date>=? AND refund_date<=?',[$this->school,$from,$to]);
-        $billed=$this->scalar("SELECT COALESCE(SUM(total_minor),0) FROM ac_invoices WHERE school_id=? AND status='issued' AND bill_date>=? AND bill_date<=? AND idempotency_key NOT LIKE 'opening:%'",[$this->school,$from,$to]);return ['billed'=>$billed,'collected'=>$collected,'refunds'=>$refunds,'outstanding'=>$this->outstanding(),'advances'=>$this->scalar('SELECT COALESCE(SUM(amount_minor),0) FROM ac_advance_entries WHERE school_id=?',[$this->school]),'income'=>$income,'expense'=>$expense,'net'=>$income-$expense];
+        $billed=$this->scalar("SELECT COALESCE(SUM(total_minor),0) FROM ac_invoices WHERE school_id=? AND status='issued' AND bill_date>=? AND bill_date<=? AND idempotency_key NOT LIKE 'opening:%'",[$this->school,$from,$to]);return ['billed'=>$billed,'collected'=>$collected,'refunds'=>$refunds,'outstanding'=>$this->outstanding(),'advances'=>$this->scalar('SELECT COALESCE(SUM(amount_minor),0) FROM ac_advance_entries WHERE school_id=?',[$this->school]),'income'=>$income,'expense'=>$expense,'net'=>acCheckedAdd($income,-$expense)];
     }
 }
