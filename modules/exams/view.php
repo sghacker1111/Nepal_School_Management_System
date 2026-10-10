@@ -7,6 +7,7 @@ require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/exam_service.php';
+require_once __DIR__ . '/../../includes/exam_mapping_service.php';
 
 Auth::requireRole(['super_admin', 'school_admin', 'principal', 'teacher', 'exam_officer']);
 
@@ -25,7 +26,7 @@ if (!$exam) {
     redirect(APP_URL . '/modules/exams/index.php', 'Exam not found', 'error');
 }
 
-$configurationFrozen = $exam['is_locked'] || $exam['is_published'] || examHasMarks($db,$exam_id);
+$configurationFrozen = $exam['is_locked'] || $exam['is_published'];
 
 // Fetch school details for signatures
 $stmt = $db->prepare("SELECT * FROM schools WHERE id = ?");
@@ -35,7 +36,7 @@ $school = $stmt->fetch();
 // Handle Signature Uploads
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_signatures']) && Auth::hasRole(['super_admin', 'school_admin', 'exam_officer'])) {
     if ($configurationFrozen) {
-        $error = "The grading configuration is frozen because this exam is locked, published, or already has marks.";
+        $error = "The grading configuration is frozen because this exam is locked or published. Reopen it first.";
     } else {
         $sig_dir = UPLOAD_DIR;
         if (!file_exists($sig_dir)) {
@@ -100,7 +101,7 @@ if ($edit_mapping_id > 0) {
 // Handle Subject Mapping Submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['map_subject']) && Auth::hasRole(['super_admin', 'school_admin', 'exam_officer'])) {
     if ($configurationFrozen) {
-        $error = "The grading configuration is frozen because this exam is locked, published, or already has marks.";
+        $error = "The grading configuration is frozen because this exam is locked or published. Reopen it first.";
     } else {
         $class_id = (int)$_POST['class_id'];
         $subject_id = (int)$_POST['subject_id'];
@@ -121,27 +122,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['map_subject']) && Aut
             $error = 'Both Class and Subject must be selected';
         } else {
             try {
-                if ($form_edit_id > 0) {
-                    $stmt = $db->prepare("UPDATE exam_subjects SET class_id = ?, subject_id = ?, theory_full = ?, theory_pass = ?, practical_full = ?, practical_pass = ?, credit_hours = ?, internal_credit_hours = ?, external_credit_hours = ?, is_optional = ?, assessment_method=?, curriculum_version=? WHERE id = ? AND exam_id = ?");
-                    $stmt->execute([$class_id, $subject_id, $theory_full, $theory_pass, $practical_full, $practical_pass, $credit_hours, $internal_credit_hours, $external_credit_hours, $is_optional, $assessmentMethod, $curriculumVersion, $form_edit_id, $exam_id]);
-                    Auth::logActivity(Auth::getUserId(), "Updated Exam Subject Configuration", 'exam_subjects', $form_edit_id);
-                    $success = 'Subject configuration updated successfully!';
-                    redirect(APP_URL . "/modules/exams/view.php?id=$exam_id", $success);
-                } else {
-                    // Check if already mapped
-                    $stmt = $db->prepare("SELECT id FROM exam_subjects WHERE exam_id = ? AND subject_id = ? AND class_id = ?");
-                    $stmt->execute([$exam_id, $subject_id, $class_id]);
-                    if ($stmt->fetch()) {
-                        $error = 'This subject is already configured for the selected class in this exam.';
-                    } else {
-                        $stmt = $db->prepare("INSERT INTO exam_subjects (exam_id, subject_id, class_id, theory_full, theory_pass, practical_full, practical_pass, credit_hours, internal_credit_hours, external_credit_hours, is_optional, assessment_method, curriculum_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                        $stmt->execute([$exam_id, $subject_id, $class_id, $theory_full, $theory_pass, $practical_full, $practical_pass, $credit_hours, $internal_credit_hours, $external_credit_hours, $is_optional, $assessmentMethod, $curriculumVersion]);
-                        Auth::logActivity(Auth::getUserId(), "Mapped Subject ID $subject_id to Class ID $class_id in Exam ID $exam_id", 'exam_subjects');
-                        $success = 'Subject mapped successfully!';
-                    }
-                }
+                $config=compact('class_id','subject_id','theory_full','theory_pass','practical_full','practical_pass','credit_hours','internal_credit_hours','external_credit_hours','is_optional');
+                $config['assessment_method']=$assessmentMethod;$config['curriculum_version']=$curriculumVersion;
+                $savedId=saveExamMapping($db,(int)$school_id,$exam_id,$config,$form_edit_id,(int)Auth::getUserId(),$_POST);
+                Auth::logActivity(Auth::getUserId(),$form_edit_id?'Updated Exam Subject Configuration':'Mapped Exam Subject','exam_subjects',$savedId);
+                redirect(APP_URL."/modules/exams/view.php?id=$exam_id",$form_edit_id?'Subject configuration updated; saved results recalculated successfully.':'Subject mapped successfully!');
+            } catch (InvalidArgumentException $e) {
+                $error = $e->getMessage();
             } catch (PDOException $e) {
-                $error = 'Database error: ' . $e->getMessage();
+                error_log($e->getMessage());$error='The subject configuration could not be saved. Please try again.';
             }
         }
     }
@@ -150,7 +139,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['map_subject']) && Aut
 // Handle Bulk Initialization from Class Mappings
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['initialize_defaults']) && Auth::hasRole(['super_admin', 'school_admin', 'exam_officer'])) {
     if ($configurationFrozen) {
-        $error = "The grading configuration is frozen because this exam is locked, published, or already has marks.";
+        $error = "The grading configuration is frozen because this exam is locked or published. Reopen it first.";
     } else {
         $class_id = (int)$_POST['init_class_id'];
         if (empty($class_id)) {
@@ -165,9 +154,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['initialize_defaults']
                            s.in_full_marks as s_in_full, s.in_pass_marks as s_in_pass
                     FROM class_subjects cs
                     JOIN subjects s ON cs.subject_id = s.id
-                    WHERE cs.class_id = ? AND cs.is_active = 1 AND (s.is_hidden = 0 OR s.is_hidden IS NULL)
+                    WHERE cs.school_id = ? AND cs.class_id = ? AND (cs.is_active = 1 OR cs.is_optional = 1) AND (s.is_hidden = 0 OR s.is_hidden IS NULL)
                 ");
-                $stmt->execute([$class_id]);
+                $stmt->execute([$school_id,$class_id]);
                 $class_subs = $stmt->fetchAll();
                 
                 // Get class name
@@ -227,16 +216,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['initialize_defaults']
 // Handle deleting mapping
 if (isset($_GET['delete_mapping']) && Auth::hasRole(['super_admin', 'school_admin', 'exam_officer'])) {
     if ($configurationFrozen) {
-        redirect(APP_URL . "/modules/exams/view.php?id=$exam_id", "Cannot modify configuration after marks have been entered or results have been locked.", 'error');
+        redirect(APP_URL . "/modules/exams/view.php?id=$exam_id", "Reopen this locked or published exam before changing subjects.", 'error');
     } else {
         $mapping_id = (int)$_GET['delete_mapping'];
         try {
             $chk_marks = $db->prepare("
                 SELECT COUNT(*) FROM marks m
                 JOIN exam_subjects es ON es.exam_id = m.exam_id AND es.subject_id = m.subject_id
-                WHERE es.id = ?
+                JOIN students st ON st.id=m.student_id AND st.class_id=es.class_id
+                WHERE es.id = ? AND es.exam_id=?
             ");
-            $chk_marks->execute([$mapping_id]);
+            $chk_marks->execute([$mapping_id,$exam_id]);
             if ($chk_marks->fetchColumn() > 0) {
                 redirect(APP_URL . "/modules/exams/view.php?id=$exam_id", "Cannot remove subject configuration: student marks have already been recorded for this subject.", 'error');
             } else {
@@ -268,7 +258,7 @@ $stmt_cs_map = $db->prepare("
     FROM class_subjects cs
     JOIN subjects s ON cs.subject_id = s.id
     JOIN classes c ON cs.class_id = c.id
-    WHERE (cs.school_id = ?) AND c.is_active = 1 AND cs.is_active = 1 AND (s.is_hidden = 0 OR s.is_hidden IS NULL)
+    WHERE (cs.school_id = ?) AND c.is_active = 1 AND (cs.is_active = 1 OR cs.is_optional = 1) AND (s.is_hidden = 0 OR s.is_hidden IS NULL)
 ");
 $stmt_cs_map->execute([$school_id]);
 $class_subject_mappings = $stmt_cs_map->fetchAll(PDO::FETCH_ASSOC);
@@ -334,7 +324,7 @@ ob_start();
     <!-- Configuration & Utility Panel -->
     <div class="col-md-4 mb-4">
         <!-- Add/Edit Subject Configuration Card -->
-        <?php if (Auth::hasRole(['super_admin', 'school_admin', 'exam_officer']) && !$exam['is_locked']): ?>
+        <?php if (Auth::hasRole(['super_admin', 'school_admin', 'exam_officer']) && !$configurationFrozen): ?>
         <div class="card mb-4 shadow-sm border-start border-primary border-3">
             <div class="card-header bg-primary text-white py-3">
                 <h5 class="mb-0"><i class="fas <?= $edit_mapping ? 'fa-edit' : 'fa-plus' ?>"></i> <?= $edit_mapping ? 'Edit Subject Details' : 'Add Subject Configuration' ?></h5>
@@ -344,6 +334,9 @@ ob_start();
                     <input type="hidden" name="map_subject" value="1">
                     <?php if ($edit_mapping): ?>
                     <input type="hidden" name="edit_mapping_id" value="<?= $edit_mapping['id'] ?>">
+                    <input type="hidden" name="mapping_revision" value="<?= examMappingRevision($edit_mapping) ?>">
+                    <div class="alert alert-warning">Changing limits or credits can change saved grades and GPA. Entered marks will not be rescaled or deleted; incompatible limits will be rejected. Changes are recorded in the audit history.</div>
+                    <label class="form-check mb-3"><input type="checkbox" class="form-check-input" name="confirm_grade_change" value="1" required> I reviewed the impact and confirm this modification.</label>
                     <?php endif; ?>
                     
                     <div class="mb-3">
@@ -447,7 +440,7 @@ ob_start();
             </div>
             <div class="card-body p-4">
                 <form method="POST" action="">
-                    <p class="text-muted small">Select a class to automatically load all subjects mapped to it in class configurations with standard 75/25 weightage defaults.</p>
+                    <p class="text-muted small">Select a class to automatically load all subjects mapped to it in class configurations, including visible optional subjects, using each subject’s configured TH/IN marks and credits. Existing mappings are kept.</p>
                     <div class="mb-3">
                         <label for="init_class_id" class="form-label">Select Class *</label>
                         <select class="form-select" id="init_class_id" name="init_class_id" required>
@@ -465,13 +458,14 @@ ob_start();
         </div>
         <?php endif; ?>
 
+        <a class="btn btn-outline-primary w-100 mb-3" href="<?= APP_URL ?>/modules/exams/symbols.php?exam_id=<?= $exam_id ?>">Manage Exam Symbol Numbers</a>
         <!-- Print Admit Cards Card -->
         <div class="card mb-4 shadow-sm border-start border-info border-3">
             <div class="card-header bg-info bg-opacity-10 text-info-emphasis py-3">
                 <h5 class="mb-0 font-weight-bold"><i class="fas fa-print"></i> Print Admit Cards</h5>
             </div>
             <div class="card-body">
-                <p class="text-muted small">Select a class to print admit cards for all students in that class. Renders 4 students per page.</p>
+                <p class="text-muted small">Select a class, then choose all students or search and select individual students. Prints up to 4 cards per A4 page.</p>
                 <div class="mb-3">
                     <label for="print_class_id" class="form-label font-weight-bold">Select Class *</label>
                     <select class="form-select" id="print_class_id" required>
@@ -553,7 +547,7 @@ ob_start();
                                         <th class="text-center">Internal (Full/Pass)</th>
                                         <th class="text-center">Total Full Marks</th>
                                         <?php endif; ?>
-                                        <?php if (Auth::hasRole(['super_admin', 'school_admin', 'exam_officer']) && !$exam['is_locked']): ?>
+                                        <?php if (Auth::hasRole(['super_admin', 'school_admin', 'exam_officer']) && !$configurationFrozen): ?>
                                         <th class="text-end">Action</th>
                                         <?php endif; ?>
                                     </tr>
@@ -589,7 +583,7 @@ ob_start();
                                             <strong><?= $m['theory_full'] + $m['practical_full'] ?></strong>
                                         </td>
                                         <?php endif; ?>
-                                        <?php if (Auth::hasRole(['super_admin', 'school_admin', 'exam_officer']) && !$exam['is_locked']): ?>
+                                        <?php if (Auth::hasRole(['super_admin', 'school_admin', 'exam_officer']) && !$configurationFrozen): ?>
                                         <td class="text-end">
                                             <div class="btn-group btn-group-sm">
                                                 <a href="<?= APP_URL ?>/modules/exams/view.php?id=<?= $exam_id ?>&edit_mapping_id=<?= $m['id'] ?>" 

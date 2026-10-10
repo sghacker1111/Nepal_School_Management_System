@@ -183,6 +183,7 @@ class Auth {
         
         $stmt = $db->prepare("INSERT INTO activity_logs (user_id, action, table_name, record_id, ip_address) VALUES (?, ?, ?, ?, ?)");
         $stmt->execute([$userId, $action, $tableName, $recordId, $ip]);
+        if(($_SERVER['REQUEST_METHOD']??'')==='POST' && $action!=='Login')$_SESSION['action_notice']=$action.' completed successfully.';
     }
     
     /**

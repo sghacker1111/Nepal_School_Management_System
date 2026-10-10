@@ -72,7 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_POST['class_id'],
                     ($_POST['section_id'] ?? '') ?: null,
                     ($_POST['roll_number'] ?? '') ?: null,
-                    ($_POST['exam_roll_number'] ?? '') ?: null,
+                    $student['exam_roll_number'] ?? null,
                     sanitize($_POST['first_name_en']),
                     sanitize($_POST['last_name_en'] ?? ''),
                     sanitize($_POST['first_name_np'] ?? ''),
@@ -265,8 +265,8 @@ ob_start();
                     <input type="number" name="roll_number" class="form-control" value="<?= sanitize($student['roll_number'] ?? '') ?>">
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label">Exam Roll Number</label>
-                    <input type="text" name="exam_roll_number" class="form-control" value="<?= sanitize($student['exam_roll_number'] ?? '') ?>">
+                    <label class="form-label">Exam Symbol No.</label>
+                    <p class="form-text">Assigned separately for each examination in Exam → Manage Exam Symbol Numbers.</p>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Caste/Ethnicity</label>

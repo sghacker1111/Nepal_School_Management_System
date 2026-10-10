@@ -106,16 +106,7 @@ ob_start();
                 <div class="form-text text-muted">Enabling adds internal full/pass marks from the class subjects. Existing theory marks, theory limits and subject selections stay unchanged. Unit tests remain theory-only; Grades 1–3 keep achievement assessment.</div>
             </div>
             
-            <div class="row g-3 mb-4">
-                <div class="col-md-6">
-                    <label for="start_date" class="form-label font-weight-bold">Start Date</label>
-                    <input type="date" class="form-control" id="start_date" name="start_date" value="<?= sanitize($formExam['start_date'] ?? '') ?>">
-                </div>
-                <div class="col-md-6">
-                    <label for="end_date" class="form-label font-weight-bold">End Date</label>
-                    <input type="date" class="form-control" id="end_date" name="end_date" value="<?= sanitize($formExam['end_date'] ?? '') ?>">
-                </div>
-            </div>
+            <?php include __DIR__.'/../../includes/exam_date_controls.php'; ?>
             <div class="row g-3 mb-4"><?php include __DIR__.'/../../includes/report_issue_controls.php'; ?></div>
             
             <button type="submit" class="btn btn-primary w-100 py-2 fw-bold shadow-sm">

@@ -108,7 +108,9 @@ if ($layoutSchoolId && in_array($layoutRole,$adminRoles,true)) {
     <?= $content ?>
 </main>
 <script src="<?= APP_URL ?>/assets/js/nepali-date-converter.js"></script>
+<script src="<?= APP_URL ?>/assets/js/school-dates.js"></script>
 <script src="<?= APP_URL ?>/assets/js/main.js"></script>
+<script src="<?= APP_URL ?>/assets/js/notifications.js"></script>
 <script>
 document.getElementById('navigationSearch').addEventListener('input', function() {
     const query=this.value.trim().toLowerCase();

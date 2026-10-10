@@ -82,7 +82,7 @@ if ($exam_id && $class_id) {
         ORDER BY s.type DESC, s.name_en ASC
     ");
     $stmt->execute([$exam_id, $class_id]);
-    $subjects = $stmt->fetchAll();
+    $subjects = erpSortSubjects($stmt->fetchAll());
 
     // If exam has no internal, override practical full & pass to 0
     if (!$exam['has_internal']) {

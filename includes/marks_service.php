@@ -3,7 +3,9 @@ require_once __DIR__.'/grading.php';
 require_once __DIR__.'/school_validation.php';
 function saveExamMarks(PDO $db,int $school,int $user,string $role,array $input): void {
     if(!in_array($role,['super_admin','school_admin','exam_officer','teacher'],true))throw new InvalidArgumentException('Your role cannot enter marks.');
-    $exam=schoolRecord($db,'exams',(int)($input['exam_id']??0),$school);
+    $db->beginTransaction();
+    try{
+    $exam=schoolRecord($db,'exams',(int)($input['exam_id']??0),$school,true);
     $class=schoolRecord($db,'classes',(int)($input['class_id']??0),$school);
     if($exam['is_locked']||$exam['is_published'])throw new InvalidArgumentException('This exam is locked or published. Marks cannot be changed.');
     $section=(int)($input['section_id']??0);
@@ -51,8 +53,6 @@ function saveExamMarks(PDO $db,int $school,int $user,string $role,array $input):
         if($role==='teacher' && (int)($class['class_teacher_id']??0)!==$user)continue;
         $attendance[(int)$id]=(int)$days;
     }
-    $db->beginTransaction();
-    try{
         $check=$db->prepare('SELECT id FROM marks WHERE exam_id=? AND student_id=? AND subject_id=?');
         $update=$db->prepare('UPDATE marks SET theory_obtained=?,practical_obtained=?,internal_breakdown=?,grade=?,grade_point=?,remarks=?,entered_by=? WHERE exam_id=? AND student_id=? AND subject_id=?');
         $insert=$db->prepare('INSERT INTO marks (theory_obtained,practical_obtained,internal_breakdown,grade,grade_point,remarks,entered_by,exam_id,student_id,subject_id) VALUES (?,?,?,?,?,?,?,?,?,?)');

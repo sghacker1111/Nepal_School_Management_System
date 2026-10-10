@@ -1,80 +1,32 @@
 <?php
-/**
- * Admit Card Batch Printing Panel
- * Prints 4 different student admit cards per A4 sheet in a 2x2 grid.
- */
-require_once __DIR__ . '/../../config/config.php';
-require_once __DIR__ . '/../../includes/database.php';
-require_once __DIR__ . '/../../includes/auth.php';
-require_once __DIR__ . '/../../includes/functions.php';
-
-Auth::requireRole(['super_admin', 'school_admin', 'principal', 'exam_officer', 'teacher']);
-
-$db = getDB();
-$school_id = Auth::getSchoolId();
-
-$exam_id = isset($_GET['exam_id']) ? (int)$_GET['exam_id'] : 0;
-$class_id = isset($_GET['class_id']) ? (int)$_GET['class_id'] : 0;
-
-if (!$exam_id || !$class_id) {
-    die("Invalid request. Exam ID and Class ID are required.");
-}
-
-// Fetch exam details
-$stmt = $db->prepare("SELECT * FROM exams WHERE id = ? AND school_id = ?");
-$stmt->execute([$exam_id, $school_id]);
-$exam = $stmt->fetch();
-
-if (!$exam) {
-    die("Exam not found.");
-}
-
-// Fetch class details
-$stmt = $db->prepare("SELECT * FROM classes WHERE id = ? AND school_id = ? AND is_active = 1");
-$stmt->execute([$class_id, $school_id]);
-$class = $stmt->fetch();
-
-if (!$class) {
-    die("Class not found.");
-}
-
-// Fetch school details
-$stmt = $db->prepare("SELECT * FROM schools WHERE id = ?");
-$stmt->execute([$school_id]);
-$school = $stmt->fetch();
-if (!$school) {
-    $school = [
-        'name_en' => 'Model Secondary School',
-        'name_np' => 'नमूना माध्यमिक विद्यालय',
-        'address' => 'Kathmandu, Nepal',
-        'phone' => '',
-        'logo' => '',
-        'class_teacher_signature' => '',
-        'exam_coordinator_signature' => '',
-        'principal_signature' => ''
-    ];
-}
-
-// Fetch active students in class
-$stmt = $db->prepare("
-    SELECT s.*, sc.name as section_name, ay.year_bs, ay.year_ad 
-    FROM students s
-    LEFT JOIN sections sc ON s.section_id = sc.id
-    LEFT JOIN academic_years ay ON s.academic_year_id = ay.id
-    WHERE s.class_id = ? AND s.school_id = ? AND s.status = 'active'
-    ORDER BY s.roll_number ASC, s.first_name_en ASC
-");
-$stmt->execute([$class_id, $school_id]);
-$students = $stmt->fetchAll();
-
-if (empty($students)) {
-    die("<div style='text-align:center; padding: 50px; font-family: sans-serif;'><h3 class='text-danger'>No active students found in this class.</h3><p><a href='javascript:window.close()'>Close Window</a></p></div>");
-}
-
-// Chunk students in groups of 4 for A4 pages
-$student_chunks = array_chunk($students, 4);
-
-$pageTitle = 'Print Admit Cards: ' . $class['name'];
+require_once __DIR__.'/../../config/config.php';
+require_once __DIR__.'/../../includes/database.php';
+require_once __DIR__.'/../../includes/auth.php';
+require_once __DIR__.'/../../includes/functions.php';
+require_once __DIR__.'/../../includes/symbol_service.php';
+require_once __DIR__.'/../../includes/report_issue.php';
+Auth::requireRole(['super_admin','school_admin','principal','exam_officer','teacher']);
+$db=getDB();$school_id=(int)Auth::getSchoolId();
+$exam_id=(int)($_GET['exam_id']??0);$class_id=(int)($_GET['class_id']??0);
+$exam=schoolRecord($db,'exams',$exam_id,$school_id);
+$class=$class_id?schoolRecord($db,'classes',$class_id,$school_id):null;
+$q=$db->prepare('SELECT * FROM schools WHERE id=?');$q->execute([$school_id]);$school=$q->fetch();
+$q=$db->prepare('SELECT id,name FROM classes WHERE school_id=? AND is_active=1 ORDER BY id');$q->execute([$school_id]);$classes=$q->fetchAll();
+try{$issue=reportIssueDate($exam,$_GET);}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
+$mode=$_GET['student_mode']??'all';if(!in_array($mode,['all','choose'],true))denySchoolRequest('Choose all students or selected students.',422);
+$selectedIds=[];
+foreach((array)($_GET['selected']??[]) as $id){if(!ctype_digit((string)$id))denySchoolRequest('Choose valid student IDs.',422);$selectedIds[(int)$id]=true;}
+$selectedStudents=$class?examSymbolStudents($db,$school_id,$exam,$class_id,['ids'=>array_keys($selectedIds)]):[];
+if(count($selectedStudents)!==count($selectedIds))denySchoolRequest('A selected student does not belong to this class and examination year.',422);
+$selected=$selectedIds;
+$search=trim((string)($_GET['search']??''));$page=max(1,(int)($_GET['page']??1));
+$filteredCount=$class&&$mode==='choose'?examSymbolStudentCount($db,$school_id,$exam,$class_id,$search):0;
+$pages=max(1,(int)ceil($filteredCount/10));$page=min($pages,$page);
+$list=$class&&$mode==='choose'?examSymbolStudents($db,$school_id,$exam,$class_id,['search'=>$search,'limit'=>10,'offset'=>($page-1)*10]):[];
+$render=($_GET['render']??'')==='1'&&$class;$error='';
+$students=$render?($mode==='all'?examSymbolStudents($db,$school_id,$exam,$class_id):$selectedStudents):[];
+if($render&&!$students){$error='Choose at least one student to print, or select a class with students.';$render=false;}
+$student_chunks=array_chunk($students,4);$pageTitle='Print Admit Cards'.($class?': '.$class['name']:'');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -82,6 +34,7 @@ $pageTitle = 'Print Admit Cards: ' . $class['name'];
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= sanitize($pageTitle) ?></title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -158,6 +111,7 @@ $pageTitle = 'Print Admit Cards: ' . $class['name'];
             break-after: page;
         }
 
+        .admit-card-page:last-child {page-break-after: auto;break-after: auto;}
         .admit-card {
             border: 2px solid #000;
             border-radius: 6px;
@@ -180,17 +134,18 @@ $pageTitle = 'Print Admit Cards: ' . $class['name'];
 
         .school-info {
             display: flex;
-            flex-direction: column;
+            flex-direction: row;
             align-items: center;
-            justify-content: center;
-            text-align: center;
-            gap: 4px;
+            justify-content: flex-start;
+            text-align: left;
+            gap: 8px;
             width: 100%;
         }
 
         .school-logo {
-            max-height: 42px;
-            max-width: 42px;
+            height: 48px;
+            width: 48px;
+            flex: 0 0 48px;
             object-fit: contain;
         }
 
@@ -341,12 +296,20 @@ $pageTitle = 'Print Admit Cards: ' . $class['name'];
             white-space: nowrap;
         }
 
+        @media screen and (max-width: 850px) {
+            .print-layout {align-items: stretch; padding: 12px;}
+            .admit-card-page {width: 100%; height: auto; grid-template-columns: 1fr; grid-template-rows: none; padding: 12px; gap: 16px;}
+            .admit-card {height: auto; min-height: 460px;}
+            .school-name {font-size: 16px;}
+            .info-item, .info-val, .info-label {font-size: 12px;}
+            .instructions-list {font-size: 11px;}
+        }
         @media print {
             body {
                 background-color: #fff;
             }
 
-            .no-print-bar {
+            .no-print-bar, .no-print {
                 display: none !important;
             }
 
@@ -365,22 +328,38 @@ $pageTitle = 'Print Admit Cards: ' . $class['name'];
 </head>
 <body>
 
-<div class="no-print-bar">
-    <div style="display: flex; align-items: center; gap: 15px;">
-        <h3 style="margin: 0;"><i class="fas fa-print text-primary"></i> Batch Printing Admit Cards: <?= sanitize($class['name']) ?></h3>
-        <span style="background-color: #e8f4fd; color: #2b82c9; font-size: 12px; padding: 4px 10px; border-radius: 20px; font-weight: bold;">
-            Total: <?= count($students) ?> Students
-        </span>
-    </div>
-    <div style="display: flex; gap: 10px;">
-        <button onclick="window.print()" class="btn btn-primary">
-            <i class="fas fa-print" style="margin-right: 8px;"></i> Print Admit Cards
-        </button>
-        <button onclick="window.close()" class="btn btn-secondary">
-            <i class="fas fa-times" style="margin-right: 8px;"></i> Close Window
-        </button>
-    </div>
+<section class="no-print bg-white p-3 mb-3">
+<h2>Generate & Print Admit Cards — <?= sanitize($exam['name']) ?></h2>
+<a href="view.php?id=<?= $exam_id ?>" class="btn btn-secondary">Back to Exam</a>
+<?php if($class): ?><a href="symbols.php?exam_id=<?= $exam_id ?>&class_id=<?= $class_id ?>" class="btn btn-secondary">Manage Symbol Numbers</a><?php endif; ?>
+<?php if($error): ?><div class="alert alert-danger mt-3"><?= sanitize($error) ?></div><?php endif; ?>
+<form method="GET" id="admit_selector" class="row g-3 mt-1">
+<input type="hidden" name="exam_id" value="<?= $exam_id ?>"><div id="selected_ids"></div>
+<div class="col-md-4"><label for="class_id" class="form-label">First select class</label><select class="form-select" id="class_id" name="class_id" required onchange="admitSelections.clear();document.getElementById('selected_ids').replaceChildren();this.form.submit()"><option value="">Choose Class</option><?php foreach($classes as $c): ?><option value="<?= $c['id'] ?>" <?= $class_id==$c['id']?'selected':'' ?>><?= sanitize($c['name']) ?></option><?php endforeach; ?></select></div>
+<div class="col-md-4"><label for="student_mode" class="form-label">Students to print</label><select class="form-select" name="student_mode" id="student_mode" onchange="toggleAdmitStudents()"><option value="all" <?= $mode==='all'?'selected':'' ?>>All students in the class</option><option value="choose" <?= $mode==='choose'?'selected':'' ?>>Choose students</option></select></div>
+<?php include __DIR__.'/../../includes/report_issue_controls.php'; ?>
+<div class="col-12" id="choose_students" <?= $mode==='all'?'hidden':'' ?>>
+ <label for="search" class="form-label">Search name, Symbol No. or Roll No.</label>
+ <div class="d-flex gap-2"><input type="search" class="form-control" id="search" name="search" value="<?= sanitize($search) ?>" placeholder="Student name, symbol or registration roll"><button class="btn btn-secondary" name="page" value="1" type="submit">Search</button></div>
+ <p class="mt-2"><span id="selection_count"><?= count($selected) ?></span> students selected. Selections are kept while searching and changing pages.</p>
+ <?php if($mode==='choose'): ?>
+ <table class="table table-striped"><thead><tr><th>Select</th><th>Name</th><th>Roll No.</th><th>Symbol No.</th></tr></thead><tbody>
+ <?php foreach($list as $s): ?><tr><td><input type="checkbox" class="admit-check" value="<?= $s['id'] ?>" <?= isset($selected[$s['id']])?'checked':'' ?> aria-label="Select <?= sanitize($s['first_name_en'].' '.$s['last_name_en']) ?>"></td><td><?= sanitize($s['first_name_en'].' '.$s['last_name_en']) ?></td><td><?= sanitize($s['roll_number']) ?></td><td><?= sanitize($s['symbol_no']??'Not assigned') ?></td></tr><?php endforeach; ?>
+ </tbody></table>
+ <div class="d-flex gap-2 align-items-center"><button class="btn btn-secondary" type="submit" name="page" value="<?= max(1,$page-1) ?>" <?= $page===1?'disabled':'' ?>>Previous</button><span>Page <?= $page ?> / <?= $pages ?> — <?= $filteredCount ?> matches (10 per page)</span><button class="btn btn-secondary" type="submit" name="page" value="<?= min($pages,$page+1) ?>" <?= $page===$pages?'disabled':'' ?>>Next</button><button class="btn btn-secondary" type="button" onclick="clearAdmitSelection()">Clear selection</button></div>
+ <?php else: ?><button class="btn btn-secondary mt-2" type="submit">Show student list</button><?php endif; ?>
 </div>
+<div class="col-12"><button class="btn btn-primary" type="submit" name="render" value="1">Generate Cards</button><?php if($render): ?> <button class="btn btn-primary" type="button" onclick="window.print()">Print <?= count($students) ?> Cards</button><?php endif; ?></div>
+</form>
+</section>
+<script>
+const admitSelections=new Set(<?= json_encode(array_map('strval',array_keys($selected))) ?>);
+function syncAdmitSelection(){const target=document.getElementById('selected_ids');target.replaceChildren();admitSelections.forEach(id=>{const i=document.createElement('input');i.type='hidden';i.name='selected[]';i.value=id;target.append(i);});document.getElementById('selection_count').textContent=admitSelections.size;}
+function toggleAdmitStudents(){const choose=document.getElementById('student_mode').value==='choose';document.getElementById('choose_students').hidden=!choose;syncAdmitSelection();if(choose)document.getElementById('admit_selector').submit();}
+function clearAdmitSelection(){admitSelections.clear();document.querySelectorAll('.admit-check').forEach(i=>i.checked=false);syncAdmitSelection();}
+document.querySelectorAll('.admit-check').forEach(i=>i.addEventListener('change',()=>{if(i.checked)admitSelections.add(i.value);else admitSelections.delete(i.value);syncAdmitSelection();}));
+document.getElementById('admit_selector').addEventListener('submit',syncAdmitSelection);syncAdmitSelection();
+</script>
 
 <div class="print-layout">
     <?php foreach ($student_chunks as $chunk_index => $chunk): ?>
@@ -389,7 +368,7 @@ $pageTitle = 'Print Admit Cards: ' . $class['name'];
         <div class="admit-card">
             <!-- Header -->
             <div class="admit-card-header">
-                <div class="school-info d-flex flex-column align-items-center justify-content-center">
+                <div class="school-info">
                     <?php if (!empty($school['logo'])): ?>
                     <img src="<?= APP_URL ?>/uploads/<?= $school['logo'] ?>" alt="Logo" class="school-logo mb-1">
                     <?php endif; ?>
@@ -438,9 +417,9 @@ $pageTitle = 'Print Admit Cards: ' . $class['name'];
                         <span class="info-val"><?= sanitize($student['roll_number'] ?? '-') ?></span>
                     </div>
                     <div class="info-item">
-                        <span class="info-label">Exam Roll No:</span>
+                        <span class="info-label">Symbol No.</span>
                         <span class="info-val" style="font-weight: bold; text-decoration: underline; font-size: 11px;">
-                            <?= sanitize($student['exam_roll_number'] ?? $student['roll_number'] ?? 'N/A') ?>
+                            <?= sanitize($student['symbol_no'] ?? 'Not assigned') ?>
                         </span>
                     </div>
                     <div class="info-item">
@@ -449,7 +428,7 @@ $pageTitle = 'Print Admit Cards: ' . $class['name'];
                     </div>
                     <div class="info-item">
                         <span class="info-label">Date of Birth:</span>
-                        <span class="info-val"><?= sanitize($student['dob_bs'] ?: formatDate($student['dob_ad'])) ?></span>
+                        <span class="info-val"><?= sanitize($student['dob_ad']?schoolDateLabel($student['dob_ad'],$issue['display'],$issue['format']):(($student['dob_bs']??'')?($student['dob_bs'].' BS'):'—')) ?></span>
                     </div>
                 </div>
             </div>
@@ -463,10 +442,11 @@ $pageTitle = 'Print Admit Cards: ' . $class['name'];
                 </div>
                 <div class="info-item">
                     <span class="info-label">Date Range:</span>
-                    <span class="info-val"><?= formatDate($exam['start_date']) ?> to <?= formatDate($exam['end_date']) ?></span>
+                    <span class="info-val"><?= sanitize(schoolDateLabel($exam['start_date'],$issue['display'],$issue['format'])) ?> to <?= sanitize(schoolDateLabel($exam['end_date'],$issue['display'],$issue['format'])) ?></span>
                 </div>
             </div>
 
+            <div class="info-item"><span class="info-label">Date of Issue:</span><span class="info-val" data-issue-date="<?= sanitize($issue['date']) ?>"><?= sanitize($issue['label']) ?></span></div>
             <!-- Instructions -->
             <div style="margin-bottom: 5px;">
                 <div style="font-size: 9px; font-weight: bold; margin-bottom: 2px;">Instructions to Candidates:</div>
@@ -509,5 +489,8 @@ $pageTitle = 'Print Admit Cards: ' . $class['name'];
     <?php endforeach; ?>
 </div>
 
+<script src="<?= APP_URL ?>/assets/js/nepali-date-converter.js"></script>
+<script src="<?= APP_URL ?>/assets/js/school-dates.js"></script>
+<script src="<?= APP_URL ?>/assets/js/notifications.js"></script>
 </body>
 </html>

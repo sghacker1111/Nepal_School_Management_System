@@ -84,14 +84,15 @@ if ($exam_id && $class_id) {
 
     // 2. Fetch active students in class/section
     $query = "
-        SELECT s.*, c.name as class_name, c.level as class_level, c.class_teacher_name, c.class_teacher_signature, c.grading_type, sc.name as section_name, y.year_bs, y.year_ad
+        SELECT s.*, sy.symbol_no, c.name as class_name, c.level as class_level, c.class_teacher_name, c.class_teacher_signature, c.grading_type, sc.name as section_name, y.year_bs, y.year_ad
         FROM students s
+        LEFT JOIN exam_symbols sy ON sy.student_id=s.id AND sy.exam_id=? AND sy.school_id=?
         JOIN classes c ON s.class_id = c.id
         LEFT JOIN sections sc ON s.section_id = sc.id
         JOIN academic_years y ON s.academic_year_id = y.id
         WHERE s.school_id = ? AND s.class_id = ? AND s.academic_year_id = ? AND (s.status='active' OR EXISTS(SELECT 1 FROM marks historical WHERE historical.student_id=s.id AND historical.exam_id=?))
     ";
-    $params = [$school_id, $class_id, $exam['academic_year_id'], $exam_id];
+    $params = [$exam_id,$school_id,$school_id, $class_id, $exam['academic_year_id'], $exam_id];
     if ($section_id) {
         $query .= " AND s.section_id = ?";
         $params[] = $section_id;
@@ -110,7 +111,7 @@ if ($exam_id && $class_id) {
 
 if(!$exam&&$exam_id)foreach($exams as $candidate)if((string)$candidate['id']===(string)$exam_id){$exam=$candidate;break;}
 try{$issue=reportIssueDate($exam??[],$_GET);}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
-$issueQuery=http_build_query(['issue_date_mode'=>$issue['mode'],'issue_date'=>$issue['manual']]);
+$issueQuery=http_build_query(['issue_date_mode'=>$issue['mode'],'issue_date'=>$issue['input_date'],'issue_calendar'=>$issue['calendar'],'display_calendar'=>$issue['display'],'date_format'=>$issue['format']]);
 $pageTitle = 'Bulk Report Cards';
 $activePage = 'results';
 
@@ -298,10 +299,10 @@ ob_start();
                                     <span class="text-muted">Registration No:</span> <strong><?= sanitize($student['student_id']) ?></strong>
                                 </td>
                                 <td style="padding: 2px 0; text-align: center;">
-                                    <span class="text-muted">Symbol No / Roll No:</span> <strong><?= sanitize($student['exam_roll_number'] ?: $student['roll_number'] ?: '-') ?></strong>
+                        <span class="text-muted">Symbol No:</span> <strong><?= sanitize($student['symbol_no'] ?? '-') ?></strong><br><span class="text-muted">Roll No:</span> <strong><?= sanitize($student['roll_number'] ?? '-') ?></strong>
                                 </td>
                                 <td style="padding: 2px 0; text-align: right;">
-                                    <span class="text-muted">Date of Birth:</span> <strong><?= sanitize($student['dob_bs'] ?: '-') ?> BS (<?= formatDate($student['dob_ad']) ?> AD)</strong>
+                                    <span class="text-muted">Date of Birth:</span> <strong><?= sanitize($student['dob_ad']?schoolDateLabel($student['dob_ad'],$issue['display'],$issue['format']):(($student['dob_bs']??'')?($student['dob_bs'].' BS'):'—')) ?></strong>
                                 </td>
                             </tr>
                         </tbody>

@@ -63,7 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_POST['class_id'],
                     ($_POST['section_id'] ?? '') ?: null,
                     ($_POST['roll_number'] ?? '') ?: null,
-                    ($_POST['exam_roll_number'] ?? '') ?: null,
+                    null,
                     sanitize($_POST['first_name_en']),
                     sanitize($_POST['last_name_en'] ?? ''),
                     sanitize($_POST['first_name_np'] ?? ''),
@@ -251,9 +251,8 @@ ob_start();
                     <input type="number" name="roll_number" class="form-control" value="<?= sanitize($_POST['roll_number'] ?? '') ?>">
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label">Exam Roll Number</label>
-                    <input type="text" name="exam_roll_number" class="form-control" placeholder="For admit card" value="<?= sanitize($_POST['exam_roll_number'] ?? '') ?>">
-                    <small class="text-muted">Used for exam admit card generation</small>
+                    <label class="form-label">Exam Symbol No.</label>
+                    <p class="form-text">Assigned separately for each examination in Exam → Manage Exam Symbol Numbers.</p>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Caste/Ethnicity</label>

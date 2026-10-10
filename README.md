@@ -33,7 +33,7 @@ A fresh database has a **disabled** administrator, not a shared password. Set a 
 3. Add teachers; assign class teachers and subject teachers.
 4. Review class-subject mappings, compulsory/elective status, credits and assessment components.
 5. Enroll students in that year, class and section, selecting their offered electives.
-6. Create an exam and initialize/configure its class subjects **before** entering marks.
+6. Create an exam, initialize/configure subjects and assign exam-specific symbol numbers. Open exams can add forgotten mappings after marks; corrections affecting saved marks require confirmation.
 7. Review marks, lock, then publish. Reopen explicitly withdraws publication for corrections.
 
 Archiving students or teachers preserves their records. Exams with marks cannot be deleted. Class/elective enrollment cannot change after marks exist; retain the enrollment for historical reports.
@@ -58,12 +58,18 @@ php tests/workflow_test.php
 php tests/grading_test.php
 php tests/content_test.php
 php tests/operations_test.php
+php tests/exam_enhancements_test.php
+php tests/exam_workflows_test.php
+php tests/cdc_2083_test.php
 python tests/http_test.py
+python tests/exam_http_test.py
 ```
 
 The HTTP suite drives real PHP requests and database persistence. `tests/upgrade_test.php` accepts only a disposable existing-database copy in the OS temporary directory through `ERP_DB_PATH`.
 
 ## Deployment boundary
+
+See [exam workflow controls](docs/exam-workflows-2026-10-10.md) for BS/AD dates, exam symbols, searchable admit-card printing, confirmed mapping corrections and converted previous-exam IN contributions.
 
 Nothing deploys automatically from local edits, but **pushing this repository's main branch triggers the existing FTP deployment workflow**. Back up production, review the diff and test a staging copy before publishing. Do not run development servers on public interfaces.
 

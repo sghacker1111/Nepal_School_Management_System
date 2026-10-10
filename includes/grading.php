@@ -43,6 +43,7 @@ function erpCalculateSubjectResult(array $scheme, array $mark, array $exam): arr
     return ['theory_obtained'=>$th,'practical_obtained'=>$pr,'theory_full'=>$tf,'practical_full'=>$pf,'theory_pass'=>$tp,'practical_pass'=>$pp,'internal_credit_hours'=>$thematic?null:$pc,'external_credit_hours'=>$thematic?null:$tc,'credit_hours'=>$credit,'internal_gp'=>$pgp,'external_gp'=>$tgp,'internal_grade'=>$pf<=0?'—':(($pr===null || (float)$pr<$pp)?'NG':$pg),'external_grade'=>$tf<=0?'—':(($th===null || (float)$th<$tp)?'NG':$tg),'grade'=>$grade,'grade_point'=>$gp,'grade_point_unrounded'=>$unroundedGp,'percentage'=>$pct,'failed'=>$failed,'incomplete'=>$incomplete,'remarks'=>$incomplete?'Incomplete':($failed?'NG':'Pass')];
 }
 function erpReportSummary(array $marks, array $exam, string $system): array {
+    $marks=erpSortSubjects($marks);
     $rows=[];$credits=0;$weighted=0;$full=0;$obtained=0;$failed=false;$incomplete=false;
     foreach($marks as $m){
         $result=erpCalculateSubjectResult($m,$m,$exam);$rows[]=array_merge($m,$result);
@@ -55,4 +56,9 @@ function erpReportSummary(array $marks, array $exam, string $system): array {
     $text=$incomplete?'Incomplete':($system==='percentage'?number_format($average,2).'%':($failed?'NG':number_format($average,2)));
     $grade=$incomplete?'Incomplete':($failed?'NG':($system==='percentage'?($average>=80?'Distinction':($average>=60?'First Division':($average>=45?'Second Division':'Third Division'))):erpFinalGrade($average)));
     return ['marks_elaborated'=>$rows,'total_credit_hours'=>$credits,'weighted_gp_sum'=>$weighted,'has_failed_subject'=>$failed,'grand_full'=>$full,'grand_obtained'=>$obtained,'average_gpa'=>$average,'final_gpa_text'=>$text,'final_grade'=>$grade,'remarks_summary'=>$incomplete?'Incomplete':($failed?($system==='percentage'?'Failed':'Not Graded'):($system==='percentage'?'Passed':'Graded'))];
+}
+/** The same order is used for marks entry, ledger and every report format. */
+function erpSortSubjects(array $subjects):array{
+    $rank=static function($s){$name=strtolower($s['subject_name']??$s['name_en']??'');if(!empty($s['is_optional'])||str_contains($name,'optional'))return 100;foreach(['nepali','english','math','science','social','health','local','mother tongue','sanskrit','serofero'] as $i=>$needle)if(str_contains($name,$needle))return $needle==='serofero'?3:$i;return 50;};
+    usort($subjects,static function($a,$b)use($rank){return ($rank($a)<=>$rank($b))?:strcasecmp($a['subject_name']??$a['name_en']??'',$b['subject_name']??$b['name_en']??'')?:(($a['subject_id']??$a['id']??0)<=>($b['subject_id']??$b['id']??0));});return $subjects;
 }

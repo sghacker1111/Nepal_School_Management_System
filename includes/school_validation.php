@@ -8,10 +8,10 @@ function studentEmisRegistrationNumber($value,bool $required=false): ?string {
     if(!preg_match('/^.{1,100}$/us',$value))throw new InvalidArgumentException('EMIS Registration Number must be at most 100 characters.');
     return $value;
 }
-function schoolRecord(PDO $db, string $table, int $id, int $school): array {
+function schoolRecord(PDO $db, string $table, int $id, int $school,bool $lock=false): array {
     $allowed = ['classes','sections','subjects','students','academic_years','exams','users','class_subjects','chapters','topics','questions','specification_grids'];
     if (!in_array($table, $allowed, true)) throw new InvalidArgumentException('Invalid record type.');
-    $stmt = $db->prepare("SELECT * FROM `$table` WHERE id=? AND school_id=?");
+    $stmt = $db->prepare("SELECT * FROM `$table` WHERE id=? AND school_id=?".($lock&&DB_TYPE==='mysql'?' FOR UPDATE':''));
     $stmt->execute([$id,$school]);
     $row = $stmt->fetch();
     if (!$row) throw new InvalidArgumentException('The selected '.str_replace('_',' ', $table).' record does not belong to this school.');
@@ -24,9 +24,9 @@ function validateSchoolReferences(PDO $db, int $school, string $module, array $d
     if($module==='students' && isset($data['gender']) && !in_array($data['gender'],['Male','Female','Other'],true))throw new InvalidArgumentException('Choose a valid gender.');
     if($module==='students' && isset($data['status']) && !in_array($data['status'],['active','inactive','transferred','dropout','passed'],true))throw new InvalidArgumentException('Choose a valid enrollment status.');
     if($module==='exams') {
+        require_once __DIR__.'/nepali_dates.php';examDateInputs($data);
         if(isset($data['result_system']) && !in_array($data['result_system'],['gpa','percentage'],true))throw new InvalidArgumentException('Choose GPA or percentage results.');
         if(isset($data['type']) && !in_array($data['type'],['unit','terminal','final','practical'],true))throw new InvalidArgumentException('Choose a valid examination type.');
-        if(!empty($data['start_date']) && !empty($data['end_date']) && $data['end_date']<$data['start_date'])throw new InvalidArgumentException('The exam end date must not be before the start date.');
     }
     $refs = ['class_id'=>'classes','init_class_id'=>'classes','assigned_class_id'=>'classes','section_id'=>'sections','subject_id'=>'subjects','student_id'=>'students','student'=>'students','academic_year_id'=>'academic_years','exam_id'=>'exams','class'=>'classes','section'=>'sections','exam'=>'exams','prev_exam'=>'exams','subject'=>'subjects'];
     $records = [];
@@ -38,7 +38,7 @@ function validateSchoolReferences(PDO $db, int $school, string $module, array $d
     }
     if (isset($records['sections'],$records['classes']) && $records['sections']['class_id'] != $records['classes']['id']) throw new InvalidArgumentException('The section must belong to the selected class.');
     if ($module==='exams' && isset($data['map_subject'], $records['classes'], $records['subjects'])) {
-        $mapped=$db->prepare('SELECT id FROM class_subjects WHERE school_id=? AND class_id=? AND subject_id=? AND is_active=1');
+        $mapped=$db->prepare('SELECT cs.id FROM class_subjects cs JOIN subjects s ON s.id=cs.subject_id WHERE cs.school_id=? AND cs.class_id=? AND cs.subject_id=? AND (cs.is_active=1 OR cs.is_optional=1) AND COALESCE(s.is_hidden,0)=0');
         $mapped->execute([$school,$records['classes']['id'],$records['subjects']['id']]);
         if(!$mapped->fetchColumn())throw new InvalidArgumentException('Assign this subject to the class before adding it to the exam.');
     }

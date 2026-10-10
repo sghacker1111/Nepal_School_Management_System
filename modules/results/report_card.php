@@ -58,8 +58,9 @@ $exam = $stmt->fetch();
 if (!$exam) {
     die("Exam not found.");
 }
+$symbolQuery=$db->prepare('SELECT symbol_no FROM exam_symbols WHERE school_id=? AND exam_id=? AND student_id=?');$symbolQuery->execute([$school_id,$exam_id,$student_id]);$student['symbol_no']=$symbolQuery->fetchColumn()?:null;
 try{$issue=reportIssueDate($exam,$_GET);}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
-$issueQuery=http_build_query(['issue_date_mode'=>$issue['mode'],'issue_date'=>$issue['manual']]);
+$issueQuery=http_build_query(['issue_date_mode'=>$issue['mode'],'issue_date'=>$issue['input_date'],'issue_calendar'=>$issue['calendar'],'display_calendar'=>$issue['display'],'date_format'=>$issue['format']]);
 
 if (!isset($_GET['system']) && !empty($exam['result_system'])) {
     $grading_system = $exam['result_system'];
@@ -328,10 +329,10 @@ extract(erpReportSummary($marks, $exam, $grading_system));
                         <span class="text-muted">Registration No:</span> <strong><?= sanitize($student['student_id']) ?></strong>
                     </td>
                     <td style="padding: 2px 0; text-align: center;">
-                        <span class="text-muted">Symbol No / Roll No:</span> <strong><?= sanitize($student['exam_roll_number'] ?: $student['roll_number'] ?: '-') ?></strong>
+                        <span class="text-muted">Symbol No:</span> <strong><?= sanitize($student['symbol_no'] ?? '-') ?></strong><br><span class="text-muted">Roll No:</span> <strong><?= sanitize($student['roll_number'] ?? '-') ?></strong>
                     </td>
                     <td style="padding: 2px 0; text-align: right;">
-                        <span class="text-muted">Date of Birth:</span> <strong><?= sanitize($student['dob_bs'] ?: '-') ?> BS (<?= formatDate($student['dob_ad']) ?> AD)</strong>
+                        <span class="text-muted">Date of Birth:</span> <strong><?= sanitize($student['dob_ad']?schoolDateLabel($student['dob_ad'],$issue['display'],$issue['format']):(($student['dob_bs']??'')?($student['dob_bs'].' BS'):'—')) ?></strong>
                     </td>
                 </tr>
             </tbody>
@@ -745,5 +746,7 @@ extract(erpReportSummary($marks, $exam, $grading_system));
     </div>
 </div>
 
+<script src="<?= APP_URL ?>/assets/js/nepali-date-converter.js"></script>
+<script src="<?= APP_URL ?>/assets/js/school-dates.js"></script>
 </body>
 </html>

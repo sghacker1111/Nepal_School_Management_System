@@ -26,9 +26,9 @@ function updateExamDetails(PDO $db,int $schoolId,int $examId,array $input): bool
         if(!is_string($input['name']??null))throw new InvalidArgumentException('Exam name is required.');
         $name=trim($input['name']);if($name==='')throw new InvalidArgumentException('Exam name is required.');
         $issue=reportIssueDate($exam,$input);
-        $start=($input['start_date']??'')?:null;$end=($input['end_date']??'')?:null;
+        $dates=examDateInputs($input,$exam);$start=$dates['start_date'];$end=$dates['end_date'];
         if($start&&$end&&$end<$start)throw new InvalidArgumentException('The exam end date must not be before its start date.');
-        $db->prepare('UPDATE exams SET name=?,type=?,start_date=?,end_date=?,has_internal=?,result_system=?,issue_date_mode=?,issue_date=? WHERE id=? AND school_id=?')->execute([$name,$type,$start,$end,$internal,$system,$issue['mode'],$issue['manual']?:null,$examId,$schoolId]);
+        $db->prepare('UPDATE exams SET name=?,type=?,start_date=?,end_date=?,has_internal=?,result_system=?,issue_date_mode=?,issue_date=?,date_calendar=?,date_format=? WHERE id=? AND school_id=?')->execute([$name,$type,$start,$end,$internal,$system,$issue['mode'],$issue['manual']?:null,$issue['display'],$issue['format'],$examId,$schoolId]);
         if($addingInternal) {
             $q=$db->prepare('SELECT es.*,s.in_full_marks subject_in_full,s.in_pass_marks subject_in_pass,s.in_credit_hours subject_in_credit FROM exam_subjects es JOIN subjects s ON s.id=es.subject_id AND s.school_id=? WHERE es.exam_id=?');$q->execute([$schoolId,$examId]);
             foreach($q->fetchAll() as $scheme) {
@@ -60,7 +60,7 @@ function updateExamDetails(PDO $db,int $schoolId,int $examId,array $input): bool
 function changeExamState(PDO $db, int $schoolId, int $examId, string $action): void {
     $db->beginTransaction();
     try {
-        $q=$db->prepare('SELECT * FROM exams WHERE id=? AND school_id=?');
+        $q=$db->prepare('SELECT * FROM exams WHERE id=? AND school_id=?'.(DB_TYPE==='mysql'?' FOR UPDATE':''));
         $q->execute([$examId,$schoolId]);$exam=$q->fetch();
         if(!$exam)throw new InvalidArgumentException('Exam not found in this school.');
         if($action==='publish') {

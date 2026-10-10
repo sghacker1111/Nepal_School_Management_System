@@ -6,7 +6,7 @@ function denySchoolRequest(string $message, int $status = 403): never {
         header('Content-Type: application/json');
         echo json_encode(['success'=>false, 'message'=>$message]);
     } else {
-        echo '<!doctype html><meta charset="utf-8"><title>Request could not be completed</title><main style="font:16px system-ui;max-width:650px;margin:10vh auto;padding:24px"><h1>Request could not be completed</h1><p>' . htmlspecialchars($message) . '</p><a href="' . htmlspecialchars(APP_URL) . '">Return to dashboard</a></main>';
+        echo '<!doctype html><meta charset="utf-8"><title>Error found</title><main role="alert" style="font:16px system-ui;max-width:650px;margin:10vh auto;padding:24px"><h1>Error found</h1><p>' . htmlspecialchars($message) . '</p><a href="' . htmlspecialchars(APP_URL) . '">Return to dashboard</a></main>';
     }
     exit;
 }
@@ -25,6 +25,8 @@ function schoolRoleCanWrite(string $role, string $module, string $file): bool {
     return false;
 }
 function guardSchoolRequest(): void {
+    require_once __DIR__.'/nepali_dates.php';
+    try{schoolNormalizeDateFields($_GET);schoolNormalizeDateFields($_POST);}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
     $script = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
     preg_match('~/modules/([^/]+)/([^/]+)$~', $script, $parts);
     $module = $parts[1] ?? '';

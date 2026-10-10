@@ -93,8 +93,9 @@ with tempfile.TemporaryDirectory(prefix='erp-http-') as tmp:
         body=request(f"/modules/exams/index.php?delete={f['exam']}",{});assert 'cannot be deleted' in body
         body=request(f"/modules/exams/edit.php?id={f['exam']}",{'name':'Exam','type':'unit','start_date':'','end_date':'','result_system':'gpa'})
         assert 'grading system cannot change' in body
-        body=request(f"/modules/exams/view.php?id={f['exam']}",{'initialize_defaults':'1','init_class_id':f['class']})
-        assert 'configuration is frozen' in body
+        empty_class=db.execute("SELECT id FROM classes WHERE school_id=1 AND name='Class 8'").fetchone()[0]
+        body=request(f"/modules/exams/view.php?id={f['exam']}",{'initialize_defaults':'1','init_class_id':empty_class})
+        assert 'Initialized' in body and 'successfully' in body
         request(f"/modules/exams/index.php?lock={f['exam']}",{})
         request(f"/modules/exams/index.php?publish={f['exam']}",{})
         assert db.execute('SELECT is_published,is_locked FROM exams').fetchone()==(1,1)
@@ -107,7 +108,7 @@ with tempfile.TemporaryDirectory(prefix='erp-http-') as tmp:
         request('/modules/super_admin/users.php',expected=403)
         attendance={'save_attendance':'1','class_id':f['class'],'date_ad':'2026-10-09',f"attendance[{f['student']}]":'P'}
         request(f"/modules/attendance/index.php?class={f['class']}&date=2026-10-09",attendance)
-        assert db.execute('SELECT status,date_bs FROM attendances').fetchone()==('P',None)
+        assert db.execute('SELECT status,date_bs FROM attendances').fetchone()==('P','2083-06-23')
         request('/modules/settings/users.php',{'user_id':'','full_name':'New Staff','username':'newstaff','password':'TestPassword123!','role':'exam_officer','status':'1'})
         assert db.execute("SELECT role FROM users WHERE username='newstaff'").fetchone()[0]=='exam_officer'
         class11=db.execute("SELECT id FROM classes WHERE school_id=1 AND name='Class 11'").fetchone()[0]

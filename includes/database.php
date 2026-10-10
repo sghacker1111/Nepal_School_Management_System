@@ -30,7 +30,7 @@ class Database {
         if (DB_TYPE==='sqlite' && !$freshDatabase) {
             $hasMeta=$this->conn->query("SELECT name FROM sqlite_master WHERE type='table' AND name='app_meta'")->fetchColumn();
             $version=$hasMeta?$this->conn->query("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'")->fetchColumn():false;
-            if($version!=='5') {
+            if($version!=='6') {
                 $backupDir=dirname(DB_SQLITE_PATH).'/.backups';
                 if(!is_dir($backupDir)&&!mkdir($backupDir,0750,true))throw new RuntimeException('Cannot create pre-upgrade database backup directory.');
                 $backup=$backupDir.'/school-before-upgrade-'.date('Ymd-His').'-'.bin2hex(random_bytes(3)).'.sqlite';

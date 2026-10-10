@@ -6,7 +6,7 @@ function dbColumns(PDO $db, string $table): array {
 }
 function migrateSchoolSchema(PDO $db): void {
     $db->exec('CREATE TABLE IF NOT EXISTS app_meta (meta_key VARCHAR(100) PRIMARY KEY, meta_value VARCHAR(255) NOT NULL)');
-    if ($db->query("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'")->fetchColumn() === '5') return;
+    if ($db->query("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'")->fetchColumn() === '6') return;
     $db->exec('CREATE TABLE IF NOT EXISTS cdc_reference (category VARCHAR(50) NOT NULL,item_key VARCHAR(50) NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(category,item_key))');
     $pk = DB_TYPE === 'sqlite' ? 'INTEGER PRIMARY KEY AUTOINCREMENT' : 'INT AUTO_INCREMENT PRIMARY KEY';
     $tables = [
@@ -21,7 +21,10 @@ function migrateSchoolSchema(PDO $db): void {
         'chapters' => 'school_id INTEGER DEFAULT 0, class_id INTEGER NOT NULL, subject_id INTEGER NOT NULL, name VARCHAR(255), name_np VARCHAR(255), sort_order INTEGER DEFAULT 0',
         'topics' => 'school_id INTEGER DEFAULT 0, class_id INTEGER NOT NULL, subject_id INTEGER NOT NULL, chapter_id INTEGER NOT NULL, name VARCHAR(255), name_np VARCHAR(255), sort_order INTEGER DEFAULT 0',
         'student_subjects' => 'student_id INTEGER NOT NULL, subject_id INTEGER NOT NULL, UNIQUE(student_id, subject_id)',
-        'login_attempts' => 'identity_key VARCHAR(64) NOT NULL, attempted_at INTEGER NOT NULL'
+        'login_attempts' => 'identity_key VARCHAR(64) NOT NULL, attempted_at INTEGER NOT NULL',
+        'exam_symbols'=>'exam_id INTEGER NOT NULL,student_id INTEGER NOT NULL,school_id INTEGER NOT NULL,symbol_no VARCHAR(100) NOT NULL,UNIQUE(exam_id,student_id),UNIQUE(exam_id,symbol_no)',
+        'exam_scheme_history'=>'school_id INTEGER NOT NULL,exam_id INTEGER NOT NULL,mapping_id INTEGER NOT NULL,old_config TEXT NOT NULL,new_config TEXT NOT NULL,changed_by INTEGER,created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+        'exam_symbol_history'=>'school_id INTEGER NOT NULL,exam_id INTEGER NOT NULL,old_symbols TEXT NOT NULL,new_symbols TEXT NOT NULL,changed_by INTEGER,created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP'
     ];
     foreach ($tables as $table => $definition) $db->exec("CREATE TABLE IF NOT EXISTS `$table` (id $pk, $definition)");
     $evaluation = ['th_credit_hours'=>'DECIMAL(6,2) DEFAULT 0', 'in_credit_hours'=>'DECIMAL(6,2) DEFAULT 0', 'th_full_marks'=>'DECIMAL(6,2) DEFAULT 75', 'th_pass_marks'=>'DECIMAL(6,2) DEFAULT 26.25', 'in_full_marks'=>'DECIMAL(6,2) DEFAULT 25', 'in_pass_marks'=>'DECIMAL(6,2) DEFAULT 10'];
@@ -32,7 +35,7 @@ function migrateSchoolSchema(PDO $db): void {
         'subjects' => ['school_id'=>'INTEGER DEFAULT 1', 'source_id'=>'INTEGER', 'is_hidden'=>'INTEGER DEFAULT 0', 'assessment_method'=>'VARCHAR(50)', 'curriculum_version'=>'VARCHAR(50)'] + $evaluation,
         'sections' => ['school_id'=>'INTEGER DEFAULT 1'],
         'students' => ['school_id'=>'INTEGER DEFAULT 1', 'optional_subject_i'=>'INTEGER', 'optional_subject_ii'=>'INTEGER', 'optional_subject_iii'=>'INTEGER', 'emis_registration_number'=>'VARCHAR(100)'],
-        'exams' => ['school_id'=>'INTEGER DEFAULT 1', 'result_system'=>"VARCHAR(20) DEFAULT 'gpa'", 'has_internal'=>'INTEGER DEFAULT 0', 'issue_date_mode'=>"VARCHAR(10) DEFAULT 'auto'", 'issue_date'=>'DATE'],
+        'exams' => ['school_id'=>'INTEGER DEFAULT 1', 'result_system'=>"VARCHAR(20) DEFAULT 'gpa'", 'has_internal'=>'INTEGER DEFAULT 0', 'issue_date_mode'=>"VARCHAR(10) DEFAULT 'auto'", 'issue_date'=>'DATE','date_calendar'=>"VARCHAR(10) DEFAULT 'both'",'date_format'=>"VARCHAR(10) DEFAULT 'long'"],
         'academic_years' => ['school_id'=>'INTEGER DEFAULT 1', 'is_hidden'=>'INTEGER DEFAULT 0'],
         'class_subjects' => ['school_id'=>'INTEGER DEFAULT 1', 'section_id'=>'INTEGER', 'is_optional'=>'INTEGER DEFAULT 0', 'is_active'=>'INTEGER DEFAULT 1', 'assessment_method'=>'VARCHAR(50)', 'curriculum_version'=>'VARCHAR(50)', 'curriculum_key'=>'VARCHAR(50)', 'curriculum_status'=>'VARCHAR(50)', 'source_notes'=>'TEXT', 'subject_order'=>'INTEGER DEFAULT 0'] + $evaluation,
         'exam_subjects' => ['credit_hours'=>'DECIMAL(6,2)', 'internal_credit_hours'=>'DECIMAL(6,2)', 'external_credit_hours'=>'DECIMAL(6,2)', 'is_optional'=>'INTEGER', 'assessment_method'=>'VARCHAR(50)', 'curriculum_version'=>'VARCHAR(50)'],
@@ -74,7 +77,7 @@ function migrateSchoolSchema(PDO $db): void {
     $db->beginTransaction();
     try {
         $db->prepare('DELETE FROM app_meta WHERE meta_key=?')->execute(['workflow_schema']);
-        $db->prepare('INSERT INTO app_meta (meta_key, meta_value) VALUES (?, ?)')->execute(['workflow_schema','5']);
+        $db->prepare('INSERT INTO app_meta (meta_key, meta_value) VALUES (?, ?)')->execute(['workflow_schema','6']);
         $db->commit();
     } catch (Throwable $e) { if ($db->inTransaction()) $db->rollBack(); throw $e; }
 }

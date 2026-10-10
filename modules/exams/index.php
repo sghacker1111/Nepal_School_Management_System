@@ -112,8 +112,8 @@ ob_start();
                             <td><strong><?= sanitize($exam['name']) ?></strong></td>
                             <td><span class="badge bg-info text-capitalize"><?= sanitize($exam['type']) ?></span></td>
                             <td><span class="badge bg-secondary"><?= sanitize($exam['year_bs']) ?> BS</span></td>
-                            <td><?= formatDate($exam['start_date']) ?></td>
-                            <td><?= formatDate($exam['end_date']) ?></td>
+                            <td><?= sanitize(schoolDateLabel($exam['start_date'],$exam['date_calendar']??'both',$exam['date_format']??'long')) ?></td>
+                            <td><?= sanitize(schoolDateLabel($exam['end_date'],$exam['date_calendar']??'both',$exam['date_format']??'long')) ?></td>
                             <td>
                                 <?php if ($exam['is_published']): ?>
                                     <span class="badge bg-success"><i class="fas fa-eye"></i> Published</span>

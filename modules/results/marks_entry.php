@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/previous_exam_service.php';
 
 Auth::requireRole(['super_admin', 'school_admin', 'principal', 'teacher', 'exam_officer']);
 
@@ -72,21 +73,6 @@ if ($class_id) {
     $classType = getClassType($class_name);
 }
 
-// Subject sorting weight helper
-if (!function_exists('getSubjectSortWeight')) {
-    function getSubjectSortWeight($sub_name) {
-        $name = strtolower(trim($sub_name));
-        if (strpos($name, 'english') !== false) return 10;
-        if (strpos($name, 'nepali') !== false) return 9;
-        if (strpos($name, 'math') !== false) return 8;
-        if (strpos($name, 'science') !== false) return 7;
-        if (strpos($name, 'social') !== false) return 6;
-        if (strpos($name, 'optional i') !== false || strpos($name, 'opt i') !== false) return 5;
-        if (strpos($name, 'optional ii') !== false || strpos($name, 'opt ii') !== false) return 4;
-        return 1;
-    }
-}
-
 // Fetch configured subjects for class
 $subjects = [];
 $all_subjects = [];
@@ -105,15 +91,7 @@ if ($exam_id && $class_id) {
         $subjects=array_values(array_filter($subjects,static fn($s)=>in_array($s['subject_id'],$allowed)));
     }
     
-    // Sort subjects serially (English, Nepali, Math, Science, Social, Opt I, Opt II)
-    usort($subjects, function($a, $b) {
-        $weightA = getSubjectSortWeight($a['subject_name']);
-        $weightB = getSubjectSortWeight($b['subject_name']);
-        if ($weightA !== $weightB) {
-            return $weightB <=> $weightA;
-        }
-        return strcasecmp($a['subject_name'], $b['subject_name']);
-    });
+    $subjects=erpSortSubjects($subjects);
     
     $all_subjects = $subjects;
     
@@ -128,12 +106,13 @@ if ($exam_id && $class_id) {
 $students = [];
 if ($exam_id && $class_id) {
     $query = "
-        SELECT s.id, s.student_id, s.first_name_en, s.last_name_en, s.roll_number, s.exam_roll_number,
+        SELECT s.id, s.student_id, s.first_name_en, s.last_name_en, s.roll_number, sy.symbol_no,
                s.optional_subject_i, s.optional_subject_ii, s.optional_subject_iii
         FROM students s
+        LEFT JOIN exam_symbols sy ON sy.student_id=s.id AND sy.exam_id=? AND sy.school_id=?
         WHERE s.class_id = ? AND s.status = 'active' AND s.school_id = ? AND s.academic_year_id = ?
     ";
-    $params = [$class_id, $school_id, $selected_exam['academic_year_id'] ?? 0];
+    $params = [$exam_id,$school_id,$class_id, $school_id, $selected_exam['academic_year_id'] ?? 0];
     if ($section_id) {
         $query .= " AND s.section_id = ?";
         $params[] = $section_id;
@@ -171,27 +150,15 @@ if ($exam_id) {
     }
 }
 
-// Fetch previous terminal exam marks for scaling
-$prev_marks = [];
-if ($prev_exam_id && $class_id) {
-    $stmt = $db->prepare("
-        SELECT m.student_id, m.subject_id, m.theory_obtained, m.practical_obtained,
-               es.theory_full, es.practical_full
-        FROM marks m
-        JOIN students s ON m.student_id = s.id
-        JOIN exam_subjects es ON es.exam_id = m.exam_id AND es.subject_id = m.subject_id AND es.class_id = s.class_id
-        WHERE m.exam_id = ? AND s.class_id = ?
-    ");
-    $stmt->execute([$prev_exam_id, $class_id]);
-    $prev_marks_raw = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    foreach ($prev_marks_raw as $pm) {
-        $prev_marks[$pm['student_id']][$pm['subject_id']] = [
-            'theory' => (float)$pm['theory_obtained'],
-            'practical' => (float)$pm['practical_obtained'],
-            'theory_full' => (float)$pm['theory_full'],
-            'practical_full' => (float)$pm['practical_full']
-        ];
-    }
+// Only explicit loading fills a read-only preview, never a database write.
+$previous_exams=$selected_exam?previousAssessmentExams($db,(int)$school_id,$selected_exam):[];
+$previous_ids=array_values((array)($_GET['prev_exams']??($prev_exam_id!==''?[$prev_exam_id]:[])));
+$previous_preview=[];
+if(isset($_GET['load_previous'])&&$selected_exam&&$class_id){
+ try{
+  $preview=previousContributionPreview($db,(int)$school_id,$selected_exam,(int)$class_id,$subjects,$students,$previous_ids);
+  $previous_preview=$preview['values'];$message="Loaded {$preview['loaded']} converted contributions for preview; {$preview['skipped']} missing or incomplete contributions were left unchanged. Review and click Save Marks to save.";$message_type='info';
+ }catch(InvalidArgumentException $e){$message=$e->getMessage();$message_type='error';}
 }
 
 $pageTitle = 'Class-Wide Marks Entry';
@@ -205,8 +172,8 @@ ob_start();
 </div>
 
 <?php if ($message): ?>
-<div class="alert alert-<?= $message_type == 'error' ? 'danger' : 'success' ?> mb-4">
-    <i class="fas <?= $message_type == 'error' ? 'fa-exclamation-circle' : 'fa-check-circle' ?>"></i> <?= $message ?>
+<div data-notify class="alert alert-<?= $message_type == 'error' ? 'danger' : ($message_type==='info'?'info':'success') ?> mb-4">
+    <i class="fas <?= $message_type == 'error' ? 'fa-exclamation-circle' : 'fa-check-circle' ?>"></i> <?= sanitize($message) ?>
 </div>
 <?php endif; ?>
 
@@ -263,17 +230,12 @@ ob_start();
             </div>
             
             <div class="col-md-3">
-                <label class="form-label fw-bold">Load Previous Terminal Exam (Optional)</label>
-                <select name="prev_exam" class="form-select" onchange="this.form.submit()">
-                    <option value="">No Previous Exam</option>
-                    <?php foreach ($exams as $e): ?>
-                    <?php if ($e['id'] != $exam_id): ?>
-                    <option value="<?= $e['id'] ?>" <?= $prev_exam_id == $e['id'] ? 'selected' : '' ?>>
-                        <?= sanitize($e['name']) ?> (<?= $e['year_bs'] ?>)
-                    </option>
-                    <?php endif; ?>
-                    <?php endforeach; ?>
+                <label class="form-label fw-bold" for="prev_exams">Load Earlier Examination Marks (IN)</label>
+                <select name="prev_exams[]" id="prev_exams" class="form-select" multiple size="3">
+                    <?php foreach($previous_exams as $e): ?><option value="<?= $e['id'] ?>" <?= in_array((string)$e['id'],array_map('strval',$previous_ids),true)?'selected':'' ?>><?= sanitize($e['name']) ?> (<?= sanitize(ucfirst($e['type'])) ?>)</option><?php endforeach; ?>
                 </select>
+                <button class="btn btn-outline-primary btn-sm mt-2" type="submit" name="load_previous" value="1">Load Converted Marks</button>
+                <div class="form-text">Only earlier unit/terminal exams in this academic year are offered. Select one for Term 1 or 2, or multiple for Term 3 (Ctrl/Cmd-click). Contribution = sum of obtained marks ÷ sum of full marks × this field’s maximum. Missing marks are not zero. TH and other IN fields stay unchanged.</div>
             </div>
         </form>
     </div>
@@ -334,7 +296,7 @@ ob_start();
                                 <td class="text-start fw-bold" style="position: sticky; left: 0; background-color: #fff; box-shadow: 2px 0 5px rgba(0,0,0,0.05); z-index: 90;">
                                     <?= sanitize($student['first_name_en'] . ' ' . $student['last_name_en']) ?>
                                 </td>
-                                <td><code><?= sanitize($student['exam_roll_number'] ?? $student['roll_number'] ?? '-') ?></code></td>
+                                <td><code><?= sanitize($student['symbol_no'] ?? '-') ?></code></td>
                                 <td style="background-color: #f8f9fa;">
                                     <input type="number" min="0" class="form-control form-control-sm text-center font-monospace" name="attendance[<?= $student['id'] ?>]" value="<?= $student_att ?>" placeholder="Days">
                                 </td>
@@ -364,8 +326,7 @@ ob_start();
                                         $prj_val = $breakdown['project_work'] ?? '';
                                         $prv_val = $breakdown['previous_exam'] ?? '';
                                         
-                                        // Previous-exam allocation depends on the approved school scheme.
-                                        // Do not silently scale or overwrite an incomplete component.
+                                        $breakdown=array_replace(is_array($breakdown)?$breakdown:[],$previous_preview[$student['id']][$sub['subject_id']]??[]);
                                         ?>
                                         <?php $components=(($selected_exam['type']??'')==='unit'||empty($selected_exam['has_internal'])||($sub['assessment_method']??'')==='THEMATIC_CONTINUOUS')?[]:cdc2083InternalComponents($sub,$selected_exam); ?>
                                         <?php foreach($components as $key=>$component): ?>

@@ -50,8 +50,10 @@ function redirect($url, $message = '', $type = 'success') {
  * Display flash message
  */
 function displayFlashMessage() {
+    if(!isset($_SESSION['flash_message'])&&isset($_SESSION['action_notice'])){$_SESSION['flash_message']=$_SESSION['action_notice'];$_SESSION['flash_type']='success';}
+    unset($_SESSION['action_notice']);
     if (isset($_SESSION['flash_message'])) {
-        $message = $_SESSION['flash_message'];
+        $message = sanitize($_SESSION['flash_message']);
         $type = $_SESSION['flash_type'] ?? 'info';
         unset($_SESSION['flash_message']);
         unset($_SESSION['flash_type']);

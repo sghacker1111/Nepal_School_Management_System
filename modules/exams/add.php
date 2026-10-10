@@ -35,9 +35,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Exam name is required';
     } else {
         try {
-            $issue=reportIssueDate([],$_POST);
-            $stmt = $db->prepare("INSERT INTO exams (name, type, academic_year_id, start_date, end_date, is_published, is_locked, school_id, has_internal, result_system,issue_date_mode,issue_date) VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?)");
-            $stmt->execute([$name, $type, $academicYear['id'], $start_date, $end_date, $school_id, $type==='unit'?0:$has_internal, $result_system,$issue['mode'],$issue['manual']?:null]);
+            $issue=reportIssueDate([],$_POST);$dates=examDateInputs($_POST);$start_date=$dates['start_date'];$end_date=$dates['end_date'];
+            $stmt = $db->prepare("INSERT INTO exams (name, type, academic_year_id, start_date, end_date, is_published, is_locked, school_id, has_internal, result_system,issue_date_mode,issue_date,date_calendar,date_format) VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$name, $type, $academicYear['id'], $start_date, $end_date, $school_id, $type==='unit'?0:$has_internal, $result_system,$issue['mode'],$issue['manual']?:null,$issue['display'],$issue['format']]);
             $new_id = $db->lastInsertId();
             
             Auth::logActivity(Auth::getUserId(), 'Create Exam', 'exams', $new_id);
@@ -113,17 +113,7 @@ ob_start();
                 <div class="form-text text-muted">If disabled, the exam will only have theory (external) marks. The practical marks input and calculations will be skipped.</div>
             </div>
             
-            <div class="row g-3 mb-4">
-                <div class="col-md-6">
-                    <label for="start_date" class="form-label">Start Date</label>
-                    <input type="date" class="form-control" id="start_date" name="start_date">
-                </div>
-                <div class="col-md-6">
-                    <label for="end_date" class="form-label">End Date</label>
-                    <input type="date" class="form-control" id="end_date" name="end_date">
-                </div>
-            </div>
-            
+            <?php include __DIR__.'/../../includes/exam_date_controls.php'; ?>
             <div class="row g-3 mb-4"><?php include __DIR__.'/../../includes/report_issue_controls.php'; ?></div>
             <button type="submit" class="btn btn-primary w-100 py-2">
                 <i class="fas fa-save"></i> Save and Configure Subjects

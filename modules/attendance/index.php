@@ -78,7 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_attendance'])) {
                 
                 // Simplified date conversion helper for SQLite/MySQL (can add real Nepali BS date library later)
                 // For now, let's keep date_bs as the same or simple string
-                $date_bs = null; // An AD date is not a BS date.
+                try{$date_bs=schoolAdToBs($date_ad_post);}catch(InvalidArgumentException $e){$date_bs=null;}
                 
                 // Fetch all active student IDs in this class to verify they belong to this school
                 $stmt_student_ids = $db->prepare("SELECT id FROM students WHERE class_id = ? AND school_id = ? AND status = 'active'");
@@ -87,7 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_attendance'])) {
                 
                 $stmt_check = $db->prepare("SELECT id FROM attendances WHERE student_id = ? AND date_ad = ?");
                 $stmt_insert = $db->prepare("INSERT INTO attendances (student_id, date_ad, date_bs, status) VALUES (?, ?, ?, ?)");
-                $stmt_update = $db->prepare("UPDATE attendances SET status = ? WHERE student_id = ? AND date_ad = ?");
+                $stmt_update = $db->prepare("UPDATE attendances SET status = ?,date_bs=? WHERE student_id = ? AND date_ad = ?");
                 
                 foreach ($att_data as $student_id => $status) {
                     if (!in_array($student_id, $valid_student_ids)) {
@@ -99,7 +99,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_attendance'])) {
                     
                     if ($record) {
                         // Update
-                        $stmt_update->execute([$status, $student_id, $date_ad_post]);
+                        $stmt_update->execute([$status,$date_bs, $student_id, $date_ad_post]);
                     } else {
                         // Insert
                         $stmt_insert->execute([$student_id, $date_ad_post, $date_bs, $status]);
@@ -230,7 +230,7 @@ ob_start();
     <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
         <h5 class="mb-0 text-primary">
             <i class="fas fa-list"></i> Attendance Sheet: Class <?= count($students) > 0 ? sanitize($students[0]['roll_number'] ?? '') : '' ?> 
-            (Date: <?= formatDate($date_ad) ?>)
+            (Date: <?= sanitize(schoolDateLabel($date_ad,'both','ymd')) ?>)
         </h5>
         <div class="no-print">
             <button class="btn btn-sm btn-outline-success me-2" onclick="markAll('P')">Mark All Present</button>
