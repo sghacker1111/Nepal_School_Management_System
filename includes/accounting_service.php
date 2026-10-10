@@ -27,7 +27,8 @@ final class SchoolAccounting {
         $this->role=$actor['role'];$this->preview=$preview;
         if(!in_array($this->role,['school_admin','super_admin','accountant','cashier','auditor'],true))throw new InvalidArgumentException('Your role cannot access accounting.');
         $q=$db->prepare('SELECT id FROM schools WHERE id=?');$q->execute([$school]);if(!$q->fetchColumn())throw new InvalidArgumentException('Choose a school for accounting.');
-        $this->initialize();$this->settings=$this->one('SELECT * FROM ac_settings WHERE school_id=?',[$school]);
+        $this->settings=$this->one('SELECT * FROM ac_settings WHERE school_id=?',[$school]);
+        if(!$this->settings)throw new InvalidArgumentException('Accounting is not provisioned. Ask an administrator to complete the school upgrade.');
     }
     public function can(string $action):bool {
         if($action==='view')return true;
@@ -43,13 +44,6 @@ final class SchoolAccounting {
     public function record(string $table,int $id,bool $lock=false):array {
         if(!in_array($table,['ac_accounts','ac_categories','ac_items','ac_fee_rules','ac_scholarships','ac_subscriptions','ac_invoices','ac_payments','ac_credits','ac_expenses','ac_periods','ac_methods','ac_journals'],true))throw new InvalidArgumentException('Invalid accounting record.');
         $row=$this->one("SELECT * FROM $table WHERE id=? AND school_id=?".($lock&&DB_TYPE==='mysql'?' FOR UPDATE':''),[$id,$this->school]);if(!$row)throw new InvalidArgumentException('The financial record does not belong to this school.');return $row;
-    }
-    private function initialize():void {
-        $ignore=DB_TYPE==='mysql'?'INSERT IGNORE':'INSERT OR IGNORE';
-        $this->db->prepare("$ignore INTO ac_settings(school_id) VALUES(?)")->execute([$this->school]);
-        $defaults=[['1000','Cash in hand','asset','cash'],['1010','Bank account','asset','bank'],['1100','Accounts receivable','asset','receivable'],['2000','Student advances','liability','advance'],['2100','Tax payable','liability','tax'],['2200','Expenses payable','liability','payable'],['3000','Opening school fund','equity','equity'],['4000','School fee income','income','income'],['4010','Product / service income','income','sales'],['4090','Discounts / waivers','contra_income','discount'],['5000','School operating expense','expense','expense']];
-        foreach($defaults as $d)$this->db->prepare("$ignore INTO ac_accounts(school_id,code,name,type,control_key) VALUES(?,?,?,?,?)")->execute([$this->school,...$d]);
-        foreach(['Cash'=>'cash','Bank Transfer'=>'bank','Cheque'=>'bank','ConnectIPS'=>'bank','eSewa'=>'bank','Khalti'=>'bank','Fonepay'=>'bank','Mobile Banking'=>'bank'] as $name=>$key)$this->db->prepare("$ignore INTO ac_methods(school_id,name,account_id,requires_reference) VALUES(?,?,?,?)")->execute([$this->school,$name,$this->control($key),$key==='bank'?1:0]);
     }
     public function control(string $key):int{return $this->scalar('SELECT id FROM ac_accounts WHERE school_id=? AND control_key=?',[$this->school,$key]);}
     /** One per-school database lock serializes cashiers, sequences and corrections. */

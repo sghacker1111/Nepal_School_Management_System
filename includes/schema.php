@@ -1,12 +1,15 @@
 <?php
 /** Additive upgrades: retain records, marks and uploaded files. */
+const SCHOOL_SCHEMA_VERSION = 8;
 function dbColumns(PDO $db, string $table): array {
     $rows = $db->query(DB_TYPE === 'sqlite' ? "PRAGMA table_info(`$table`)" : "SHOW COLUMNS FROM `$table`")->fetchAll();
     return array_column($rows, DB_TYPE === 'sqlite' ? 'name' : 'Field');
 }
 function migrateSchoolSchema(PDO $db): void {
     $db->exec('CREATE TABLE IF NOT EXISTS app_meta (meta_key VARCHAR(100) PRIMARY KEY, meta_value VARCHAR(255) NOT NULL)');
-    if (in_array($db->query("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'")->fetchColumn(),['6','7'],true)) return;
+    $version=$db->query("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'")->fetchColumn();
+    if($version!==false&&(!ctype_digit((string)$version)||(int)$version>SCHOOL_SCHEMA_VERSION))throw new InvalidArgumentException('This database schema requires a newer application; no downgrade was performed.');
+    if($version!==false&&(int)$version>=6)return;
     $db->exec('CREATE TABLE IF NOT EXISTS cdc_reference (category VARCHAR(50) NOT NULL,item_key VARCHAR(50) NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(category,item_key))');
     $pk = DB_TYPE === 'sqlite' ? 'INTEGER PRIMARY KEY AUTOINCREMENT' : 'INT AUTO_INCREMENT PRIMARY KEY';
     $tables = [

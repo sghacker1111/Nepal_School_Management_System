@@ -35,9 +35,57 @@ function migrateAccountingSchema(PDO $db): void {
     }
 }
 function migrateSchoolExtensions(PDO $db):void {
-    if($db->query("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'")->fetchColumn()==='7')return;
-    foreach(['subjects','class_subjects','exam_subjects'] as $table)if(!in_array('internal_components',dbColumns($db,$table),true))$db->exec("ALTER TABLE $table ADD COLUMN internal_components TEXT");
-    if(DB_TYPE==='mysql')$db->exec("ALTER TABLE users MODIFY role VARCHAR(50) NOT NULL");
-    migrateAccountingSchema($db);
-    $db->prepare("UPDATE app_meta SET meta_value='7' WHERE meta_key='workflow_schema'")->execute();
+    $version=$db->query("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'")->fetchColumn();
+    if(!ctype_digit((string)$version)||(int)$version>SCHOOL_SCHEMA_VERSION)throw new InvalidArgumentException('This database schema requires a newer application; no downgrade was performed.');
+    if((int)$version===SCHOOL_SCHEMA_VERSION)return;
+    if((int)$version<7){
+        foreach(['subjects','class_subjects','exam_subjects'] as $table)if(!in_array('internal_components',dbColumns($db,$table),true))$db->exec("ALTER TABLE $table ADD COLUMN internal_components TEXT");
+        if(DB_TYPE==='mysql')$db->exec("ALTER TABLE users MODIFY role VARCHAR(50) NOT NULL");
+        migrateAccountingSchema($db);
+    }
+    $columns=[
+        'students'=>['admission_date'=>'DATE','withdrawal_date'=>'DATE','academic_stream'=>'VARCHAR(100)'],
+        'ac_accounts'=>['cash_bank_kind'=>'VARCHAR(10)'],
+        'ac_invoices'=>['revision'=>'INTEGER NOT NULL DEFAULT 1','snapshot_json'=>'TEXT','opening_reference'=>'VARCHAR(150)'],
+        'ac_expenses'=>['revision'=>'INTEGER NOT NULL DEFAULT 1'],
+        'ac_credits'=>['receivable_minor'=>'BIGINT NOT NULL DEFAULT 0','refund_minor'=>'BIGINT NOT NULL DEFAULT 0','tax_minor'=>'BIGINT NOT NULL DEFAULT 0','request_hash'=>'VARCHAR(64)'],
+        'ac_subscriptions'=>['billing_calendar'=>"VARCHAR(2) NOT NULL DEFAULT 'AD'",'anchor_day'=>'INTEGER']
+    ];
+    foreach($columns as $table=>$fields){$existing=dbColumns($db,$table);foreach($fields as $name=>$type)if(!in_array($name,$existing,true))$db->exec("ALTER TABLE $table ADD COLUMN $name $type");}
+    $pk=DB_TYPE==='sqlite'?'INTEGER PRIMARY KEY AUTOINCREMENT':'INT AUTO_INCREMENT PRIMARY KEY';
+    $tables=[
+        'ac_charge_posts'=>"student_id INTEGER NOT NULL,item_id INTEGER,cycle_key VARCHAR(100) NOT NULL,business_key VARCHAR(190) NOT NULL,invoice_id INTEGER NOT NULL,created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,UNIQUE(school_id,business_key),FOREIGN KEY(student_id) REFERENCES students(id),FOREIGN KEY(item_id) REFERENCES ac_items(id),FOREIGN KEY(invoice_id) REFERENCES ac_invoices(id)",
+        'ac_generation_previews'=>"kind VARCHAR(30) NOT NULL,token VARCHAR(64) NOT NULL,actor_id INTEGER NOT NULL,input_json TEXT NOT NULL,payload_json TEXT NOT NULL,fingerprint VARCHAR(64) NOT NULL,expires_at DATETIME NOT NULL,created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,UNIQUE(school_id,token)",
+        'ac_credit_items'=>"credit_id INTEGER NOT NULL,invoice_item_id INTEGER NOT NULL,amount_minor BIGINT NOT NULL,tax_minor BIGINT NOT NULL DEFAULT 0,FOREIGN KEY(credit_id) REFERENCES ac_credits(id),FOREIGN KEY(invoice_item_id) REFERENCES ac_invoice_items(id),UNIQUE(credit_id,invoice_item_id)",
+        'ac_credit_refunds'=>"credit_id INTEGER NOT NULL,number VARCHAR(100) NOT NULL,amount_minor BIGINT NOT NULL,refund_date DATE NOT NULL,account_id INTEGER NOT NULL,reason TEXT NOT NULL,approved_by INTEGER NOT NULL,idempotency_key VARCHAR(150) NOT NULL,request_hash VARCHAR(64) NOT NULL,created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,UNIQUE(school_id,number),UNIQUE(school_id,idempotency_key),FOREIGN KEY(credit_id) REFERENCES ac_credits(id),FOREIGN KEY(account_id) REFERENCES ac_accounts(id)",
+        'ac_fine_policies'=>"name VARCHAR(120) NOT NULL,grace_days INTEGER NOT NULL DEFAULT 0,amount_minor BIGINT NOT NULL DEFAULT 0,basis_points INTEGER NOT NULL DEFAULT 0,behavior VARCHAR(20) NOT NULL DEFAULT 'once',cap_minor BIGINT NOT NULL DEFAULT 0,item_id INTEGER,class_id INTEGER,student_id INTEGER,academic_year_id INTEGER,effective_from DATE NOT NULL,effective_to DATE,income_account_id INTEGER NOT NULL,is_active INTEGER NOT NULL DEFAULT 1,created_by INTEGER NOT NULL,FOREIGN KEY(item_id) REFERENCES ac_items(id),FOREIGN KEY(class_id) REFERENCES classes(id),FOREIGN KEY(student_id) REFERENCES students(id),FOREIGN KEY(academic_year_id) REFERENCES academic_years(id),FOREIGN KEY(income_account_id) REFERENCES ac_accounts(id)",
+        'ac_fine_posts'=>"policy_id INTEGER NOT NULL,source_invoice_id INTEGER NOT NULL,fine_invoice_id INTEGER NOT NULL,amount_minor BIGINT NOT NULL,as_of DATE NOT NULL,business_key VARCHAR(190) NOT NULL,created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,UNIQUE(school_id,business_key),FOREIGN KEY(policy_id) REFERENCES ac_fine_policies(id),FOREIGN KEY(source_invoice_id) REFERENCES ac_invoices(id),FOREIGN KEY(fine_invoice_id) REFERENCES ac_invoices(id)",
+        'ac_expense_attachments'=>"expense_id INTEGER NOT NULL,private_name VARCHAR(100) NOT NULL,original_name VARCHAR(200) NOT NULL,mime_type VARCHAR(100) NOT NULL,size_bytes BIGINT NOT NULL,sha256 VARCHAR(64) NOT NULL,created_by INTEGER NOT NULL,created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,FOREIGN KEY(expense_id) REFERENCES ac_expenses(id)",
+        'ac_period_close_snapshots'=>"period_id INTEGER NOT NULL,payload_json TEXT NOT NULL,fingerprint VARCHAR(64) NOT NULL,closed_by INTEGER NOT NULL,reason TEXT NOT NULL,created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,FOREIGN KEY(period_id) REFERENCES ac_periods(id)"
+    ];
+    foreach($tables as $table=>$definition)$db->exec("CREATE TABLE IF NOT EXISTS $table (id $pk,school_id INTEGER NOT NULL,$definition,FOREIGN KEY(school_id) REFERENCES schools(id))".(DB_TYPE==='mysql'?' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4':''));
+    accountingIndex($db,'ac_invoices','idx_ac_opening_reference','school_id,opening_reference',true);
+    accountingIndex($db,'ac_generation_previews','idx_ac_preview_actor','school_id,actor_id,kind,expires_at');
+    accountingIndex($db,'ac_credit_refunds','idx_ac_credit_refund','school_id,credit_id,refund_date');
+    accountingIndex($db,'ac_fine_posts','idx_ac_fine_invoice','school_id,source_invoice_id,policy_id');
+    // Version7 credits were allowed only against unpaid dues; preserve their AR treatment.
+    $db->exec('UPDATE ac_credits SET receivable_minor=amount_minor WHERE request_hash IS NULL AND receivable_minor=0 AND refund_minor=0');
+    $db->exec('UPDATE ac_subscriptions SET anchor_day=CAST(SUBSTR(start_date,9,2) AS UNSIGNED) WHERE anchor_day IS NULL');
+    foreach($db->query('SELECT id FROM schools')->fetchAll(PDO::FETCH_COLUMN) as $school)provisionSchoolAccounting($db,(int)$school);
+    $db->prepare('UPDATE app_meta SET meta_value=? WHERE meta_key=?')->execute([(string)SCHOOL_SCHEMA_VERSION,'workflow_schema']);
+}
+function accountingIndex(PDO $db,string $table,string $name,string $fields,bool $unique=false):void {
+    if(DB_TYPE==='sqlite')$db->exec('CREATE '.($unique?'UNIQUE ':'')."INDEX IF NOT EXISTS $name ON $table($fields)");
+    elseif(!$db->query("SHOW INDEX FROM $table WHERE Key_name='$name'")->fetch())$db->exec('CREATE '.($unique?'UNIQUE ':'')."INDEX $name ON $table($fields)");
+}
+/** Metadata provisioning only: no fees, invoices, journals or fabricated balances. */
+function provisionSchoolAccounting(PDO $db,int $school):void {
+    $q=$db->prepare('SELECT id FROM schools WHERE id=?');$q->execute([$school]);if(!$q->fetchColumn())throw new InvalidArgumentException('Choose an existing school for accounting provisioning.');
+    $ignore=DB_TYPE==='mysql'?'INSERT IGNORE':'INSERT OR IGNORE';
+    $db->prepare("$ignore INTO ac_settings(school_id) VALUES(?)")->execute([$school]);
+    $defaults=[['1000','Cash in hand','asset','cash'],['1010','Bank account','asset','bank'],['1100','Accounts receivable','asset','receivable'],['2000','Student advances','liability','advance'],['2100','Tax payable','liability','tax'],['2200','Expenses payable','liability','payable'],['2300','Credit refunds payable','liability','refund_payable'],['3000','Opening school fund','equity','equity'],['4000','School fee income','income','income'],['4010','Product / service income','income','sales'],['4090','Discounts / waivers','contra_income','discount'],['5000','School operating expense','expense','expense']];
+    foreach($defaults as $d)$db->prepare("$ignore INTO ac_accounts(school_id,code,name,type,control_key) VALUES(?,?,?,?,?)")->execute([$school,...$d]);
+    $db->prepare("UPDATE ac_accounts SET cash_bank_kind=control_key WHERE school_id=? AND control_key IN ('cash','bank') AND cash_bank_kind IS NULL")->execute([$school]);
+    $q=$db->prepare("SELECT id,control_key FROM ac_accounts WHERE school_id=? AND control_key IN ('cash','bank')");$q->execute([$school]);$controls=array_column($q->fetchAll(),'id','control_key');
+    foreach(['Cash'=>'cash','Bank Transfer'=>'bank','Cheque'=>'bank','ConnectIPS'=>'bank','eSewa'=>'bank','Khalti'=>'bank','Fonepay'=>'bank','Mobile Banking'=>'bank'] as $name=>$key)$db->prepare("$ignore INTO ac_methods(school_id,name,account_id,requires_reference) VALUES(?,?,?,?)")->execute([$school,$name,$controls[$key],$key==='bank'?1:0]);
 }
