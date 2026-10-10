@@ -318,6 +318,7 @@ ob_start();
                                     <td>
                                         <div class="fw-bold text-dark"><?= sanitize($cs['subject_name_en']) ?></div>
                                         <small class="text-muted"><?= sanitize($cs['subject_name_np'] ?? '') ?></small>
+                                        <?php if((float)($cs['in_full_marks']??0)>0): ?><a class="d-block small" href="<?= APP_URL ?>/modules/subjects/internal.php?mapping=<?= (int)$cs['id'] ?>">Edit IN components</a><?php endif; ?>
                                     </td>
                                     <td>
                                         <span class="badge bg-primary bg-opacity-10 text-primary border border-primary font-monospace">
@@ -430,6 +431,7 @@ ob_start();
                                     <td>
                                         <div class="fw-bold text-dark"><?= sanitize($os['subject_name_en']) ?></div>
                                         <small class="text-muted"><?= sanitize($os['subject_name_np'] ?? '') ?></small>
+                                        <?php if((float)($os['in_full_marks']??0)>0): ?><a class="d-block small" href="<?= APP_URL ?>/modules/subjects/internal.php?mapping=<?= (int)$os['id'] ?>">Edit IN components</a><?php endif; ?>
                                     </td>
                                     <td>
                                         <span class="badge bg-primary bg-opacity-10 text-primary border border-primary font-monospace">

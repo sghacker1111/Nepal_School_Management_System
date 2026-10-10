@@ -43,7 +43,7 @@ function examDateInputs(array $input,array $exam=[]):array{
 function schoolNormalizeDateFields(array &$input):void{
     $fields=$input['calendar_fields']??[];
     if(!is_array($fields))throw new InvalidArgumentException('Choose a valid date calendar.');
-    $allowed=['date','date_ad','dob_ad','join_date','perm_issue_date','temp_issue_date','start_date','end_date'];
+    $allowed=['date','date_ad','dob_ad','join_date','perm_issue_date','temp_issue_date','start_date','end_date','bill_date','due_date','payment_date','expense_date','effective_from','effective_to','from','to'];
     foreach($fields as $field=>$calendar){
         if(!in_array($field,$allowed,true)||!in_array($calendar,['AD','BS'],true))throw new InvalidArgumentException('Choose AD or BS for a supported date field.');
         if(array_key_exists($field,$input))$input[$field]=schoolDateToAd($input[$field],$calendar)??'';

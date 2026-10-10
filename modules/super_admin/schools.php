@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/packages.php';
 
 Auth::requireRole('super_admin');
 
@@ -88,7 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     
     if (empty($name_en) || empty($name_np) || empty($emis_code) || empty($address) || empty($phone) || empty($email) || empty($principal_name) || empty($principal_mobile) || empty($technical_person) || empty($admin_full_name) || empty($admin_username)) {
         $error = "All fields are required.";
-    } elseif (!in_array($subscription_type, ['full','exam_generator','result_system'], true)) {
+    } elseif (!array_key_exists($subscription_type, schoolPackages())) {
         $error = 'Choose a valid subscription package.';
     } elseif (($action === 'add' || $admin_password !== '') && strlen($admin_password) < 8) {
         $error = 'Administrator passwords must contain at least 8 characters.';
@@ -281,14 +282,8 @@ ob_start();
                             <td><?= sanitize($school['address'] ?: '-') ?></td>
                             <td>
                                 <?php
-                                $pkg = $school['subscription_type'] ?? 'full';
-                                if ($pkg === 'full') {
-                                    echo '<span class="badge bg-success">Full ERP</span>';
-                                } elseif ($pkg === 'exam_generator') {
-                                    echo '<span class="badge bg-primary">Exam Generator Only</span>';
-                                } elseif ($pkg === 'result_system') {
-                                    echo '<span class="badge bg-secondary">Result System Only</span>';
-                                }
+                                $pkg = $school['subscription_type'] ?? '';
+                                echo '<span class="badge '.($pkg==='full'?'bg-success':'bg-secondary').'">'.sanitize(schoolPackages()[$pkg]??'Unknown package — access disabled').'</span>';
                                 ?>
                             </td>
                             <td>
@@ -425,9 +420,7 @@ ob_start();
                         <div class="col-md-6">
                             <label class="form-label">Subscription Package *</label>
                             <select name="subscription_type" id="modalSubscriptionType" class="form-select" required>
-                                <option value="full">Full ERP Package</option>
-                                <option value="exam_generator">Exam Paper Generator Only</option>
-                                <option value="result_system">Result System Only</option>
+                                <?php foreach(schoolPackages() as $package=>$label): ?><option value="<?= $package ?>"><?= sanitize($label) ?></option><?php endforeach; ?>
                             </select>
                         </div>
 

@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__.'/grading.php';
 require_once __DIR__.'/school_validation.php';
+require_once __DIR__.'/assessment_service.php';
 function saveExamMarks(PDO $db,int $school,int $user,string $role,array $input): void {
     if(!in_array($role,['super_admin','school_admin','exam_officer','teacher'],true))throw new InvalidArgumentException('Your role cannot enter marks.');
     $db->beginTransaction();
@@ -30,7 +31,7 @@ function saveExamMarks(PDO $db,int $school,int $user,string $role,array $input):
                 foreach($scopes as $scope)if(!$scope||$scope==$student['section_id'])$permitted=true;
                 if(!$permitted)throw new InvalidArgumentException('Teachers may enter marks only for their assigned subjects and sections.');
             }
-            if(!empty($scheme['is_optional']) && $subjectId!=$student['optional_subject_i'] && $subjectId!=$student['optional_subject_ii'] && $subjectId!=($student['optional_subject_iii']??null))throw new InvalidArgumentException('This optional subject is not selected by the student.');
+            if(!empty($scheme['is_optional'])){enrollOptionalForMarks($db,$school,$student,$scheme,$input,$class,$user);$students[$id]=$student;}
             $theory=erpMarkValue($fields['theory']??null,(float)$scheme['theory_full']);
             $practical=0.0;$breakdown=null;
             if($exam['has_internal'] && $exam['type']!=='unit' && (float)$scheme['practical_full']>0){

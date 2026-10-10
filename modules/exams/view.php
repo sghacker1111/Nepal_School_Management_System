@@ -124,6 +124,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['map_subject']) && Aut
             try {
                 $config=compact('class_id','subject_id','theory_full','theory_pass','practical_full','practical_pass','credit_hours','internal_credit_hours','external_credit_hours','is_optional');
                 $config['assessment_method']=$assessmentMethod;$config['curriculum_version']=$curriculumVersion;
+                if(!$form_edit_id)$config['internal_components']=$catalogScheme['internal_components']??null;
                 $savedId=saveExamMapping($db,(int)$school_id,$exam_id,$config,$form_edit_id,(int)Auth::getUserId(),$_POST);
                 Auth::logActivity(Auth::getUserId(),$form_edit_id?'Updated Exam Subject Configuration':'Mapped Exam Subject','exam_subjects',$savedId);
                 redirect(APP_URL."/modules/exams/view.php?id=$exam_id",$form_edit_id?'Subject configuration updated; saved results recalculated successfully.':'Subject mapped successfully!');
@@ -200,6 +201,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['initialize_defaults']
                         if(($cs['assessment_method']??'')==='THEMATIC_CONTINUOUS'){$theory_full=100;$theory_pass=35;$practical_full=0;$practical_pass=0;$credit_hours=(float)$cs['credit_hours'];$int_ch=null;$ext_ch=null;}
                         $ins = $db->prepare("INSERT INTO exam_subjects (exam_id, subject_id, class_id, theory_full, theory_pass, practical_full, practical_pass, credit_hours, internal_credit_hours, external_credit_hours, is_optional, assessment_method, curriculum_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
                         $ins->execute([$exam_id, $cs['subject_id'], $class_id, $theory_full, $theory_pass, $practical_full, $practical_pass, $credit_hours, $int_ch, $ext_ch, (int)$cs['is_optional'], $cs['assessment_method'], $cs['curriculum_version']]);
+                        $db->prepare('UPDATE exam_subjects SET internal_components=? WHERE id=?')->execute([$cs['internal_components']??null,$db->lastInsertId()]);
                         $inserted++;
                     }
                 }
@@ -557,6 +559,7 @@ ob_start();
                                     <tr>
                                         <td>
                                             <strong><?= sanitize($m['subject_name']) ?></strong> 
+                                            <?php if(!$configurationFrozen&&!empty($exam['has_internal'])&&(float)$m['practical_full']>0): ?><a class="d-block small" href="<?= APP_URL ?>/modules/subjects/internal.php?exam=<?= (int)$exam_id ?>&mapping=<?= (int)$m['id'] ?>">Edit IN fields & allocation</a><?php endif; ?>
                                             <span class="text-muted font-monospace small">(<?= sanitize($m['subject_code']) ?>)</span>
                                         </td>
                                         <?php if ($exam['type'] === 'unit'): ?>

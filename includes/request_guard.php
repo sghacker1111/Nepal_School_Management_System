@@ -19,7 +19,12 @@ function schoolMutationQuery(array $query): bool {
 function schoolRoleCanWrite(string $role, string $module, string $file): bool {
     if (in_array($role, ['super_admin','school_admin'], true)) return true;
     if ($module === 'auth') return true;
-    if ($role === 'exam_officer') return in_array($module, ['exams','results','learning'], true);
+    if ($module === 'accounting') {
+        if($role==='cashier')return in_array($file,['payments.php','invoice.php','student.php'],true);
+        if($role==='accountant')return !in_array($file,['settings.php','journals.php','credit.php','attachment.php'],true);
+        return false;
+    }
+    if ($role === 'exam_officer') return in_array($module, ['exams','results','learning'], true) || ($module === 'subjects' && $file === 'internal.php');
     if ($role === 'teacher') return in_array($module, ['attendance','learning'], true) || ($module === 'results' && $file === 'marks_entry.php');
     if ($role === 'principal') return in_array($module, ['attendance','learning'], true);
     return false;
@@ -32,12 +37,19 @@ function guardSchoolRequest(): void {
     $module = $parts[1] ?? '';
     $file = $parts[2] ?? '';
     $role = Auth::getRole();
+    if(in_array($role,['accountant','cashier','auditor'],true)&&!in_array($module,['accounting','auth'],true)&&$module!=='')denySchoolRequest('Your finance role can access Accounting & Billing only.');
     $write = ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST';
     $mutation = schoolMutationQuery($_GET);
     if ($module === 'super_admin' && $role !== 'super_admin') denySchoolRequest('System administrator access is required.');
-    if ($module && !in_array($module, ['auth','super_admin'], true) && !Auth::hasAccess($module)) denySchoolRequest('This module is not included in your school package.');
+    $accessModule=$module==='learning'?(['questions.php'=>'questions','paper_generator.php'=>'paper_generator','specification_grids.php'=>'specification_grids','curriculum.php'=>'curriculum','ocr_scanner.php'=>'ocr_scanner'][$file]??'learning'):$module;
+    if ($module && !in_array($module, ['auth','super_admin'], true) && !Auth::hasAccess($accessModule)) denySchoolRequest('This module is not included in your school package.');
+    if($module==='learning'&&$file==='questions.php'&&($write||$mutation)&&in_array(Auth::getSubscriptionType(),['question_view','paper_generator'],true))denySchoolRequest('Your package allows question viewing, not adding or editing questions.');
     if ($role !== 'super_admin' && !(int)Auth::getSchoolId()) denySchoolRequest('Your account has no school assignment. Contact an administrator.');
     if (($write || $mutation) && !schoolRoleCanWrite($role, $module, $file)) denySchoolRequest('Your role does not allow changes in this section.');
+    if($write&&$module==='accounting'){
+        require_once __DIR__.'/accounting_service.php';$action=accountingRouteAction($file,$_POST);
+        if(!$action||!accountingActionAllowed((string)$role,$action,Auth::isReadOnly()))denySchoolRequest('Your role does not allow this financial action.');
+    }
     if (($write || $mutation) && Auth::isReadOnly() && $module !== 'auth') denySchoolRequest('School preview is read-only. Sign in as a school administrator to make changes.');
     if (!$write && $mutation) {
         // Old bookmarked action links remain usable, but a GET never changes records.

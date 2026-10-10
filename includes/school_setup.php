@@ -19,7 +19,9 @@ function provisionSchool(PDO $db, int $schoolId): void {
     $check = $db->prepare('SELECT workflow_version FROM schools WHERE id=?');
     $check->execute([$schoolId]);
     $version = $check->fetchColumn();
-    if ($version === false || (int)$version >= 2) return;
+    if ($version === false) return;
+    $financeReady=function_exists('provisionSchoolAccounting')&&(int)$db->query("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'")->fetchColumn()===8;
+    if ((int)$version >= 2) {if($financeReady)provisionSchoolAccounting($db,$schoolId);return;}
     $ownTransaction = !$db->inTransaction();
     if ($ownTransaction) $db->beginTransaction();
     try {
@@ -83,6 +85,7 @@ function provisionSchool(PDO $db, int $schoolId): void {
             if(!$q->fetchColumn())insertRecord($db,'topics',$topic);
         }
         $db->prepare('UPDATE schools SET workflow_version=2 WHERE id=?')->execute([$schoolId]);
+        if($financeReady)provisionSchoolAccounting($db,$schoolId);
         if ($ownTransaction) $db->commit();
     } catch (Throwable $e) { if ($ownTransaction && $db->inTransaction()) $db->rollBack(); throw $e; }
 }

@@ -1,0 +1,15 @@
+'use strict';
+const assert=require('node:assert/strict');
+const money=require('../assets/js/accounting.js');
+assert.equal(money.units('2500.00'),250000n);
+assert.equal(money.mulDiv(1000000000000n,1000000000000n,1000000000000n),1000000000000n);
+assert.equal(money.mulDiv(1999n,2500n,1000n),4998n);
+for(const value of ['1e3','-1','1.001',1.5,'10000000000.01'])assert.throws(()=>money.units(value));
+assert.throws(()=>money.add(money.MAX,1n));assert.throws(()=>money.mulDiv(1n,1n,0n));
+const bill=money.preview([{particular:'Monthly Tuition Fee',quantity:'1',rate:'2500.00'},{particular:'Examination Fee',quantity:'1',rate:'500.00'}],'0');
+assert.equal(bill.total_minor,300000n);assert.equal(money.show(bill.total_minor),'Rs. 3,000.00');
+assert.equal(money.preview([{particular:'A',rate:'0.01'},{particular:'B',rate:'0.01'},{particular:'C',rate:'0.01'}],'0.01').total_minor,2n);
+const tax=money.preview([{particular:'Fractional',quantity:'1.999',rate:'25.00',tax_percent:'13.00'}],'0',{taxRegistered:true});
+assert.equal(tax.subtotal_minor,4998n);assert.equal(tax.tax_minor,650n);assert.equal(tax.total_minor,5648n);
+assert.throws(()=>money.preview([{particular:'Overflow',quantity:'1000',rate:'10000000000.00'}],'0'));
+console.log('Accounting browser money passed: decimal, upper-bound, fractional, discount, tax and Rs. 3,000 preview parity.');

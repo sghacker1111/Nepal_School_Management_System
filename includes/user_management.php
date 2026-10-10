@@ -1,5 +1,7 @@
 <?php
 function saveSchoolUser(PDO $db, int $actorId, string $actorRole, int $actorSchool, array $input): int {
+    $actorQuery=$db->prepare('SELECT role,school_id,status FROM users WHERE id=?');$actorQuery->execute([$actorId]);$actor=$actorQuery->fetch();
+    if(!$actor||!(int)$actor['status']||$actor['role']!==$actorRole||($actorRole!=='super_admin'&&(int)$actor['school_id']!==$actorSchool))throw new InvalidArgumentException('An active administrator assigned to this school is required.');
     if (!in_array($actorRole,['super_admin','school_admin'],true)) throw new InvalidArgumentException('Only administrators can manage accounts.');
     $id=(int)($input['user_id']??0);
     $school=$actorRole==='super_admin'?(int)($input['school_id']??0):$actorSchool;
@@ -7,7 +9,7 @@ function saveSchoolUser(PDO $db, int $actorId, string $actorRole, int $actorScho
     $role=$input['role']??'teacher'; $password=$input['password']??'';
     $status=empty($input['status'])?0:1;
     $email=trim($input['email']??'');
-    if (!in_array($role,['school_admin','principal','teacher','exam_officer','accountant'],true)) throw new InvalidArgumentException('Choose a valid school role.');
+    if (!in_array($role,['school_admin','principal','teacher','exam_officer','accountant','cashier','auditor'],true)) throw new InvalidArgumentException('Choose a valid school role.');
     if (!$name || !preg_match('/^[A-Za-z0-9_.@-]{3,50}$/',$username)) throw new InvalidArgumentException('Enter a name and a username of 3–50 letters, numbers, dots, hyphens or underscores.');
     if ($email!=='' && !filter_var($email,FILTER_VALIDATE_EMAIL)) throw new InvalidArgumentException('Enter a valid email address.');
     if ((!$id || $password!=='') && strlen($password)<8) throw new InvalidArgumentException('Passwords must contain at least 8 characters.');

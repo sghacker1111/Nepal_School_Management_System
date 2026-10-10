@@ -312,8 +312,11 @@ ob_start();
                                     
                                     if (!$is_selected): 
                                         $components = (($selected_exam['type']??'')==='unit'||empty($selected_exam['has_internal'])||($sub['assessment_method']??'')==='THEMATIC_CONTINUOUS')?[]:cdc2083InternalComponents($sub,$selected_exam); $colspan=1+count($components);
+                                        $savedElective=$marks_matrix[$student['id']][$sub['subject_id']]??null;
+                                        $savedParts=json_decode($savedElective['internal_breakdown']??'null',true);$savedParts=is_array($savedParts)?$savedParts:[];
                                     ?>
-                                        <td colspan="<?= $colspan ?>" style="background-color: #eaeded; color: #a6acaf; font-size: 0.75rem;" class="text-center font-monospace">N/A</td>
+                                        <?php foreach($components as $key=>$component): ?><td><input disabled data-elective="<?= (int)$student['id'].'-'.(int)$sub['subject_id'] ?>" type="number" step="0.01" min="0" max="<?= $component['max'] ?>" class="form-control form-control-sm" name="marks[<?= $student['id'] ?>][<?= $sub['subject_id'] ?>][<?= $key ?>]" value="<?= sanitize($savedParts[$key]??'') ?>" aria-label="<?= sanitize($student['first_name_en'].' '.$sub['subject_name'].' '.$component['label']) ?>"></td><?php endforeach; ?>
+                                        <td><label class="small"><input type="checkbox" class="elective-select" data-elective="<?= (int)$student['id'].'-'.(int)$sub['subject_id'] ?>" name="optional_enrollment[<?= $student['id'] ?>][<?= $sub['subject_id'] ?>]" value="1"> Take this subject</label><input disabled data-elective="<?= (int)$student['id'].'-'.(int)$sub['subject_id'] ?>" type="number" step="0.01" min="0" max="<?= $sub['theory_full'] ?>" class="form-control form-control-sm" name="marks[<?= $student['id'] ?>][<?= $sub['subject_id'] ?>][theory]" value="<?= sanitize($savedElective['theory_obtained']??'') ?>" aria-label="<?= sanitize($student['first_name_en'].' '.$sub['subject_name'].' theory marks') ?>"><?php if($savedElective): ?><span class="d-block small text-warning">Saved marks retained. Confirm the subject selection to edit.</span><?php endif; ?></td>
                                     <?php else: ?>
                                         <?php 
                                         $m = $marks_matrix[$student['id']][$sub['subject_id']] ?? null;
@@ -351,12 +354,14 @@ ob_start();
             
             <?php if (count($students) > 0 && Auth::hasRole(['super_admin', 'school_admin', 'teacher', 'exam_officer'])): ?>
             <div class="text-end p-4 bg-light border-top no-print">
+                <label class="d-block small mb-3"><input type="checkbox" name="confirm_optional_enrollment" value="1"> I confirm newly checked optional subjects are taken by these students. Saving updates their subject selection and report cards.</label>
                 <button type="submit" name="save_marks" class="btn btn-primary btn-lg px-5 shadow-sm">
                     <i class="fas fa-save me-2"></i> Save & Compute Results
                 </button>
             </div>
             <?php endif; ?>
         </form>
+        <script>document.querySelectorAll('.elective-select').forEach(box=>box.addEventListener('change',()=>{document.querySelectorAll('input[type="number"][data-elective="'+box.dataset.elective+'"]').forEach(field=>field.disabled=!box.checked);}));</script>
     </div>
 </div>
 <?php else: ?>

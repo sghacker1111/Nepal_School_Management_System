@@ -167,6 +167,7 @@ ob_start();
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="fas fa-edit"></i> Edit Subject</h2>
+    <?php if($mapping&&(float)($mapping['in_full_marks']??0)>0): ?><a class="btn btn-outline-primary" href="<?= APP_URL ?>/modules/subjects/internal.php?mapping=<?= (int)$mapping['id'] ?>">Edit Internal Assessment (IN)</a><?php endif; ?>
     <a href="<?= APP_URL ?>/modules/subjects/index.php" class="btn btn-secondary">
         <i class="fas fa-arrow-left"></i> Back to List
     </a>
