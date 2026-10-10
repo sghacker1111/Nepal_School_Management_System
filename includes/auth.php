@@ -241,24 +241,8 @@ class Auth {
      * Check if current subscription package allows access to a module
      */
     public static function hasAccess($module) {
-        $sub = self::getSubscriptionType();
-        if ($sub === 'full') {
-            return true;
-        }
-        
-        // Modules mapped to Result System
-        $result_modules = ['students', 'teachers', 'results', 'attendance', 'reports', 'exams'];
-        // Modules mapped to Exam Generator
-        $exam_modules = ['paper_generator', 'questions', 'learning', 'specification_grids'];
-        
-        if (in_array($module, $result_modules)) {
-            return ($sub === 'result_system');
-        }
-        if (in_array($module, $exam_modules)) {
-            return ($sub === 'exam_generator');
-        }
-        
-        return true; // Default to true for common modules (classes, subjects, exams)
+        require_once __DIR__.'/packages.php';
+        return schoolPackageAllows(self::getSubscriptionType(),$module);
     }
 
     /**

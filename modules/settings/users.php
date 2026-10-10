@@ -18,7 +18,7 @@ $sql="SELECT u.id,u.school_id,u.username,u.full_name,u.role,u.email,u.phone,u.st
 $params=[]; if(!$system){$sql.=' AND u.school_id=?';$params[]=(int)Auth::getSchoolId();}
 $stmt=$db->prepare($sql.' ORDER BY s.name_en,u.full_name');$stmt->execute($params);$accounts=$stmt->fetchAll();
 $schools=$system?$db->query('SELECT id,name_en FROM schools ORDER BY name_en')->fetchAll():[];
-$roles=['school_admin'=>'School administrator','principal'=>'Principal','teacher'=>'Teacher','exam_officer'=>'Exam officer','accountant'=>'Accountant'];
+$roles=['school_admin'=>'School administrator','principal'=>'Principal','teacher'=>'Teacher','exam_officer'=>'Exam officer','accountant'=>'Accountant','cashier'=>'Cashier','auditor'=>'Auditor (read only)'];
 $pageTitle='User management';$activePage=$system?'super_admin_users':'users';ob_start();
 ?>
 <div class="d-flex justify-content-between align-items-center mb-3"><div><h2>User management</h2><p class="text-muted mb-0">Manage staff access without losing their school records.</p></div><button class="btn btn-primary" onclick="openAccount()">Add staff account</button></div>

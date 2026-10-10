@@ -38,13 +38,14 @@ $groups['Academics'] = [
     ['reports','Reports','chart-pie','/modules/reports/index.php','reports'],
 ];
 $groups['Learning'] = [
-    ['questions','Question bank','database','/modules/learning/questions.php','learning'],
-    ['paper_generator','Paper generator','file-pen','/modules/learning/paper_generator.php','learning'],
-    ['specification_grids','Specification grids','table-cells','/modules/learning/specification_grids.php','learning'],
-    ['curriculum','Curriculum & topics','sitemap','/modules/learning/curriculum.php','learning'],
+    ['questions','Question bank','database','/modules/learning/questions.php','questions'],
+    ['paper_generator','Paper generator','file-pen','/modules/learning/paper_generator.php','paper_generator'],
+    ['specification_grids','Specification grids','table-cells','/modules/learning/specification_grids.php','specification_grids'],
+    ['curriculum','Curriculum & topics','sitemap','/modules/learning/curriculum.php','curriculum'],
     ['learning','Learning hub','book-open-reader','/modules/learning/index.php','learning'],
-    ['ocr_scanner','Paper scanner','camera','/modules/learning/ocr_scanner.php','learning'],
+    ['ocr_scanner','Paper scanner','camera','/modules/learning/ocr_scanner.php','ocr_scanner'],
 ];
+if($layoutSchoolId&&Auth::hasAccess('accounting')&&in_array($layoutRole,['super_admin','school_admin','accountant','cashier','auditor'],true))$groups['Accounting & Billing']=[['accounting','Accounting overview','coins','/modules/accounting/index.php','accounting'],['accounting_fees','Fee management','tags','/modules/accounting/fees.php','accounting'],['accounting_bill','Create manual bill','file-invoice','/modules/accounting/create_bill.php','accounting'],['accounting_invoices','Invoices & dues','file-lines','/modules/accounting/invoices.php','accounting'],['accounting_generate','Generate fee bills','calendar','/modules/accounting/generate.php','accounting'],['accounting_payment','Collect payment','money-bill','/modules/accounting/payments.php','accounting'],['accounting_student','Student accounts','user-graduate','/modules/accounting/student.php','accounting'],['accounting_subscription','Subscriptions','repeat','/modules/accounting/subscriptions.php','accounting'],['accounting_expenses','Expenses','receipt','/modules/accounting/expenses.php','accounting'],['accounting_journals','Accounts & journals','book','/modules/accounting/journals.php','accounting'],['accounting_reports','Financial reports','chart-pie','/modules/accounting/reports.php','accounting'],['accounting_settings','Settings & audit','sliders','/modules/accounting/settings.php','accounting']];
 if ($layoutSchoolId && in_array($layoutRole,$adminRoles,true)) {
     $groups['Administration'] = [
         ['users','Staff accounts','users-gear','/modules/settings/users.php','settings'],
@@ -92,13 +93,13 @@ if ($layoutSchoolId && in_array($layoutRole,$adminRoles,true)) {
 <nav class="offcanvas-md offcanvas-start sidebar" id="sidebar" tabindex="-1" aria-label="Main navigation">
     <div class="offcanvas-header"><h5>Navigation</h5><button class="btn-close btn-close-white" data-bs-dismiss="offcanvas" data-bs-target="#sidebar" aria-label="Close navigation"></button></div>
     <div class="sidebar-search"><label class="visually-hidden" for="navigationSearch">Find a section</label><input id="navigationSearch" type="search" placeholder="Find a section…" autocomplete="off"></div>
-    <?php foreach ($groups as $group=>$items): ?><section class="nav-group"><h2><?= $group ?></h2><ul class="nav flex-column">
+    <?php foreach ($groups as $group=>$items): ?><section class="nav-group"><?php if($group==='Accounting & Billing'): ?><h2><button class="btn btn-sm text-white p-0" data-bs-toggle="collapse" data-bs-target="#accountingNav" aria-expanded="<?= str_starts_with($activePage??'','accounting')?'true':'false' ?>">Accounting & Billing <i class="fa-solid fa-chevron-down"></i></button></h2><?php else: ?><h2><?= $group ?></h2><?php endif; ?><ul <?= $group==='Accounting & Billing'?'id="accountingNav"':'' ?> class="nav flex-column <?= $group==='Accounting & Billing'?'collapse '.(str_starts_with($activePage??'','accounting')?'show':''):'' ?>">
     <?php foreach ($items as [$key,$label,$icon,$path,$module]):
         if ($module && !Auth::hasAccess($module)) continue;
         if ($layoutRole==='super_admin' && !$layoutSchoolId && in_array($key,['routine','exams','results','reports'],true)) continue;
         if ($layoutRole==='teacher' && in_array($key,['teachers','exams','reports'],true)) continue;
         if ($layoutRole==='exam_officer' && in_array($key,['teachers','attendance','reports'],true)) continue;
-        if ($layoutRole==='accountant' && $key!=='dashboard') continue;
+        if (in_array($layoutRole,['accountant','cashier','auditor'],true) && $key!=='dashboard' && $module!=='accounting') continue;
     ?><li class="nav-item"><a class="nav-link <?= ($activePage??'')===$key?'active':'' ?>" <?= ($activePage??'')===$key?'aria-current="page"':'' ?> href="<?= APP_URL.$path ?>"><i class="fa-solid fa-<?= $icon ?>" aria-hidden="true"></i><span><?= $label ?></span></a></li><?php endforeach; ?>
     </ul></section><?php endforeach; ?>
 </nav>

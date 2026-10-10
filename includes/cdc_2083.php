@@ -82,6 +82,8 @@ function importCdc2083(PDO $db): void {
 }
 /** Annual has FOUR entries. Trimester has three; values entered are scaled contributions. */
 function cdc2083InternalComponents(array $scheme,array $exam): array {
+    require_once __DIR__.'/assessment_service.php';
+    $custom=assessmentProfile($scheme,$exam);if($custom)return $custom;
     $total=(float)($scheme['practical_full']??0);if($total<=0)return [];
     if(empty($scheme['curriculum_version']))return ['participation'=>['label'=>'Participation','max'=>$total],'project_work'=>['label'=>'Project work','max'=>$total],'previous_exam'=>['label'=>'Previous assessment','max'=>$total]];
     $annual=in_array($exam['type']??'',['final','annual'],true);$basic=($scheme['assessment_method']??'')==='DUAL_50_50';$base=$basic?50:25;

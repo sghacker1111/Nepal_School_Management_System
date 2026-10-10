@@ -256,7 +256,7 @@ class XlsxHelper {
      * @param string $sheetName Worksheet title
      * @return string Binary contents of the .xlsx file
      */
-    public static function generateXlsx(array $headers, array $rows, $sheetName = 'Questions') {
+    public static function generateXlsx(array $headers, array $rows, $sheetName = 'Questions', array $numericColumns = []) {
         $tempFile = tempnam(sys_get_temp_dir(), 'xlsx_');
         $zip = new ZipArchive();
         if ($zip->open($tempFile, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
@@ -349,7 +349,8 @@ class XlsxHelper {
             foreach ($row as $colIdx => $val) {
                 $cellRef = self::indexToColumnLetter($colIdx) . $rowNum;
                 $valStr = htmlspecialchars((string)$val, ENT_XML1, 'UTF-8');
-                $sheetXml .= '<c r="' . $cellRef . '" t="inlineStr"><is><t>' . $valStr . '</t></is></c>';
+                if(in_array($colIdx,$numericColumns,true)&&preg_match('/^-?\d+(?:\.\d+)?$/',(string)$val))$sheetXml.='<c r="'.$cellRef.'"><v>'.$valStr.'</v></c>';
+                else $sheetXml .= '<c r="' . $cellRef . '" t="inlineStr"><is><t>' . $valStr . '</t></is></c>';
             }
             $sheetXml .= '</row>';
             $rowNum++;

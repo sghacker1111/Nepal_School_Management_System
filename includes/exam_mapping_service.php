@@ -13,6 +13,7 @@ function saveExamMapping(PDO $db,int $school,int $examId,array $config,int $mapp
   if($mappingId){
    $q=$db->prepare('SELECT * FROM exam_subjects WHERE id=? AND exam_id=?');$q->execute([$mappingId,$examId]);$old=$q->fetch();
    if(!$old)throw new InvalidArgumentException('The subject mapping no longer exists.');
+   if(!array_key_exists('internal_components',$config))$config['internal_components']=$old['internal_components']??null;
    if($config['class_id']==$old['class_id']&&$config['subject_id']==$old['subject_id']){
     // Editing marks/credits is not an implicit migration to another assessment profile.
     foreach(['assessment_method','curriculum_version','is_optional'] as $key)$config[$key]=$old[$key]??null;
@@ -32,9 +33,10 @@ function saveExamMapping(PDO $db,int $school,int $examId,array $config,int $mapp
   foreach($marks as $m){
    erpMarkValue($m['theory_obtained'],$config['theory_full']);erpMarkValue($m['practical_obtained'],$config['practical_full']);
    $parts=json_decode($m['internal_breakdown']??'null',true);
+   if(is_array($parts))foreach($parts as $key=>$value)if($value!==null&&!array_key_exists($key,cdc2083InternalComponents($config,$exam)))throw new InvalidArgumentException('A component with saved marks cannot be removed. Keep its key and edit its label or limit instead.');
    if(is_array($parts))foreach(cdc2083InternalComponents($config,$exam) as $key=>$component)erpMarkValue($parts[$key]??null,$component['max']);
   }
-  $keys=['class_id','subject_id','theory_full','theory_pass','practical_full','practical_pass','credit_hours','internal_credit_hours','external_credit_hours','is_optional','assessment_method','curriculum_version'];
+  $keys=['class_id','subject_id','theory_full','theory_pass','practical_full','practical_pass','credit_hours','internal_credit_hours','external_credit_hours','is_optional','assessment_method','curriculum_version','internal_components'];
   $values=array_map(fn($k)=>$config[$k]??null,$keys);
   if($old){$db->prepare('UPDATE exam_subjects SET '.implode(',',array_map(fn($k)=>"$k=?",$keys)).' WHERE id=? AND exam_id=?')->execute([...$values,$mappingId,$examId]);}
   else{$db->prepare('INSERT INTO exam_subjects ('.implode(',',$keys).',exam_id) VALUES ('.implode(',',array_fill(0,count($keys)+1,'?')).')')->execute([...$values,$examId]);$mappingId=(int)$db->lastInsertId();}

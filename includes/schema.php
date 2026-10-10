@@ -6,7 +6,7 @@ function dbColumns(PDO $db, string $table): array {
 }
 function migrateSchoolSchema(PDO $db): void {
     $db->exec('CREATE TABLE IF NOT EXISTS app_meta (meta_key VARCHAR(100) PRIMARY KEY, meta_value VARCHAR(255) NOT NULL)');
-    if ($db->query("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'")->fetchColumn() === '6') return;
+    if (in_array($db->query("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'")->fetchColumn(),['6','7'],true)) return;
     $db->exec('CREATE TABLE IF NOT EXISTS cdc_reference (category VARCHAR(50) NOT NULL,item_key VARCHAR(50) NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(category,item_key))');
     $pk = DB_TYPE === 'sqlite' ? 'INTEGER PRIMARY KEY AUTOINCREMENT' : 'INT AUTO_INCREMENT PRIMARY KEY';
     $tables = [
