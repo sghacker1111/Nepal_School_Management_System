@@ -3,6 +3,7 @@ require_once __DIR__.'/school_validation.php';
 require_once __DIR__.'/nepali_dates.php';
 
 require_once __DIR__.'/accounting_money.php';
+require_once __DIR__.'/accounting_ledger.php';
 
 /** Shared action matrix: direct HTTP and service methods enforce the same capabilities. */
 function accountingActionAllowed(string $role,string $action,bool $preview=false):bool {
@@ -30,7 +31,7 @@ function accountingRouteAction(string $file,array $input):?string {
     };
 }
 final class SchoolAccounting {
-    public string $role;private bool $preview;private bool $approvedGeneration=false;public array $settings;
+    public string $role;private bool $preview;private bool $approvedGeneration=false;public array $settings;private AccountingLedger $ledger;
     public function __construct(public PDO $db,public int $school,public int $user,bool $preview=false){
         $q=$db->prepare('SELECT role,school_id,status FROM users WHERE id=?');$q->execute([$user]);$actor=$q->fetch();
         if(!$actor||!$actor['status']||($actor['role']!=='super_admin'&&(int)$actor['school_id']!==$school))throw new InvalidArgumentException('Accounting access requires an active account in this school.');
@@ -39,6 +40,7 @@ final class SchoolAccounting {
         $q=$db->prepare('SELECT id FROM schools WHERE id=?');$q->execute([$school]);if(!$q->fetchColumn())throw new InvalidArgumentException('Choose a school for accounting.');
         $this->settings=$this->one('SELECT * FROM ac_settings WHERE school_id=?',[$school]);
         if(!$this->settings)throw new InvalidArgumentException('Accounting is not provisioned. Ask an administrator to complete the school upgrade.');
+        $this->ledger=new AccountingLedger($db,$school,$user);
     }
     public function can(string $action):bool {
         return accountingActionAllowed($this->role,$action,$this->preview);
@@ -57,13 +59,7 @@ final class SchoolAccounting {
     public function control(string $key):int{return $this->scalar('SELECT id FROM ac_accounts WHERE school_id=? AND control_key=?',[$this->school,$key]);}
     /** One per-school database lock serializes cashiers, sequences and corrections. */
     private function atomic(callable $fn):mixed {
-        if($this->db->inTransaction())throw new RuntimeException('Nested accounting transaction is not supported.');
-        $this->db->beginTransaction();
-        try{
-            $this->db->prepare('UPDATE ac_settings SET due_days=due_days WHERE school_id=?')->execute([$this->school]);
-            if(DB_TYPE==='mysql')$this->one('SELECT school_id FROM ac_settings WHERE school_id=? FOR UPDATE',[$this->school]);
-            $value=$fn();$this->db->commit();return $value;
-        }catch(Throwable $e){if($this->db->inTransaction())$this->db->rollBack();throw $e;}
+        return $this->ledger->transaction(function()use($fn){$this->authorize('view');$this->settings=$this->one('SELECT * FROM ac_settings WHERE school_id=?',[$this->school]);return $fn();});
     }
     private function audit(string $action,string $entity,int $id,array $old=[],array $new=[],string $reason=''):void{
         $this->db->prepare('INSERT INTO ac_audit(school_id,actor_id,action,entity,record_id,old_data,new_data,reason) VALUES(?,?,?,?,?,?,?,?)')->execute([$this->school,$this->user,$action,$entity,$id,json_encode($old,JSON_UNESCAPED_UNICODE),json_encode($new,JSON_UNESCAPED_UNICODE),$reason]);
@@ -81,12 +77,12 @@ final class SchoolAccounting {
         if($periods[0]['is_closed'])throw new InvalidArgumentException('This fiscal period is closed. An administrator must reopen it before posting.');return $periods[0];
     }
     private function journal(string $type,int $id,string $date,string $description,array $lines,?int $reversal=null):int {
-        $period=$this->period($date);$dr=0;$cr=0;$valid=[];
-        foreach($lines as $line){[$account,$debit,$credit,$student]=$line;$a=$this->record('ac_accounts',(int)$account);if(!$a['is_active']||!is_int($debit)||!is_int($credit)||$debit<0||$credit<0||($debit&&$credit))throw new InvalidArgumentException('Journal lines require active accounts and non-negative exact amounts on one side only.');if($student)schoolRecord($this->db,'students',(int)$student,$this->school);$dr=acCheckedAdd($dr,$debit);$cr=acCheckedAdd($cr,$credit);if($debit||$credit)$valid[]=$line;}
-        if(!$valid||$dr!==$cr)throw new InvalidArgumentException('Journal debit and credit totals must balance exactly.');
-        $this->db->prepare('INSERT INTO ac_journals(school_id,number,posting_date,period_id,reference_type,reference_id,description,created_by,reversal_of) VALUES(?,?,?,?,?,?,?,?,?)')->execute([$this->school,$this->number('journal',$date),$date,$period['id'],$type,$id,$description,$this->user,$reversal]);$journal=(int)$this->db->lastInsertId();
-        foreach($valid as [$account,$debit,$credit,$student])$this->db->prepare('INSERT INTO ac_journal_lines(journal_id,account_id,debit_minor,credit_minor,student_id) VALUES(?,?,?,?,?)')->execute([$journal,$account,$debit,$credit,$student]);
-        $this->audit('Post balanced journal','ac_journals',$journal,[],['type'=>$type,'reference'=>$id,'debit_minor'=>$dr,'credit_minor'=>$cr]);return $journal;
+        return $this->ledger->post($type,$id,$date,$description,$lines,$reversal);
+    }
+    public function cashBankAccount(int $id):array {
+        $account=$this->record('ac_accounts',$id);
+        if($account['type']!=='asset'||!(int)$account['is_active']||!in_array($account['cash_bank_kind'],['cash','bank'],true)||($account['control_key']!==null&&!in_array($account['control_key'],['cash','bank'],true)))throw new InvalidArgumentException('Choose a designated active cash or bank asset account in this school.');
+        return $account;
     }
     public function saveCategory(array $in):int {
         $this->authorize('catalog');$name=trim($in['name']??'');$kind=$in['kind']??'fee';if(!$name||strlen($name)>120||!in_array($kind,['fee','expense'],true))throw new InvalidArgumentException('Enter a category name and valid category type.');
@@ -95,7 +91,8 @@ final class SchoolAccounting {
     public function saveAccount(array $in):int {
         $this->authorize('settings');$code=trim($in['code']??'');$name=trim($in['name']??'');$type=$in['type']??'';
         if(!preg_match('/^[A-Za-z0-9_.-]{1,30}$/',$code)||!$name||strlen($name)>120||!in_array($type,['asset','liability','equity','income','expense','contra_income'],true))throw new InvalidArgumentException('Enter a valid account code, name and type.');
-        return $this->atomic(function()use($code,$name,$type){$this->db->prepare('INSERT INTO ac_accounts(school_id,code,name,type) VALUES(?,?,?,?)')->execute([$this->school,$code,$name,$type]);$id=(int)$this->db->lastInsertId();$this->audit('Create account','ac_accounts',$id,[],compact('code','name','type'));return $id;});
+        $cashKind=trim($in['cash_bank_kind']??'');if(!in_array($cashKind,['','cash','bank'],true)||($cashKind!==''&&$type!=='asset'))throw new InvalidArgumentException('Only asset accounts may be designated cash or bank.');
+        return $this->atomic(function()use($code,$name,$type,$cashKind){$this->db->prepare('INSERT INTO ac_accounts(school_id,code,name,type,cash_bank_kind) VALUES(?,?,?,?,?)')->execute([$this->school,$code,$name,$type,$cashKind?:null]);$id=(int)$this->db->lastInsertId();$this->audit('Create account','ac_accounts',$id,[],compact('code','name','type','cashKind'));return $id;});
     }
     public function saveItem(array $in):int {
         $this->authorize('catalog');$name=trim($in['name']??'');$code=trim($in['code']??'');$kind=$in['kind']??'fee';$frequency=$in['frequency']??'manual';$rate=acDecimalUnits($in['rate']??'0');$tax=acDecimalUnits($in['tax_percent']??'0');
@@ -159,12 +156,15 @@ final class SchoolAccounting {
         return ['student'=>$student,'customer_name'=>$customer,'customer_type'=>$student?'student':($in['customer_type']??'external'),'academic_year_id'=>$year['id']??($student['academic_year_id']??null),'bill_date'=>$date,'due_date'=>$due,'items'=>$items,'subtotal_minor'=>$subtotal,'discount_minor'=>$discountTotal,'tax_minor'=>$taxTotal,'total_minor'=>$total];
     }
     public function createInvoice(array $in,bool $issue=false):int {
-        $this->authorize('invoice');$key=$this->key($in);$hash=hash('sha256',json_encode(['issue'=>$issue,'input'=>$in],JSON_UNESCAPED_UNICODE));
-        return $this->atomic(function()use($in,$issue,$key,$hash){if(($id=$this->replay('ac_invoices',$key,$hash))!==null)return $id;$p=$this->previewInvoice($in);$s=$p['student'];
+        $this->authorize('invoice');return $this->atomic(fn()=>$this->createInvoiceInside($in,$issue));
+    }
+    private function createInvoiceInside(array $in,bool $issue):int {
+        if(!$this->db->inTransaction())throw new RuntimeException('Internal invoice creation requires a transaction.');
+        $key=$this->key($in);$hash=hash('sha256',json_encode(['issue'=>$issue,'input'=>$in],JSON_UNESCAPED_UNICODE));
+        if(($id=$this->replay('ac_invoices',$key,$hash))!==null)return $id;$p=$this->previewInvoice($in);$s=$p['student'];
             $this->db->prepare('INSERT INTO ac_invoices(school_id,academic_year_id,class_id,section_id,student_id,customer_type,customer_name,guardian_name,phone,address,description,bill_date,due_date,billing_period,subtotal_minor,discount_minor,tax_minor,total_minor,idempotency_key,request_hash,created_by) VALUES('.implode(',',array_fill(0,21,'?')).')')->execute([$this->school,$p['academic_year_id'],$s['class_id']??null,$s['section_id']??null,$s['id']??null,$p['customer_type'],$p['customer_name'],trim($in['guardian_name']??$s['guardian_name']??$s['father_name']??''),trim($in['phone']??$s['guardian_phone']??''),trim($in['address']??''),trim($in['description']??''),$p['bill_date'],$p['due_date'],trim($in['billing_period']??''),$p['subtotal_minor'],$p['discount_minor'],$p['tax_minor'],$p['total_minor'],$key,$hash,$this->user]);$id=(int)$this->db->lastInsertId();
             foreach($p['items'] as $r){$fields=array_keys($r);$this->db->prepare('INSERT INTO ac_invoice_items(invoice_id,'.implode(',',$fields).') VALUES('.implode(',',array_fill(0,count($fields)+1,'?')).')')->execute([$id,...array_values($r)]);}
             $this->audit('Save invoice draft','ac_invoices',$id,[],['total_minor'=>$p['total_minor']]);if($issue)$this->issueInside($id);return $id;
-        });
     }
     private function issueInside(int $id):void {
         $i=$this->record('ac_invoices',$id,true);if($i['status']!=='draft')return;$this->period($i['bill_date']);$lines=[[$this->control('receivable'),(int)$i['total_minor'],0,$i['student_id']]];
@@ -185,19 +185,47 @@ final class SchoolAccounting {
     public function outstanding(?int $student=null):int{$ids=$this->rows("SELECT id FROM ac_invoices WHERE school_id=? AND status='issued'".($student!==null?' AND student_id=?':''),$student!==null?[$this->school,$student]:[$this->school]);$sum=0;foreach($ids as $r)$sum=acCheckedAdd($sum,$this->invoiceBalance((int)$r['id']));return $sum;}
     public function advanceBalance(int $student):int {schoolRecord($this->db,'students',$student,$this->school);return $this->scalar('SELECT COALESCE(SUM(amount_minor),0) FROM ac_advance_entries WHERE school_id=? AND student_id=?',[$this->school,$student]);}
     public function recordPayment(array $in):int {
-        $this->authorize('payment');$key=$this->key($in);$hash=hash('sha256',json_encode($in));$amount=acDecimalUnits($in['amount']??'0');if(!$amount)throw new InvalidArgumentException('Payment amount must be positive.');$date=$this->date($in['payment_date']??'');
-        return $this->atomic(function()use($in,$key,$hash,$amount,$date){if(($id=$this->replay('ac_payments',$key,$hash))!==null)return $id;
-            $student=!empty($in['student_id'])?schoolRecord($this->db,'students',(int)$in['student_id'],$this->school):null;$method=$this->record('ac_methods',(int)($in['method_id']??0));$account=$this->record('ac_accounts',(int)$method['account_id']);if(!$method['is_active']||!$account['is_active']||$account['type']!=='asset')throw new InvalidArgumentException('Choose an active cash/bank payment method.');
-            $reference=trim($in['reference']??'');if($method['requires_reference']&&($reference===''||empty($in['externally_confirmed'])))throw new InvalidArgumentException('Confirm the external bank/digital payment and enter its transaction reference; this form does not process an online gateway.');
-            $allocations=[];$allocated=0;$customer=trim($in['customer_name']??'');
-            foreach((array)($in['allocations']??[]) as $invoice=>$v){if($v==='')continue;$value=acDecimalUnits($v);if(!$value)continue;$i=$this->record('ac_invoices',(int)$invoice,true);if($i['status']!=='issued'||($student&&(int)$i['student_id']!==(int)$student['id'])||(!$student&&!empty($i['student_id'])))throw new InvalidArgumentException('Select issued invoices for the chosen student/customer.');if(!$student&&$customer!==$i['customer_name'])throw new InvalidArgumentException('External invoice customer must match the payment customer.');if($value>$this->invoiceBalance((int)$invoice))throw new InvalidArgumentException('Payment allocation exceeds the current invoice balance. Reload balances.');$allocations[(int)$invoice]=$value;$allocated=acCheckedAdd($allocated,$value);}
-            if($allocated>$amount)throw new InvalidArgumentException('Invoice allocations exceed the payment amount.');$excess=$amount-$allocated;if($excess&&(!$student||empty($in['allow_advance'])))throw new InvalidArgumentException('Explicitly allow the unallocated student amount as an advance, or allocate the entire payment.');
-            if($student)$customer=trim($student['first_name_en'].' '.$student['last_name_en']);if(!$customer)throw new InvalidArgumentException('Choose a student or enter the invoice customer name.');
-            $number=$this->number('receipt',$date);$this->db->prepare('INSERT INTO ac_payments(school_id,number,student_id,customer_name,payment_date,amount_minor,method_id,account_id,reference,remarks,idempotency_key,request_hash,received_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)')->execute([$this->school,$number,$student['id']??null,$customer,$date,$amount,$method['id'],$account['id'],$reference,trim($in['remarks']??''),$key,$hash,$this->user]);$id=(int)$this->db->lastInsertId();
-            foreach($allocations as $invoice=>$value)$this->db->prepare('INSERT INTO ac_allocations(payment_id,invoice_id,amount_minor) VALUES(?,?,?)')->execute([$id,$invoice,$value]);
+        $this->authorize('payment');$key=$this->key($in);$amount=acDecimalUnits($in['amount']??'0');
+        if(!$amount)throw new InvalidArgumentException('Payment amount must be positive.');
+        $date=$this->date($in['payment_date']??'');$studentId=(int)($in['student_id']??0);$methodId=(int)($in['method_id']??0);
+        $reference=trim($in['reference']??'');$remarks=trim($in['remarks']??'');$customer=trim($in['customer_name']??'');
+        if($studentId<0||$methodId<=0||strlen($reference)>150||strlen($remarks)>2000||strlen($customer)>200)throw new InvalidArgumentException('Enter valid payment references and customer details.');
+        $requested=[];foreach((array)($in['allocations']??[]) as $invoice=>$value){
+            if($value==='')continue;$minor=acDecimalUnits($value);if(!$minor)continue;
+            if(!ctype_digit((string)$invoice)||(int)$invoice<=0||isset($requested[(int)$invoice]))throw new InvalidArgumentException('Select distinct valid invoice references.');
+            $requested[(int)$invoice]=$minor;
+        }
+        if(count($requested)>100)throw new InvalidArgumentException('Allocate at most 100 invoices per payment.');
+        ksort($requested,SORT_NUMERIC);
+        $allowAdvance=!empty($in['allow_advance']);$confirmed=!empty($in['externally_confirmed']);
+        $hash=hash('sha256',json_encode(['student_id'=>$studentId,'method_id'=>$methodId,'amount_minor'=>$amount,'date'=>$date,'customer'=>$studentId?'':$customer,'reference'=>$reference,'remarks'=>$remarks,'allow_advance'=>$allowAdvance,'externally_confirmed'=>$confirmed,'allocations'=>$requested],JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR));
+        return $this->atomic(function()use($key,$hash,$amount,$date,$studentId,$methodId,$reference,$remarks,$customer,$allowAdvance,$confirmed,$requested){
+            if(($id=$this->replay('ac_payments',$key,$hash))!==null)return $id;
+            $student=$studentId?schoolRecord($this->db,'students',$studentId,$this->school):null;
+            $method=$this->record('ac_methods',$methodId);$account=$this->cashBankAccount((int)$method['account_id']);
+            if(!(int)$method['is_active'])throw new InvalidArgumentException('Choose an active payment method.');
+            if(($method['requires_reference']||$account['cash_bank_kind']==='bank')&&($reference===''||!$confirmed))throw new InvalidArgumentException('Confirm the external bank/digital payment and enter its transaction reference; this form does not process an online gateway.');
+            $allocated=0;
+            foreach($requested as $invoice=>$value){
+                $i=$this->record('ac_invoices',$invoice,true);
+                if($i['status']!=='issued'||($student&&(int)$i['student_id']!==$studentId)||(!$student&&!empty($i['student_id'])))throw new InvalidArgumentException('Select issued invoices for the chosen student/customer.');
+                if(!$student&&$customer!==$i['customer_name'])throw new InvalidArgumentException('External invoice customer must match the payment customer.');
+                if($date<$i['bill_date'])throw new InvalidArgumentException('Payment date cannot precede an allocated bill date.');
+                if($value>$this->invoiceBalance($invoice))throw new InvalidArgumentException('Payment allocation exceeds the current invoice balance. Reload balances.');
+                $allocated=acCheckedAdd($allocated,$value);
+            }
+            if($allocated>$amount)throw new InvalidArgumentException('Invoice allocations exceed the payment amount.');
+            $excess=$amount-$allocated;
+            if($excess&&(!$student||!$allowAdvance))throw new InvalidArgumentException('Explicitly allow the unallocated student amount as an advance, or allocate the entire payment.');
+            if($student)$customer=trim($student['first_name_en'].' '.$student['last_name_en']);
+            if(!$customer)throw new InvalidArgumentException('Choose a student or enter the invoice customer name.');
+            $number=$this->number('receipt',$date);
+            $this->db->prepare('INSERT INTO ac_payments(school_id,number,student_id,customer_name,payment_date,amount_minor,method_id,account_id,reference,remarks,idempotency_key,request_hash,received_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)')->execute([$this->school,$number,$student['id']??null,$customer,$date,$amount,$methodId,$account['id'],$reference,$remarks,$key,$hash,$this->user]);$id=(int)$this->db->lastInsertId();
+            foreach($requested as $invoice=>$value)$this->db->prepare('INSERT INTO ac_allocations(payment_id,invoice_id,amount_minor) VALUES(?,?,?)')->execute([$id,$invoice,$value]);
             $lines=[[(int)$account['id'],$amount,0,$student['id']??null]];if($allocated)$lines[]=[$this->control('receivable'),0,$allocated,$student['id']??null];
-            if($excess){$this->db->prepare("INSERT INTO ac_advance_entries(school_id,student_id,payment_id,amount_minor,entry_date,kind,reference_key,created_by) VALUES(?,?,?,?,?,'receive',?,?)")->execute([$this->school,$student['id'],$id,$excess,$date,'receive:'.$id,$this->user]);$lines[]=[$this->control('advance'),0,$excess,$student['id']];}
-            $this->journal('payment',$id,$date,'Receive payment '.$number,$lines);$this->audit('Receive confirmed payment','ac_payments',$id,[],['amount_minor'=>$amount,'allocated_minor'=>$allocated,'advance_minor'=>$excess]);return $id;
+            if($excess){$this->db->prepare("INSERT INTO ac_advance_entries(school_id,student_id,payment_id,amount_minor,entry_date,kind,reference_key,created_by) VALUES(?,?,?,?,?,'receive',?,?)")->execute([$this->school,$studentId,$id,$excess,$date,'receive:'.$id,$this->user]);$lines[]=[$this->control('advance'),0,$excess,$studentId];}
+            $this->journal('payment',$id,$date,'Receive payment '.$number,$lines);
+            $this->audit('Receive confirmed payment','ac_payments',$id,[],['amount_minor'=>$amount,'allocated_minor'=>$allocated,'advance_minor'=>$excess]);return $id;
         });
     }
     public function applyAdvance(array $in):int {
@@ -228,7 +256,7 @@ final class SchoolAccounting {
     public function refundAdvance(array $in):int {
         $this->authorize('refund');if(empty($in['confirm']))throw new InvalidArgumentException('Confirm the refund warning.');$key=$this->key($in);$amount=acDecimalUnits($in['amount']??'0');$date=$this->date($in['date']??'');$reason=trim($in['reason']??'');if(!$amount||!$reason)throw new InvalidArgumentException('A positive refund and reason are required.');
         return $this->atomic(function()use($in,$key,$amount,$date,$reason){$old=$this->one('SELECT * FROM ac_refunds WHERE school_id=? AND idempotency_key=?',[$this->school,$key]);if($old){if((int)$old['student_id']!==(int)$in['student_id']||(int)$old['amount_minor']!==$amount||$old['refund_date']!==$date||$old['reason']!==$reason||(int)$old['account_id']!==(int)$in['account_id'])throw new InvalidArgumentException('This refund key already has different data.');return (int)$old['id'];}
-            $student=schoolRecord($this->db,'students',(int)$in['student_id'],$this->school);$account=$this->record('ac_accounts',(int)$in['account_id']);if($account['type']!=='asset'||!$account['is_active']||$amount>$this->advanceBalance((int)$student['id']))throw new InvalidArgumentException('Choose an active cash/bank account and an amount within available advance.');
+            $student=schoolRecord($this->db,'students',(int)$in['student_id'],$this->school);$account=$this->cashBankAccount((int)$in['account_id']);if($amount>$this->advanceBalance((int)$student['id']))throw new InvalidArgumentException('Refund amount exceeds available advance.');
             $this->db->prepare('INSERT INTO ac_refunds(school_id,student_id,amount_minor,refund_date,account_id,reason,approved_by,idempotency_key) VALUES(?,?,?,?,?,?,?,?)')->execute([$this->school,$student['id'],$amount,$date,$account['id'],$reason,$this->user,$key]);$id=(int)$this->db->lastInsertId();$this->db->prepare("INSERT INTO ac_advance_entries(school_id,student_id,amount_minor,entry_date,kind,reference_key,created_by) VALUES(?,?,?,?,'refund',?,?)")->execute([$this->school,$student['id'],-$amount,$date,'refund:'.$id,$this->user]);$this->journal('refund',$id,$date,$reason,[[$this->control('advance'),$amount,0,$student['id']],[(int)$account['id'],0,$amount,$student['id']]]);$this->audit('Approve advance refund','ac_refunds',$id,[],['amount_minor'=>$amount],$reason);return $id;
         });
     }
@@ -245,18 +273,18 @@ final class SchoolAccounting {
         $this->atomic(function()use($in,$pan,$registered,$invoice,$receipt,$days,$threshold){$this->db->prepare('UPDATE ac_settings SET pan_number=?,tax_registered=?,invoice_prefix=?,receipt_prefix=?,due_days=?,discount_approval_minor=?,prorate=? WHERE school_id=?')->execute([$pan,$registered,$invoice,$receipt,$days,$threshold,empty($in['prorate'])?0:1,$this->school]);$this->audit('Change accounting settings','ac_settings',$this->school,$this->settings,$in);});$this->settings=$this->one('SELECT * FROM ac_settings WHERE school_id=?',[$this->school]);
     }
     public function saveMethod(array $in):int {
-        $this->authorize('settings');$account=$this->record('ac_accounts',(int)($in['account_id']??0));$name=trim($in['name']??'');if($account['type']!=='asset'||!$account['is_active']||!$name||strlen($name)>100)throw new InvalidArgumentException('Enter a payment method name and an active cash/bank asset account.');
-        return $this->atomic(function()use($in,$account,$name){$this->db->prepare('INSERT INTO ac_methods(school_id,name,account_id,requires_reference) VALUES(?,?,?,?)')->execute([$this->school,$name,$account['id'],empty($in['requires_reference'])?0:1]);$id=(int)$this->db->lastInsertId();$this->audit('Create payment method','ac_methods',$id,[],$in);return $id;});
+        $this->authorize('settings');$name=trim($in['name']??'');if(!$name||strlen($name)>100)throw new InvalidArgumentException('Enter a payment method name up to 100 characters.');
+        return $this->atomic(function()use($in,$name){$account=$this->cashBankAccount((int)($in['account_id']??0));$this->db->prepare('INSERT INTO ac_methods(school_id,name,account_id,requires_reference) VALUES(?,?,?,?)')->execute([$this->school,$name,$account['id'],$account['cash_bank_kind']==='bank'||!empty($in['requires_reference'])?1:0]);$id=(int)$this->db->lastInsertId();$this->audit('Create payment method','ac_methods',$id,[],$in);return $id;});
     }
     public function createExpense(array $in):int {
-        $this->authorize('expense');$key=$this->key($in);$date=$this->date($in['expense_date']??'');$amount=acDecimalUnits($in['amount']??'0');$title=trim($in['title']??'');$expense=$this->record('ac_accounts',(int)($in['expense_account_id']??0));$cash=$this->record('ac_accounts',(int)($in['payment_account_id']??0));$category=(int)($in['category_id']??0);if($category)$this->record('ac_categories',$category);
+        $this->authorize('expense');$key=$this->key($in);$date=$this->date($in['expense_date']??'');$amount=acDecimalUnits($in['amount']??'0');$title=trim($in['title']??'');$expense=$this->record('ac_accounts',(int)($in['expense_account_id']??0));$cash=$this->cashBankAccount((int)($in['payment_account_id']??0));$category=(int)($in['category_id']??0);if($category)$this->record('ac_categories',$category);
         if(!$amount||!$title||strlen($title)>200||$expense['type']!=='expense'||$cash['type']!=='asset'||!$expense['is_active']||!$cash['is_active'])throw new InvalidArgumentException('Enter a positive expense, title and valid expense/cash accounts.');
         return $this->atomic(function()use($in,$key,$date,$amount,$title,$expense,$cash,$category){$old=$this->one('SELECT * FROM ac_expenses WHERE school_id=? AND idempotency_key=?',[$this->school,$key]);if($old){if($old['title']!==$title||(int)$old['amount_minor']!==$amount||$old['expense_date']!==$date||(int)$old['expense_account_id']!==(int)$expense['id']||(int)$old['payment_account_id']!==(int)$cash['id'])throw new InvalidArgumentException('This expense submission key already contains different data.');return (int)$old['id'];}
             $this->db->prepare('INSERT INTO ac_expenses(school_id,number,title,payee,expense_date,amount_minor,expense_account_id,payment_account_id,category_id,reference,remarks,idempotency_key,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)')->execute([$this->school,$this->number('expense',$date),$title,trim($in['payee']??''),$date,$amount,$expense['id'],$cash['id'],$category?:null,trim($in['reference']??''),trim($in['remarks']??''),$key,$this->user]);$id=(int)$this->db->lastInsertId();$this->audit('Save expense draft','ac_expenses',$id,[],$in);return $id;
         });
     }
     public function approveExpense(int $id):void {$this->authorize('approve');$this->atomic(function()use($id){$e=$this->record('ac_expenses',$id,true);if($e['status']!=='draft')return;$this->journal('expense_approve',$id,$e['expense_date'],$e['title'],[[(int)$e['expense_account_id'],(int)$e['amount_minor'],0,null],[$this->control('payable'),0,(int)$e['amount_minor'],null]]);$this->db->prepare("UPDATE ac_expenses SET status='approved',approved_by=? WHERE id=? AND school_id=?")->execute([$this->user,$id,$this->school]);$this->audit('Approve expense','ac_expenses',$id,$e,['status'=>'approved']);});}
-    public function payExpense(int $id,string $date):void {$this->authorize('expense');$date=$this->date($date);$this->atomic(function()use($id,$date){$e=$this->record('ac_expenses',$id,true);if($e['status']==='paid')return;if($e['status']!=='approved')throw new InvalidArgumentException('Administrator approval is required before expense payment.');$this->journal('expense_pay',$id,$date,'Pay '.$e['title'],[[$this->control('payable'),(int)$e['amount_minor'],0,null],[(int)$e['payment_account_id'],0,(int)$e['amount_minor'],null]]);$this->db->prepare("UPDATE ac_expenses SET status='paid' WHERE id=? AND school_id=?")->execute([$id,$this->school]);$this->audit('Pay approved expense','ac_expenses',$id,$e,['status'=>'paid']);});}
+    public function payExpense(int $id,string $date):void {$this->authorize('expense');$date=$this->date($date);$this->atomic(function()use($id,$date){$e=$this->record('ac_expenses',$id,true);if($e['status']==='paid')return;if($e['status']!=='approved')throw new InvalidArgumentException('Administrator approval is required before expense payment.');$this->cashBankAccount((int)$e['payment_account_id']);if($date<$e['expense_date'])throw new InvalidArgumentException('Expense payment date cannot precede the approved expense date.');$this->journal('expense_pay',$id,$date,'Pay '.$e['title'],[[$this->control('payable'),(int)$e['amount_minor'],0,null],[(int)$e['payment_account_id'],0,(int)$e['amount_minor'],null]]);$this->db->prepare("UPDATE ac_expenses SET status='paid' WHERE id=? AND school_id=?")->execute([$id,$this->school]);$this->audit('Pay approved expense','ac_expenses',$id,$e,['status'=>'paid']);});}
     public function reverseExpense(int $id,string $date,string $reason,bool $confirm):void {
         $this->authorize('reverse');$date=$this->date($date);if(!$confirm||!trim($reason))throw new InvalidArgumentException('Confirm expense reversal and provide a reason.');$this->atomic(function()use($id,$date,$reason){$e=$this->record('ac_expenses',$id,true);if($e['status']==='reversed')return;if($e['status']==='draft')throw new InvalidArgumentException('A draft has no posted financial entry to reverse.');
             foreach($this->rows("SELECT * FROM ac_journals WHERE school_id=? AND reference_id=? AND reference_type IN ('expense_approve','expense_pay') ORDER BY id",[$this->school,$id]) as $j){$lines=[];foreach($this->rows('SELECT * FROM ac_journal_lines WHERE journal_id=?',[$j['id']]) as $l)$lines[]=[(int)$l['account_id'],(int)$l['credit_minor'],(int)$l['debit_minor'],$l['student_id']];$this->journal($j['reference_type'].'_reverse',$id,$date,$reason,$lines,(int)$j['id']);}$this->db->prepare("UPDATE ac_expenses SET status='reversed' WHERE id=? AND school_id=?")->execute([$id,$this->school]);$this->audit('Reverse expense','ac_expenses',$id,$e,['status'=>'reversed'],$reason);
