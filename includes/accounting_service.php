@@ -19,6 +19,31 @@ function acWords(int $minor):string {
     return ucfirst($say(intdiv(abs($minor),100))).' Nepalese rupees'.($minor%100?' and '.$say(abs($minor)%100).' paisa':'').' only';
 }
 
+/** Shared action matrix: direct HTTP and service methods enforce the same capabilities. */
+function accountingActionAllowed(string $role,string $action,bool $preview=false):bool {
+    $known=['view','catalog','fees','invoice','payment','advance','expense','subscription','settings','approve','credit','refund','reverse','period','opening'];
+    if(!in_array($action,$known,true))return false;
+    if(!in_array($role,['super_admin','school_admin','accountant','cashier','auditor'],true))return false;
+    if($action==='view')return true;
+    if($preview||$role==='auditor')return false;
+    if(in_array($role,['school_admin','super_admin'],true))return true;
+    if($role==='cashier')return in_array($action,['payment','advance'],true);
+    return in_array($action,['catalog','fees','invoice','payment','advance','expense','subscription'],true);
+}
+function accountingRouteAction(string $file,array $input):?string {
+    $action=(string)($input['action']??'');
+    return match($file){
+        'create_bill.php'=>'invoice','generate.php'=>'invoice','payments.php'=>'payment',
+        'invoice.php'=>['issue'=>'invoice','advance'=>'advance','credit'=>'credit','update'=>'invoice'][$action]??null,
+        'fees.php'=>['category'=>'catalog','item'=>'catalog','rule'=>'fees','scholarship'=>'approve','copy_preview'=>'fees','copy'=>'fees','fine_policy'=>'approve'][$action]??null,
+        'settings.php'=>['settings'=>'settings','method'=>'settings','period'=>'period','period_state'=>'period','close_preview'=>'period'][$action]??null,
+        'journals.php'=>'settings',
+        'student.php'=>['opening'=>'opening','refund'=>'refund','fines_preview'=>'approve','fines'=>'approve','waive_fine'=>'credit'][$action]??null,
+        'expenses.php'=>['create'=>'expense','update'=>'expense','upload'=>'expense','approve'=>'approve','pay'=>'expense','reverse'=>'reverse'][$action]??null,
+        'subscriptions.php'=>'subscription','credit.php'=>$action==='refund'?'refund':null,
+        default=>null
+    };
+}
 final class SchoolAccounting {
     public string $role;private bool $preview;private bool $approvedGeneration=false;public array $settings;
     public function __construct(public PDO $db,public int $school,public int $user,bool $preview=false){
@@ -31,13 +56,12 @@ final class SchoolAccounting {
         if(!$this->settings)throw new InvalidArgumentException('Accounting is not provisioned. Ask an administrator to complete the school upgrade.');
     }
     public function can(string $action):bool {
-        if($action==='view')return true;
-        if($this->preview||$this->role==='auditor')return false;
-        if(in_array($this->role,['school_admin','super_admin'],true))return true;
-        if($this->role==='cashier')return in_array($action,['payment','advance'],true);
-        return !in_array($action,['settings','approve','credit','refund','reverse','period','opening'],true);
+        return accountingActionAllowed($this->role,$action,$this->preview);
     }
-    private function authorize(string $action):void{if(!$this->can($action))throw new InvalidArgumentException('Your role is not authorized for this financial action.');}
+    private function authorize(string $action):void{
+        $actor=$this->one('SELECT role,school_id,status FROM users WHERE id=?',[$this->user]);
+        if(!$actor||!(int)$actor['status']||$actor['role']!==$this->role||($this->role!=='super_admin'&&(int)$actor['school_id']!==$this->school)||!$this->can($action))throw new InvalidArgumentException('Your active account is not authorized for this financial action.');
+    }
     public function rows(string $sql,array $values=[]):array{$q=$this->db->prepare($sql);$q->execute($values);return $q->fetchAll();}
     public function one(string $sql,array $values=[]):array{return $this->rows($sql,$values)[0]??[];}
     private function scalar(string $sql,array $values=[]):int{$q=$this->db->prepare($sql);$q->execute($values);return (int)$q->fetchColumn();}

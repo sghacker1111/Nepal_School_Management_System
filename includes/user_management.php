@@ -1,5 +1,7 @@
 <?php
 function saveSchoolUser(PDO $db, int $actorId, string $actorRole, int $actorSchool, array $input): int {
+    $actorQuery=$db->prepare('SELECT role,school_id,status FROM users WHERE id=?');$actorQuery->execute([$actorId]);$actor=$actorQuery->fetch();
+    if(!$actor||!(int)$actor['status']||$actor['role']!==$actorRole||($actorRole!=='super_admin'&&(int)$actor['school_id']!==$actorSchool))throw new InvalidArgumentException('An active administrator assigned to this school is required.');
     if (!in_array($actorRole,['super_admin','school_admin'],true)) throw new InvalidArgumentException('Only administrators can manage accounts.');
     $id=(int)($input['user_id']??0);
     $school=$actorRole==='super_admin'?(int)($input['school_id']??0):$actorSchool;

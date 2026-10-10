@@ -100,6 +100,8 @@ if ($layoutSchoolId && in_array($layoutRole,$adminRoles,true)) {
         if ($layoutRole==='teacher' && in_array($key,['teachers','exams','reports'],true)) continue;
         if ($layoutRole==='exam_officer' && in_array($key,['teachers','attendance','reports'],true)) continue;
         if (in_array($layoutRole,['accountant','cashier','auditor'],true) && $key!=='dashboard' && $module!=='accounting') continue;
+        if(in_array($layoutRole,['cashier','auditor'],true)&&in_array($key,['accounting_bill','accounting_generate','accounting_subscription'],true))continue;
+        if($layoutRole==='auditor'&&$key==='accounting_payment')continue;
     ?><li class="nav-item"><a class="nav-link <?= ($activePage??'')===$key?'active':'' ?>" <?= ($activePage??'')===$key?'aria-current="page"':'' ?> href="<?= APP_URL.$path ?>"><i class="fa-solid fa-<?= $icon ?>" aria-hidden="true"></i><span><?= $label ?></span></a></li><?php endforeach; ?>
     </ul></section><?php endforeach; ?>
 </nav>

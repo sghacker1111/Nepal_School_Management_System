@@ -59,4 +59,8 @@ class ERPHttpFixture:
         return body
     def snapshot(self,table):
         assert re.fullmatch(r'[a-z_]+',table)
-        return self.db.execute(f'SELECT * FROM {table} ORDER BY id').fetchall()
+        fields=self.db.execute(f'PRAGMA table_info({table})').fetchall()
+        assert fields,'Unknown table'
+        keys=[row[1] for row in sorted(fields,key=lambda row:row[5]) if row[5]]
+        order=','.join('"'+key.replace('"','""')+'"' for key in keys) if keys else '1'
+        return self.db.execute(f'SELECT * FROM {table} ORDER BY {order}').fetchall()
