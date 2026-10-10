@@ -282,14 +282,8 @@ ob_start();
                             <td><?= sanitize($school['address'] ?: '-') ?></td>
                             <td>
                                 <?php
-                                $pkg = $school['subscription_type'] ?? 'full';
-                                if ($pkg === 'full') {
-                                    echo '<span class="badge bg-success">Full ERP</span>';
-                                } elseif ($pkg === 'exam_generator') {
-                                    echo '<span class="badge bg-primary">Exam Generator Only</span>';
-                                } elseif ($pkg === 'result_system') {
-                                    echo '<span class="badge bg-secondary">Result System Only</span>';
-                                }
+                                $pkg = $school['subscription_type'] ?? '';
+                                echo '<span class="badge '.($pkg==='full'?'bg-success':'bg-secondary').'">'.sanitize(schoolPackages()[$pkg]??'Unknown package — access disabled').'</span>';
                                 ?>
                             </td>
                             <td>

@@ -3,6 +3,7 @@ function schoolPackages(): array {
     return ['full'=>'Full ERP','result_system'=>'Result System','learning_system'=>'Learning System','paper_generator'=>'Paper Generator System','question_view'=>'Question View System','question_add'=>'Question Add System','accounting'=>'Accounting & Billing System','exam_generator'=>'Legacy Exam Generator Package'];
 }
 function schoolPackageAllows(string $package,string $module): bool {
+    if(!array_key_exists($package,schoolPackages()))return false;
     if($package==='full')return true;
     if(in_array($module,['auth','settings','classes','subjects'],true))return true;
     $features=[

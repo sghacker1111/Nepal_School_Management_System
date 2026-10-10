@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../config/config.php';
+require_once __DIR__.'/test_support.php';['db'=>$db,'fixture'=>$f]=erpTestFixture();
 require_once __DIR__ . '/../includes/auth.php';
 Auth::startSession();
 $failures = [];
@@ -12,6 +12,7 @@ checkSecurity(!Auth::verifyCSRFToken('incorrect'), 'An incorrect CSRF token must
 $_SESSION['role'] = 'teacher';
 $_SESSION['school_id'] = 1;
 $_SESSION['school_subscription_type'] = 'exam_generator';
+$db->exec("UPDATE schools SET subscription_type='exam_generator' WHERE id=1");
 checkSecurity(Auth::hasAccess('classes'), 'Paper-only schools need class selectors');
 checkSecurity(Auth::hasAccess('subjects'), 'Paper-only schools need subject selectors');
 checkSecurity(!Auth::hasAccess('results'), 'Paper-only subscriptions must not expose results');

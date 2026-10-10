@@ -207,7 +207,7 @@ class Auth {
 
     /**
      * Get current school's subscription/access package
-     * Returns: 'full', 'exam_generator', or 'result_system'
+     * Resolve the current database value, never a stale session entitlement.
      */
     public static function getSubscriptionType() {
         self::startSession();
@@ -217,11 +217,7 @@ class Auth {
         
         $school_id = self::getSchoolId();
         if (!$school_id) {
-            return 'full';
-        }
-        
-        if (isset($_SESSION['school_subscription_type'])) {
-            return $_SESSION['school_subscription_type'];
+            return 'unavailable';
         }
         
         try {
@@ -229,12 +225,12 @@ class Auth {
             $stmt = $db->prepare("SELECT subscription_type FROM schools WHERE id = ?");
             $stmt->execute([$school_id]);
             $sub = $stmt->fetchColumn();
-            $_SESSION['school_subscription_type'] = $sub ? $sub : 'full';
-        } catch (Exception $e) {
-            $_SESSION['school_subscription_type'] = 'full';
+            require_once __DIR__.'/packages.php';
+            return is_string($sub)&&array_key_exists($sub,schoolPackages())?$sub:'unavailable';
+        } catch (Throwable $e) {
+            error_log('School package lookup failed; access denied.');
+            return 'unavailable';
         }
-        
-        return $_SESSION['school_subscription_type'];
     }
 
     /**
@@ -251,7 +247,8 @@ class Auth {
     public static function requireAccess($module) {
         self::requireLogin();
         if (!self::hasAccess($module)) {
-            die("<div style='font-family:sans-serif;padding:30px;text-align:center;'><h2 style='color:#e74c3c;'>Access Denied</h2><p>Your school's active subscription package does not allow access to the <strong>" . htmlspecialchars($module) . "</strong> module.</p><p><a href='" . APP_URL . "/index.php'>Go to Dashboard</a></p></div>");
+            require_once __DIR__.'/request_guard.php';
+            denySchoolRequest('This module is not included in your school package.');
         }
     }
 }
