@@ -8,7 +8,8 @@ require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
 
 Auth::requireRole(['super_admin', 'school_admin', 'principal', 'teacher', 'exam_officer']);
-Auth::requireAccess('paper_generator');
+Auth::requireAccess('curriculum');
+require_once __DIR__.'/../../includes/teaching_scope.php';
 
 $db = getDB();
 $school_id = Auth::getSchoolId();
@@ -24,15 +25,7 @@ if (isset($_GET['action'])) {
     if ($action === 'get_subjects') {
         $class_id = (int)($_GET['class_id'] ?? 0);
         try {
-            $stmt = $db->prepare("
-                SELECT s.id, s.name_en, s.code 
-                FROM subjects s
-                JOIN class_subjects cs ON s.id = cs.subject_id
-                WHERE cs.class_id = ? AND (cs.school_id = ?) AND cs.is_active = 1 AND (s.is_hidden = 0 OR s.is_hidden IS NULL)
-                ORDER BY s.name_en
-            ");
-            $stmt->execute([$class_id, $school_id]);
-            $subjects = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $subjects=learningSubjects($db,(int)$school_id,$class_id,Auth::getRole(),(int)Auth::getUserId());
             echo json_encode(['success' => true, 'subjects' => $subjects]);
         } catch (Exception $e) {
             echo json_encode(['success' => false, 'message' => $e->getMessage()]);
@@ -220,9 +213,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 }
 
 // Fetch all classes for filter
-$stmt = $db->prepare("SELECT * FROM classes WHERE school_id = ? ORDER BY level, name");
-$stmt->execute([$school_id]);
-$classes = $stmt->fetchAll();
+$classes=learningClasses($db,(int)$school_id,Auth::getRole(),(int)Auth::getUserId());
 
 $pageTitle = 'Curriculum & Topics Manager';
 $activePage = 'curriculum';
@@ -265,7 +256,7 @@ ob_start();
                     <div id="subjectSection" style="display: none;">
                         <div class="d-flex justify-content-between align-items-center mb-1">
                             <label class="form-label fw-bold text-muted small mb-0">Select Subject</label>
-                            <button type="button" class="btn btn-link p-0 text-primary small text-decoration-none fw-bold" onclick="showMapSubjectModal()"><i class="fas fa-link"></i> Map Subject</button>
+                            <?php if(Auth::getRole()!=='teacher'): ?><button type="button" class="btn btn-link p-0 text-primary small text-decoration-none fw-bold" onclick="showMapSubjectModal()"><i class="fas fa-link"></i> Map Subject</button><?php endif; ?>
                         </div>
                         <select id="curriculumSubject" class="form-select" onchange="onSubjectChange()">
                             <option value="">-- Choose Subject --</option>

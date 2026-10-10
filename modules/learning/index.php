@@ -18,9 +18,7 @@ $error = '';
 // 1. Fetch school details and permission status
 $permission_status = 'none';
 if ($school_id) {
-    $stmt = $db->prepare("SELECT learning_hub_permission_status FROM schools WHERE id = ?");
-    $stmt->execute([$school_id]);
-    $permission_status = $stmt->fetchColumn() ?: 'none';
+    $permission_status = Auth::hasAccess('learning')?'approved':'none';
 }
 
 // Handle request access action for school users

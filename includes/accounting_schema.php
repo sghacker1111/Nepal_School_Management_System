@@ -38,6 +38,12 @@ function migrateSchoolExtensions(PDO $db):void {
     $version=$db->query("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'")->fetchColumn();
     if(!ctype_digit((string)$version)||(int)$version>SCHOOL_SCHEMA_VERSION)throw new InvalidArgumentException('This database schema requires a newer application; no downgrade was performed.');
     if((int)$version===SCHOOL_SCHEMA_VERSION)return;
+    require_once __DIR__.'/packages.php';
+    if((int)$version>=8){
+        migrateSchoolSubscriptionSchema($db);
+        $db->prepare('UPDATE app_meta SET meta_value=? WHERE meta_key=?')->execute([(string)SCHOOL_SCHEMA_VERSION,'workflow_schema']);
+        return;
+    }
     if((int)$version<7){
         foreach(['subjects','class_subjects','exam_subjects'] as $table)if(!in_array('internal_components',dbColumns($db,$table),true))$db->exec("ALTER TABLE $table ADD COLUMN internal_components TEXT");
         if(DB_TYPE==='mysql')$db->exec("ALTER TABLE users MODIFY role VARCHAR(50) NOT NULL");
@@ -72,6 +78,7 @@ function migrateSchoolExtensions(PDO $db):void {
     $db->exec('UPDATE ac_credits SET receivable_minor=amount_minor WHERE request_hash IS NULL AND receivable_minor=0 AND refund_minor=0');
     $db->exec('UPDATE ac_subscriptions SET anchor_day=CAST(SUBSTR(start_date,9,2) AS UNSIGNED) WHERE anchor_day IS NULL');
     foreach($db->query('SELECT id FROM schools')->fetchAll(PDO::FETCH_COLUMN) as $school)provisionSchoolAccounting($db,(int)$school);
+    migrateSchoolSubscriptionSchema($db);
     $db->prepare('UPDATE app_meta SET meta_value=? WHERE meta_key=?')->execute([(string)SCHOOL_SCHEMA_VERSION,'workflow_schema']);
 }
 function accountingIndex(PDO $db,string $table,string $name,string $fields,bool $unique=false):void {

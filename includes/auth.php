@@ -222,11 +222,12 @@ class Auth {
         
         try {
             $db = getDB();
-            $stmt = $db->prepare("SELECT subscription_type FROM schools WHERE id = ?");
+            $stmt = $db->prepare("SELECT * FROM schools WHERE id = ?");
             $stmt->execute([$school_id]);
-            $sub = $stmt->fetchColumn();
+            $school = $stmt->fetch();
             require_once __DIR__.'/packages.php';
-            return is_string($sub)&&array_key_exists($sub,schoolPackages())?$sub:'unavailable';
+            $packages=$school?schoolSelectedPackages($school):[];
+            return in_array('full',$packages,true)?'full':(count($packages)===1?$packages[0]:'unavailable');
         } catch (Throwable $e) {
             error_log('School package lookup failed; access denied.');
             return 'unavailable';
@@ -238,7 +239,18 @@ class Auth {
      */
     public static function hasAccess($module) {
         require_once __DIR__.'/packages.php';
-        return schoolPackageAllows(self::getSubscriptionType(),$module);
+        if(self::getRole()==='super_admin'&&!self::getSchoolId())return true;
+        $school=self::getSubscription();
+        return $school&&schoolSubscriptionAllows($school,(string)$module);
+    }
+
+    public static function getSubscription():array {
+        try{$q=getDB()->prepare('SELECT * FROM schools WHERE id=?');$q->execute([self::getSchoolId()]);return $q->fetch()?:[];}
+        catch(Throwable $e){error_log('School subscription lookup failed; access denied.');return [];}
+    }
+    public static function canAddQuestions():bool {
+        require_once __DIR__.'/packages.php';
+        return self::getRole()==='super_admin'||schoolSubscriptionCanAddQuestions(self::getSubscription());
     }
 
     /**

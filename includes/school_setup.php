@@ -20,7 +20,8 @@ function provisionSchool(PDO $db, int $schoolId): void {
     $check->execute([$schoolId]);
     $version = $check->fetchColumn();
     if ($version === false) return;
-    $financeReady=function_exists('provisionSchoolAccounting')&&(int)$db->query("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'")->fetchColumn()===8;
+    $schemaVersion=(int)$db->query("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'")->fetchColumn();
+    $financeReady=function_exists('provisionSchoolAccounting')&&$schemaVersion>=8&&$schemaVersion<=SCHOOL_SCHEMA_VERSION;
     if ((int)$version >= 2) {if($financeReady)provisionSchoolAccounting($db,$schoolId);return;}
     $ownTransaction = !$db->inTransaction();
     if ($ownTransaction) $db->beginTransaction();
