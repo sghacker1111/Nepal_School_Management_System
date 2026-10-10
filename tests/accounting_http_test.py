@@ -49,4 +49,33 @@ with ERPHttpFixture() as app:
     app.login('cashier');app.request(create,status=403)
     app.login('auditor');app.request(view);app.request(view,{'action':'issue'},status=403)
     app.login('school_admin');app.request(create,{**payload,'action':'draft'},status=419,csrf=False)
+    paid_input={'action':'issue','student_id':f['student'],'bill_date':'2026-10-01','due_date':'2026-10-31','items[0][particular]':'Paid refundable fee','items[0][rate]':'100','idempotency_key':'http-paid-refund-bill'}
+    app.request(create,paid_input)
+    paid_bill=app.db.execute('SELECT id FROM ac_invoices WHERE idempotency_key=?',(paid_input['idempotency_key'],)).fetchone()[0]
+    cash=app.db.execute("SELECT id FROM ac_methods WHERE school_id=1 AND name='Cash'").fetchone()[0]
+    cash_account=app.db.execute("SELECT id FROM ac_accounts WHERE school_id=1 AND control_key='cash'").fetchone()[0]
+    ar=app.db.execute("SELECT id FROM ac_accounts WHERE school_id=1 AND control_key='receivable'").fetchone()[0]
+    payment={'action':'payment','student_id':f['student'],'method_id':cash,'payment_date':'2026-10-03','amount':'100','allocations['+str(paid_bill)+']':'100','idempotency_key':'http-paid-refund-payment'}
+    app.request('/modules/accounting/payments.php',payment)
+    paid_view=f'/modules/accounting/invoice.php?id={paid_bill}'
+    credit_input={'action':'credit','amount':'100','date':'2026-10-04','reason':'Synthetic approved correction','confirm':1,'idempotency_key':'http-paid-credit-one'}
+    body=app.request(paid_view,credit_input);assert 'CRN-' in body
+    credit_id=app.db.execute('SELECT id FROM ac_credits WHERE invoice_id=?',(paid_bill,)).fetchone()[0]
+    assert app.db.execute('SELECT receivable_minor,refund_minor FROM ac_credits WHERE id=?',(credit_id,)).fetchone()==(0,10000)
+    credit_view=f'/modules/accounting/credit.php?id={credit_id}'
+    body=app.request(credit_view);assert 'CREDIT NOTE' in body and '2083-' in body and 'Paid refundable fee' in body
+    refund={'action':'refund','amount':'100','date':'2026-10-05','reason':'Synthetic cash refund','confirm':1,'account_id':ar,'idempotency_key':'http-credit-refund-one'}
+    before=app.snapshot('ac_credit_refunds');body=app.request(credit_view,refund)
+    assert 'designated active cash' in body and app.snapshot('ac_credit_refunds')==before
+    refund['account_id']=cash_account;body=app.request(credit_view,refund);assert 'RFN-' in body
+    app.request(credit_view,refund);assert len(app.snapshot('ac_credit_refunds'))==1
+    app.login('cashier');app.request(credit_view,refund,status=403)
+    app.login('auditor');before=app.snapshot('ac_credits');app.request(credit_view);assert app.snapshot('ac_credits')==before;app.request(credit_view,refund,status=403)
+    app.login('other_admin');app.request(credit_view,status=404)
+    app.login('school_admin')
+    account_view=f'/modules/accounting/student.php?student={f["student"]}'
+    opening={'action':'opening','amount':'100','date':'2026-10-01','opening_reference':'HTTP-SYNTHETIC-REGISTER-1','reason':'Verified synthetic opening register','confirm':1,'idempotency_key':'http-opening-import-first'}
+    body=app.request(account_view,opening);assert 'Unique verified source' in body
+    app.request(account_view,{**opening,'idempotency_key':'http-opening-import-retry'})
+    assert app.db.execute('SELECT COUNT(*) FROM ac_invoices WHERE opening_reference=?',(opening['opening_reference'],)).fetchone()[0]==1
     print(f'Accounting HTTP passed: {app.count} requests; previews, retention, drafts, immutable print, roles, tenant isolation and CSRF.')

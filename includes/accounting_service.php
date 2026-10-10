@@ -66,6 +66,7 @@ final class SchoolAccounting {
         return $this->ledger->transaction(function()use($fn){$this->authorize('view');$this->settings=$this->one('SELECT * FROM ac_settings WHERE school_id=?',[$this->school]);return $fn();});
     }
     private function audit(string $action,string $entity,int $id,array $old=[],array $new=[],string $reason=''):void{
+        unset($old['csrf_token'],$new['csrf_token']);
         $this->db->prepare('INSERT INTO ac_audit(school_id,actor_id,action,entity,record_id,old_data,new_data,reason) VALUES(?,?,?,?,?,?,?,?)')->execute([$this->school,$this->user,$action,$entity,$id,json_encode($old,JSON_UNESCAPED_UNICODE),json_encode($new,JSON_UNESCAPED_UNICODE),$reason]);
     }
     private function date($date):string{return schoolDateToAd($date)??throw new InvalidArgumentException('A valid date is required.');}
@@ -73,7 +74,7 @@ final class SchoolAccounting {
     private function number(string $kind,string $date):string {
         $year=substr(schoolAdToBs($date)??$date,0,4);$r=$this->one('SELECT next_number FROM ac_sequences WHERE school_id=? AND kind=? AND year_key=?',[$this->school,$kind,$year]);$n=(int)($r['next_number']??1);
         if($r)$this->db->prepare('UPDATE ac_sequences SET next_number=? WHERE school_id=? AND kind=? AND year_key=?')->execute([$n+1,$this->school,$kind,$year]);else $this->db->prepare('INSERT INTO ac_sequences VALUES(?,?,?,?)')->execute([$this->school,$kind,$year,$n+1]);
-        $prefix=match($kind){'invoice'=>$this->settings['invoice_prefix'],'receipt'=>$this->settings['receipt_prefix'],'credit'=>'CRN','expense'=>'EXP',default=>'JRN'};return $prefix.'-'.$year.'-'.str_pad((string)$n,6,'0',STR_PAD_LEFT);
+        $prefix=match($kind){'invoice'=>$this->settings['invoice_prefix'],'receipt'=>$this->settings['receipt_prefix'],'credit'=>'CRN','refund'=>'RFN','expense'=>'EXP',default=>'JRN'};return $prefix.'-'.$year.'-'.str_pad((string)$n,6,'0',STR_PAD_LEFT);
     }
     private function period(string $date):array {
         $periods=$this->rows('SELECT * FROM ac_periods WHERE school_id=? AND start_date<=? AND end_date>=? ORDER BY start_date DESC',[$this->school,$date,$date]);
@@ -220,7 +221,7 @@ final class SchoolAccounting {
     public function invoiceBalance(int $id):int {
         $i=$this->record('ac_invoices',$id);if(in_array($i['status'],['draft','void'],true))return 0;
         $paid=$this->scalar("SELECT COALESCE(SUM(a.amount_minor),0) FROM ac_allocations a JOIN ac_payments p ON p.id=a.payment_id WHERE a.invoice_id=? AND p.school_id=? AND p.status='posted'",[$id,$this->school]);
-        $credits=$this->scalar('SELECT COALESCE(SUM(amount_minor),0) FROM ac_credits WHERE school_id=? AND invoice_id=?',[$this->school,$id]);
+        $credits=$this->scalar('SELECT COALESCE(SUM(receivable_minor),0) FROM ac_credits WHERE school_id=? AND invoice_id=?',[$this->school,$id]);
         $advance=$this->scalar("SELECT COALESCE(-SUM(amount_minor),0) FROM ac_advance_entries WHERE school_id=? AND invoice_id=? AND kind='apply'",[$this->school,$id]);
         return (int)$i['total_minor']-$paid-$credits-$advance;
     }
@@ -279,18 +280,78 @@ final class SchoolAccounting {
         });
     }
     public function creditInvoice(array $in):int {
-        $this->authorize('credit');if(empty($in['confirm']))throw new InvalidArgumentException('Confirm the credit/cancellation warning.');$key=$this->key($in);$amount=acDecimalUnits($in['amount']??'0');$date=$this->date($in['date']??'');$reason=trim($in['reason']??'');if(!$reason||!$amount)throw new InvalidArgumentException('A positive amount and correction reason are required.');
-        return $this->atomic(function()use($in,$key,$amount,$date,$reason){$existing=$this->one('SELECT * FROM ac_credits WHERE school_id=? AND idempotency_key=?',[$this->school,$key]);if($existing){if((int)$existing['invoice_id']!==(int)$in['invoice_id']||(int)$existing['amount_minor']!==$amount||$existing['credit_date']!==$date||$existing['reason']!==$reason)throw new InvalidArgumentException('This credit key already has different data.');return (int)$existing['id'];}
-            $i=$this->record('ac_invoices',(int)$in['invoice_id'],true);if($i['status']!=='issued'||$amount>$this->invoiceBalance((int)$i['id']))throw new InvalidArgumentException('Credit cannot exceed the unpaid invoice balance. Reverse/refund payments explicitly when required.');
-            $void=!empty($in['void']);if($void&&($amount!==(int)$i['total_minor']||$this->invoiceBalance((int)$i['id'])!==(int)$i['total_minor']))throw new InvalidArgumentException('Only a completely unpaid, unadjusted invoice can be voided. Use a credit note otherwise.');
-            $this->db->prepare('INSERT INTO ac_credits(school_id,number,invoice_id,credit_date,amount_minor,reason,kind,created_by,idempotency_key) VALUES(?,?,?,?,?,?,?,?,?)')->execute([$this->school,$this->number('credit',$date),$i['id'],$date,$amount,$reason,$void?'void':'credit',$this->user,$key]);$id=(int)$this->db->lastInsertId();
-            $remaining=$amount;$base=(int)$i['total_minor'];$tax=(int)$i['tax_minor'];$taxCredit=$base>0?acMulDiv($amount,$tax,$base):0;$lines=[[$this->control('discount'),$amount-$taxCredit,0,$i['student_id']],[$this->control('receivable'),0,$amount,$i['student_id']]];if($taxCredit)$lines[]=[$this->control('tax'),$taxCredit,0,$i['student_id']];$this->journal('credit',$id,$date,$reason,$lines);
-            if($void)$this->db->prepare("UPDATE ac_invoices SET status='void' WHERE id=? AND school_id=?")->execute([$i['id'],$this->school]);$this->audit($void?'Void invoice':'Approve credit note','ac_credits',$id,$i,['amount_minor'=>$amount],$reason);return $id;
+        $this->authorize('credit');if(empty($in['confirm']))throw new InvalidArgumentException('Confirm the credit/cancellation warning.');
+        $key=$this->key($in);$date=$this->date($in['date']??'');$reason=trim($in['reason']??'');$invoiceId=(int)($in['invoice_id']??0);$void=!empty($in['void']);
+        $requested=[];$requestedTotal=0;
+        foreach((array)($in['line_amounts']??[]) as $line=>$value){if($value==='')continue;$v=acDecimalUnits($value);if(!$v)continue;if(!ctype_digit((string)$line)||(int)$line<=0||isset($requested[(int)$line]))throw new InvalidArgumentException('Choose distinct valid invoice lines.');$requested[(int)$line]=$v;$requestedTotal=acCheckedAdd($requestedTotal,$v);}
+        ksort($requested,SORT_NUMERIC);
+        $amount=isset($in['amount'])&&$in['amount']!==''?acDecimalUnits($in['amount']):$requestedTotal;
+        if(!$amount||!$reason||strlen($reason)>2000||$invoiceId<=0||($requested&&$amount!==$requestedTotal)||count($requested)>100)throw new InvalidArgumentException('Enter a positive credit, matching line amounts and a correction reason.');
+        $hash=hash('sha256',json_encode([$invoiceId,$amount,$date,$reason,$void,$requested],JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR));
+        return $this->atomic(function()use($key,$date,$reason,$invoiceId,$void,$amount,$requested,$hash){
+            $existing=$this->one('SELECT * FROM ac_credits WHERE school_id=? AND idempotency_key=?',[$this->school,$key]);
+            if($existing){if(!empty($existing['request_hash'])?!hash_equals($existing['request_hash'],$hash):((int)$existing['invoice_id']!==$invoiceId||(int)$existing['amount_minor']!==$amount||$existing['credit_date']!==$date||$existing['reason']!==$reason||($existing['kind']==='void')!==$void))throw new InvalidArgumentException('This credit key already has different data.');return (int)$existing['id'];}
+            $invoice=$this->record('ac_invoices',$invoiceId,true);
+            $credited=$this->scalar('SELECT COALESCE(SUM(amount_minor),0) FROM ac_credits WHERE school_id=? AND invoice_id=?',[$this->school,$invoiceId]);
+            if($invoice['status']!=='issued'||$date<$invoice['bill_date']||$amount>(int)$invoice['total_minor']-$credited)throw new InvalidArgumentException('Credit must be dated on or after the issued bill and cannot exceed its uncredited amount.');
+            $due=$this->invoiceBalance($invoiceId);
+            if($void&&($credited||$amount!==(int)$invoice['total_minor']||$due!==(int)$invoice['total_minor']))throw new InvalidArgumentException('Only a completely unpaid, unadjusted invoice can be voided. Use a credit note otherwise.');
+            $opening=(bool)$this->one("SELECT id FROM ac_journals WHERE school_id=? AND reference_type='opening_due' AND reference_id=?",[$this->school,$invoiceId]);
+            $details=[];$taxCredit=0;
+            if($opening){if($requested)throw new InvalidArgumentException('Opening dues have no fee-item lines; enter the verified correction amount.');}
+            else {
+                $items=$this->rows('SELECT i.*,COALESCE(c.used_amount,0) used_amount,COALESCE(c.used_tax,0) used_tax FROM ac_invoice_items i LEFT JOIN (SELECT ci.invoice_item_id,SUM(ci.amount_minor) used_amount,SUM(ci.tax_minor) used_tax FROM ac_credit_items ci JOIN ac_credits c ON c.id=ci.credit_id AND c.school_id=ci.school_id WHERE c.school_id=? AND c.invoice_id=? GROUP BY ci.invoice_item_id) c ON c.invoice_item_id=i.id WHERE i.invoice_id=? ORDER BY i.id',[$this->school,$invoiceId,$invoiceId]);
+                $weight=0;$used=0;foreach($items as $item){$weight=acCheckedAdd($weight,(int)$item['total_minor']-(int)$item['used_amount']);$used=acCheckedAdd($used,(int)$item['used_amount']);}
+                if($used!==$credited)throw new InvalidArgumentException('This legacy invoice has credits without item allocations; review its historical credit details before another correction.');
+                if(!$items||$weight<$amount)throw new InvalidArgumentException('The invoice item balances are insufficient for this credit.');
+                $remaining=$amount;$seen=[];
+                foreach($items as $item){
+                    $lineId=(int)$item['id'];$available=(int)$item['total_minor']-(int)$item['used_amount'];
+                    $portion=$requested?($requested[$lineId]??0):($weight>0?min($remaining,acMulDiv($remaining,$available,$weight)):0);
+                    if($portion>$available)throw new InvalidArgumentException('A line credit exceeds that line remaining amount.');
+                    if($requested&&isset($requested[$lineId]))$seen[$lineId]=true;
+                    if($portion){
+                        $taxToDate=acMulDiv(acCheckedAdd((int)$item['used_amount'],$portion),(int)$item['tax_minor'],(int)$item['total_minor']);
+                        $tax=max(0,min((int)$item['tax_minor']-(int)$item['used_tax'],$taxToDate-(int)$item['used_tax']));
+                        $details[]=[$lineId,$portion,$tax];$taxCredit=acCheckedAdd($taxCredit,$tax);$remaining-=$portion;
+                    }
+                    $weight-=$available;
+                }
+                if($remaining!==0||($requested&&count($seen)!==count($requested)))throw new InvalidArgumentException('Select only this invoice eligible lines with matching credit totals.');
+            }
+            $receivable=min($amount,max(0,$due));$refund=$amount-$receivable;
+            $this->db->prepare('INSERT INTO ac_credits(school_id,number,invoice_id,credit_date,amount_minor,reason,kind,created_by,idempotency_key,receivable_minor,refund_minor,tax_minor,request_hash) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)')->execute([$this->school,$this->number('credit',$date),$invoiceId,$date,$amount,$reason,$void?'void':'credit',$this->user,$key,$receivable,$refund,$taxCredit,$hash]);$id=(int)$this->db->lastInsertId();
+            foreach($details as [$line,$value,$tax])$this->db->prepare('INSERT INTO ac_credit_items(school_id,credit_id,invoice_item_id,amount_minor,tax_minor) VALUES(?,?,?,?,?)')->execute([$this->school,$id,$line,$value,$tax]);
+            $lines=[[$this->control($opening?'equity':'discount'),$amount-$taxCredit,0,$invoice['student_id']]];
+            if($taxCredit)$lines[]=[$this->control('tax'),$taxCredit,0,$invoice['student_id']];
+            if($receivable)$lines[]=[$this->control('receivable'),0,$receivable,$invoice['student_id']];
+            if($refund)$lines[]=[$this->control('refund_payable'),0,$refund,$invoice['student_id']];
+            $this->journal('credit',$id,$date,$reason,$lines);
+            if($void)$this->db->prepare("UPDATE ac_invoices SET status='void',revision=revision+1 WHERE id=? AND school_id=?")->execute([$invoiceId,$this->school]);
+            $this->audit($void?'Void invoice':'Approve credit note','ac_credits',$id,$invoice,['amount_minor'=>$amount,'receivable_minor'=>$receivable,'refund_minor'=>$refund,'tax_minor'=>$taxCredit],$reason);return $id;
+        });
+    }
+    public function refundCredit(array $in):int {
+        $this->authorize('refund');if(empty($in['confirm']))throw new InvalidArgumentException('Confirm the credit refund warning.');
+        $key=$this->key($in);$creditId=(int)($in['credit_id']??0);$accountId=(int)($in['account_id']??0);$amount=acDecimalUnits($in['amount']??'0');$date=$this->date($in['date']??'');$reason=trim($in['reason']??'');
+        if(!$amount||!$reason||strlen($reason)>2000||$creditId<=0||$accountId<=0)throw new InvalidArgumentException('Enter a positive refund, credit, cash/bank account and reason.');
+        $hash=hash('sha256',json_encode([$creditId,$accountId,$amount,$date,$reason],JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR));
+        return $this->atomic(function()use($key,$creditId,$accountId,$amount,$date,$reason,$hash){
+            if(($id=$this->replay('ac_credit_refunds',$key,$hash))!==null)return $id;
+            $credit=$this->record('ac_credits',$creditId,true);$invoice=$this->record('ac_invoices',(int)$credit['invoice_id']);$account=$this->cashBankAccount($accountId);
+            $paid=$this->scalar('SELECT COALESCE(SUM(amount_minor),0) FROM ac_credit_refunds WHERE school_id=? AND credit_id=?',[$this->school,$creditId]);
+            if($date<$credit['credit_date']||$amount>(int)$credit['refund_minor']-$paid)throw new InvalidArgumentException('Refund must be on or after the credit date and within its remaining payable balance.');
+            $number=$this->number('refund',$date);
+            $this->db->prepare('INSERT INTO ac_credit_refunds(school_id,credit_id,number,amount_minor,refund_date,account_id,reason,approved_by,idempotency_key,request_hash) VALUES(?,?,?,?,?,?,?,?,?,?)')->execute([$this->school,$creditId,$number,$amount,$date,$accountId,$reason,$this->user,$key,$hash]);$id=(int)$this->db->lastInsertId();
+            $this->journal('credit_refund',$id,$date,$reason,[[$this->control('refund_payable'),$amount,0,$invoice['student_id']],[(int)$account['id'],0,$amount,$invoice['student_id']]]);
+            $this->audit('Approve credit refund','ac_credit_refunds',$id,[],['credit_id'=>$creditId,'amount_minor'=>$amount],$reason);return $id;
         });
     }
     public function reversePayment(int $id,string $date,string $reason,bool $confirmed):void {
         $this->authorize('reverse');$date=$this->date($date);if(!$confirmed||trim($reason)==='')throw new InvalidArgumentException('Confirm reversal and provide a reason.');
-        $this->atomic(function()use($id,$date,$reason){$p=$this->record('ac_payments',$id,true);if($p['status']==='reversed')return;$advance=$this->scalar("SELECT COALESCE(SUM(amount_minor),0) FROM ac_advance_entries WHERE school_id=? AND payment_id=? AND kind='receive'",[$this->school,$id]);if($advance&&$advance>$this->advanceBalance((int)$p['student_id']))throw new InvalidArgumentException('This payment advance has been used or refunded. Restore it before reversal.');
+        $this->atomic(function()use($id,$date,$reason){$p=$this->record('ac_payments',$id,true);if($p['status']==='reversed')return;
+            if($this->scalar('SELECT COUNT(*) FROM ac_allocations a JOIN ac_credits c ON c.invoice_id=a.invoice_id WHERE a.payment_id=? AND c.school_id=? AND c.refund_minor>0',[$id,$this->school]))throw new InvalidArgumentException('This payment is linked to an approved credit refund; it cannot also be reversed.');
+            $advance=$this->scalar("SELECT COALESCE(SUM(amount_minor),0) FROM ac_advance_entries WHERE school_id=? AND payment_id=? AND kind='receive'",[$this->school,$id]);if($advance&&$advance>$this->advanceBalance((int)$p['student_id']))throw new InvalidArgumentException('This payment advance has been used or refunded. Restore it before reversal.');
             $j=$this->one("SELECT * FROM ac_journals WHERE school_id=? AND reference_type='payment' AND reference_id=?",[$this->school,$id]);if(!$j)throw new InvalidArgumentException('The original payment journal is missing.');$lines=[];foreach($this->rows('SELECT * FROM ac_journal_lines WHERE journal_id=?',[$j['id']]) as $l)$lines[]=[(int)$l['account_id'],(int)$l['credit_minor'],(int)$l['debit_minor'],$l['student_id']];$this->journal('payment_reverse',$id,$date,$reason,$lines,(int)$j['id']);
             if($advance)$this->db->prepare("INSERT INTO ac_advance_entries(school_id,student_id,payment_id,amount_minor,entry_date,kind,reference_key,created_by) VALUES(?,?,?,?,?,'reverse',?,?)")->execute([$this->school,$p['student_id'],$id,-$advance,$date,'reverse:'.$id,$this->user]);$this->db->prepare("UPDATE ac_payments SET status='reversed' WHERE id=? AND school_id=?")->execute([$id,$this->school]);$this->audit('Reverse payment','ac_payments',$id,$p,['status'=>'reversed'],$reason);
         });
@@ -335,14 +396,24 @@ final class SchoolAccounting {
     }
     public function postManualJournal(array $in):int {
         $this->authorize('opening');if(empty($in['confirm']))throw new InvalidArgumentException('Confirm this journal after reviewing the accounts.');$key=$this->key($in);$date=$this->date($in['date']??'');$description=trim($in['description']??'');if(!$description)throw new InvalidArgumentException('Journal description is required.');$lines=[];
-        foreach((array)($in['lines']??[]) as $r){if(empty($r['account_id']))continue;$a=$this->record('ac_accounts',(int)$r['account_id']);if(in_array($a['control_key'],['receivable','advance'],true))throw new InvalidArgumentException('Use verified student opening dues or advance workflows for control accounts, to keep subledgers reconciled.');$lines[]=[(int)$a['id'],acDecimalUnits($r['debit']?:'0'),acDecimalUnits($r['credit']?:'0'),null];}
-        return $this->atomic(function()use($in,$key,$date,$description,$lines){$old=$this->one("SELECT * FROM ac_audit WHERE school_id=? AND action='Manual journal request' AND reason=?",[$this->school,$key]);if($old){if($old['new_data']!==json_encode($in,JSON_UNESCAPED_UNICODE))throw new InvalidArgumentException('This journal key already contains different data.');return (int)$old['record_id'];}$id=$this->journal('manual',random_int(1,2000000000),$date,$description,$lines);$this->audit('Manual journal request','ac_journals',$id,[],$in,$key);return $id;});
+        foreach((array)($in['lines']??[]) as $r){if(empty($r['account_id']))continue;$a=$this->record('ac_accounts',(int)$r['account_id']);if(in_array($a['control_key'],['receivable','advance','refund_payable'],true))throw new InvalidArgumentException('Use verified student opening dues or advance workflows for control accounts, to keep subledgers reconciled.');$lines[]=[(int)$a['id'],acDecimalUnits($r['debit']?:'0'),acDecimalUnits($r['credit']?:'0'),null];}
+        usort($lines,fn($a,$b)=>$a<=>$b);$request=['date'=>$date,'description'=>$description,'lines'=>$lines];
+        return $this->atomic(function()use($request,$key,$date,$description,$lines){$old=$this->one("SELECT * FROM ac_audit WHERE school_id=? AND action='Manual journal request' AND reason=?",[$this->school,$key]);if($old){if($old['new_data']!==json_encode($request,JSON_UNESCAPED_UNICODE))throw new InvalidArgumentException('This journal key already contains different data.');return (int)$old['record_id'];}$id=$this->journal('manual',random_int(1,2000000000),$date,$description,$lines);$this->audit('Manual journal request','ac_journals',$id,[],$request,$key);return $id;});
     }
     public function openingDue(array $in):int {
-        $this->authorize('opening');if(empty($in['confirm']))throw new InvalidArgumentException('Confirm that this opening balance was independently verified.');$amount=acDecimalUnits($in['amount']??'0');if(!$amount)throw new InvalidArgumentException('Opening due must be positive.');$this->key($in);
-        $student=schoolRecord($this->db,'students',(int)($in['student_id']??0),$this->school);$date=$this->date($in['date']??'');
-        return $this->atomic(function()use($in,$amount,$student,$date){$key='opening:'.$in['idempotency_key'];$hash=hash('sha256',json_encode($in));if(($id=$this->replay('ac_invoices',$key,$hash))!==null)return $id;$this->period($date);$number=$this->number('invoice',$date);$name=trim($student['first_name_en'].' '.$student['last_name_en']);
-            $this->db->prepare("INSERT INTO ac_invoices(school_id,number,academic_year_id,class_id,section_id,student_id,customer_type,customer_name,description,bill_date,due_date,status,subtotal_minor,total_minor,idempotency_key,request_hash,created_by,issued_at) VALUES(?,?,?,?,?,?,'student',?,?,?,?,'issued',?,?,?,?,?,CURRENT_TIMESTAMP)")->execute([$this->school,$number,$student['academic_year_id'],$student['class_id'],$student['section_id'],$student['id'],$name,'Verified opening due: '.trim($in['reason']??''),$date,$date,$amount,$amount,$key,$hash,$this->user]);$id=(int)$this->db->lastInsertId();$this->journal('opening_due',$id,$date,'Verified opening student due',[[$this->control('receivable'),$amount,0,$student['id']],[$this->control('equity'),0,$amount,$student['id']]]);$this->audit('Import verified opening due','ac_invoices',$id,[],$in);return $id;
+        $this->authorize('opening');if(empty($in['confirm']))throw new InvalidArgumentException('Confirm that this opening balance was independently verified.');
+        $key='opening:'.hash('sha256',$this->key($in));$amount=acDecimalUnits($in['amount']??'0');$reference=trim($in['opening_reference']??'');$reason=trim($in['reason']??'');$date=$this->date($in['date']??'');$studentId=(int)($in['student_id']??0);
+        if(!$amount||!$reference||strlen($reference)>150||!$reason||strlen($reason)>2000)throw new InvalidArgumentException('Enter a positive verified opening due, unique source reference and explanation.');
+        $hash=hash('sha256',json_encode([$studentId,$amount,$date,$reference,$reason],JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR));
+        return $this->atomic(function()use($key,$amount,$reference,$reason,$date,$studentId,$hash){
+            if(($id=$this->replay('ac_invoices',$key,$hash))!==null)return $id;
+            $prior=$this->one('SELECT id,request_hash FROM ac_invoices WHERE school_id=? AND opening_reference=?',[$this->school,$reference]);
+            if($prior){if(!hash_equals($prior['request_hash'],$hash))throw new InvalidArgumentException('This verified opening reference was already imported with different data. Use a reviewed correction.');return (int)$prior['id'];}
+            $student=schoolRecord($this->db,'students',$studentId,$this->school);$this->period($date);$number=$this->number('invoice',$date);$name=trim($student['first_name_en'].' '.$student['last_name_en']);
+            $this->db->prepare("INSERT INTO ac_invoices(school_id,number,academic_year_id,class_id,section_id,student_id,customer_type,customer_name,description,bill_date,due_date,status,subtotal_minor,total_minor,idempotency_key,request_hash,created_by,issued_at,opening_reference) VALUES(?,?,?,?,?,?,'student',?,?,?,?,'issued',?,?,?,?,?,CURRENT_TIMESTAMP,?)")->execute([$this->school,$number,$student['academic_year_id'],$student['class_id'],$student['section_id'],$studentId,$name,'Verified opening due: '.$reason,$date,$date,$amount,$amount,$key,$hash,$this->user,$reference]);$id=(int)$this->db->lastInsertId();
+            $snapshot=json_encode($this->documentSnapshot($this->record('ac_invoices',$id),[]),JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR);$this->db->prepare('UPDATE ac_invoices SET snapshot_json=? WHERE id=? AND school_id=?')->execute([$snapshot,$id,$this->school]);
+            $this->journal('opening_due',$id,$date,'Verified opening student due',[[$this->control('receivable'),$amount,0,$studentId],[$this->control('equity'),0,$amount,$studentId]]);
+            $this->audit('Import verified opening due','ac_invoices',$id,[],['opening_reference'=>$reference,'amount_minor'=>$amount],$reason);return $id;
         });
     }
     public function billingWindow(string $period,string $calendar):array {
@@ -406,7 +477,7 @@ final class SchoolAccounting {
         return $this->rows('SELECT a.id,a.code,a.name,a.type,a.control_key,COALESCE(SUM(l.debit_minor),0) debit_minor,COALESCE(SUM(l.credit_minor),0) credit_minor FROM ac_accounts a LEFT JOIN (ac_journal_lines l JOIN ac_journals j ON j.id=l.journal_id AND j.school_id=? AND j.posting_date>=? AND j.posting_date<=?) ON l.account_id=a.id WHERE a.school_id=? GROUP BY a.id,a.code,a.name,a.type,a.control_key ORDER BY a.code',[$this->school,$from,$to,$this->school]);
     }
     public function reconcile():array {
-        $ar=$this->scalar('SELECT COALESCE(SUM(l.debit_minor-l.credit_minor),0) FROM ac_journal_lines l JOIN ac_journals j ON j.id=l.journal_id WHERE j.school_id=? AND l.account_id=?',[$this->school,$this->control('receivable')]);$adv=$this->scalar('SELECT COALESCE(SUM(l.credit_minor-l.debit_minor),0) FROM ac_journal_lines l JOIN ac_journals j ON j.id=l.journal_id WHERE j.school_id=? AND l.account_id=?',[$this->school,$this->control('advance')]);$subAdv=$this->scalar('SELECT COALESCE(SUM(amount_minor),0) FROM ac_advance_entries WHERE school_id=?',[$this->school]);$outstanding=$this->outstanding();$unbalanced=$this->scalar('SELECT COUNT(*) FROM (SELECT j.id FROM ac_journals j JOIN ac_journal_lines l ON l.journal_id=j.id WHERE j.school_id=? GROUP BY j.id HAVING SUM(l.debit_minor)<>SUM(l.credit_minor)) bad',[$this->school]);return ['receivable_gl'=>$ar,'receivable_subledger'=>$outstanding,'advance_gl'=>$adv,'advance_subledger'=>$subAdv,'unbalanced_journals'=>$unbalanced,'ok'=>$ar===$outstanding&&$adv===$subAdv&&$unbalanced===0];
+        $ar=$this->scalar('SELECT COALESCE(SUM(l.debit_minor-l.credit_minor),0) FROM ac_journal_lines l JOIN ac_journals j ON j.id=l.journal_id WHERE j.school_id=? AND l.account_id=?',[$this->school,$this->control('receivable')]);$adv=$this->scalar('SELECT COALESCE(SUM(l.credit_minor-l.debit_minor),0) FROM ac_journal_lines l JOIN ac_journals j ON j.id=l.journal_id WHERE j.school_id=? AND l.account_id=?',[$this->school,$this->control('advance')]);$subAdv=$this->scalar('SELECT COALESCE(SUM(amount_minor),0) FROM ac_advance_entries WHERE school_id=?',[$this->school]);$refundGl=$this->scalar('SELECT COALESCE(SUM(l.credit_minor-l.debit_minor),0) FROM ac_journal_lines l JOIN ac_journals j ON j.id=l.journal_id WHERE j.school_id=? AND l.account_id=?',[$this->school,$this->control('refund_payable')]);$refundSub=acCheckedAdd($this->scalar('SELECT COALESCE(SUM(refund_minor),0) FROM ac_credits WHERE school_id=?',[$this->school]),-$this->scalar('SELECT COALESCE(SUM(amount_minor),0) FROM ac_credit_refunds WHERE school_id=?',[$this->school]));$outstanding=$this->outstanding();$unbalanced=$this->scalar('SELECT COUNT(*) FROM (SELECT j.id FROM ac_journals j JOIN ac_journal_lines l ON l.journal_id=j.id WHERE j.school_id=? GROUP BY j.id HAVING SUM(l.debit_minor)<>SUM(l.credit_minor)) bad',[$this->school]);return ['receivable_gl'=>$ar,'receivable_subledger'=>$outstanding,'advance_gl'=>$adv,'advance_subledger'=>$subAdv,'refund_gl'=>$refundGl,'refund_subledger'=>$refundSub,'unbalanced_journals'=>$unbalanced,'ok'=>$ar===$outstanding&&$adv===$subAdv&&$refundGl===$refundSub&&$unbalanced===0];
     }
     public function studentStatement(int $student):array {
         schoolRecord($this->db,'students',$student,$this->school);
