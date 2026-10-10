@@ -20,4 +20,9 @@ $otherClass=(int)$db->query("SELECT id FROM classes WHERE school_id=$otherSchool
 $otherYear=(int)$db->query("SELECT id FROM academic_years WHERE school_id=$otherSchool LIMIT 1")->fetchColumn();
 $db->prepare("INSERT INTO students(student_id,academic_year_id,class_id,first_name_en,last_name_en,gender,school_id,status) VALUES ('OTHER-1',?,?,'Other','Student','Male',?,'active')")->execute([$otherYear,$otherClass,$otherSchool]);$otherStudent=(int)$db->lastInsertId();
 $db->prepare("INSERT INTO users(username,password,role,full_name,school_id,status) VALUES ('other_admin',?,'school_admin','Other Admin',?,1)")->execute([$hash,$otherSchool]);$otherUser=(int)$db->lastInsertId();
+if(getenv('ERP_TEST_OPTIONAL')==='1'){
+    $optional=(int)$db->query("SELECT subject_id FROM class_subjects WHERE class_id=$class AND is_optional=1 LIMIT 1")->fetchColumn();
+    $db->prepare('INSERT INTO exam_subjects(exam_id,class_id,subject_id,theory_full,theory_pass,practical_full,practical_pass,credit_hours,is_optional) VALUES (?,?,?,75,26.25,25,10,4,1)')->execute([$exam,$class,$optional]);
+    $db->prepare('INSERT INTO marks(exam_id,student_id,subject_id,theory_obtained,practical_obtained,internal_breakdown) VALUES (?,?,?,55,20,?)')->execute([$exam,$student,$optional,json_encode(['participation'=>3,'project_work'=>12,'previous_exam'=>5])]);
+}
 echo json_encode(compact('class','subject','section','student','exam','otherClass','otherSchool','otherStudent','otherUser','ids'));
