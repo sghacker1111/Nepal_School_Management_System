@@ -1,7 +1,7 @@
 # School accounting and assessment completion design
 
 Date: 2026-10-10
-Status: proposed for user review; not an implementation-complete report
+Status: approved by the user on 2026-10-10; implementation-plan review pending
 
 ## Intended outcome
 
@@ -148,4 +148,4 @@ Acceptance is not merely syntax success. Financial invariants, real HTTP workflo
 
 ## Review checkpoint
 
-The user must review this proposed design before the written implementation plan is produced. The plan will specify the regression-first work, file boundaries and verification commands. Implementation resumes only after the plan is reviewed and its execution method is selected. This document has not authorized publication or migration of the original school database.
+The user approved this design on 2026-10-10. The written plans specify regression-first work, file boundaries and verification commands. Implementation resumes only after those plans are reviewed and their execution method is selected. This document has not authorized publication or migration of the original school database.
