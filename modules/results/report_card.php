@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/report_issue.php';
 
 Auth::requireLogin();
 
@@ -57,6 +58,8 @@ $exam = $stmt->fetch();
 if (!$exam) {
     die("Exam not found.");
 }
+try{$issue=reportIssueDate($exam,$_GET);}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
+$issueQuery=http_build_query(['issue_date_mode'=>$issue['mode'],'issue_date'=>$issue['manual']]);
 
 if (!isset($_GET['system']) && !empty($exam['result_system'])) {
     $grading_system = $exam['result_system'];
@@ -251,12 +254,21 @@ extract(erpReportSummary($marks, $exam, $grading_system));
 
 <div class="container no-print text-center my-3">
     <div class="btn-group me-2" role="group">
-        <a href="?student=<?= $student_id ?>&exam=<?= $exam_id ?>&system=gpa" class="btn btn-<?= $grading_system === 'gpa' ? 'primary' : 'outline-primary' ?>">GPA Format</a>
-        <a href="?student=<?= $student_id ?>&exam=<?= $exam_id ?>&system=percentage" class="btn btn-<?= $grading_system === 'percentage' ? 'primary' : 'outline-primary' ?>">Percentage Format</a>
+        <a href="?student=<?= $student_id ?>&exam=<?= $exam_id ?>&system=gpa&<?= sanitize($issueQuery) ?>" class="btn btn-<?= $grading_system === 'gpa' ? 'primary' : 'outline-primary' ?>">GPA Format</a>
+        <a href="?student=<?= $student_id ?>&exam=<?= $exam_id ?>&system=percentage&<?= sanitize($issueQuery) ?>" class="btn btn-<?= $grading_system === 'percentage' ? 'primary' : 'outline-primary' ?>">Percentage Format</a>
     </div>
-    <button onclick="window.print()" class="btn btn-success px-4 py-2">
+    <button type="submit" form="report_issue_form" name="print" value="1" class="btn btn-success px-4 py-2">
         <i class="fas fa-print"></i> Print Report Card (A4 Page)
     </button>
+</div>
+<div class="container no-print mb-3">
+    <form method="GET" id="report_issue_form" class="row g-3 bg-white border rounded p-3 mx-auto" style="max-width:800px">
+        <input type="hidden" name="student" value="<?= $student_id ?>">
+        <input type="hidden" name="exam" value="<?= $exam_id ?>">
+        <input type="hidden" name="system" value="<?= sanitize($grading_system) ?>">
+        <?php include __DIR__.'/../../includes/report_issue_controls.php'; ?>
+        <div class="col-md-4 d-flex align-items-end"><button type="submit" class="btn btn-outline-primary">Update Preview</button></div>
+    </form>
 </div>
 
 <div class="report-container">
@@ -326,6 +338,10 @@ extract(erpReportSummary($marks, $exam, $grading_system));
         </table>
     </div>
     
+    <div class="d-flex justify-content-between small mb-2">
+        <span>EMIS Registration Number: <strong><?= sanitize($student['emis_registration_number']?:'-') ?></strong></span>
+        <span>Date of Issue: <strong data-issue-date="<?= sanitize($issue['date']) ?>"><?= sanitize($issue['label']) ?></strong></span>
+    </div>
     <!-- Marks Table -->
     <?php if ($exam['type'] === 'unit'): ?>
         <?php if ($grading_system === 'percentage'): ?>

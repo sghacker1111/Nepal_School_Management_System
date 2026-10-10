@@ -6,7 +6,7 @@ function dbColumns(PDO $db, string $table): array {
 }
 function migrateSchoolSchema(PDO $db): void {
     $db->exec('CREATE TABLE IF NOT EXISTS app_meta (meta_key VARCHAR(100) PRIMARY KEY, meta_value VARCHAR(255) NOT NULL)');
-    if ($db->query("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'")->fetchColumn() === '4') return;
+    if ($db->query("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'")->fetchColumn() === '5') return;
     $db->exec('CREATE TABLE IF NOT EXISTS cdc_reference (category VARCHAR(50) NOT NULL,item_key VARCHAR(50) NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(category,item_key))');
     $pk = DB_TYPE === 'sqlite' ? 'INTEGER PRIMARY KEY AUTOINCREMENT' : 'INT AUTO_INCREMENT PRIMARY KEY';
     $tables = [
@@ -31,8 +31,8 @@ function migrateSchoolSchema(PDO $db): void {
         'classes' => ['school_id'=>'INTEGER DEFAULT 1', 'source_id'=>'INTEGER', 'class_teacher_id'=>'INTEGER', 'class_teacher_name'=>'VARCHAR(100)', 'class_teacher_signature'=>'VARCHAR(255)', 'is_active'=>'INTEGER DEFAULT 1', 'is_grading_teaching'=>'INTEGER DEFAULT 0'],
         'subjects' => ['school_id'=>'INTEGER DEFAULT 1', 'source_id'=>'INTEGER', 'is_hidden'=>'INTEGER DEFAULT 0', 'assessment_method'=>'VARCHAR(50)', 'curriculum_version'=>'VARCHAR(50)'] + $evaluation,
         'sections' => ['school_id'=>'INTEGER DEFAULT 1'],
-        'students' => ['school_id'=>'INTEGER DEFAULT 1', 'optional_subject_i'=>'INTEGER', 'optional_subject_ii'=>'INTEGER', 'optional_subject_iii'=>'INTEGER'],
-        'exams' => ['school_id'=>'INTEGER DEFAULT 1', 'result_system'=>"VARCHAR(20) DEFAULT 'gpa'", 'has_internal'=>'INTEGER DEFAULT 0'],
+        'students' => ['school_id'=>'INTEGER DEFAULT 1', 'optional_subject_i'=>'INTEGER', 'optional_subject_ii'=>'INTEGER', 'optional_subject_iii'=>'INTEGER', 'emis_registration_number'=>'VARCHAR(100)'],
+        'exams' => ['school_id'=>'INTEGER DEFAULT 1', 'result_system'=>"VARCHAR(20) DEFAULT 'gpa'", 'has_internal'=>'INTEGER DEFAULT 0', 'issue_date_mode'=>"VARCHAR(10) DEFAULT 'auto'", 'issue_date'=>'DATE'],
         'academic_years' => ['school_id'=>'INTEGER DEFAULT 1', 'is_hidden'=>'INTEGER DEFAULT 0'],
         'class_subjects' => ['school_id'=>'INTEGER DEFAULT 1', 'section_id'=>'INTEGER', 'is_optional'=>'INTEGER DEFAULT 0', 'is_active'=>'INTEGER DEFAULT 1', 'assessment_method'=>'VARCHAR(50)', 'curriculum_version'=>'VARCHAR(50)', 'curriculum_key'=>'VARCHAR(50)', 'curriculum_status'=>'VARCHAR(50)', 'source_notes'=>'TEXT', 'subject_order'=>'INTEGER DEFAULT 0'] + $evaluation,
         'exam_subjects' => ['credit_hours'=>'DECIMAL(6,2)', 'internal_credit_hours'=>'DECIMAL(6,2)', 'external_credit_hours'=>'DECIMAL(6,2)', 'is_optional'=>'INTEGER', 'assessment_method'=>'VARCHAR(50)', 'curriculum_version'=>'VARCHAR(50)'],
@@ -74,7 +74,7 @@ function migrateSchoolSchema(PDO $db): void {
     $db->beginTransaction();
     try {
         $db->prepare('DELETE FROM app_meta WHERE meta_key=?')->execute(['workflow_schema']);
-        $db->prepare('INSERT INTO app_meta (meta_key, meta_value) VALUES (?, ?)')->execute(['workflow_schema','4']);
+        $db->prepare('INSERT INTO app_meta (meta_key, meta_value) VALUES (?, ?)')->execute(['workflow_schema','5']);
         $db->commit();
     } catch (Throwable $e) { if ($db->inTransaction()) $db->rollBack(); throw $e; }
 }

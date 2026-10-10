@@ -1,5 +1,6 @@
 """Real HTTP + SQLite regression checks. A fresh temporary database is always used."""
 import os, sys, tempfile, subprocess, socket, time, re, json, sqlite3
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.request import build_opener, HTTPCookieProcessor, Request
 from urllib.error import HTTPError, URLError
@@ -72,6 +73,20 @@ with tempfile.TemporaryDirectory(prefix='erp-http-') as tmp:
         assert row==(60,20,3.6),row
         for route in ['/modules/results/ledger.php?'+query,'/modules/results/print_bulk.php?'+query,f"/modules/results/report_card.php?student={f['student']}&exam={f['exam']}"]:
             body=request(route);assert '3.60' in body,(route,'GPA missing')
+        # Issue dates are shared across single/bulk formats, validated, and read-only on print.
+        today=datetime.now(timezone(timedelta(hours=5,minutes=45))).strftime('%Y-%m-%d')
+        report_routes=[f"/modules/results/report_card.php?student={f['student']}&exam={f['exam']}",'/modules/results/print_bulk.php?'+query]
+        for route in report_routes:
+            body=request(route);assert f'data-issue-date="{today}"' in body and 'Date of Issue:' in body
+            body=request(route+'&issue_date_mode=manual&issue_date=2026-09-25&system=percentage')
+            assert 'data-issue-date="2026-09-25"' in body and '25 Sep 2026 AD' in body
+            request(route+'&issue_date_mode=manual&issue_date=2026-02-30',expected=422)
+            request(route+'&issue_date_mode=invalid',expected=422)
+        assert db.execute('SELECT issue_date_mode,issue_date FROM exams WHERE id=?',(f['exam'],)).fetchone()==('auto',None)
+        request(f"/modules/exams/edit.php?id={f['exam']}",{'name':'Regression Exam','type':'terminal','result_system':'gpa','has_internal':'1','issue_date_mode':'manual','issue_date':'2026-09-25'})
+        for route in report_routes:
+            body=request(route);assert 'data-issue-date="2026-09-25"' in body
+        request(f"/modules/exams/edit.php?id={f['exam']}",{'name':'Regression Exam','type':'terminal','result_system':'gpa','has_internal':'1','issue_date_mode':'auto'})
         bad=dict(marks);bad[f"marks[{f['student']}][{f['subject']}][theory]"]='76'
         body=request('/modules/results/marks_entry.php?'+query,bad);assert 'Marks must be between' in body
         assert db.execute('SELECT theory_obtained FROM marks').fetchone()[0]==60
@@ -97,9 +112,21 @@ with tempfile.TemporaryDirectory(prefix='erp-http-') as tmp:
         assert db.execute("SELECT role FROM users WHERE username='newstaff'").fetchone()[0]=='exam_officer'
         class11=db.execute("SELECT id FROM classes WHERE school_id=1 AND name='Class 11'").fetchone()[0]
         electives=[r[0] for r in db.execute('SELECT subject_id FROM class_subjects WHERE school_id=1 AND class_id=? AND is_optional=1 LIMIT 3',(class11,))]
-        enrollment={'first_name_en':'Higher','last_name_en':'Secondary','gender':'Female','class_id':class11,'optional_subject_i':electives[0],'optional_subject_ii':electives[1],'optional_subject_iii':electives[2]}
+        enrollment={'first_name_en':'Higher','last_name_en':'Secondary','gender':'Female','class_id':class11,'emis_id':'OLD-EMIS-ID','emis_registration_number':'001234-2083','optional_subject_i':electives[0],'optional_subject_ii':electives[1],'optional_subject_iii':electives[2]}
         request('/modules/students/add.php',enrollment)
         assert db.execute("SELECT optional_subject_iii FROM students WHERE first_name_en='Higher'").fetchone()[0]==electives[2]
+        higher=db.execute("SELECT id,emis_id,emis_registration_number FROM students WHERE first_name_en='Higher'").fetchone()
+        assert higher[1:]==('OLD-EMIS-ID','001234-2083')
+        body=request('/modules/students/view.php?id='+str(higher[0]));assert '001234-2083' in body
+        missing=dict(enrollment);missing.pop('emis_registration_number');missing['first_name_en']='Missing Registration'
+        body=request('/modules/students/add.php',missing);assert 'EMIS Registration Number is required' in body
+        assert db.execute("SELECT COUNT(*) FROM students WHERE first_name_en='Missing Registration'").fetchone()[0]==0
+        invalid=dict(enrollment);invalid['emis_registration_number']='X'*101
+        request('/modules/students/add.php',invalid,expected=422)
+        edit=dict(enrollment);edit.update(status='active',emis_registration_number='0000456')
+        request('/modules/students/edit.php?id='+str(higher[0]),edit)
+        assert db.execute('SELECT emis_registration_number FROM students WHERE id=?',(higher[0],)).fetchone()[0]=='0000456'
+        body=request('/modules/students/index.php');assert 'EMIS Reg: 0000456' in body
         request('/modules/classes/routine.php',{'action':'generate','target_class_id':f['class'],'password':'TestPassword123!'})
         assert db.execute('SELECT COUNT(*) FROM class_routines WHERE class_id=?',(f['class'],)).fetchone()[0]>0
         upload_csv('/modules/teachers/import_export.php','Full Name,Username,Email,Phone,DOB\nImport Teacher,importteacher,teacher@example.test,9800000000,1990-01-01')
@@ -107,6 +134,11 @@ with tempfile.TemporaryDirectory(prefix='erp-http-') as tmp:
         upload_csv('/modules/students/import_export.php','First Name,Last Name,Gender,Class,DOB\nImported,Student,Female,Class 11,\nInvalid,Date,Male,Class 11,2026-02-30')
         assert db.execute("SELECT dob_ad FROM students WHERE first_name_en='Imported'").fetchone()==(None,)
         assert db.execute("SELECT COUNT(*) FROM students WHERE first_name_en='Invalid'").fetchone()[0]==0
+        upload_csv('/modules/students/import_export.php','First Name,Last Name,Gender,Class,EMIS Registration Number\nEMIS Import,Student,Female,Class 9,00000089')
+        assert db.execute("SELECT emis_registration_number FROM students WHERE first_name_en='EMIS Import'").fetchone()[0]=='00000089'
+        for action in ['export','template']:
+            body=request('/modules/students/import_export.php?action='+action);assert 'EMIS Registration Number' in body
+            if action=='export':assert '00000089' in body
         for module in ['teachers','students']:
             request(f'/modules/{module}/import_export.php?action=export')
             request(f'/modules/{module}/import_export.php?action=template')
@@ -149,13 +181,38 @@ with tempfile.TemporaryDirectory(prefix='erp-http-') as tmp:
             c=db.execute('SELECT id FROM classes WHERE school_id=1 AND name=?',('Class '+str(grade),)).fetchone()[0]
             request('/modules/classes/subjects.php?class_id='+str(c))
             student=db.execute("INSERT INTO students(student_id,academic_year_id,class_id,first_name_en,last_name_en,gender,school_id,status) VALUES (?,1,?,'CDC','Example','Male',1,'active')",('CDC-'+str(grade),c)).lastrowid
-            exam=db.execute("INSERT INTO exams(name,type,academic_year_id,school_id,has_internal,result_system) VALUES ('CDC Annual','final',1,1,1,'gpa')").lastrowid
+            exam=db.execute("INSERT INTO exams(name,type,academic_year_id,school_id,has_internal,result_system) VALUES ('CDC Annual','final',1,1,0,'gpa')").lastrowid
             db.commit()
             request('/modules/exams/view.php?id='+str(exam),{'initialize_defaults':'1','init_class_id':c})
             schemes=db.execute('SELECT subject_id,assessment_method,internal_credit_hours,external_credit_hours FROM exam_subjects WHERE exam_id=?',(exam,)).fetchall()
             assert len(schemes)==(5 if grade==1 else 7)
             assert all(s[1]==('THEMATIC_CONTINUOUS' if grade==1 else 'DUAL_50_50') for s in schemes)
             q=urlencode({'exam':exam,'class':c})
+            # Enter TH first, then enable IN on the real edit endpoint without rewriting TH.
+            theory_values={'save_marks':'1','exam_id':exam,'class_id':c}
+            for subject,*_ in schemes:theory_values[f'marks[{student}][{subject}][theory]']=80 if grade==1 else 40
+            request('/modules/results/marks_entry.php?'+q,theory_values)
+            theory_before=db.execute('SELECT id,student_id,subject_id,theory_obtained FROM marks WHERE exam_id=? ORDER BY id',(exam,)).fetchall()
+            theory_limits=db.execute('SELECT theory_full,theory_pass,credit_hours FROM exam_subjects WHERE exam_id=? ORDER BY id',(exam,)).fetchall()
+            enable={'name':'CDC Annual','type':'final','result_system':'gpa','has_internal':'1','issue_date_mode':'auto'}
+            request('/modules/exams/edit.php?id='+str(exam),enable,expected=419,csrf=False)
+            assert db.execute('SELECT has_internal FROM exams WHERE id=?',(exam,)).fetchone()[0]==0
+            request('/modules/exams/edit.php?id='+str(exam),enable)
+            assert db.execute('SELECT has_internal FROM exams WHERE id=?',(exam,)).fetchone()[0]==1
+            assert db.execute('SELECT id,student_id,subject_id,theory_obtained FROM marks WHERE exam_id=? ORDER BY id',(exam,)).fetchall()==theory_before
+            assert db.execute('SELECT theory_full,theory_pass,credit_hours FROM exam_subjects WHERE exam_id=? ORDER BY id',(exam,)).fetchall()==theory_limits
+            if grade==4:
+                assert db.execute('SELECT DISTINCT practical_full,practical_pass FROM exam_subjects WHERE exam_id=?',(exam,)).fetchall()==[(50,20)]
+                assert db.execute('SELECT DISTINCT practical_obtained,remarks FROM marks WHERE exam_id=?',(exam,)).fetchall()==[(None,'Incomplete')]
+                body=request(f'/modules/results/report_card.php?student={student}&exam={exam}');assert 'Incomplete' in body
+                request('/modules/exams/index.php?lock='+str(exam),{})
+                body=request('/modules/exams/index.php?publish='+str(exam),{});assert 'incomplete' in body
+                request('/modules/exams/index.php?reopen='+str(exam),{})
+                remove=dict(enable);remove.pop('has_internal')
+                body=request('/modules/exams/edit.php?id='+str(exam),remove);assert 'grading system cannot change' in body
+                assert db.execute('SELECT has_internal FROM exams WHERE id=?',(exam,)).fetchone()[0]==1
+            request('/modules/exams/edit.php?id='+str(exam),enable)
+            assert db.execute('SELECT COUNT(*) FROM exam_subjects WHERE exam_id=?',(exam,)).fetchone()[0]==len(schemes)
             body=request('/modules/results/marks_entry.php?'+q)
             assert ('Achievement (%)' if grade==1 else 'Second trimester contribution') in body
             values={'save_marks':'1','exam_id':exam,'class_id':c}

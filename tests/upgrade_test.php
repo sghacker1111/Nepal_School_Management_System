@@ -13,7 +13,7 @@ $db=getDB();
 foreach($counts as $table=>$count)if($count!==(int)$db->query("SELECT COUNT(*) FROM $table")->fetchColumn())throw new RuntimeException("Upgrade changed $table record count");
 if($db->query('PRAGMA integrity_check')->fetchColumn()!=='ok')throw new RuntimeException('Database integrity check failed');
 if((int)$db->query('SELECT COUNT(*) FROM students s JOIN classes c ON c.id=s.class_id WHERE c.school_id<>s.school_id')->fetchColumn())throw new RuntimeException('Students still reference another school class');
-if((int)$db->query("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'")->fetchColumn()!==4)throw new RuntimeException('Migration version missing');
+if((int)$db->query("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'")->fetchColumn()!==5)throw new RuntimeException('Migration version missing');
 $classCount=(int)$db->query('SELECT COUNT(*) FROM classes')->fetchColumn();migrateSchoolSchema($db);
 if($classCount!==(int)$db->query('SELECT COUNT(*) FROM classes')->fetchColumn())throw new RuntimeException('Migration is not idempotent');
 if(!glob(dirname($path).'/.backups/*.sqlite'))throw new RuntimeException('Pre-upgrade backup missing');

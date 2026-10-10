@@ -37,6 +37,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'template') {
     
     writeCsvRow($output, [
         'EMIS ID',
+        'EMIS Registration Number',
         'Student ID',
         'Roll Number',
         'Exam Roll Number',
@@ -69,6 +70,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'export') {
     
     writeCsvRow($output, [
         'EMIS ID',
+        'EMIS Registration Number',
         'Student ID',
         'Roll Number',
         'Exam Roll Number',
@@ -103,6 +105,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'export') {
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
         writeCsvRow($output, [
             $row['emis_id'],
+            $row['emis_registration_number'],
             $row['student_id'],
             $row['roll_number'],
             $row['exam_roll_number'],
@@ -152,6 +155,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
             // Map table column names to possible CSV headings (lowercase aliases)
             $headers_map = [
                 'emis_id' => ['emis id', 'emis_id', 'emiscode', 'emis_code', 'emis', 'student emis id'],
+                'emis_registration_number' => ['emis registration number','emis_registration_number','emis registration no','emis reg no','emis_reg_no'],
                 'student_id' => ['student id', 'student_id', 'student ID', 'reg no', 'registration no', 'registration_no', 'reg_no'],
                 'roll_number' => ['roll number', 'roll_number', 'roll no', 'roll_no', 'rollno', 'class roll', 'roll'],
                 'exam_roll_number' => ['exam roll number', 'exam_roll_number', 'exam roll', 'exam_roll', 'symbol no', 'symbol_no', 'symbol number', 'symbol_number'],
@@ -206,12 +210,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                                 emis_id, student_id, academic_year_id, class_id, section_id, roll_number, exam_roll_number,
                                 first_name_en, last_name_en, first_name_np, last_name_np, gender, dob_bs, dob_ad,
                                 blood_group, father_name, father_phone, mother_name, guardian_name, guardian_phone,
-                                status, school_id
+                                status, school_id, emis_registration_number
                             ) VALUES (
                                 :emis_id, :student_id, :academic_year_id, :class_id, :section_id, :roll_number, :exam_roll_number,
                                 :first_name_en, :last_name_en, :first_name_np, :last_name_np, :gender, :dob_bs, :dob_ad,
                                 :blood_group, :father_name, :father_phone, :mother_name, :guardian_name, :guardian_phone,
-                                :status, :school_id
+                                :status, :school_id, :emis_registration_number
                             )
                         ");
                         
@@ -292,7 +296,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                             $gender=['m'=>'Male','male'=>'Male','f'=>'Female','female'=>'Female','o'=>'Other','other'=>'Other'][$gender]??null;
                             $status=strtolower($get_val('status')?:'active');
                             if(!$gender || !in_array($status,['active','inactive','transferred','dropout','passed'],true) || (!empty($sec_val) && !$section_id)) { $skipped_count++; continue; }
-                            try { $dob_ad=importDateValue($get_val('dob_ad')); }
+                            try { $dob_ad=importDateValue($get_val('dob_ad'));$emisRegistrationNumber=studentEmisRegistrationNumber($get_val('emis_registration_number')); }
                             catch(InvalidArgumentException $e) { $skipped_count++; continue; }
                             $dob_bs=$get_val('dob_bs')?:'';
                             
@@ -319,7 +323,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                                     ':guardian_name' => $get_val('guardian_name'),
                                     ':guardian_phone' => $get_val('guardian_phone'),
                                     ':status' => strtolower($status),
-                                    ':school_id' => $school_id
+                                    ':school_id' => $school_id,
+                                    ':emis_registration_number' => $emisRegistrationNumber
                                 ]);
                                 $imported_count++;
                             } catch (PDOException $e) {
@@ -387,8 +392,9 @@ ob_start();
                             <strong>Full Name</strong> (or <em>First Name</em> and <em>Last Name</em>), 
                             <strong>Class Name</strong>, 
                             <strong>EMIS ID</strong>, 
+                            <strong>EMIS Registration Number</strong>,
                             <strong>Gender</strong>, 
-                            <strong>Roll Number</strong>.
+                            <strong>Roll Number</strong>. Older CSV files without the new registration-number column are still supported.
                         </p>
                     </div>
                 </div>

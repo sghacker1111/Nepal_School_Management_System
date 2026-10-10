@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/report_issue.php';
 
 Auth::requireRole(['super_admin', 'school_admin', 'principal', 'teacher', 'exam_officer']);
 
@@ -57,6 +58,7 @@ if ($class_id) {
 
 $students = [];
 $school = null;
+$exam = null;
 
 if ($exam_id && $class_id) {
     // Verify ownership
@@ -106,6 +108,9 @@ if ($exam_id && $class_id) {
     $sectionsCount = (int)$stmt_sec_count->fetchColumn();
 }
 
+if(!$exam&&$exam_id)foreach($exams as $candidate)if((string)$candidate['id']===(string)$exam_id){$exam=$candidate;break;}
+try{$issue=reportIssueDate($exam??[],$_GET);}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
+$issueQuery=http_build_query(['issue_date_mode'=>$issue['mode'],'issue_date'=>$issue['manual']]);
 $pageTitle = 'Bulk Report Cards';
 $activePage = 'results';
 
@@ -115,13 +120,13 @@ ob_start();
 <div class="d-flex justify-content-between align-items-center mb-4 no-print">
     <h2><i class="fas fa-print"></i> Bulk Print Report Cards</h2>
     <div>
-        <a href="?exam=<?= $exam_id ?>&class=<?= $class_id ?>&section=<?= $section_id ?>&system=gpa" class="btn btn-<?= $grading_system === 'gpa' ? 'primary' : 'outline-primary' ?> me-2">GPA Format</a>
-        <a href="?exam=<?= $exam_id ?>&class=<?= $class_id ?>&section=<?= $section_id ?>&system=percentage" class="btn btn-<?= $grading_system === 'percentage' ? 'primary' : 'outline-primary' ?> me-2">Percentage Format</a>
+        <a href="?exam=<?= $exam_id ?>&class=<?= $class_id ?>&section=<?= $section_id ?>&system=gpa&<?= sanitize($issueQuery) ?>" class="btn btn-<?= $grading_system === 'gpa' ? 'primary' : 'outline-primary' ?> me-2">GPA Format</a>
+        <a href="?exam=<?= $exam_id ?>&class=<?= $class_id ?>&section=<?= $section_id ?>&system=percentage&<?= sanitize($issueQuery) ?>" class="btn btn-<?= $grading_system === 'percentage' ? 'primary' : 'outline-primary' ?> me-2">Percentage Format</a>
         <a href="<?= APP_URL ?>/modules/results/index.php" class="btn btn-secondary me-2">
             <i class="fas fa-arrow-left"></i> Back
         </a>
         <?php if (!empty($students)): ?>
-        <button onclick="window.print()" class="btn btn-primary btn-lg">
+        <button type="submit" form="report_issue_form" name="print" value="1" class="btn btn-primary btn-lg">
             <i class="fas fa-print"></i> Print All Now
         </button>
         <?php endif; ?>
@@ -131,7 +136,7 @@ ob_start();
 <!-- Filters Form -->
 <div class="card mb-4 no-print">
     <div class="card-body">
-        <form method="GET" action="" class="row g-3">
+        <form method="GET" action="" class="row g-3" id="report_issue_form">
             <input type="hidden" name="system" value="<?= htmlspecialchars($grading_system) ?>">
             <div class="col-md-4">
                 <label class="form-label">Select Exam</label>
@@ -171,6 +176,7 @@ ob_start();
                     <i class="fas fa-search"></i> Load Report Cards
                 </button>
             </div>
+            <?php include __DIR__.'/../../includes/report_issue_controls.php'; ?>
         </form>
     </div>
 </div>
@@ -302,6 +308,10 @@ ob_start();
                     </table>
                 </div>
 
+                <div class="d-flex justify-content-between small mb-2">
+                    <span>EMIS Registration Number: <strong><?= sanitize($student['emis_registration_number']?:'-') ?></strong></span>
+                    <span>Date of Issue: <strong data-issue-date="<?= sanitize($issue['date']) ?>"><?= sanitize($issue['label']) ?></strong></span>
+                </div>
                 <!-- Marks Table -->
                 <?php if ($exam['type'] === 'unit'): ?>
                     <?php if ($grading_system === 'percentage'): ?>

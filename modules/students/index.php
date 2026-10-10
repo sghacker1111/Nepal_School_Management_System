@@ -150,6 +150,7 @@ ob_start();
                             <td>
                                 <strong><?= sanitize($student['first_name_en'] . ' ' . $student['last_name_en']) ?></strong><br>
                                 <small class="text-muted"><?= sanitize($student['emis_id'] ?? '') ?></small>
+                                <?php if(!empty($student['emis_registration_number'])): ?><br><small class="text-muted">EMIS Reg: <?= sanitize($student['emis_registration_number']) ?></small><?php endif; ?>
                             </td>
                             <td><?= sanitize($student['class_name']) ?></td>
                             <td><?= sanitize($student['roll_number'] ?? '-') ?></td>

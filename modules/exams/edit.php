@@ -29,31 +29,17 @@ if ($exam['is_locked'] || $exam['is_published']) {
     redirect(APP_URL . '/modules/exams/index.php', 'Locked exams cannot be edited.', 'error');
 }
 
+$hasMarks = examHasMarks($db,$exam_id);
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $name = sanitize($_POST['name'] ?? '');
-    $type = sanitize($_POST['type'] ?? 'terminal');
-    $start_date = $_POST['start_date'] ?: null;
-    $end_date = $_POST['end_date'] ?: null;
-    $has_internal = isset($_POST['has_internal']) ? (int)$_POST['has_internal'] : 0;
-    $result_system = sanitize($_POST['result_system'] ?? 'gpa');
-    
-    $hasMarks = examHasMarks($db,$exam_id);
-    if ($hasMarks && ($type !== $exam['type'] || $has_internal !== (int)$exam['has_internal'] || $result_system !== $exam['result_system'])) {
-        $error = 'The grading system cannot change after marks have been entered. You may still correct the exam name and dates.';
-    } elseif (empty($name)) {
-        $error = 'Exam name is required';
-    } else {
-        try {
-            $stmt = $db->prepare("UPDATE exams SET name = ?, type = ?, start_date = ?, end_date = ?, has_internal = ?, result_system = ? WHERE id = ? AND school_id = ?");
-            $stmt->execute([$name, $type, $start_date, $end_date, $has_internal, $result_system, $exam_id, $school_id]);
-            
-            Auth::logActivity(Auth::getUserId(), 'Edit Exam Details', 'exams', $exam_id);
-            redirect(APP_URL . '/modules/exams/index.php', 'Exam details updated successfully.');
-        } catch (PDOException $e) {
-            $error = 'Database error: ' . $e->getMessage();
-        }
-    }
+    try {
+        $addedInternal=updateExamDetails($db,$school_id,$exam_id,$_POST);
+        Auth::logActivity(Auth::getUserId(),$addedInternal?'Enabled Internal Assessment; Theory Marks Preserved':'Edit Exam Details','exams',$exam_id);
+        redirect(APP_URL . '/modules/exams/index.php',$addedInternal?'Internal assessment enabled. Existing theory marks are preserved. Enter the missing internal marks before publishing.':'Exam details updated successfully.');
+    } catch (InvalidArgumentException $e) { $error=$e->getMessage(); }
+    catch (PDOException $e) { error_log($e->getMessage());$error='The exam could not be updated. Please try again.'; }
 }
+$formExam=array_replace($exam,array_intersect_key($_POST,$exam));
+try{$issue=reportIssueDate($exam,$_SERVER['REQUEST_METHOD']==='POST'?$_POST:[]);}catch(InvalidArgumentException $e){$issue=reportIssueDate($exam);}
 
 $pageTitle = 'Edit Exam: ' . $exam['name'];
 $activePage = 'exams';
@@ -80,14 +66,19 @@ ob_start();
     </div>
     <div class="card-body p-4">
         <form method="POST" action="">
+            <?php if($hasMarks): ?>
+            <div class="alert alert-info small">Theory marks are already saved. You can enable internal assessment without losing them. Exam type and result system stay fixed; internal assessment cannot be removed after marks are recorded.</div>
+            <input type="hidden" name="type" value="<?= sanitize($exam['type']) ?>">
+            <input type="hidden" name="result_system" value="<?= sanitize($exam['result_system']) ?>">
+            <?php endif; ?>
             <div class="mb-3">
                 <label for="name" class="form-label font-weight-bold">Exam Name *</label>
-                <input type="text" class="form-control" id="name" name="name" value="<?= sanitize($exam['name']) ?>" required>
+                <input type="text" class="form-control" id="name" name="name" value="<?= sanitize($formExam['name']) ?>" required>
             </div>
             
             <div class="mb-3">
                 <label for="type" class="form-label font-weight-bold">Exam Type</label>
-                <select class="form-select" id="type" name="type">
+                <select class="form-select" id="type" name="type" <?= $hasMarks?'disabled':'' ?>>
                     <option value="terminal" <?= $exam['type'] === 'terminal' ? 'selected' : '' ?>>Terminal Exam (Term Exam)</option>
                     <option value="final" <?= $exam['type'] === 'final' ? 'selected' : '' ?>>Final Exam</option>
                     <option value="unit" <?= $exam['type'] === 'unit' ? 'selected' : '' ?>>Unit Test / Class Test</option>
@@ -97,7 +88,7 @@ ob_start();
 
             <div class="mb-3">
                 <label for="result_system" class="form-label font-weight-bold">Result System (for Unit Tests or General)</label>
-                <select class="form-select" id="result_system" name="result_system">
+                <select class="form-select" id="result_system" name="result_system" <?= $hasMarks?'disabled':'' ?>>
                     <option value="gpa" <?= ($exam['result_system'] ?? 'gpa') === 'gpa' ? 'selected' : '' ?>>Grading System (GPA / Grades)</option>
                     <option value="percentage" <?= ($exam['result_system'] ?? 'gpa') === 'percentage' ? 'selected' : '' ?>>Marksheet System (Marks / Percentage)</option>
                 </select>
@@ -105,24 +96,27 @@ ob_start();
             
             <div class="mb-3">
                 <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="has_internal" name="has_internal" value="1" <?= $exam['has_internal'] ? 'checked' : '' ?>>
+                    <?php $internalFrozen=$hasMarks&&(int)$exam['has_internal']===1; ?>
+                    <?php if($internalFrozen): ?><input type="hidden" name="has_internal" value="1"><?php endif; ?>
+                    <input class="form-check-input" type="checkbox" id="has_internal" name="has_internal" value="1" <?= $exam['has_internal'] ? 'checked' : '' ?> <?= ($internalFrozen||$exam['type']==='unit')?'disabled':'' ?>>
                     <label class="form-check-label fw-bold text-primary" for="has_internal">
                         Include Internal Exam / Practical Assessment Component
                     </label>
                 </div>
-                <div class="form-text text-muted">If disabled, the exam will only have theory (external) marks. The practical marks input and calculations will be skipped.</div>
+                <div class="form-text text-muted">Enabling adds internal full/pass marks from the class subjects. Existing theory marks, theory limits and subject selections stay unchanged. Unit tests remain theory-only; Grades 1–3 keep achievement assessment.</div>
             </div>
             
             <div class="row g-3 mb-4">
                 <div class="col-md-6">
                     <label for="start_date" class="form-label font-weight-bold">Start Date</label>
-                    <input type="date" class="form-control" id="start_date" name="start_date" value="<?= sanitize($exam['start_date'] ?? '') ?>">
+                    <input type="date" class="form-control" id="start_date" name="start_date" value="<?= sanitize($formExam['start_date'] ?? '') ?>">
                 </div>
                 <div class="col-md-6">
                     <label for="end_date" class="form-label font-weight-bold">End Date</label>
-                    <input type="date" class="form-control" id="end_date" name="end_date" value="<?= sanitize($exam['end_date'] ?? '') ?>">
+                    <input type="date" class="form-control" id="end_date" name="end_date" value="<?= sanitize($formExam['end_date'] ?? '') ?>">
                 </div>
             </div>
+            <div class="row g-3 mb-4"><?php include __DIR__.'/../../includes/report_issue_controls.php'; ?></div>
             
             <button type="submit" class="btn btn-primary w-100 py-2 fw-bold shadow-sm">
                 <i class="fas fa-save"></i> Save Changes

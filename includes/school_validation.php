@@ -1,5 +1,13 @@
 <?php
 /** Validate relationships before any screen changes school data. */
+function studentEmisRegistrationNumber($value,bool $required=false): ?string {
+    if($value===null)$value='';
+    if(!is_string($value)||preg_match('/[[:cntrl:]]/u',$value))throw new InvalidArgumentException('Enter a valid EMIS Registration Number.');
+    $value=trim($value);
+    if($value===''){if($required)throw new InvalidArgumentException('EMIS Registration Number is required.');return null;}
+    if(!preg_match('/^.{1,100}$/us',$value))throw new InvalidArgumentException('EMIS Registration Number must be at most 100 characters.');
+    return $value;
+}
 function schoolRecord(PDO $db, string $table, int $id, int $school): array {
     $allowed = ['classes','sections','subjects','students','academic_years','exams','users','class_subjects','chapters','topics','questions','specification_grids'];
     if (!in_array($table, $allowed, true)) throw new InvalidArgumentException('Invalid record type.');
@@ -12,6 +20,7 @@ function schoolRecord(PDO $db, string $table, int $id, int $school): array {
 function validateSchoolReferences(PDO $db, int $school, string $module, array $data, array $query = []): void {
     if (in_array($module, ['super_admin','auth'], true)) return;
     $values = array_replace($query, $data);
+    if($module==='students'&&array_key_exists('emis_registration_number',$data))studentEmisRegistrationNumber($data['emis_registration_number']);
     if($module==='students' && isset($data['gender']) && !in_array($data['gender'],['Male','Female','Other'],true))throw new InvalidArgumentException('Choose a valid gender.');
     if($module==='students' && isset($data['status']) && !in_array($data['status'],['active','inactive','transferred','dropout','passed'],true))throw new InvalidArgumentException('Choose a valid enrollment status.');
     if($module==='exams') {

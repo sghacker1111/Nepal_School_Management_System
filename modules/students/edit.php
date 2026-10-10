@@ -24,6 +24,7 @@ if (!$student) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    try{$emisRegistrationNumber=studentEmisRegistrationNumber($_POST['emis_registration_number']??$student['emis_registration_number']);}catch(InvalidArgumentException $e){$errors[]=$e->getMessage();}
     // Validate required fields
     if (empty($_POST['first_name_en'])) {
         $errors[] = "First name (English) is required";
@@ -63,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     caste_ethnicity = ?, religion = ?, disability_status = ?, scholarship_type = ?,
                     perm_province = ?, perm_district = ?, perm_municipality = ?, perm_ward_no = ?, perm_tole = ?,
                     father_name = ?, father_phone = ?, mother_name = ?, mother_phone = ?, guardian_name = ?, guardian_phone = ?,
-                    status = ?, optional_subject_i = ?, optional_subject_ii = ?, optional_subject_iii = ?
+                    status = ?, optional_subject_i = ?, optional_subject_ii = ?, optional_subject_iii = ?, emis_registration_number = ?
                     WHERE id = ?");
                 
                 $stmt->execute([
@@ -100,6 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ($_POST['optional_subject_i'] ?? '') ?: null,
                     ($_POST['optional_subject_ii'] ?? '') ?: null,
                     ($_POST['optional_subject_iii'] ?? '') ?: null,
+                    $emisRegistrationNumber,
                     $id
                 ]);
                 
@@ -231,6 +233,11 @@ ob_start();
                 <div class="col-md-3">
                     <label class="form-label">EMIS ID</label>
                     <input type="text" name="emis_id" class="form-control" value="<?= sanitize($student['emis_id'] ?? '') ?>">
+                </div>
+                <div class="col-md-3">
+                    <label for="emis_registration_number" class="form-label">EMIS Registration Number</label>
+                    <input type="text" id="emis_registration_number" name="emis_registration_number" class="form-control" maxlength="100" value="<?= sanitize($_POST['emis_registration_number']??$student['emis_registration_number']??'') ?>">
+                    <div class="form-text">Separate from EMIS ID; existing records may be completed later.</div>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Class <span class="text-danger">*</span></label>

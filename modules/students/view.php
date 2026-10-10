@@ -85,6 +85,10 @@ ob_start();
                         <div class="col-6"><strong><?= sanitize($student['emis_id'] ?: '-') ?></strong></div>
                     </div>
                     <div class="row mb-2">
+                        <div class="col-6 text-muted">EMIS Registration Number:</div>
+                        <div class="col-6"><strong><?= sanitize($student['emis_registration_number']?:'-') ?></strong></div>
+                    </div>
+                    <div class="row mb-2">
                         <div class="col-6 text-muted">Class:</div>
                         <div class="col-6"><strong><?= sanitize($student['class_name']) ?></strong></div>
                     </div>

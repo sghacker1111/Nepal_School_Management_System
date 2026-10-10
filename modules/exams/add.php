@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/report_issue.php';
 
 Auth::requireRole(['super_admin', 'school_admin', 'exam_officer']);
 
@@ -25,8 +26,8 @@ if (!$academicYear) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name = sanitize($_POST['name'] ?? '');
     $type = sanitize($_POST['type'] ?? 'terminal');
-    $start_date = $_POST['start_date'] ?: null;
-    $end_date = $_POST['end_date'] ?: null;
+    $start_date = ($_POST['start_date'] ?? '') ?: null;
+    $end_date = ($_POST['end_date'] ?? '') ?: null;
     $has_internal = isset($_POST['has_internal']) ? (int)$_POST['has_internal'] : 0;
     $result_system = sanitize($_POST['result_system'] ?? 'gpa');
     
@@ -34,17 +35,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Exam name is required';
     } else {
         try {
-            $stmt = $db->prepare("INSERT INTO exams (name, type, academic_year_id, start_date, end_date, is_published, is_locked, school_id, has_internal, result_system) VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, ?)");
-            $stmt->execute([$name, $type, $academicYear['id'], $start_date, $end_date, $school_id, $has_internal, $result_system]);
+            $issue=reportIssueDate([],$_POST);
+            $stmt = $db->prepare("INSERT INTO exams (name, type, academic_year_id, start_date, end_date, is_published, is_locked, school_id, has_internal, result_system,issue_date_mode,issue_date) VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?)");
+            $stmt->execute([$name, $type, $academicYear['id'], $start_date, $end_date, $school_id, $type==='unit'?0:$has_internal, $result_system,$issue['mode'],$issue['manual']?:null]);
             $new_id = $db->lastInsertId();
             
             Auth::logActivity(Auth::getUserId(), 'Create Exam', 'exams', $new_id);
             redirect(APP_URL . '/modules/exams/view.php?id=' . $new_id, 'Exam created successfully. Now configure subjects and weightage.');
-        } catch (PDOException $e) {
+        } catch (InvalidArgumentException $e) { $error=$e->getMessage(); }
+        catch (PDOException $e) {
             $error = 'Database error: ' . $e->getMessage();
         }
     }
 }
+try{$issue=reportIssueDate([],$_SERVER['REQUEST_METHOD']==='POST'?$_POST:[]);}catch(InvalidArgumentException $e){$issue=reportIssueDate([]);}
 
 $pageTitle = 'Create New Exam';
 $activePage = 'exams';
@@ -120,12 +124,20 @@ ob_start();
                 </div>
             </div>
             
+            <div class="row g-3 mb-4"><?php include __DIR__.'/../../includes/report_issue_controls.php'; ?></div>
             <button type="submit" class="btn btn-primary w-100 py-2">
                 <i class="fas fa-save"></i> Save and Configure Subjects
             </button>
         </form>
     </div>
 </div>
+
+<script>
+document.getElementById('type').addEventListener('change',function(){
+    const internal=document.getElementById('has_internal');internal.disabled=this.value==='unit';
+    if(internal.disabled)internal.checked=false;
+});
+</script>
 
 <?php
 $content = ob_get_clean();
