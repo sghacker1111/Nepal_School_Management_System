@@ -122,20 +122,25 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Accounting
         }
     }
     function add(item = null) {
-        const i = rowIndex++, row = document.createElement('tr'); row.dataset.eligible = item ? String(item.discount_eligible) : '1';
-        const fields = [['particular', 'text', item?.name || ''], ['quantity', 'number', '1'], ['rate', 'number', item?.rate || '0.00'], ['discount', 'number', '0.00'], ['tax_percent', 'number', item?.tax_percent || '0.00']];
+        if (body.querySelectorAll('tr').length >= 100) { bill.querySelector('[data-bill-preview]').textContent = 'A bill may contain at most 100 lines.'; return; }
+        const i = rowIndex++, row = document.createElement('tr'); row.dataset.eligible = String(item?.discount_eligible ?? '1');
+        const fields = [['particular', 'text', item?.particular ?? item?.name ?? ''], ['quantity', 'number', item?.quantity ?? '1'], ['rate', 'number', item?.rate ?? '0.00'], ['discount', 'number', item?.discount ?? '0.00'], ['tax_percent', 'number', item?.tax_percent ?? '0.00']];
         fields.forEach(([key, type, value]) => {
             const td = document.createElement('td'), input = document.createElement('input'); input.type = type; input.name = 'items[' + i + '][' + key + ']'; input.dataset.field = key; input.value = value; input.className = 'form-control'; input.required = true;
             input.setAttribute('aria-label', key.replaceAll('_', ' '));
+            if (key === 'tax_percent' && (item?.item_id || item?.id)) { input.readOnly = true; input.title = 'Catalog tax is configured under Fees & products.'; }
             if (type === 'number') { input.min = '0'; input.step = key === 'quantity' ? '0.001' : '0.01'; if (key === 'quantity') input.max = '1000'; if (key === 'tax_percent') input.max = '100'; }
             input.addEventListener('input', update); td.append(input); row.append(td);
         });
-        const hidden = document.createElement('input'); hidden.type = 'hidden'; hidden.name = 'items[' + i + '][item_id]'; hidden.value = item?.id || ''; row.firstChild.append(hidden);
+        const hidden = document.createElement('input'); hidden.type = 'hidden'; hidden.name = 'items[' + i + '][item_id]'; hidden.value = item?.item_id ?? item?.id ?? ''; row.firstChild.append(hidden);
         const total = document.createElement('td'); total.dataset.lineTotal = ''; row.append(total);
         const td = document.createElement('td'), remove = document.createElement('button'); remove.type = 'button'; remove.className = 'btn btn-outline-danger'; remove.textContent = 'Remove';
         remove.onclick = () => { row.remove(); update(); }; td.append(remove); row.append(td); body.append(row); update();
     }
     bill.querySelector('[data-add-item]').onclick = () => add();
     bill.querySelector('[data-add-catalog]').onclick = () => { const id = bill.querySelector('[data-catalog]').value, item = catalog.find(r => String(r.id) === id); if (item) add(item); };
-    bill.querySelector('[name=bill_discount]').addEventListener('input', update); add();
+    bill.querySelector('[name=bill_discount]').addEventListener('input', update);
+    const initial = document.getElementById('acBillRows');
+    const rows = initial ? JSON.parse(initial.textContent) : [];
+    if (rows.length) rows.forEach(row => add(row)); else add();
 })();

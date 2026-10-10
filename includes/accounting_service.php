@@ -5,6 +5,10 @@ require_once __DIR__.'/nepali_dates.php';
 require_once __DIR__.'/accounting_money.php';
 require_once __DIR__.'/accounting_ledger.php';
 
+function invoiceRevision(array $invoice):string {
+    return hash('sha256',json_encode([(int)$invoice['id'],(int)$invoice['school_id'],(int)($invoice['revision']??1),$invoice['status']],JSON_THROW_ON_ERROR));
+}
+
 /** Shared action matrix: direct HTTP and service methods enforce the same capabilities. */
 function accountingActionAllowed(string $role,string $action,bool $preview=false):bool {
     $known=['view','catalog','fees','invoice','payment','advance','expense','subscription','settings','approve','credit','refund','reverse','period','opening'];
@@ -132,6 +136,7 @@ final class SchoolAccounting {
         $student=!empty($in['student_id'])?schoolRecord($this->db,'students',(int)$in['student_id'],$this->school):null;
         $customer=trim($in['customer_name']??'');if($student)$customer=trim($student['first_name_en'].' '.$student['last_name_en']);
         if(!$customer||strlen($customer)>200)throw new InvalidArgumentException('Choose a student or enter a customer name.');
+        if(!$student&&!in_array($in['customer_type']??'external',['external','guardian','student'],true))throw new InvalidArgumentException('Choose a supported customer type.');
         $year=!empty($in['academic_year_id'])?schoolRecord($this->db,'academic_years',(int)$in['academic_year_id'],$this->school):null;
         $date=$this->date($in['bill_date']??'');$due=$this->date($in['due_date']??$date);if($due<$date)throw new InvalidArgumentException('Due date cannot precede bill date.');
         $items=[];$subtotal=0;$lineDiscount=0;
@@ -160,20 +165,58 @@ final class SchoolAccounting {
     }
     private function createInvoiceInside(array $in,bool $issue):int {
         if(!$this->db->inTransaction())throw new RuntimeException('Internal invoice creation requires a transaction.');
-        $key=$this->key($in);$hash=hash('sha256',json_encode(['issue'=>$issue,'input'=>$in],JSON_UNESCAPED_UNICODE));
+        $key=$this->key($in);$hash=hash('sha256',json_encode(['issue'=>$issue,'input'=>$this->invoiceRequest($in)],JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR));
         if(($id=$this->replay('ac_invoices',$key,$hash))!==null)return $id;$p=$this->previewInvoice($in);$s=$p['student'];
             $this->db->prepare('INSERT INTO ac_invoices(school_id,academic_year_id,class_id,section_id,student_id,customer_type,customer_name,guardian_name,phone,address,description,bill_date,due_date,billing_period,subtotal_minor,discount_minor,tax_minor,total_minor,idempotency_key,request_hash,created_by) VALUES('.implode(',',array_fill(0,21,'?')).')')->execute([$this->school,$p['academic_year_id'],$s['class_id']??null,$s['section_id']??null,$s['id']??null,$p['customer_type'],$p['customer_name'],trim($in['guardian_name']??$s['guardian_name']??$s['father_name']??''),trim($in['phone']??$s['guardian_phone']??''),trim($in['address']??''),trim($in['description']??''),$p['bill_date'],$p['due_date'],trim($in['billing_period']??''),$p['subtotal_minor'],$p['discount_minor'],$p['tax_minor'],$p['total_minor'],$key,$hash,$this->user]);$id=(int)$this->db->lastInsertId();
             foreach($p['items'] as $r){$fields=array_keys($r);$this->db->prepare('INSERT INTO ac_invoice_items(invoice_id,'.implode(',',$fields).') VALUES('.implode(',',array_fill(0,count($fields)+1,'?')).')')->execute([$id,...array_values($r)]);}
             $this->audit('Save invoice draft','ac_invoices',$id,[],['total_minor'=>$p['total_minor']]);if($issue)$this->issueInside($id);return $id;
+    }
+    /** Only validated billing fields contribute; CSRF, buttons and row indexes do not. */
+    private function invoiceRequest(array $in):array {
+        $student=(int)($in['student_id']??0);$year=(int)($in['academic_year_id']??0);
+        if($student<0||$year<0)throw new InvalidArgumentException('Choose valid student and academic-year references.');
+        $date=$this->date($in['bill_date']??'');$due=$this->date($in['due_date']??$date);
+        $rows=[];foreach((array)($in['items']??[]) as $r){if(empty($r['particular'])&&empty($r['item_id']))continue;
+            $rows[]=['item_id'=>(int)($r['item_id']??0),'particular'=>isset($r['particular'])?trim($r['particular']):null,'quantity'=>acDecimalUnits($r['quantity']??'1',3),'rate'=>isset($r['rate'])?acDecimalUnits($r['rate']):null,'discount'=>acDecimalUnits($r['discount']??'0'),'tax'=>isset($r['tax_percent'])?acDecimalUnits($r['tax_percent']):null,'income_account_id'=>(int)($r['income_account_id']??0)];
+        }
+        if(!$rows||count($rows)>100)throw new InvalidArgumentException('Add between 1 and 100 invoice items.');
+        $request=['student_id'=>$student,'academic_year_id'=>$year,'customer_name'=>$student?'':trim($in['customer_name']??''),'customer_type'=>$student?'student':($in['customer_type']??'external'),'bill_date'=>$date,'due_date'=>$due,'bill_discount'=>acDecimalUnits($in['bill_discount']??'0'),'items'=>$rows];
+        foreach(['guardian_name','phone','address','description','billing_period'] as $field){$value=isset($in[$field])?trim($in[$field]):null;if($value!==null&&strlen($value)>($field==='phone'?50:($field==='billing_period'?30:2000)))throw new InvalidArgumentException('The '.str_replace('_',' ',$field).' is too long.');$request[$field]=$value;}
+        return $request;
+    }
+    public function updateInvoiceDraft(int $id,array $in,string $revision):void {
+        $this->authorize('invoice');$this->atomic(function()use($id,$in,$revision){
+            $old=$this->record('ac_invoices',$id,true);
+            if($old['status']!=='draft')throw new InvalidArgumentException('Issued invoices cannot be edited; use a reviewed credit or correction.');
+            if(!hash_equals(invoiceRevision($old),$revision))throw new InvalidArgumentException('This draft changed after you opened it. Reload the latest version before saving.');
+            $this->invoiceRequest($in);$p=$this->previewInvoice($in);$s=$p['student'];
+            $this->db->prepare('UPDATE ac_invoices SET academic_year_id=?,class_id=?,section_id=?,student_id=?,customer_type=?,customer_name=?,guardian_name=?,phone=?,address=?,description=?,bill_date=?,due_date=?,billing_period=?,subtotal_minor=?,discount_minor=?,tax_minor=?,total_minor=?,revision=revision+1 WHERE id=? AND school_id=?')->execute([$p['academic_year_id'],$s['class_id']??null,$s['section_id']??null,$s['id']??null,$p['customer_type'],$p['customer_name'],trim($in['guardian_name']??$s['guardian_name']??$s['father_name']??''),trim($in['phone']??$s['guardian_phone']??''),trim($in['address']??''),trim($in['description']??''),$p['bill_date'],$p['due_date'],trim($in['billing_period']??''),$p['subtotal_minor'],$p['discount_minor'],$p['tax_minor'],$p['total_minor'],$id,$this->school]);
+            // Only an unposted draft's child rows may be replaced.
+            $this->db->prepare('DELETE FROM ac_invoice_items WHERE invoice_id=?')->execute([$id]);
+            foreach($p['items'] as $r){$fields=array_keys($r);$this->db->prepare('INSERT INTO ac_invoice_items(invoice_id,'.implode(',',$fields).') VALUES('.implode(',',array_fill(0,count($fields)+1,'?')).')')->execute([$id,...array_values($r)]);}
+            $this->audit('Update invoice draft','ac_invoices',$id,$old,['revision'=>(int)$old['revision']+1,'total_minor'=>$p['total_minor']]);
+        });
+    }
+    private function documentSnapshot(array $invoice,array $items):array {
+        $s=$invoice['student_id']?schoolRecord($this->db,'students',(int)$invoice['student_id'],$this->school):[];
+        $school=$this->one('SELECT name_en,name_np,address,phone,email,logo FROM schools WHERE id=?',[$this->school]);
+        return ['version'=>1,'school'=>$school,'pan_number'=>$this->settings['pan_number'],'tax_registered'=>(int)$this->settings['tax_registered'],'student'=>['student_id'=>$s['student_id']??''],'class'=>$invoice['class_id']?schoolRecord($this->db,'classes',(int)$invoice['class_id'],$this->school):[],'section'=>$invoice['section_id']?schoolRecord($this->db,'sections',(int)$invoice['section_id'],$this->school):[],'year'=>$invoice['academic_year_id']?schoolRecord($this->db,'academic_years',(int)$invoice['academic_year_id'],$this->school):[],'items'=>$items];
+    }
+    public function invoiceDocument(int $id):array {
+        $invoice=$this->record('ac_invoices',$id);
+        if(!empty($invoice['snapshot_json']))$snapshot=json_decode($invoice['snapshot_json'],true,512,JSON_THROW_ON_ERROR);
+        else $snapshot=$this->documentSnapshot($invoice,$this->rows('SELECT * FROM ac_invoice_items WHERE invoice_id=? ORDER BY id',[$id]));
+        return ['invoice'=>$invoice]+$snapshot;
     }
     private function issueInside(int $id):void {
         $i=$this->record('ac_invoices',$id,true);if($i['status']!=='draft')return;$this->period($i['bill_date']);$lines=[[$this->control('receivable'),(int)$i['total_minor'],0,$i['student_id']]];
         $items=$this->rows('SELECT * FROM ac_invoice_items WHERE invoice_id=?',[$id]);foreach($items as $r)$lines[]=[(int)$r['income_account_id'],0,(int)$r['gross_minor'],$i['student_id']];
         if($i['discount_minor'])$lines[]=[$this->control('discount'),(int)$i['discount_minor'],0,$i['student_id']];if($i['tax_minor'])$lines[]=[$this->control('tax'),0,(int)$i['tax_minor'],$i['student_id']];
         if((int)$i['total_minor']>0||$i['subtotal_minor']>0)$this->journal('invoice',$id,$i['bill_date'],'Issue invoice '.$id,$lines);
-        $number=$this->number('invoice',$i['bill_date']);$this->db->prepare("UPDATE ac_invoices SET number=?,status='issued',issued_at=CURRENT_TIMESTAMP WHERE id=? AND school_id=?")->execute([$number,$id,$this->school]);$this->audit('Issue invoice','ac_invoices',$id,$i,['number'=>$number]);
+        $snapshot=json_encode($this->documentSnapshot($i,$items),JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR);
+        $number=$this->number('invoice',$i['bill_date']);$this->db->prepare("UPDATE ac_invoices SET number=?,status='issued',issued_at=CURRENT_TIMESTAMP,snapshot_json=?,revision=revision+1 WHERE id=? AND school_id=?")->execute([$number,$snapshot,$id,$this->school]);$this->audit('Issue invoice','ac_invoices',$id,$i,['number'=>$number]);
     }
-    public function issueInvoice(int $id):void{$this->authorize('invoice');$this->atomic(fn()=>$this->issueInside($id));}
+    public function issueInvoice(int $id,?string $revision=null):void{$this->authorize('invoice');$this->atomic(function()use($id,$revision){$invoice=$this->record('ac_invoices',$id,true);if($invoice['status']==='draft'&&$revision!==null&&!hash_equals(invoiceRevision($invoice),$revision))throw new InvalidArgumentException('This draft changed after review. Reload it before issuing.');$this->issueInside($id);});}
     public function invoiceBalance(int $id):int {
         $i=$this->record('ac_invoices',$id);if(in_array($i['status'],['draft','void'],true))return 0;
         $paid=$this->scalar("SELECT COALESCE(SUM(a.amount_minor),0) FROM ac_allocations a JOIN ac_payments p ON p.id=a.payment_id WHERE a.invoice_id=? AND p.school_id=? AND p.status='posted'",[$id,$this->school]);

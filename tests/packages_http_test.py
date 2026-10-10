@@ -47,7 +47,7 @@ with ERPHttpFixture() as app:
     app.request('/modules/accounting/settings.php',{'action':'period_state'},status=403)
     app.request('/modules/accounting/expenses.php',{'action':'approve'},status=403)
     app.request('/modules/accounting/student.php?student=1',{'action':'refund'},status=403)
-    data={'action':'create','idempotency_key':'package-accountant-bill-1','customer_name':'Synthetic finance customer','customer_type':'external','bill_date':'2026-10-10','due_date':'2026-10-31','items[0][particular]':'Monthly Tuition Fee','items[0][quantity]':'1','items[0][rate]':'2500.00','items[1][particular]':'Examination Fee','items[1][quantity]':'1','items[1][rate]':'500.00'}
+    data={'action':'draft','idempotency_key':'package-accountant-bill-1','customer_name':'Synthetic finance customer','customer_type':'external','bill_date':'2026-10-10','due_date':'2026-10-31','items[0][particular]':'Monthly Tuition Fee','items[0][quantity]':'1','items[0][rate]':'2500.00','items[1][particular]':'Examination Fee','items[1][quantity]':'1','items[1][rate]':'500.00'}
     body=app.request('/modules/accounting/create_bill.php',data)
     assert 'Rs. 3,000.00' in body
     assert app.db.execute('SELECT COUNT(*) FROM ac_invoices WHERE total_minor=300000').fetchone()[0]==1
