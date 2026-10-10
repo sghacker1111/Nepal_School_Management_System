@@ -5,6 +5,14 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
+# Never interrupt an FTP transfer or allow concurrent writes to the same site.
+concurrency:
+  group: school-ftp-production
+  cancel-in-progress: false
+
 jobs:
   web-deploy:
     name: Deploy to Hosting
@@ -22,3 +30,33 @@ jobs:
         username: ${{ secrets.FTP_USERNAME }}
         password: ${{ secrets.FTP_PASSWORD }}
         server-dir: school.my-board.org/htdocs/ # Subdomain folder for school.my-board.org
+        # Exclusions apply to uploads AND deletions from the previous sync state.
+        # These files belong to the running school, not the source repository.
+        dangerous-clean-slate: false
+        exclude: |
+          **/.git*
+          **/.git*/**
+          **/node_modules/**
+          **/.env*
+          **/*.sqlite
+          **/*.sqlite-*
+          **/*.sqlite3
+          **/*.sqlite3-*
+          **/*.db
+          **/*.db-*
+          **/*.bak
+          **/.backups
+          **/.backups/**
+          **/backups
+          **/backups/**
+          **/uploads
+          **/uploads/**
+          config/config.php
+          config/local.php
+          config/*.local.php
+          **/__pycache__/**
+          **/*.pyc
+          scratch/**
+          tests/**
+          docs/**
+          **/*.log
