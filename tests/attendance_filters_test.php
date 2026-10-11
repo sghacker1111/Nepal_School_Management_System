@@ -1,0 +1,41 @@
+<?php
+require __DIR__.'/test_support.php';['db'=>$db,'fixture'=>$f]=erpTestFixture();
+require __DIR__.'/../includes/attendance_service.php';
+$ad=attendancePeriod(['view'=>'monthly','year'=>2024,'month'=>2],'2026-10-10');
+erpEqual([$ad['start'],$ad['end'],$ad['days']],['2024-02-01','2024-02-29',29],'AD leap February is exact');
+for($year=2000;$year<=2090;$year++){
+    $period=attendancePeriod(['view'=>'yearly','calendar'=>'BS','year'=>$year],'2026-10-10');
+    erpEqual($period['days'],array_sum(schoolCalendar()['years'][$year]),'BS year length '.$year);
+    erpEqual(schoolAdToBs($period['start']),$year.'-01-01','BS year starts at Baishak '.$year);
+}
+$bs=attendancePeriod(['view'=>'monthly','calendar'=>'BS','year'=>2083,'month'=>6],'2026-10-10');
+erpEqual(schoolAdToBs($bs['start']),'2083-06-01','BS month starts on its real first day');
+erpEqual(schoolAdToBs($bs['end']),'2083-06-'.schoolCalendar()['years'][2083][5],'BS month ends on its actual length');
+erpEqual(attendanceMonths('BS'),['Baishak','Jestha','Asad','Shrawan','Bhadra','Asoj','Kartik','Mangsir','Paush','Magh','Falgun','Chaitra'],'All requested Nepali months');
+foreach([['view'=>'range','range_start'=>'2026-10-03','range_end'=>'2026-10-01'],['view'=>'range','range_start'=>'2024-01-01','range_end'=>'2026-01-01'],['view'=>'monthly','month'=>'1x'],['calendar'=>'XY'],['view'=>'yearly','calendar'=>'BS','year'=>2091]] as $bad)erpReject(fn()=>attendancePeriod($bad),'Invalid period rejected');
+$year=attendancePeriod(['view'=>'yearly','year'=>2024]);$dates=[];
+for($i=1;$i<=attendanceWindow($year)['pages'];$i++)$dates=[...$dates,...attendanceWindow($year,$i)['dates']];
+erpEqual(count(array_unique($dates)),366,'Yearly editing pages cover every leap day once');
+$period=attendancePeriod(['view'=>'range','range_start'=>'2026-10-01','range_end'=>'2026-10-03']);
+$students=attendanceStudents($db,1,$f['class'],0,'',$period);$visible=attendanceWindow($period)['dates'];
+$input=['class_id'=>$f['class'],'attendance_grid'=>[$f['student']=>['2026-10-01'=>'P','2026-10-02'=>'A']],'expected_cells'=>2];
+erpEqual(saveStudentAttendance($db,1,$f['ids']['school_admin'],'school_admin',$input,$period,$students,$visible),2,'Multi-day new records save atomically');
+erpEqual($db->query("SELECT date_bs FROM attendances WHERE date_ad='2026-10-01'")->fetchColumn(),schoolAdToBs('2026-10-01'),'Saved BS date is a real conversion');
+$before=$db->query('SELECT * FROM attendances ORDER BY id')->fetchAll();
+$edit=$input;$edit['attendance_grid'][$f['student']]['2026-10-01']='L';
+erpReject(fn()=>saveStudentAttendance($db,1,$f['ids']['school_admin'],'school_admin',$edit,$period,$students,$visible),'Saved corrections require password');
+erpEqual($db->query('SELECT * FROM attendances ORDER BY id')->fetchAll(),$before,'Rejected correction preserves all records');
+$edit['edit_password']='TestPassword123!';erpEqual(saveStudentAttendance($db,1,$f['ids']['school_admin'],'school_admin',$edit,$period,$students,$visible),1,'Verified correction saves changed cell only');
+$edit['attendance_grid'][$f['student']]['2026-10-01']='';erpEqual(saveStudentAttendance($db,1,$f['ids']['school_admin'],'school_admin',$edit,$period,$students,$visible),0,'Blank never erases a saved attendance');
+$edit['attendance_grid'][$f['student']]['2026-10-02']='X';erpReject(fn()=>saveStudentAttendance($db,1,$f['ids']['school_admin'],'school_admin',$edit,$period,$students,$visible),'Invalid status rejected');
+$before=$db->query('SELECT * FROM attendances ORDER BY id')->fetchAll();
+$bad=$input;$bad['attendance_grid'][$f['student']]=['2026-10-03'=>'P','2026-10-02'=>'X'];erpReject(fn()=>saveStudentAttendance($db,1,$f['ids']['school_admin'],'school_admin',$bad,$period,$students,$visible),'New and invalid mixed cells rollback');
+erpEqual($db->query('SELECT * FROM attendances ORDER BY id')->fetchAll(),$before,'Mixed batch saves no partial attendance');
+$future=attendancePeriod(['view'=>'daily','date'=>'2100-01-01']);$futureInput=['class_id'=>$f['class'],'attendance_grid'=>[$f['student']=>['2100-01-01'=>'P']]];
+erpReject(fn()=>saveStudentAttendance($db,1,$f['ids']['school_admin'],'school_admin',$futureInput,$future,$students,['2100-01-01']),'Future attendance cannot be fabricated');
+$edit=$input;$edit['expected_cells']=3;erpReject(fn()=>saveStudentAttendance($db,1,$f['ids']['school_admin'],'school_admin',$edit,$period,$students,$visible),'Truncated form rejected');
+erpReject(fn()=>saveStudentAttendance($db,1,$f['ids']['principal'],'principal',$input,$period,$students,$visible),'Principal attendance is view-only');
+$db->prepare('UPDATE classes SET class_teacher_id=NULL WHERE id=?')->execute([$f['class']]);
+erpReject(fn()=>attendanceClass($db,1,$f['ids']['teacher'],'teacher',$f['class']),'Subject assignment does not grant attendance editing');
+erpReject(fn()=>attendanceClass($db,1,$f['ids']['teacher'],'teacher',$f['otherClass']),'Another school attendance denied');
+echo 'Attendance calendars and save safety passed: '.$GLOBALS['erp_checks']." checks\n";

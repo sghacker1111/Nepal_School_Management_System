@@ -28,10 +28,11 @@ changeExamState($db,1,$exam,'reopen');$input['marks']=[$student=>[$other=>$parts
 $otherClass=(int)$db->query("SELECT id FROM classes WHERE school_id=1 AND name='Class 8'")->fetchColumn();
 erpEqual(teacherClassResultScope($db,1,$ct,$otherClass)['class_teacher'],false,'Class supervision does not extend to another class');
 Auth::startSession();$_SESSION=['user_id'=>$ct,'role'=>'teacher','school_id'=>1];
-erpReject(fn()=>validateTeacherResultRequest($db,1,'results','ledger.php',[],['class'=>$otherClass]),'Forged unsupervised class ledger denied');
+validateTeacherResultRequest($db,1,'results','ledger.php',[],['class'=>$otherClass]);erpCheck(true,'Unsupervised same-school ledger viewing is allowed');
 erpReject(fn()=>validateTeacherResultRequest($db,1,'results','marks_entry.php',['class_id'=>$otherClass],[]),'Forged unsupervised marks form denied');
 $_SESSION['user_id']=$teacher;
-erpReject(fn()=>validateTeacherResultRequest($db,1,'results','ledger.php',[],['class'=>$class,'subject'=>$other]),'Forged unassigned subject ledger denied');
+validateTeacherResultRequest($db,1,'results','ledger.php',[],['class'=>$class,'subject'=>$other]);erpCheck(true,'Unassigned subject ledger viewing is allowed');
+erpEqual(count(resultClasses($db,1,'teacher',$ct,true)),(int)$db->query('SELECT COUNT(*) FROM classes WHERE school_id=1')->fetchColumn(),'Ledger class list includes all school classes');
 $scope=teacherClassResultScope($db,1,$teacher,$class);erpEqual(teacherResultCellAllowed($scope,$own,$f['section']),true,'Assigned section visible');erpEqual(teacherResultCellAllowed($scope,$own,$sectionB),false,'Unassigned section not visible');
 $db->exec('UPDATE users SET status=0 WHERE id='.$ct);erpReject(fn()=>saveExamMarks($db,1,$ct,'teacher',$input),'Inactive class teacher cannot change marks');
 $db->exec('UPDATE users SET status=1 WHERE id='.$ct);$db->prepare('UPDATE classes SET class_teacher_id=? WHERE id=?')->execute([$teacher,$class]);erpReject(fn()=>saveExamMarks($db,1,$ct,'teacher',$input),'Reassigned class teacher loses authority immediately');

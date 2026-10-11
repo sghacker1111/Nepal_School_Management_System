@@ -66,6 +66,7 @@ if ($layoutSchoolId && in_array($layoutRole,$adminRoles,true)) {
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css">
 <link rel="stylesheet" href="<?= APP_URL ?>/assets/css/style.css">
 <link rel="stylesheet" href="<?= APP_URL ?>/assets/css/workspace.css">
+<?php foreach($pageStyles??[] as $stylesheet): ?><link rel="stylesheet" href="<?= htmlspecialchars(APP_URL.$stylesheet,ENT_QUOTES,'UTF-8') ?>"><?php endforeach; ?>
 <script>window.APP_URL=<?= json_encode(APP_URL,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;window.CSRF_TOKEN=<?= json_encode($token) ?>;</script>
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
