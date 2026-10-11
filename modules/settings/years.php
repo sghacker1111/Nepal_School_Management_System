@@ -38,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 $success = "Academic Year added successfully.";
             }
         } catch (PDOException $e) {
-            $error = "Database error: " . $e->getMessage();
+            $error = schoolPublicError($e);
         }
     }
 }
@@ -65,7 +65,7 @@ if (isset($_GET['toggle_hidden'])) {
             redirect(APP_URL . '/modules/settings/years.php', $success, 'success');
         }
     } catch (PDOException $e) {
-        $error = "Database error: " . $e->getMessage();
+        $error = schoolPublicError($e);
     }
 }
 
@@ -117,7 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             if ($db->inTransaction()) {
                 $db->rollBack();
             }
-            $error = "Database error: " . $e->getMessage();
+            $error = schoolPublicError($e);
         }
     }
 }

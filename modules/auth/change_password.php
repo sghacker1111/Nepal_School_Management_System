@@ -40,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 Auth::logActivity($user_id, 'Changed own account password', 'users', $user_id);
                 $success = 'Password changed successfully!';
             } catch (PDOException $e) {
-                $error = 'Database error: ' . $e->getMessage();
+                $error = schoolPublicError($e);
             }
         } else {
             $error = 'Incorrect old password';

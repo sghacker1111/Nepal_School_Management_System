@@ -229,9 +229,9 @@ class XlsxHelper {
         fwrite($tempHandle, $content);
         rewind($tempHandle);
 
-        while (($data = fgetcsv($tempHandle, 0, $delimiter)) !== false) {
+        while (($data = fgetcsv($tempHandle, 0, $delimiter, '"', '')) !== false) {
             // Trim all cell values
-            $data = array_map('trim', $data);
+            $data = array_map(static fn($value)=>trim((string)($value??'')), $data);
             $hasContent = false;
             foreach ($data as $d) {
                 if ($d !== '') {
@@ -375,10 +375,10 @@ class XlsxHelper {
         fwrite($fp, "\xEF\xBB\xBF");
 
         if (!empty($headers)) {
-            fputcsv($fp, $headers);
+            fputcsv($fp, $headers, ',', '"', '');
         }
         foreach ($rows as $r) {
-            fputcsv($fp, $r);
+            fputcsv($fp, $r, ',', '"', '');
         }
 
         rewind($fp);

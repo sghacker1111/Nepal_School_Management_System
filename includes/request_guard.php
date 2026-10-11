@@ -45,7 +45,7 @@ function guardSchoolRequest(): void {
     $write = ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST';
     $mutation = schoolMutationQuery($_GET);
     if ($module === 'super_admin' && $role !== 'super_admin') denySchoolRequest('System administrator access is required.');
-    $accessModule=$module==='learning'?(['questions.php'=>'questions','paper_generator.php'=>'paper_generator','specification_grids.php'=>'specification_grids','curriculum.php'=>'curriculum','ocr_scanner.php'=>'ocr_scanner'][$file]??'learning'):$module;
+    $accessModule=$module==='learning'?(['questions.php'=>'questions','paper_generator.php'=>'paper_generator','question_grid.php'=>'paper_generator','specification_grids.php'=>'specification_grids','curriculum.php'=>'curriculum','ocr_scanner.php'=>'ocr_scanner'][$file]??'learning'):$module;
     if ($module && !in_array($module, ['auth','super_admin'], true) && !Auth::hasAccess($accessModule)) denySchoolRequest('This module is not included in your school package.');
     if($module==='learning'&&$file==='questions.php'&&($write||$mutation)&&!Auth::canAddQuestions())denySchoolRequest('Your package allows question viewing, not adding or editing questions.');
     if($module==='exams'&&isset($_GET['reopen'])&& !in_array($role,['super_admin','school_admin'],true))denySchoolRequest('Only a school administrator may reopen marks.');
@@ -74,7 +74,7 @@ function guardSchoolRequest(): void {
         if (str_ends_with($key, '_drive_path') && !empty($value)) denySchoolRequest('Use the file upload button. Reading a server file path is not supported.', 422);
     }
     foreach ($_FILES as $fileKey=>$upload) {
-        if (is_array($upload['error'] ?? null)) continue;
+        if (is_array($upload['error'] ?? null)) denySchoolRequest('Upload one file per field.',422);
         if (($upload['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) continue;
         if (($upload['error'] ?? -1) !== UPLOAD_ERR_OK || ($upload['size'] ?? 0) > MAX_FILE_SIZE) denySchoolRequest('The upload failed or exceeds the 5 MB limit.', 422);
         if (preg_match('/photo|logo|signature|sig$/i', $fileKey)) {

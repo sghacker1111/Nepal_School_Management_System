@@ -12,11 +12,26 @@ Auth::requireRole('super_admin');
 $db = getDB();
 $error = '';
 $success = '';
+require_once __DIR__.'/../../includes/school_validation.php';
+$filter_class=(int)($_GET['filter_class']??$_POST['filter_class']??0);
+$show_hidden=(string)($_GET['show_hidden']??$_POST['show_hidden']??'0')==='1';
+if($filter_class)try{schoolRecord($db,'classes',$filter_class,0);}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),404);}
+$catalogReturn=APP_URL.'/modules/super_admin/subjects.php?'.http_build_query(['filter_class'=>$filter_class,'show_hidden'=>$show_hidden?'1':'0']);
+
 
 // Handle AJAX Chapter Actions
+if(isset($_GET['action_get_chapters'])){
+    header('Content-Type: application/json');
+    try{$c=(int)($_GET['class_id']??0);$s=(int)($_GET['subject_id']??0);schoolRecord($db,'classes',$c,0);schoolRecord($db,'subjects',$s,0);
+        $q=$db->prepare('SELECT id,name FROM chapters WHERE school_id=0 AND class_id=? AND subject_id=? ORDER BY sort_order,id');$q->execute([$c,$s]);echo json_encode($q->fetchAll());
+    }catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),404);}exit;
+}
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_chapter'])) {
     header('Content-Type: application/json');
     $action = $_POST['action_chapter'];
+    if(in_array($action,['add','delete_by_name'],true)){
+        try{schoolRecord($db,'classes',(int)($_POST['class_id']??0),0);schoolRecord($db,'subjects',(int)($_POST['subject_id']??0),0);}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
+    }
     
     if ($action === 'add') {
         $c_id = (int)$_POST['class_id'];
@@ -35,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_chapter'])) {
             $stmt->execute([$c_id, $s_id, $name, $name_np, $sort_order]);
             echo json_encode(['success' => true]);
         } catch (PDOException $e) {
-            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+            echo json_encode(['success' => false, 'message' => schoolPublicError($e)]);
         }
         exit;
     }
@@ -47,7 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_chapter'])) {
             $stmt->execute([$ch_id]);
             echo json_encode(['success' => true]);
         } catch (PDOException $e) {
-            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+            echo json_encode(['success' => false, 'message' => schoolPublicError($e)]);
         }
         exit;
     }
@@ -61,7 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_chapter'])) {
             $stmt->execute([$c_id, $s_id, $name]);
             echo json_encode(['success' => true]);
         } catch (PDOException $e) {
-            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+            echo json_encode(['success' => false, 'message' => schoolPublicError($e)]);
         }
         exit;
     }
@@ -99,6 +114,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_subject'])) {
         $error = "Subject Name (EN) is required. Leave the code blank when the source does not specify one.";
     } else {
         try {
+            if(!in_array($action,['add','edit'],true))throw new InvalidArgumentException('Choose a valid subject action.');
+            $map_class_id=(int)($_POST['map_class_id']??0);
+            if($map_class_id)schoolRecord($db,'classes',$map_class_id,0);
+            if($action==='edit')schoolRecord($db,'subjects',(int)($_POST['subject_id']??0),0);
             if ($action === 'add') {
                 $stmt = $db->prepare("
                     INSERT INTO subjects (
@@ -159,8 +178,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_subject'])) {
                 ]);
                 $success = "Universal subject updated successfully.";
             }
-        } catch (PDOException $e) {
-            $error = "Database error: " . $e->getMessage();
+        } catch (Throwable $e) {
+            $error = schoolPublicError($e);
         }
     }
 }
@@ -170,18 +189,16 @@ if (isset($_GET['delete_subject'])) {
     $error = "Permanent deletion of subjects is disabled to protect student marks, report cards, and examination ledgers. You can toggle the subject to 'Hidden' instead.";
 }
 
-// Handle Toggle Hide / Show Subject Action
-if (isset($_GET['toggle_hide'])) {
-    $s_id = (int)$_GET['toggle_hide'];
-    try {
-        $stmt = $db->prepare("UPDATE subjects SET is_hidden = (CASE WHEN is_hidden = 1 THEN 0 ELSE 1 END) WHERE id = ? AND school_id = 0");
-        $stmt->execute([$s_id]);
-        $success = "Subject visibility status toggled successfully.";
-    } catch (PDOException $e) {
-        $error = "Database error: " . $e->getMessage();
-    }
+// Explicit target state plus redirect prevents refresh/back toggling visibility twice.
+if($_SERVER['REQUEST_METHOD']==='POST'&&(isset($_POST['action_visibility'])||isset($_GET['toggle_hide']))){
+    $id=(int)($_POST['subject_id']??$_GET['toggle_hide']??0);
+    try{$s=schoolRecord($db,'subjects',$id,0);$visible=isset($_POST['visible'])?(int)$_POST['visible']:(int)!empty($s['is_hidden']);
+        if(!in_array($visible,[0,1],true))throw new InvalidArgumentException('Choose a valid visibility state.');
+        $db->prepare('UPDATE subjects SET is_hidden=? WHERE id=? AND school_id=0')->execute([$visible?0:1,$id]);
+        Auth::logActivity(Auth::getUserId(),'Update universal subject visibility','subjects',$id);
+        redirect($catalogReturn,'Subject visibility saved successfully.','success');
+    }catch(Throwable $e){$error=schoolPublicError($e);}
 }
-
 // Handle Add Class-Subject Mapping
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_map'])) {
     $class_id = (int)($_POST['class_id'] ?? 0);
@@ -191,6 +208,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_map'])) {
         $error = "Please select both Class and Subject to map.";
     } else {
         try {
+            schoolRecord($db,'classes',$class_id,0);
+            schoolRecord($db,'subjects',$subject_id,0);
             // Check if already mapped by ID or by matching name
             $stmt = $db->prepare("
                 SELECT s.name_en FROM class_subjects cs
@@ -229,11 +248,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_map'])) {
                 $stmt->execute([$class_id, $subject_id, $ch, $th_ch, $in_ch, $th_fm, $th_pm, $in_fm, $in_pm, $is_opt]);
                 $success = "Subject mapped to class successfully.";
             }
-        } catch (PDOException $e) {
-            if (strpos($e->getMessage(), 'UNIQUE constraint failed') !== false) {
+        } catch (Throwable $e) {
+            if ($e instanceof PDOException && strpos($e->getMessage(), 'UNIQUE constraint failed') !== false) {
                 $error = "Duplicate Subject Blocked: This subject is already assigned to this class.";
             } else {
-                $error = "Database error: " . $e->getMessage();
+                $error = schoolPublicError($e);
             }
         }
     }
@@ -244,38 +263,24 @@ if (isset($_GET['delete_map'])) {
     $error = "Deleting class mappings is disabled to preserve historical exam records. You can toggle mapping status instead.";
 }
 
-// Handle Toggle Mapping Status
-if (isset($_GET['toggle_map_status'])) {
-    $map_id = (int)$_GET['toggle_map_status'];
-    try {
-        $stmt = $db->prepare("UPDATE class_subjects SET is_active = (CASE WHEN is_active = 1 THEN 0 ELSE 1 END) WHERE id = ? AND school_id = 0");
-        $stmt->execute([$map_id]);
-        $success = "Class mapping status updated successfully.";
-    } catch (PDOException $e) {
-        $error = "Database error: " . $e->getMessage();
-    }
+if($_SERVER['REQUEST_METHOD']==='POST'&&(isset($_POST['action_mapping_visibility'])||isset($_GET['toggle_map_status']))){
+    $id=(int)($_POST['mapping_id']??$_GET['toggle_map_status']??0);
+    try{$mapping=schoolRecord($db,'class_subjects',$id,0);$active=isset($_POST['active'])?(int)$_POST['active']:(int)!$mapping['is_active'];
+        if(!in_array($active,[0,1],true))throw new InvalidArgumentException('Choose a valid mapping state.');
+        $db->prepare('UPDATE class_subjects SET is_active=? WHERE id=? AND school_id=0')->execute([$active,$id]);
+        Auth::logActivity(Auth::getUserId(),'Update universal mapping visibility','class_subjects',$id);
+        redirect($catalogReturn,'Class mapping visibility saved successfully.','success');
+    }catch(Throwable $e){$error=schoolPublicError($e);}
 }
-
 // Fetch all universal classes
 $classes = $db->query("SELECT * FROM classes WHERE school_id = 0 ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
 
-// Filter show hidden
-$show_hidden = isset($_GET['show_hidden']) && $_GET['show_hidden'] == '1';
-$hidden_clause = $show_hidden ? "" : "WHERE is_hidden = 0 OR is_hidden IS NULL";
-
-// Fetch universal subjects
-$subjects = $db->query("SELECT * FROM subjects WHERE school_id = 0 " . ($show_hidden ? "" : "AND (is_hidden = 0 OR is_hidden IS NULL)") . " ORDER BY name_en")->fetchAll(PDO::FETCH_ASSOC);
-
-// Fetch class-subject mappings
-$mappings = $db->query("
-    SELECT cs.id, c.name as class_name, s.name_en as subject_name, cs.credit_hours, cs.th_credit_hours, cs.in_credit_hours, cs.class_id, cs.subject_id, cs.is_active, cs.is_optional
-    FROM class_subjects cs
-    JOIN classes c ON cs.class_id = c.id
-    JOIN subjects s ON cs.subject_id = s.id
-    WHERE cs.school_id = 0
-    ORDER BY c.id ASC, s.name_en ASC
-")->fetchAll(PDO::FETCH_ASSOC);
-
+$catalogSubjects=$db->query('SELECT * FROM subjects WHERE school_id=0 ORDER BY name_en,id')->fetchAll();
+$subjects=[];$mappings=[];
+if($filter_class){
+    $q=$db->prepare('SELECT DISTINCT s.* FROM subjects s JOIN class_subjects cs ON cs.subject_id=s.id AND cs.school_id=0 WHERE s.school_id=0 AND cs.class_id=?'.($show_hidden?'':' AND COALESCE(s.is_hidden,0)=0 AND cs.is_active=1').' ORDER BY s.name_en,s.id');$q->execute([$filter_class]);$subjects=$q->fetchAll();
+    $q=$db->prepare('SELECT cs.*,c.name class_name,s.name_en subject_name FROM class_subjects cs JOIN classes c ON c.id=cs.class_id AND c.school_id=0 JOIN subjects s ON s.id=cs.subject_id AND s.school_id=0 WHERE cs.school_id=0 AND cs.class_id=?'.($show_hidden?'':' AND cs.is_active=1 AND COALESCE(s.is_hidden,0)=0').' ORDER BY s.name_en,cs.id');$q->execute([$filter_class]);$mappings=$q->fetchAll();
+}
 $pageTitle = 'Subjects & Chapters Catalog';
 $activePage = 'super_admin_subjects';
 
@@ -294,6 +299,8 @@ ob_start();
 <div class="alert alert-success"><i class="fas fa-check-circle"></i> <?= sanitize($success) ?></div>
 <?php endif; ?>
 
+<form method="GET" class="row g-3 mb-4"><div class="col-md-6"><label for="catalogClass" class="form-label">Select class first</label><select id="catalogClass" name="filter_class" class="form-select" onchange="this.form.submit()"><option value="">Choose class</option><?php foreach($classes as $c): ?><option value="<?= $c['id'] ?>" <?= $filter_class===(int)$c['id']?'selected':'' ?>><?= sanitize($c['name']) ?></option><?php endforeach; ?></select></div><div class="col-md-4 d-flex align-items-end"><label><input type="checkbox" name="show_hidden" value="1" <?= $show_hidden?'checked':'' ?> onchange="this.form.submit()"> Include hidden / inactive subjects and mappings</label></div></form>
+<?php if(!$filter_class): ?><p class="alert alert-info">Choose a class to see its subjects and chapters. Class creation belongs in Class Management.</p><?php endif; ?>
 <div class="row g-4">
     <!-- Left Column: Manage Universal Subjects & Mapping -->
     <div class="col-lg-6">
@@ -305,7 +312,7 @@ ob_start();
                     <small class="text-muted">Standard CDC subjects with TH & IN breakdown</small>
                 </div>
                 <div class="d-flex gap-2">
-                    <a href="?show_hidden=<?= $show_hidden ? '0' : '1' ?>" class="btn btn-sm <?= $show_hidden ? 'btn-warning text-dark' : 'btn-outline-secondary' ?>">
+                    <a href="?filter_class=<?= $filter_class ?>&show_hidden=<?= $show_hidden ? '0' : '1' ?>" class="btn btn-sm <?= $show_hidden ? 'btn-warning text-dark' : 'btn-outline-secondary' ?>">
                         <i class="fas <?= $show_hidden ? 'fa-eye-slash' : 'fa-eye' ?>"></i> <?= $show_hidden ? 'Hide Inactive' : 'Show Hidden' ?>
                     </a>
                     <button class="btn btn-sm btn-primary" onclick="showAddSubjectForm()"><i class="fas fa-plus"></i> Add Subject</button>
@@ -354,12 +361,8 @@ ob_start();
                                     <?php endif; ?>
                                 </td>
                                 <td class="text-end">
-                                    <button class="btn btn-sm btn-outline-warning" onclick='editSubject(<?= json_encode($s) ?>)' title="Edit Subject"><i class="fas fa-edit"></i></button>
-                                    <a href="?toggle_hide=<?= $s['id'] ?><?= $show_hidden ? '&show_hidden=1' : '' ?>" 
-                                       class="btn btn-sm <?= !empty($s['is_hidden']) ? 'btn-outline-success' : 'btn-outline-secondary' ?>" 
-                                       title="<?= !empty($s['is_hidden']) ? 'Unhide Subject' : 'Hide Subject' ?>">
-                                        <i class="fas <?= !empty($s['is_hidden']) ? 'fa-eye' : 'fa-eye-slash' ?>"></i>
-                                    </a>
+                                    <button class="btn btn-sm btn-outline-warning" onclick='editSubject(<?= htmlspecialchars(json_encode($s),ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8') ?>)' title="Edit Subject"><i class="fas fa-edit"></i></button>
+                                    <form method="POST" class="d-inline"><input type="hidden" name="action_visibility" value="1"><input type="hidden" name="subject_id" value="<?= $s['id'] ?>"><input type="hidden" name="visible" value="<?= !empty($s['is_hidden'])?'1':'0' ?>"><button class="btn btn-sm btn-outline-secondary" title="<?= !empty($s['is_hidden'])?'Unhide Subject':'Hide Subject' ?>"><i class="fas <?= !empty($s['is_hidden'])?'fa-eye':'fa-eye-slash' ?>"></i></button></form>
                                 </td>
                             </tr>
                             <?php endforeach; ?>
@@ -393,7 +396,7 @@ ob_start();
                         <label class="form-label small fw-semibold">Select Subject</label>
                         <select name="subject_id" class="form-select form-select-sm" required>
                             <option value="">-- Choose Subject --</option>
-                            <?php foreach ($subjects as $s): ?>
+                            <?php foreach ($catalogSubjects as $s): ?>
                             <option value="<?= $s['id'] ?>"><?= sanitize($s['name_en']) ?></option>
                             <?php endforeach; ?>
                         </select>
@@ -431,9 +434,7 @@ ob_start();
                                     <?php endif; ?>
                                 </td>
                                 <td class="text-end">
-                                    <a href="?toggle_map_status=<?= $m['id'] ?>" class="btn btn-xs btn-outline-secondary" title="Toggle active/hidden">
-                                        <i class="fas <?= !empty($m['is_active']) ? 'fa-eye-slash' : 'fa-eye' ?>"></i>
-                                    </a>
+                                    <form method="POST" class="d-inline"><input type="hidden" name="action_mapping_visibility" value="1"><input type="hidden" name="mapping_id" value="<?= $m['id'] ?>"><input type="hidden" name="active" value="<?= $m['is_active']?'0':'1' ?>"><button class="btn btn-sm btn-outline-secondary" title="Save mapping visibility"><i class="fas <?= $m['is_active']?'fa-eye-slash':'fa-eye' ?>"></i></button></form>
                                 </td>
                             </tr>
                             <?php endforeach; ?>
@@ -454,10 +455,10 @@ ob_start();
                 <div class="row g-2 mb-4">
                     <div class="col-md-6">
                         <label class="form-label small fw-semibold">Filter Class</label>
-                        <select id="chapterFilterClass" class="form-select form-select-sm" onchange="loadChaptersList()">
+                        <select id="chapterFilterClass" class="form-select form-select-sm" onchange="window.location.href='?filter_class='+this.value+'&show_hidden=<?= $show_hidden?1:0 ?>'">
                             <option value="">-- Choose Class --</option>
                             <?php foreach ($classes as $c): ?>
-                            <option value="<?= $c['id'] ?>"><?= sanitize($c['name']) ?></option>
+                            <option value="<?= $c['id'] ?>" <?= $filter_class===(int)$c['id']?'selected':'' ?>><?= sanitize($c['name']) ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
@@ -712,7 +713,7 @@ function loadChaptersList() {
     
     // Fetch chapters via AJAX (fallback to cdc curriculum if empty)
     $.ajax({
-        url: '../learning/questions.php',
+        url: 'subjects.php',
         data: {
             action_get_chapters: 1,
             class_id: classId,
@@ -733,16 +734,8 @@ function loadChaptersList() {
                             </thead>
                             <tbody>
                 `;
-                chapters.forEach((ch, idx) => {
-                    html += `
-                        <tr>
-                            <td><strong>${ch}</strong></td>
-                            <td class="text-end">
-                                <button class="btn btn-xs btn-outline-danger" onclick="deleteChapter('${ch}')"><i class="fas fa-trash"></i></button>
-                            </td>
-                        </tr>
-                    `;
-                });
+                // Chapter names are rendered using textContent below.
+
                 html += `
                             </tbody>
                         </table>
@@ -756,6 +749,12 @@ function loadChaptersList() {
                 `;
             }
             wrapper.innerHTML = html;
+            const body=wrapper.querySelector('tbody');
+            if(body)chapters.forEach(ch=>{
+                const row=document.createElement('tr'),label=document.createElement('td'),action=document.createElement('td'),button=document.createElement('button');
+                label.textContent=typeof ch==='string'?ch:ch.name;button.type='button';button.className='btn btn-sm btn-outline-danger';button.textContent='Delete';
+                button.onclick=()=>deleteChapter(typeof ch==='string'?ch:ch.name);action.append(button);row.append(label,action);body.append(row);
+            });
         },
         error: function() {
             wrapper.innerHTML = `<div class="alert alert-danger">Error loading chapters list.</div>`;

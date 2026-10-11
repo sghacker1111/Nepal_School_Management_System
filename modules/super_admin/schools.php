@@ -156,7 +156,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             if ($db->inTransaction()) {
                 $db->rollBack();
             }
-            $error = "Database error: " . $e->getMessage();
+            $error = schoolPublicError($e);
         }
     }
 }

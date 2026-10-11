@@ -209,7 +209,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['initialize_defaults']
                 Auth::logActivity(Auth::getUserId(), "Initialized $inserted Subjects for Class ID $class_id in Exam ID $exam_id", 'exam_subjects');
                 $success = "Initialized $inserted subject configurations successfully!";
             } catch (PDOException $e) {
-                $error = 'Database error: ' . $e->getMessage();
+                $error = schoolPublicError($e);
             }
         }
     }
@@ -629,7 +629,7 @@ function printAdmitCards() {
 }
 
 // Dynamic class-subject dropdown filtering
-const classSubjectsMap = <?= json_encode($class_subjects_json) ?>;
+const classSubjectsMap = <?= json_encode($class_subjects_json,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;
 const editMapping = <?= $edit_mapping ? json_encode($edit_mapping) : 'null' ?>;
 
 document.addEventListener('DOMContentLoaded', function() {

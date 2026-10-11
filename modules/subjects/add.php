@@ -114,7 +114,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (strpos($e->getMessage(), 'UNIQUE constraint failed') !== false) {
                     $error = 'Duplicate Subject Blocked: This subject is already assigned to this class.';
                 } else {
-                    $error = 'Database error: ' . $e->getMessage();
+                    $error = schoolPublicError($e);
                 }
             }
         }

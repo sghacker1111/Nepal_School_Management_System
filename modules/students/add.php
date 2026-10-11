@@ -102,7 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 redirect(APP_URL . '/modules/students/view.php?id=' . $studentId_db, 'Student added successfully!');
                 
             } catch (PDOException $e) {
-                $errors[] = "Database error: " . $e->getMessage();
+                $errors[] = schoolPublicError($e);
             }
         }
     }

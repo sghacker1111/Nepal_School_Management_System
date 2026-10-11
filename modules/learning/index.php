@@ -68,9 +68,7 @@ if ($is_admin) {
 }
 
 // 3. Classes and subjects configuration based on active school context
-$classes_stmt = $db->prepare("SELECT * FROM classes WHERE school_id = ? AND is_active = 1 ORDER BY id ASC");
-$classes_stmt->execute([$school_id]);
-$classes = $classes_stmt->fetchAll();
+$classes=learningClasses($db,(int)$school_id,(string)Auth::getRole(),(int)Auth::getUserId());
 
 $class_id = $_GET['class_id'] ?? ($classes[0]['id'] ?? '');
 
@@ -81,17 +79,7 @@ if ($class_id) {
     $selected_class = $stmt->fetch();
 }
 
-$subjects = [];
-if ($class_id) {
-    $stmt = $db->prepare("
-        SELECT s.* FROM subjects s 
-        JOIN class_subjects cs ON cs.subject_id = s.id 
-        WHERE cs.class_id = ? AND (cs.school_id = ?)
-        ORDER BY s.name_en
-    ");
-    $stmt->execute([$class_id, $school_id]);
-    $subjects = $stmt->fetchAll();
-}
+$subjects=learningSubjects($db,(int)$school_id,(int)$class_id,(string)Auth::getRole(),(int)Auth::getUserId());
 
 $subject_id = $_GET['subject_id'] ?? ($subjects[0]['id'] ?? '');
 

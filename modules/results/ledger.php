@@ -23,7 +23,7 @@ $role=Auth::getRole();
 $teacherScope=$role==='teacher'?teacherClassResultScope($db,(int)$school_id,(int)Auth::getUserId(),$class_id):['class_teacher'=>false,'subjects'=>[]];
 $canFullLedger=true;
 $canOpenMarks=$role!=='teacher'||$teacherScope['class_teacher']||array_reduce(array_keys($teacherScope['subjects']),static fn($allowed,$id)=>$allowed||((!$subject_id||$subject_id===$id)&&(!$section_id||teacherResultCellAllowed($teacherScope,(int)$id,$section_id))),false);
-$schoolQuery=$db->prepare('SELECT name_en,name_np,address FROM schools WHERE id=?');$schoolQuery->execute([$school_id]);$school=$schoolQuery->fetch()?:[];
+$schoolQuery=$db->prepare('SELECT * FROM schools WHERE id=?');$schoolQuery->execute([$school_id]);$school=$schoolQuery->fetch()?:[];
 
 // Fetch active exams
 $stmt = $db->prepare("
@@ -376,6 +376,7 @@ ob_start();
             </table>
         </div>
         <p class="small text-muted p-3 mb-0">Students: <?= count($ledger_data) ?>. — means an incomplete mark; N/A means the student does not take the optional subject. <?= $isSubjectLedger?'This is a selected-subject ledger, not the overall class result.':'' ?></p>
+        <?= schoolPrintSignatures($db,(int)$school_id,$school,(int)$class_id) ?>
     </div>
 </div>
 

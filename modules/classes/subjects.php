@@ -51,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
             echo json_encode(['success' => false, 'error' => $e->getMessage()]);
             exit;
         }
-        $error = "Database error: " . $e->getMessage();
+        $error = schoolPublicError($e);
     }
 }
 
@@ -127,7 +127,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             if (strpos($e->getMessage(), 'UNIQUE constraint failed') !== false) {
                 $error = "Duplicate Subject Blocked: This subject is already assigned to this class.";
             } else {
-                $error = "Database error: " . $e->getMessage();
+                $error = schoolPublicError($e);
             }
         }
     }
@@ -159,22 +159,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     
     try {
         if(($existingScheme['assessment_method']??'')==='THEMATIC_CONTINUOUS'){$th_credit_hours=$in_credit_hours=$th_full_marks=$th_pass_marks=$in_full_marks=$in_pass_marks=null;$credit_hours=(float)$existingScheme['credit_hours'];}
+        $weekly=$_POST['weekly_periods']??'';
+        if(!is_scalar($weekly)||($weekly!==''&&(!preg_match('/^\d{1,2}$/',(string)$weekly)||(int)$weekly>50)))throw new InvalidArgumentException('Weekly periods must be a whole number from 0 to 50.');
         $stmt = $db->prepare("
             UPDATE class_subjects 
             SET credit_hours = ?, th_credit_hours = ?, in_credit_hours = ?,
                 th_full_marks = ?, th_pass_marks = ?, in_full_marks = ?, in_pass_marks = ?,
-                teacher_id = ?, is_optional = ? 
+                teacher_id = ?, is_optional = ?,weekly_periods=?
             WHERE id = ? AND class_id = ?
         ");
         $stmt->execute([
             $credit_hours, $th_credit_hours, $in_credit_hours,
             $th_full_marks, $th_pass_marks, $in_full_marks, $in_pass_marks,
-            $teacher_id_str, $is_optional, $mapping_id, $class_id
+            $teacher_id_str, $is_optional,$weekly===''?null:(int)$weekly, $mapping_id, $class_id
         ]);
         Auth::logActivity(Auth::getUserId(), 'Edit Class Subject Assignment', 'class_subjects', $mapping_id);
         $success = "Subject mapping updated successfully.";
-    } catch (PDOException $e) {
-        $error = "Database error: " . $e->getMessage();
+    } catch (Throwable $e) {
+        $error = schoolPublicError($e);
     }
 }
 
@@ -373,7 +375,7 @@ ob_start();
                                         ?>
                                     </td>
                                     <td class="text-end">
-                                        <button onclick='editMapping(<?= json_encode($cs) ?>)' 
+                                        <button onclick='editMapping(<?= htmlspecialchars(json_encode($cs),ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8') ?>)'
                                                 class="btn btn-sm btn-outline-warning" title="Edit Assignment & Evaluation">
                                             <i class="fas fa-edit"></i>
                                         </button>
@@ -480,7 +482,7 @@ ob_start();
                                         ?>
                                     </td>
                                     <td class="text-end">
-                                        <button onclick='editMapping(<?= json_encode($os) ?>)' 
+                                        <button onclick='editMapping(<?= htmlspecialchars(json_encode($os),ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8') ?>)'
                                                 class="btn btn-sm btn-outline-warning" title="Edit Assignment & Evaluation">
                                             <i class="fas fa-edit"></i>
                                         </button>
@@ -668,6 +670,7 @@ ob_start();
                     </div>
 
                     <!-- Individual Fields for Theory (TH) and Internal (IN) -->
+                    <div class="mb-3"><label for="editWeeklyPeriods" class="form-label">Total periods per week (routine)</label><input class="form-control" id="editWeeklyPeriods" name="weekly_periods" type="number" min="0" max="50"><small class="text-muted">Independent of TH/IN credit hours. Leave blank to use rounded credits as a suggestion.</small></div>
                     <div class="row g-2 mb-3">
                         <div class="col-6">
                             <div class="p-2 border rounded bg-light">
@@ -816,6 +819,7 @@ function calculateEditTotals() {
 
 function editMapping(item) {
     document.getElementById('editMappingId').value = item.id;
+    document.getElementById('editWeeklyPeriods').value=item.weekly_periods??'';
     document.getElementById('editIsOptional').value = (item.is_optional == '1') ? '1' : '0';
     
     document.getElementById('editThCh').value = parseFloat(item.th_credit_hours || 0).toFixed(2);

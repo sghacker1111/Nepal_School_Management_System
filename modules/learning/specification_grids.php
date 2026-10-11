@@ -31,7 +31,7 @@ if (isset($_GET['delete'])) {
         Auth::logActivity(Auth::getUserId(), 'Delete Specification Grid', 'specification_grids', $delete_id);
         redirect(APP_URL . '/modules/learning/specification_grids.php', 'Specification grid deleted successfully.', 'success');
     } catch (PDOException $e) {
-        $error = "Database error: " . $e->getMessage();
+        $error = schoolPublicError($e);
     }
 }
 
@@ -45,7 +45,7 @@ if (isset($_GET['make_universal'])) {
         Auth::logActivity(Auth::getUserId(), 'Make Grid Universal', 'specification_grids', $id);
         redirect(APP_URL . '/modules/learning/specification_grids.php', 'Specification grid is now universal for all schools.', 'success');
     } catch (PDOException $e) {
-        $error = "Database error: " . $e->getMessage();
+        $error = schoolPublicError($e);
     }
 }
 
@@ -105,7 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 redirect(APP_URL . '/modules/learning/specification_grids.php', 'Specification grid updated successfully.', 'success');
             }
         } catch (PDOException $e) {
-            $error = "Database error: " . $e->getMessage();
+            $error = schoolPublicError($e);
         }
     }
 }
@@ -219,7 +219,7 @@ ob_start();
                                         <i class="fas fa-magic"></i> Use Grid
                                     </a>
                                     <?php if ($is_admin || $g['school_id'] == $school_id): ?>
-                                    <button onclick='editGrid(<?= json_encode($g) ?>)' class="btn btn-sm btn-outline-warning" title="Edit">
+                                    <button onclick='editGrid(<?= htmlspecialchars(json_encode($g),ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8') ?>)' class="btn btn-sm btn-outline-warning" title="Edit">
                                         <i class="fas fa-edit"></i>
                                     </button>
                                     <a href="?delete=<?= $g['id'] ?>" class="btn btn-sm btn-outline-danger" title="Delete" onclick="return confirm('Are you sure you want to delete this specification grid layout?');">

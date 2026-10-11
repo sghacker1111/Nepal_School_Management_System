@@ -34,6 +34,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $principal_name = sanitize($_POST['principal_name'] ?? '');
     $principal_mobile = sanitize($_POST['principal_mobile'] ?? '');
     $technical_person = sanitize($_POST['technical_person'] ?? '');
+    $exam_coordinator_name=trim((string)($_POST['exam_coordinator_name']??''));
+    if(mb_strlen($exam_coordinator_name)>100)denySchoolRequest('Exam coordinator name must be at most 100 characters.',422);
 
     if (empty($name_en)) {
         $error = "School name in English is required.";
@@ -45,12 +47,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt_update = $db->prepare("
                 UPDATE schools 
                 SET name_en = ?, name_np = ?, emis_code = ?, address = ?, phone = ?, email = ?, 
-                    principal_name = ?, principal_mobile = ?, technical_person = ?
+                    principal_name = ?, principal_mobile = ?, technical_person = ?,exam_coordinator_name=?
                 WHERE id = ?
             ");
             $stmt_update->execute([
                 $name_en, $name_np, $emis_code, $address, $phone, $email, 
-                $principal_name, $principal_mobile, $technical_person, $school_id
+                $principal_name, $principal_mobile, $technical_person,$exam_coordinator_name, $school_id
             ]);
 
             // Update active classes status
@@ -207,7 +209,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($db->inTransaction()) {
                 $db->rollBack();
             }
-            $error = 'Database error: ' . $e->getMessage();
+            $error = schoolPublicError($e);
         }
     }
 }
@@ -282,6 +284,8 @@ ob_start();
                         <div class="col-md-6">
                             <label for="technical_person" class="form-label fw-bold">Technical / Computer Operator Person</label>
                             <input type="text" class="form-control" id="technical_person" name="technical_person" value="<?= sanitize($school['technical_person'] ?? '') ?>">
+                            <label for="exam_coordinator_name" class="form-label fw-bold mt-3">Exam Coordinator Name (printed with signature)</label>
+                            <input type="text" class="form-control" id="exam_coordinator_name" name="exam_coordinator_name" maxlength="100" value="<?= sanitize($school['exam_coordinator_name']??'') ?>">
                         </div>
                     </div>
                 </div>

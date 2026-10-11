@@ -69,9 +69,11 @@ php tests/accounting_test.php
 php tests/subscription_teaching_test.php
 php tests/teacher_results_test.php
 php tests/attendance_filters_test.php
+php tests/routine_learning_test.php
 node tests/accounting_preview_test.js
 node tests/date_controls_test.js
 node tests/attendance_controls_test.js
+node tests/content_safety_test.js
 python tests/http_test.py
 python tests/exam_http_test.py
 python tests/assessment_http_test.py
@@ -80,6 +82,7 @@ python tests/accounting_http_test.py
 python tests/subscription_teaching_http_test.py
 python tests/teacher_results_http_test.py
 python tests/attendance_filters_http_test.py
+python tests/routine_learning_http_test.py
 python tests/deployment_test.py
 ```
 
@@ -100,6 +103,20 @@ Use **Marks & results → Ledger Grid** or the **Full-class ledger / Subject led
 Attendance supports **Daily, Monthly, Yearly and Date range** views in AD or BS. BS periods use real calendar month lengths, not AD month names or fixed day offsets (supported BS years: 2000–2090). Monthly selectors show the twelve requested Nepali or English months. Year/range totals cover the full selected period; editable pages show at most 10 students and 32 dates to avoid truncated PHP forms. Browse dates/students or search a name, roll, student ID or EMIS number. Future dates and archived students are view-only, blanks are not inferred absences and never delete saved history, and correcting a saved status requires the actor's current password. Attendance editing remains limited to school/system administrators and the assigned class teacher; principals may view it. Arbitrary ranges are limited to 366 days.
 
 Student Management uses exact class and section IDs and exact statuses on the server. Class 1 does not match Class 10. Free-text search is limited to names (English/Nepali), rolls, student IDs and EMIS numbers, not class names, gender or statuses. Search wildcards are treated literally, and every filter remains school-scoped.
+
+## Weekly routine and class-subject selectors
+
+Routine settings use Monday–Friday; Saturday and Sunday are holidays. Administrators select a class, edit subject teachers and **total periods per week**, then generate or modify daily cells. Weekly periods are independent of TH/IN grading credit hours; unsaved values suggest rounded credits. The same value is editable in Class Subject Mapping. First periods require the class teacher and their assigned subject every school day, so their subjects need at least five weekly periods. Generation checks teacher collisions and capacity; infeasible schedules roll back entirely. Existing routines are archived before replacement. Section requirements are displayed separately, but the timetable is class-wide and uses the largest per-subject requirement.
+
+Question Bank, both paper generators, Learning Hub and curriculum selectors use school-scoped class mappings. Assigned optional subjects appear when the catalogue subject is not hidden. Teachers see only their teaching classes/subjects. Duplicate section/name entries are removed. Choose a class before a subject; changing class resets subject. Question Bank supports class, subject, category, cognitive level and text/chapter search. Quick Add Class/Subject is removed, including crafted requests; administrators use management pages.
+
+The universal CDC catalogue has a class-first filter and include-hidden/inactive option. Visibility uses POST with an explicit target state and a redirect, preventing refresh/back from toggling it again. Existing school copies retain their own settings.
+
+Bulk cards default to **BS only, YYYY-MM-DD**; explicit calendar/format choices still work. Shared signatures print image/signing space, content-width rule, name, then post. Configure the coordinator name in School Settings. Empty result classes show no results table.
+
+Schema 10 adds nullable weekly-period/coordinator-name fields only. Pre-upgrade SQLite backups and idempotent migration remain enabled; records and money are preserved.
+
+See [security review and hosting requirements](docs/security-review-2026-10-11.md). These checks reduce risk; they are not a guarantee against all attacks or a production penetration test.
 
 ## Deployment boundary
 

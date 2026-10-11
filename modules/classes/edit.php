@@ -113,7 +113,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 redirect(APP_URL . '/modules/classes/index.php', 'Class updated successfully');
             }
         } catch (PDOException $e) {
-            $error = 'Database error: ' . $e->getMessage();
+            $error = schoolPublicError($e);
         }
     }
 }

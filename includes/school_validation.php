@@ -30,15 +30,18 @@ function validateSchoolReferences(PDO $db, int $school, string $module, array $d
         if(isset($data['result_system']) && !in_array($data['result_system'],['gpa','percentage'],true))throw new InvalidArgumentException('Choose GPA or percentage results.');
         if(isset($data['type']) && !in_array($data['type'],['unit','terminal','final','practical'],true))throw new InvalidArgumentException('Choose a valid examination type.');
     }
-    $refs = ['class_id'=>'classes','init_class_id'=>'classes','assigned_class_id'=>'classes','section_id'=>'sections','subject_id'=>'subjects','student_id'=>'students','student'=>'students','academic_year_id'=>'academic_years','exam_id'=>'exams','class'=>'classes','section'=>'sections','exam'=>'exams','prev_exam'=>'exams','subject'=>'subjects'];
+    $refs = ['class_id'=>'classes','init_class_id'=>'classes','assigned_class_id'=>'classes','section_id'=>'sections','subject_id'=>'subjects','topic_id'=>'topics','student_id'=>'students','student'=>'students','academic_year_id'=>'academic_years','exam_id'=>'exams','class'=>'classes','section'=>'sections','exam'=>'exams','prev_exam'=>'exams','subject'=>'subjects','default_class_id'=>'classes','default_subject_id'=>'subjects'];
     $records = [];
     foreach ($refs as $key=>$table) {
-        if (empty($values[$key]) || is_array($values[$key])) continue;
+        if(isset($values[$key])&&!is_scalar($values[$key]))throw new InvalidArgumentException('Choose a valid '.str_replace('_',' ',$key).'.');
+        if (empty($values[$key])) continue;
         // Human student numbers are not foreign keys.
         if ($key === 'student_id' && $module === 'students') continue;
+        if(!preg_match('/^[1-9][0-9]*$/',(string)$values[$key]))throw new InvalidArgumentException('Choose a valid '.str_replace('_',' ',$key).'.');
         $records[$table] = schoolRecord($db,$table,(int)$values[$key],$school);
     }
     if (isset($records['sections'],$records['classes']) && $records['sections']['class_id'] != $records['classes']['id']) throw new InvalidArgumentException('The section must belong to the selected class.');
+    if(isset($records['topics'])&&((isset($records['classes'])&&$records['topics']['class_id']!=$records['classes']['id'])||(isset($records['subjects'])&&$records['topics']['subject_id']!=$records['subjects']['id'])))throw new InvalidArgumentException('Choose a topic belonging to the selected class subject.');
     if ($module==='exams' && isset($data['map_subject'], $records['classes'], $records['subjects'])) {
         $mapped=$db->prepare('SELECT cs.id FROM class_subjects cs JOIN subjects s ON s.id=cs.subject_id WHERE cs.school_id=? AND cs.class_id=? AND cs.subject_id=? AND (cs.is_active=1 OR cs.is_optional=1) AND COALESCE(s.is_hidden,0)=0');
         $mapped->execute([$school,$records['classes']['id'],$records['subjects']['id']]);

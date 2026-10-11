@@ -94,7 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($db->inTransaction()) {
                 $db->rollBack();
             }
-            $error = 'Database error: ' . $e->getMessage();
+            $error = schoolPublicError($e);
         }
     }
 }

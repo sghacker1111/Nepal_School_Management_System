@@ -44,7 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect(APP_URL . '/modules/exams/view.php?id=' . $new_id, 'Exam created successfully. Now configure subjects and weightage.');
         } catch (InvalidArgumentException $e) { $error=$e->getMessage(); }
         catch (PDOException $e) {
-            $error = 'Database error: ' . $e->getMessage();
+            $error = schoolPublicError($e);
         }
     }
 }
