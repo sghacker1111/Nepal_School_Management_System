@@ -21,7 +21,8 @@ $subject_id = (int)($_GET['subject'] ?? 0);
 $school_id = Auth::getSchoolId();
 $role=Auth::getRole();
 $teacherScope=$role==='teacher'?teacherClassResultScope($db,(int)$school_id,(int)Auth::getUserId(),$class_id):['class_teacher'=>false,'subjects'=>[]];
-$canFullLedger=$role!=='teacher'||$teacherScope['class_teacher'];
+$canFullLedger=true;
+$canOpenMarks=$role!=='teacher'||$teacherScope['class_teacher']||array_reduce(array_keys($teacherScope['subjects']),static fn($allowed,$id)=>$allowed||((!$subject_id||$subject_id===$id)&&(!$section_id||teacherResultCellAllowed($teacherScope,(int)$id,$section_id))),false);
 $schoolQuery=$db->prepare('SELECT name_en,name_np,address FROM schools WHERE id=?');$schoolQuery->execute([$school_id]);$school=$schoolQuery->fetch()?:[];
 
 // Fetch active exams
@@ -36,7 +37,7 @@ $stmt->execute([$school_id]);
 $exams = $stmt->fetchAll();
 
 // Fetch classes
-$classes=resultClasses($db,(int)$school_id,$role,(int)Auth::getUserId());
+$classes=resultClasses($db,(int)$school_id,$role,(int)Auth::getUserId(),true);
 
 $selected_class = null;
 if ($class_id) {
@@ -88,9 +89,7 @@ if ($exam_id && $class_id) {
     ");
     $stmt->execute([$exam_id, $class_id]);
     $subjects = erpSortSubjects($stmt->fetchAll());
-    if($role==='teacher')$subjects=teacherResultSubjects($subjects,$teacherScope,$section_id);
     $all_subjects=$subjects;
-    if(!$canFullLedger&&!$subject_id&&$subjects)$subject_id=(int)$subjects[0]['subject_id'];
     if($subject_id){
         $subjects=array_values(array_filter($subjects,static fn($subject)=>(int)$subject['subject_id']===$subject_id));
         if(!$subjects)denySchoolRequest('Choose a subject configured for this exam and class that you are allowed to view.',403);
@@ -116,7 +115,6 @@ if ($exam_id && $class_id) {
     $stmt = $db->prepare($query);
     $stmt->execute($params);
     $students = $stmt->fetchAll();
-    if($role==='teacher'&&!$canFullLedger)$students=array_values(array_filter($students,static fn($student)=>teacherResultCellAllowed($teacherScope,$subject_id,(int)$student['section_id'])));
 
     // 3. Fetch marks matrix
     $stmt = $db->prepare("
@@ -165,15 +163,13 @@ if ($exam_id && $class_id) {
     }
 }
 
-if($role==='teacher'&&!$canFullLedger&&$section_id===0){
-    $sections=array_values(array_filter($sections,static fn($section)=>$subject_id?teacherResultCellAllowed($teacherScope,$subject_id,(int)$section['id']):array_reduce(array_keys($teacherScope['subjects']),static fn($allowed,$id)=>$allowed||teacherResultCellAllowed($teacherScope,(int)$id,(int)$section['id']),false)));
-}
 $isSubjectLedger=$subject_id>0;
 $subjectColumns=($exam['type']??'')==='unit'?2:4;
 function ledgerMark($value):string {return $value===null?'—':rtrim(rtrim(number_format((float)$value,2,'.',','),'0'),'.');}
 
 $pageTitle = $isSubjectLedger?'Subject Marks Ledger':'Class Result Ledger';
 $activePage = 'results';
+$pageStyles=['/assets/css/result-ledger.css'];
 
 ob_start();
 ?>
@@ -185,15 +181,15 @@ ob_start();
             <i class="fas fa-arrow-left"></i> Back to Results
         </a>
         <?php if ($exam_id && $class_id && $subjects): ?>
-        <a class="btn btn-outline-primary me-2" href="<?= APP_URL ?>/modules/results/marks_entry.php?<?= htmlspecialchars(http_build_query(['exam'=>$exam_id,'class'=>$class_id,'section'=>$section_id,'subject'=>$subject_id?:''])) ?>">View / correct marks</a>
+        <?php if($canOpenMarks): ?><a class="btn btn-outline-primary me-2" href="<?= APP_URL ?>/modules/results/marks_entry.php?<?= htmlspecialchars(http_build_query(['exam'=>$exam_id,'class'=>$class_id,'section'=>$section_id,'subject'=>$subject_id?:''])) ?>"><?= $role==='teacher'&&!$teacherScope['class_teacher']?'Open assigned marks entry':'View / correct marks' ?></a><?php endif; ?>
         <button onclick="window.print()" class="btn btn-primary">
             <i class="fas fa-print"></i> Print Ledger
         </button>
         <?php endif; ?>
     </div>
 </div>
-<?php if($role==='teacher'&&$class_id): ?><div class="alert alert-info no-print"><?= $canFullLedger?'Class teacher access: all subjects in this supervised class. Choose All Subjects to view and print the full ledger.':'Subject teacher access: only your selected assigned subject and its assigned sections are printed. Totals and grades below refer to that subject, not the full report card.' ?></div><?php endif; ?>
-<style>@media print{@page{size:landscape;margin:10mm}.ledger-print-card,.ledger-print-card .card-body,.ledger-print-card .table-responsive{overflow:visible!important}.ledger-print-card table{width:100%!important;font-size:8pt!important}.ledger-print-card thead{display:table-header-group}.ledger-print-card tr{break-inside:avoid}.ledger-print-card th,.ledger-print-card td{padding:3px!important;white-space:normal!important}.ledger-print-card .badge{color:#000!important;background:transparent!important}}</style>
+<?php if($role==='teacher'&&$class_id): ?><div class="alert alert-info no-print">Ledger viewing: all classes and subjects in your school are available to view and print. This does not grant marks-editing rights; only your assigned subjects or supervised class can be corrected, and exam locks still apply.</div><?php endif; ?>
+<p class="small text-muted no-print">Print format: A4 landscape. If your printer overrides page settings, select Landscape in its print dialog.</p>
 
 <!-- Filters Form -->
 <div class="card mb-4 no-print">

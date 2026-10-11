@@ -9,10 +9,11 @@ function teacherClassResultScope(PDO $db,int $school,int $teacher,int $class):ar
     foreach(teacherTeachingAssignments($db,$school,$teacher) as $row)if((int)$row['class_id']===$class)$subjects[(int)$row['subject_id']][]=(int)($row['section_id']??0);
     return ['class_teacher'=>false,'subjects'=>$subjects];
 }
-function resultClasses(PDO $db,int $school,string $role,int $actor):array {
+function resultClasses(PDO $db,int $school,string $role,int $actor,bool $viewAll=false):array {
     $q=$db->prepare('SELECT * FROM classes WHERE school_id=? ORDER BY id');$q->execute([$school]);$classes=$q->fetchAll();
     if($role!=='teacher')return $classes;
     $q=$db->prepare("SELECT id FROM users WHERE id=? AND school_id=? AND role='teacher' AND status=1");$q->execute([$actor,$school]);if(!$q->fetchColumn())return [];
+    if($viewAll)return $classes;
     $assigned=array_column(teacherTeachingAssignments($db,$school,$actor),'class_id');
     return array_values(array_filter($classes,static fn($class)=>$class['is_active']&&((int)($class['class_teacher_id']??0)===$actor||in_array($class['id'],$assigned))));
 }
@@ -25,6 +26,8 @@ function teacherResultSubjects(array $subjects,array $scope,int $section=0):arra
 }
 function validateTeacherResultRequest(PDO $db,int $school,string $module,string $file,array $data,array $query):void {
     if($module!=='results'||!in_array($file,['marks_entry.php','ledger.php'],true)||Auth::getRole()!=='teacher')return;
+    // School-scoped ledger viewing is deliberately broader than marks-entry authority.
+    if($file==='ledger.php')return;
     $class=(int)($data['class_id']??$query['class']??0);if(!$class)return;
     $scope=teacherClassResultScope($db,$school,(int)Auth::getUserId(),$class);
     if($scope['class_teacher'])return;

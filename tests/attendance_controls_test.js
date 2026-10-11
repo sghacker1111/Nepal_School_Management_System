@@ -1,0 +1,12 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const context={schoolConvertDate:(value,from,to)=>{if(value==='bad')throw new Error('bad date');return from===to?value:'2083-06-24';},schoolNotify:()=>{}};
+vm.runInNewContext(fs.readFileSync(require.resolve('../assets/js/attendance-controls.js'),'utf8'),context);
+const makeForm=elements=>({elements,submitted:false,submit(){this.submitted=true;}});
+let form=makeForm({date_input:{value:'2026-10-10',type:'date'}}),select={dataset:{previous:'AD'},value:'BS',form};
+context.changeAttendanceCalendar(select);assert.equal(form.elements.date_input.value,'2083-06-24');assert.equal(form.elements.date_input.type,'text');assert.ok(form.submitted);
+form=makeForm({range_start:{value:'2026-10-10',type:'date'},range_end:{value:'bad',type:'date'}});select={dataset:{previous:'AD'},value:'BS',form};
+context.changeAttendanceCalendar(select);assert.equal(form.elements.range_start.value,'2026-10-10');assert.equal(select.value,'AD');assert.equal(form.submitted,false);
+form=makeForm({year:{value:'2026'},month:{value:'10'}});select={dataset:{previous:'AD'},value:'BS',form};
+context.changeAttendanceCalendar(select);assert.equal(form.elements.year.value,'2083');assert.equal(form.elements.month.value,'6');assert.ok(form.submitted);
+console.log('Attendance calendar controls passed: AD/BS dates, monthly focus and atomic failed conversions.');

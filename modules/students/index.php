@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__.'/../../includes/student_search.php';
 
 Auth::requireRole(['super_admin', 'school_admin', 'principal', 'teacher', 'exam_officer']);
 Auth::requireAccess('students');
@@ -36,21 +37,32 @@ if (isset($_GET['delete']) && Auth::hasRole(['super_admin', 'school_admin'])) {
 
 // Build query
 $school_id = Auth::getSchoolId();
+$class_id=(int)($_GET['class']??0);$section_id=(int)($_GET['section']??0);
+$status_filter=$_GET['status']??'';
+try{$search=studentSearchTerm($_GET['search']??'');}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
+if(!in_array($status_filter,['','active','transferred','dropout','passed','inactive'],true))denySchoolRequest('Choose a valid student status.',422);
 $query = "SELECT s.*, c.name as class_name, sc.name as section_name 
           FROM students s 
           LEFT JOIN classes c ON s.class_id = c.id 
           LEFT JOIN sections sc ON s.section_id = sc.id 
-          WHERE s.school_id = ? AND (c.is_active = 1 OR s.class_id IS NULL)
-          ORDER BY s.created_at DESC";
+          WHERE s.school_id = ? AND (c.is_active = 1 OR s.class_id IS NULL)";
+$params=[$school_id];
+if($class_id){$query.=' AND s.class_id=?';$params[]=$class_id;}
+if($section_id){$query.=' AND s.section_id=?';$params[]=$section_id;}
+if($status_filter!==''){$query.=' AND s.status=?';$params[]=$status_filter;}
+try{$query.=studentSearchWhere($search,$params);}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
+$query.=' ORDER BY s.created_at DESC,s.id DESC';
 
 $stmt = $db->prepare($query);
-$stmt->execute([$school_id]);
+$stmt->execute($params);
 $students = $stmt->fetchAll();
 
 // Get classes for filter
 $stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ?) AND is_active = 1 ORDER BY id ASC");
 $stmt->execute([$school_id]);
 $classes = $stmt->fetchAll();
+$sections=[];
+if($class_id){$stmt=$db->prepare('SELECT id,name FROM sections WHERE school_id=? AND class_id=? ORDER BY name');$stmt->execute([$school_id,$class_id]);$sections=$stmt->fetchAll();}
 
 $pageTitle = 'Student Management';
 $activePage = 'students';
@@ -75,39 +87,41 @@ ob_start();
 <!-- Filters -->
 <div class="card mb-4 shadow-sm border-0">
     <div class="card-body bg-light py-3">
-        <div class="row g-3">
-            <div class="col-md-4">
+        <form method="GET" class="row g-3" id="studentFilters">
+            <div class="col-md-3">
                 <label for="filter_class" class="form-label small fw-bold">Filter By Class</label>
-                <select id="filter_class" class="form-select form-select-sm">
+                <select id="filter_class" name="class" class="form-select form-select-sm" onchange="this.form.elements.section.value='';this.form.submit()">
                     <option value="">All Classes</option>
                     <?php foreach ($classes as $class): ?>
-                    <option value="<?= sanitize($class['name']) ?>">
+                    <option value="<?= (int)$class['id'] ?>" <?= $class_id===(int)$class['id']?'selected':'' ?>>
                         <?= sanitize($class['name']) ?>
                     </option>
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-md-4">
-                <label for="filter_status" class="form-label small fw-bold">Filter By Status</label>
-                <select id="filter_status" class="form-select form-select-sm">
-                    <option value="">All Statuses</option>
-                    <option value="Active">Active</option>
-                    <option value="Transferred">Transferred</option>
-                    <option value="Dropout">Dropout</option>
-                    <option value="Passed">Passed Out</option>
-                    <option value="Inactive">Inactive</option>
+            <div class="col-md-2">
+                <label for="filter_section" class="form-label small fw-bold">Section</label>
+                <select id="filter_section" name="section" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <option value="">All Sections</option>
+                    <?php foreach($sections as $section): ?><option value="<?= (int)$section['id'] ?>" <?= $section_id===(int)$section['id']?'selected':'' ?>><?= sanitize($section['name']) ?></option><?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-md-4">
-                <label for="filter_search" class="form-label small fw-bold">Search Student (Name, ID, EMIS...)</label>
+            <div class="col-md-2">
+                <label for="filter_status" class="form-label small fw-bold">Filter By Status</label>
+                <select id="filter_status" name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <option value="">All Statuses</option>
+                    <?php foreach(['active'=>'Active','transferred'=>'Transferred','dropout'=>'Dropout','passed'=>'Passed Out','inactive'=>'Inactive'] as $value=>$label): ?><option value="<?= $value ?>" <?= $status_filter===$value?'selected':'' ?>><?= $label ?></option><?php endforeach; ?>
+                </select>
+            </div>
+            <div class="col-md-5">
+                <label for="filter_search" class="form-label small fw-bold">Search name, roll, student ID or EMIS number</label>
                 <div class="input-group input-group-sm">
-                    <input type="text" id="filter_search" class="form-control" placeholder="Type name, ID, EMIS to filter...">
-                    <button id="btn_reset" class="btn btn-secondary">
-                        <i class="fas fa-redo"></i> Reset
-                    </button>
+                    <input type="search" name="search" id="filter_search" class="form-control" maxlength="100" value="<?= sanitize($search) ?>" placeholder="Name, roll, student ID or EMIS">
+                    <button type="submit" class="btn btn-primary">Search</button>
+                    <a id="btn_reset" href="<?= APP_URL ?>/modules/students/index.php" class="btn btn-secondary">Reset</a>
                 </div>
             </div>
-        </div>
+        </form>
     </div>
 </div>
 
@@ -207,7 +221,7 @@ ob_start();
 
 <script>
 $(document).ready(function() {
-    var table = $('#studentTable').DataTable({
+    $('#studentTable').DataTable({
         pageLength: 25,
         order: [[0, 'desc']],
         language: {
@@ -216,24 +230,6 @@ $(document).ready(function() {
         dom: 'rtip'
     });
 
-    $('#filter_search').on('keyup change', function() {
-        table.search(this.value).draw();
-    });
-
-    $('#filter_class').on('change', function() {
-        table.column(3).search(this.value).draw();
-    });
-
-    $('#filter_status').on('change', function() {
-        table.column(6).search(this.value).draw();
-    });
-
-    $('#btn_reset').on('click', function() {
-        $('#filter_search').val('');
-        $('#filter_class').val('');
-        $('#filter_status').val('');
-        table.search('').columns().search('').draw();
-    });
 });
 
 function confirmDeleteStudent(id) {

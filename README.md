@@ -68,8 +68,10 @@ php tests/accounting_money_test.php
 php tests/accounting_test.php
 php tests/subscription_teaching_test.php
 php tests/teacher_results_test.php
+php tests/attendance_filters_test.php
 node tests/accounting_preview_test.js
 node tests/date_controls_test.js
+node tests/attendance_controls_test.js
 python tests/http_test.py
 python tests/exam_http_test.py
 python tests/assessment_http_test.py
@@ -77,6 +79,7 @@ python tests/packages_http_test.py
 python tests/accounting_http_test.py
 python tests/subscription_teaching_http_test.py
 python tests/teacher_results_http_test.py
+python tests/attendance_filters_http_test.py
 python tests/deployment_test.py
 ```
 
@@ -90,7 +93,13 @@ Schema 9 adds subscription fields without assigning invented expiry dates to exi
 
 Teachers can manage chapters, topics and specification grids only for active subjects assigned to them in the selected class. Subject selectors remove duplicate section mappings and show the subject code. These permissions are enforced on submitted requests as well as in the interface. Locked/published exams show saved marks read-only; only school/system administrators may reopen marks. After reopening, a subject teacher can save only their assigned subjects and sections. The active teacher assigned as **Class Teacher** in Classes may review and correct all configured subjects and sections in that supervised class, including subjects they do not teach; this never grants chapter/topic ownership or extends marks-entry/ledger authority to another class.
 
-Use **Marks & results → Ledger Grid** or the **Full-class ledger / Subject ledger** links in Marks Entry to view and print. Class teachers and administrators can select **All Subjects** for the full-class ledger or select a single subject. Subject teachers see only their assigned subjects, default to one subject, and print students from their assigned sections (all students when the assignment is class-wide). Subject totals/GP/percentage refer only to the selected subject, never the overall report card. Print layouts include the actual school name, exam/class/section, rolls, exam-specific symbols, numeric TH/IN/total marks and grades; incomplete marks and untaken optional subjects remain distinct.
+Use **Marks & results → Ledger Grid** or the **Full-class ledger / Subject ledger** links in Marks Entry to view and print. All teachers may view and print all classes, sections and subjects within their own school. Select **All Subjects** for the full-class ledger or a single subject. Broader ledger viewing never grants extra marks-entry permissions: subject teachers edit only their assigned subjects/sections; class teachers correct their supervised class; locks still apply. Subject totals/GP/percentage refer only to the selected subject, never the overall report card. Dedicated print CSS specifies **A4 landscape**, including a named ledger page; printers that override CSS must be set to Landscape in their dialog. Print layouts include the actual school name, exam/class/section, rolls, exam-specific symbols, numeric TH/IN/total marks and grades; incomplete marks and untaken optional subjects remain distinct.
+
+## Attendance and student filters
+
+Attendance supports **Daily, Monthly, Yearly and Date range** views in AD or BS. BS periods use real calendar month lengths, not AD month names or fixed day offsets (supported BS years: 2000–2090). Monthly selectors show the twelve requested Nepali or English months. Year/range totals cover the full selected period; editable pages show at most 10 students and 32 dates to avoid truncated PHP forms. Browse dates/students or search a name, roll, student ID or EMIS number. Future dates and archived students are view-only, blanks are not inferred absences and never delete saved history, and correcting a saved status requires the actor's current password. Attendance editing remains limited to school/system administrators and the assigned class teacher; principals may view it. Arbitrary ranges are limited to 366 days.
+
+Student Management uses exact class and section IDs and exact statuses on the server. Class 1 does not match Class 10. Free-text search is limited to names (English/Nepali), rolls, student IDs and EMIS numbers, not class names, gender or statuses. Search wildcards are treated literally, and every filter remains school-scoped.
 
 ## Deployment boundary
 

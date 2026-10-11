@@ -1,0 +1,15 @@
+#attendanceSheet .table-responsive { max-height: 65vh; }
+#attendanceTable thead th { position: sticky; top: 0; z-index: 2; }
+#attendanceTable th:first-child, #attendanceTable td:first-child { position: sticky; left: 0; min-width: 50px; background: #fff; z-index: 3; }
+#attendanceTable th:nth-child(2), #attendanceTable td:nth-child(2) { position: sticky; left: 50px; background: #fff; z-index: 3; }
+@media print {
+    @page { size: A4 landscape; margin: 8mm; }
+    .card, .card-body, .table-responsive { overflow: visible !important; }
+    #attendanceSheet .table-responsive { max-height: none; }
+    #attendanceTable th, #attendanceTable td { position: static !important; }
+    #attendanceTable { width: 100% !important; font-size: 7pt; table-layout: fixed; }
+    #attendanceTable th, #attendanceTable td { min-width: 0 !important; padding: 2px !important; overflow-wrap: anywhere; }
+    #attendanceTable th:nth-child(2), #attendanceTable td:nth-child(2) { width: 100px; }
+    #attendanceTable thead { display: table-header-group; }
+    #attendanceTable tr { break-inside: avoid; }
+}

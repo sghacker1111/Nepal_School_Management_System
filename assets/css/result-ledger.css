@@ -1,0 +1,13 @@
+@page { size: A4 landscape; margin: 10mm; }
+@page result-ledger { size: A4 landscape; margin: 10mm; }
+@media print {
+    .ledger-print-card { page: result-ledger; border: 0; }
+    .ledger-print-card, .ledger-print-card .card-body, .ledger-print-card .table-responsive {
+        overflow: visible !important;
+    }
+    .ledger-print-card table { width: 100% !important; font-size: 8pt !important; }
+    .ledger-print-card thead { display: table-header-group; }
+    .ledger-print-card tr { break-inside: avoid; }
+    .ledger-print-card th, .ledger-print-card td { padding: 3px !important; white-space: normal !important; }
+    .ledger-print-card .badge { color: #000 !important; background: transparent !important; }
+}
