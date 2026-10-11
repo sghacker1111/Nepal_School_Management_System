@@ -41,11 +41,11 @@ if ($exam_id) {
     $selected_exam = $stmt_sel->fetch(PDO::FETCH_ASSOC);
 }
 $marksEditable=$selected_exam&&!$selected_exam['is_locked']&&!$selected_exam['is_published']&&Auth::hasRole(['super_admin','school_admin','teacher','exam_officer'])&&!Auth::isReadOnly();
-require_once __DIR__.'/../../includes/teaching_scope.php';
-$teacherScopes=[];$teacherCanAttendance=true;
+require_once __DIR__.'/../../includes/result_scope.php';
+$teacherCanAttendance=true;$teacherIsClassTeacher=false;$teacherResultScope=['class_teacher'=>false,'subjects'=>[]];
 if(Auth::getRole()==='teacher'){
-    foreach(teacherTeachingAssignments($db,(int)$school_id,(int)Auth::getUserId()) as $assignment)if((int)$assignment['class_id']===(int)$class_id)$teacherScopes[$assignment['subject_id']][]=$assignment['section_id'];
-    $q=$db->prepare('SELECT class_teacher_id FROM classes WHERE id=? AND school_id=?');$q->execute([$class_id,$school_id]);$teacherCanAttendance=(int)$q->fetchColumn()===(int)Auth::getUserId();
+    $teacherResultScope=teacherClassResultScope($db,(int)$school_id,(int)Auth::getUserId(),(int)$class_id);
+    $teacherIsClassTeacher=$teacherResultScope['class_teacher'];$teacherCanAttendance=$teacherIsClassTeacher;
 }
 $stmt = $db->prepare("
     SELECT e.*, y.year_bs 
@@ -58,9 +58,7 @@ $stmt->execute([$school_id]);
 $exams = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Fetch classes
-$stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ?) AND is_active = 1 ORDER BY id ASC");
-$stmt->execute([$school_id]);
-$classes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$classes=array_values(array_filter(resultClasses($db,(int)$school_id,Auth::getRole(),(int)Auth::getUserId()),static fn($class)=>$class['is_active']));
 
 // Fetch sections for selected class
 $sections = [];
@@ -68,6 +66,7 @@ if ($class_id) {
     $stmt = $db->prepare("SELECT * FROM sections WHERE class_id = ? ORDER BY name");
     $stmt->execute([$class_id]);
     $sections = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    if(Auth::getRole()==='teacher'&&!$teacherIsClassTeacher)$sections=array_values(array_filter($sections,static fn($section)=>array_reduce(array_keys($teacherResultScope['subjects']),static fn($permitted,$subject)=>$permitted||teacherResultCellAllowed($teacherResultScope,(int)$subject,(int)$section['id']),false)));
 }
 
 // Global class level resolver
@@ -93,8 +92,7 @@ if ($exam_id && $class_id) {
     $stmt->execute([$exam_id, $class_id]);
     $subjects = $stmt->fetchAll(PDO::FETCH_ASSOC);
     if (Auth::getRole()==='teacher') {
-        $allowed=[];foreach(teacherTeachingAssignments($db,(int)$school_id,(int)Auth::getUserId()) as $assignment)if((int)$assignment['class_id']===(int)$class_id&&(!$section_id||!$assignment['section_id']||(int)$assignment['section_id']===(int)$section_id))$allowed[]=$assignment['subject_id'];
-        $subjects=array_values(array_filter($subjects,static fn($s)=>in_array($s['subject_id'],$allowed)));
+        $subjects=teacherResultSubjects($subjects,$teacherResultScope,(int)$section_id);
     }
     
     $subjects=erpSortSubjects($subjects);
@@ -127,6 +125,7 @@ if ($exam_id && $class_id) {
     $stmt = $db->prepare($query);
     $stmt->execute($params);
     $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    if(Auth::getRole()==='teacher'&&!$teacherIsClassTeacher)$students=array_values(array_filter($students,static function($student)use($subjects,$teacherResultScope){foreach($subjects as $subject)if(teacherResultCellAllowed($teacherResultScope,(int)$subject['subject_id'],(int)$student['section_id']))return true;return false;}));
 }
 
 // Fetch saved marks
@@ -175,7 +174,12 @@ ob_start();
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="fas fa-edit text-primary"></i> Class-Wide Marks Entry Sheet</h2>
+    <?php if($exam_id&&$class_id&&$subjects): ?><div class="d-flex gap-2">
+        <?php if(Auth::getRole()!=='teacher'||$teacherIsClassTeacher): ?><a class="btn btn-outline-info" href="<?= APP_URL ?>/modules/results/ledger.php?<?= htmlspecialchars(http_build_query(['exam'=>$exam_id,'class'=>$class_id,'section'=>$section_id])) ?>"><i class="fas fa-print"></i> Full-class ledger</a><?php endif; ?>
+        <a class="btn btn-outline-primary" href="<?= APP_URL ?>/modules/results/ledger.php?<?= htmlspecialchars(http_build_query(['exam'=>$exam_id,'class'=>$class_id,'section'=>$section_id,'subject'=>$filter_subject_id?:reset($subjects)['subject_id']])) ?>"><i class="fas fa-print"></i> Subject ledger</a>
+    </div><?php endif; ?>
 </div>
+<?php if(Auth::getRole()==='teacher'&&$class_id): ?><div class="alert alert-info no-print"><?= $teacherIsClassTeacher?'Class teacher access: view and correct all configured subjects in this class. Locked or published exams remain view-only.':'Subject teacher access: view and enter marks for your assigned subjects and sections only.' ?></div><?php endif; ?>
 
 <?php if ($message): ?>
 <div data-notify class="alert alert-<?= $message_type == 'error' ? 'danger' : ($message_type==='info'?'info':'success') ?> mb-4">
@@ -189,7 +193,7 @@ ob_start();
         <form method="GET" action="" class="row g-3">
             <div class="col-md-2">
                 <label class="form-label fw-bold">Exam</label>
-                <select name="exam" class="form-select" required onchange="this.form.submit()">
+                <select name="exam" class="form-select" required onchange="this.form.elements.subject.value='';this.form.submit()">
                     <option value="">Select Exam</option>
                     <?php foreach ($exams as $e): ?>
                     <option value="<?= $e['id'] ?>" <?= $exam_id == $e['id'] ? 'selected' : '' ?>>
@@ -201,7 +205,7 @@ ob_start();
             
             <div class="col-md-2">
                 <label class="form-label fw-bold">Class</label>
-                <select name="class" class="form-select" required onchange="this.form.submit()">
+                <select name="class" class="form-select" required onchange="this.form.elements.section.value='';this.form.elements.subject.value='';this.form.submit()">
                     <option value="">Select Class</option>
                     <?php foreach ($classes as $c): ?>
                     <option value="<?= $c['id'] ?>" <?= $class_id == $c['id'] ? 'selected' : '' ?>>
@@ -213,7 +217,7 @@ ob_start();
             
             <div class="col-md-2">
                 <label class="form-label fw-bold">Section</label>
-                <select name="section" class="form-select" onchange="this.form.submit()">
+                <select name="section" class="form-select" onchange="this.form.elements.subject.value='';this.form.submit()">
                     <option value="">All Sections</option>
                     <?php foreach ($sections as $s): ?>
                     <option value="<?= $s['id'] ?>" <?= $section_id == $s['id'] ? 'selected' : '' ?>>
@@ -312,8 +316,9 @@ ob_start();
                                 <?php foreach ($subjects as $sub): ?>
                                     <?php 
                                     // Check optional mapping
-                                    $canEditCell=$marksEditable;
-                                    if(Auth::getRole()==='teacher'){$assignedSection=false;foreach($teacherScopes[$sub['subject_id']]??[] as $scope)if(!$scope||(int)$scope===(int)$student['section_id'])$assignedSection=true;$canEditCell=$canEditCell&&$assignedSection;}
+                                    $canViewCell=Auth::getRole()!=='teacher'||teacherResultCellAllowed($teacherResultScope,(int)$sub['subject_id'],(int)$student['section_id']);
+                                    $canEditCell=$marksEditable&&$canViewCell;
+                                    if(!$canViewCell){$cellParts=(($selected_exam['type']??'')==='unit'||empty($selected_exam['has_internal'])||($sub['assessment_method']??'')==='THEMATIC_CONTINUOUS')?[]:cdc2083InternalComponents($sub,$selected_exam);echo '<td colspan="'.(count($cellParts)+1).'" class="text-muted small">Not assigned</td>';continue;}
                                     $is_optional = (!empty($sub['is_optional']));
                                     $is_selected = true;
                                     if ($is_optional) {

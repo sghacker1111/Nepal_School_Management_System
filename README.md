@@ -67,6 +67,7 @@ php tests/accounting_schema_test.php
 php tests/accounting_money_test.php
 php tests/accounting_test.php
 php tests/subscription_teaching_test.php
+php tests/teacher_results_test.php
 node tests/accounting_preview_test.js
 node tests/date_controls_test.js
 python tests/http_test.py
@@ -75,6 +76,7 @@ python tests/assessment_http_test.py
 python tests/packages_http_test.py
 python tests/accounting_http_test.py
 python tests/subscription_teaching_http_test.py
+python tests/teacher_results_http_test.py
 python tests/deployment_test.py
 ```
 
@@ -86,7 +88,9 @@ System administrators use **School Management → Edit** to tick multiple purcha
 
 Schema 9 adds subscription fields without assigning invented expiry dates to existing schools. Legacy schools retain their existing package and no expiry until the administrator configures a dated subscription.
 
-Teachers can manage chapters, topics and specification grids only for active subjects assigned to them in the selected class. Subject selectors remove duplicate section mappings and show the subject code. These permissions are enforced on submitted requests as well as in the interface. Locked/published exams show saved marks read-only; only school/system administrators may reopen marks. After reopening, a teacher can save only their own assigned subjects and sections.
+Teachers can manage chapters, topics and specification grids only for active subjects assigned to them in the selected class. Subject selectors remove duplicate section mappings and show the subject code. These permissions are enforced on submitted requests as well as in the interface. Locked/published exams show saved marks read-only; only school/system administrators may reopen marks. After reopening, a subject teacher can save only their assigned subjects and sections. The active teacher assigned as **Class Teacher** in Classes may review and correct all configured subjects and sections in that supervised class, including subjects they do not teach; this never grants chapter/topic ownership or extends marks-entry/ledger authority to another class.
+
+Use **Marks & results → Ledger Grid** or the **Full-class ledger / Subject ledger** links in Marks Entry to view and print. Class teachers and administrators can select **All Subjects** for the full-class ledger or select a single subject. Subject teachers see only their assigned subjects, default to one subject, and print students from their assigned sections (all students when the assignment is class-wide). Subject totals/GP/percentage refer only to the selected subject, never the overall report card. Print layouts include the actual school name, exam/class/section, rolls, exam-specific symbols, numeric TH/IN/total marks and grades; incomplete marks and untaken optional subjects remain distinct.
 
 ## Deployment boundary
 

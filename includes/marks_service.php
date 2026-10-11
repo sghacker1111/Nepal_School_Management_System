@@ -16,8 +16,9 @@ function saveExamMarks(PDO $db,int $school,int $user,string $role,array $input):
     $q=$db->prepare("SELECT * FROM students WHERE school_id=? AND class_id=? AND academic_year_id=? AND status='active'");
     $q->execute([$school,$class['id'],$exam['academic_year_id']]);$students=array_column($q->fetchAll(),null,'id');
     $allowed=[];
+    $classTeacher=false;
     if($role==='teacher') {
-        foreach(teacherTeachingAssignments($db,$school,$user) as $row)if((int)$row['class_id']===(int)$class['id'])$allowed[$row['subject_id']][]=$row['section_id'];
+        $resultScope=teacherClassResultScope($db,$school,$user,(int)$class['id']);$classTeacher=$resultScope['class_teacher'];$allowed=$resultScope['subjects'];
     }
     $changes=[];
     foreach(($input['marks']??[]) as $id=>$entries){
@@ -25,10 +26,10 @@ function saveExamMarks(PDO $db,int $school,int $user,string $role,array $input):
         if(!$student || ($section && $student['section_id']!=$section))throw new InvalidArgumentException('Marks include a student outside the selected school, class, section or academic year.');
         foreach($entries as $subjectId=>$fields){
             $scheme=$subjects[$subjectId]??null;if(!$scheme)throw new InvalidArgumentException('This subject is not configured for the selected exam and class.');
-            if($role==='teacher') {
+            if($role==='teacher'&&!$classTeacher) {
                 $scopes=$allowed[$subjectId]??[];$permitted=false;
                 foreach($scopes as $scope)if(!$scope||$scope==$student['section_id'])$permitted=true;
-                if(!$permitted)throw new InvalidArgumentException('Teachers may enter marks only for their assigned subjects and sections.');
+                if(!$permitted)throw new InvalidArgumentException('Subject teachers may enter marks only for their assigned subjects and sections; class teachers may correct all subjects in their own class.');
             }
             if(!empty($scheme['is_optional'])){enrollOptionalForMarks($db,$school,$student,$scheme,$input,$class,$user);$students[$id]=$student;}
             $theory=erpMarkValue($fields['theory']??null,(float)$scheme['theory_full']);
@@ -50,7 +51,7 @@ function saveExamMarks(PDO $db,int $school,int $user,string $role,array $input):
         if(!isset($students[$id])||($section&&$students[$id]['section_id']!=$section))throw new InvalidArgumentException('Attendance contains an invalid student.');
         if($days==='')continue;
         if(filter_var($days,FILTER_VALIDATE_INT)===false || (int)$days<0 || (int)$days>366)throw new InvalidArgumentException('Attendance days must be a whole number from 0 to 366.');
-        if($role==='teacher' && (int)($class['class_teacher_id']??0)!==$user)continue;
+        if($role==='teacher' && !$classTeacher)continue;
         $attendance[(int)$id]=(int)$days;
     }
         $check=$db->prepare('SELECT id FROM marks WHERE exam_id=? AND student_id=? AND subject_id=?');

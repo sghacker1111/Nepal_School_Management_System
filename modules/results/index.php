@@ -112,13 +112,13 @@ ob_start();
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="fas fa-poll"></i> Student Exam Results</h2>
     <div class="d-flex gap-2">
-        <a href="<?= APP_URL ?>/modules/results/ledger.php" class="btn btn-outline-info">
+        <a href="<?= APP_URL ?>/modules/results/ledger.php?<?= htmlspecialchars(http_build_query(['exam'=>$exam_id,'class'=>$class_id,'section'=>$section_id])) ?>" class="btn btn-outline-info">
             <i class="fas fa-poll-h"></i> Ledger Grid
         </a>
         <a href="<?= APP_URL ?>/modules/results/print_bulk.php" class="btn btn-outline-success">
             <i class="fas fa-print"></i> Bulk Print Cards
         </a>
-        <a href="<?= APP_URL ?>/modules/results/marks_entry.php" class="btn btn-primary">
+        <a href="<?= APP_URL ?>/modules/results/marks_entry.php?<?= htmlspecialchars(http_build_query(['exam'=>$exam_id,'class'=>$class_id,'section'=>$section_id])) ?>" class="btn btn-primary">
             <i class="fas fa-edit"></i> Marks Entry
         </a>
     </div>

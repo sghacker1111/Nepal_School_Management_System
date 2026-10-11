@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__.'/teaching_scope.php';
+require_once __DIR__.'/result_scope.php';
 /** Validate relationships before any screen changes school data. */
 function studentEmisRegistrationNumber($value,bool $required=false): ?string {
     if($value===null)$value='';

@@ -6,17 +6,23 @@ require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__.'/../../includes/result_scope.php';
 
 Auth::requireRole(['super_admin', 'school_admin', 'principal', 'teacher', 'exam_officer']);
 
 $db = getDB();
 
 // Filters
-$exam_id = $_GET['exam'] ?? '';
-$class_id = $_GET['class'] ?? '';
-$section_id = $_GET['section'] ?? '';
+$exam_id = (int)($_GET['exam'] ?? 0);
+$class_id = (int)($_GET['class'] ?? 0);
+$section_id = (int)($_GET['section'] ?? 0);
+$subject_id = (int)($_GET['subject'] ?? 0);
 
 $school_id = Auth::getSchoolId();
+$role=Auth::getRole();
+$teacherScope=$role==='teacher'?teacherClassResultScope($db,(int)$school_id,(int)Auth::getUserId(),$class_id):['class_teacher'=>false,'subjects'=>[]];
+$canFullLedger=$role!=='teacher'||$teacherScope['class_teacher'];
+$schoolQuery=$db->prepare('SELECT name_en,name_np,address FROM schools WHERE id=?');$schoolQuery->execute([$school_id]);$school=$schoolQuery->fetch()?:[];
 
 // Fetch active exams
 $stmt = $db->prepare("
@@ -30,9 +36,7 @@ $stmt->execute([$school_id]);
 $exams = $stmt->fetchAll();
 
 // Fetch classes
-$classes_stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ?) ORDER BY id ASC");
-$classes_stmt->execute([$school_id]);
-$classes = $classes_stmt->fetchAll();
+$classes=resultClasses($db,(int)$school_id,$role,(int)Auth::getUserId());
 
 $selected_class = null;
 if ($class_id) {
@@ -53,6 +57,7 @@ if ($class_id) {
 }
 
 $subjects = [];
+$all_subjects=[];
 $students = [];
 $ledger_data = [];
 
@@ -83,6 +88,13 @@ if ($exam_id && $class_id) {
     ");
     $stmt->execute([$exam_id, $class_id]);
     $subjects = erpSortSubjects($stmt->fetchAll());
+    if($role==='teacher')$subjects=teacherResultSubjects($subjects,$teacherScope,$section_id);
+    $all_subjects=$subjects;
+    if(!$canFullLedger&&!$subject_id&&$subjects)$subject_id=(int)$subjects[0]['subject_id'];
+    if($subject_id){
+        $subjects=array_values(array_filter($subjects,static fn($subject)=>(int)$subject['subject_id']===$subject_id));
+        if(!$subjects)denySchoolRequest('Choose a subject configured for this exam and class that you are allowed to view.',403);
+    }
 
     // If exam has no internal, override practical full & pass to 0
     if (!$exam['has_internal']) {
@@ -94,24 +106,24 @@ if ($exam_id && $class_id) {
     }
 
     // 2. Fetch active students in class
-    $query = "SELECT id, student_id, first_name_en, last_name_en, roll_number, optional_subject_i, optional_subject_ii, optional_subject_iii FROM students WHERE class_id = ? AND (status = 'active' OR EXISTS(SELECT 1 FROM marks historical WHERE historical.student_id=students.id AND historical.exam_id=?)) AND school_id=? AND academic_year_id=?";
-    $params = [$class_id,$exam_id,$school_id,$exam['academic_year_id']];
+    $query = "SELECT st.id, st.student_id, st.first_name_en, st.last_name_en, st.roll_number, st.section_id, st.optional_subject_i, st.optional_subject_ii, st.optional_subject_iii, sy.symbol_no FROM students st LEFT JOIN exam_symbols sy ON sy.student_id=st.id AND sy.exam_id=? AND sy.school_id=? WHERE st.class_id = ? AND (st.status = 'active' OR EXISTS(SELECT 1 FROM marks historical WHERE historical.student_id=st.id AND historical.exam_id=?)) AND st.school_id=? AND st.academic_year_id=?";
+    $params = [$exam_id,$school_id,$class_id,$exam_id,$school_id,$exam['academic_year_id']];
     if ($section_id) {
-        $query .= " AND section_id = ?";
+        $query .= " AND st.section_id = ?";
         $params[] = $section_id;
     }
-    $query .= " ORDER BY roll_number ASC, first_name_en ASC";
+    $query .= " ORDER BY st.roll_number ASC, st.first_name_en ASC,st.id";
     $stmt = $db->prepare($query);
     $stmt->execute($params);
     $students = $stmt->fetchAll();
+    if($role==='teacher'&&!$canFullLedger)$students=array_values(array_filter($students,static fn($student)=>teacherResultCellAllowed($teacherScope,$subject_id,(int)$student['section_id'])));
 
     // 3. Fetch marks matrix
     $stmt = $db->prepare("
-        SELECT * FROM marks WHERE exam_id = ? AND student_id IN (
-            SELECT id FROM students WHERE class_id = ?
-        )
+        SELECT m.* FROM marks m JOIN students st ON st.id=m.student_id
+        WHERE m.exam_id=? AND st.class_id=? AND st.school_id=? AND st.academic_year_id=?
     ");
-    $stmt->execute([$exam_id, $class_id]);
+    $stmt->execute([$exam_id, $class_id,$school_id,$exam['academic_year_id']]);
     $marks_raw = $stmt->fetchAll();
     
     $marks = [];
@@ -119,34 +131,32 @@ if ($exam_id && $class_id) {
         $marks[$m['student_id']][$m['subject_id']] = $m;
     }
 
-    // Get class level type
-    $stmt_class_lvl = $db->prepare("SELECT name FROM classes WHERE id = ?");
-    $stmt_class_lvl->execute([$class_id]);
-    $class_name = $stmt_class_lvl->fetchColumn();
-    $classType = getClassType($class_name);
-
     // 4. Compute Ledger Matrix
     foreach ($students as $student) {
         $row_subs = [];
         $studentMarks=[];
+        $hasObtained=false;
         foreach($subjects as $sub) {
             $sub_id=$sub['subject_id'];
             if(!empty($sub['is_optional']) && $sub_id!=$student['optional_subject_i'] && $sub_id!=$student['optional_subject_ii'] && $sub_id!=($student['optional_subject_iii']??null)) {$row_subs[$sub_id]='N/A';continue;}
             $m=$marks[$student['id']][$sub_id]??[];
+            if(($m['theory_obtained']??null)!==null||((float)$sub['practical_full']>0&&($m['practical_obtained']??null)!==null))$hasObtained=true;
             $result=erpCalculateSubjectResult($sub,$m,$exam);
             $studentMarks[]=array_merge($sub,$m);
-            $row_subs[$sub_id]=['theory'=>$result['theory_obtained'],'practical'=>$result['practical_obtained'],'total'=>(float)$result['theory_obtained']+(float)$result['practical_obtained'],'gp'=>$result['grade_point'],'grade'=>$result['grade'],'remarks'=>$result['remarks']];
+            $row_subs[$sub_id]=['theory'=>$result['theory_obtained'],'practical'=>$result['practical_obtained'],'total'=>$result['incomplete']?null:(float)$result['theory_obtained']+(float)$result['practical_obtained'],'gp'=>$result['grade_point'],'grade'=>$result['grade'],'remarks'=>$result['remarks']];
         }
         $summary=erpReportSummary($studentMarks,$exam,$exam['result_system']??'gpa');
-        $total_obtained=$summary['grand_obtained'];
+        $total_obtained=$hasObtained?$summary['grand_obtained']:null;
         $gpa=$summary['average_gpa'];
         $status=$summary['remarks_summary']==='Incomplete'?'Incomplete':($summary['has_failed_subject']?'Fail/NG':'Pass');
+        if(!$studentMarks){$status='N/A';$gpa=null;}
 
         $ledger_data[] = [
             'id' => $student['id'],
             'student_id' => $student['student_id'],
             'name' => $student['first_name_en'] . ' ' . $student['last_name_en'],
-            'roll' => $student['roll_number'] ?? 999,
+            'roll' => $student['roll_number'],
+            'symbol' => $student['symbol_no'],
             'subjects' => $row_subs,
             'total_marks' => $total_obtained,
             'gpa' => $gpa,
@@ -155,33 +165,43 @@ if ($exam_id && $class_id) {
     }
 }
 
-$pageTitle = 'Class Result Ledger';
+if($role==='teacher'&&!$canFullLedger&&$section_id===0){
+    $sections=array_values(array_filter($sections,static fn($section)=>$subject_id?teacherResultCellAllowed($teacherScope,$subject_id,(int)$section['id']):array_reduce(array_keys($teacherScope['subjects']),static fn($allowed,$id)=>$allowed||teacherResultCellAllowed($teacherScope,(int)$id,(int)$section['id']),false)));
+}
+$isSubjectLedger=$subject_id>0;
+$subjectColumns=($exam['type']??'')==='unit'?2:4;
+function ledgerMark($value):string {return $value===null?'—':rtrim(rtrim(number_format((float)$value,2,'.',','),'0'),'.');}
+
+$pageTitle = $isSubjectLedger?'Subject Marks Ledger':'Class Result Ledger';
 $activePage = 'results';
 
 ob_start();
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4 no-print">
-    <h2><i class="fas fa-poll-h"></i> Class Result Ledger Grid</h2>
+    <h2><i class="fas fa-poll-h"></i> <?= $isSubjectLedger?'Subject Marks Ledger':'Full-Class Result Ledger' ?></h2>
     <div>
         <a href="<?= APP_URL ?>/modules/results/index.php" class="btn btn-secondary me-2">
             <i class="fas fa-arrow-left"></i> Back to Results
         </a>
-        <?php if ($exam_id && $class_id): ?>
+        <?php if ($exam_id && $class_id && $subjects): ?>
+        <a class="btn btn-outline-primary me-2" href="<?= APP_URL ?>/modules/results/marks_entry.php?<?= htmlspecialchars(http_build_query(['exam'=>$exam_id,'class'=>$class_id,'section'=>$section_id,'subject'=>$subject_id?:''])) ?>">View / correct marks</a>
         <button onclick="window.print()" class="btn btn-primary">
             <i class="fas fa-print"></i> Print Ledger
         </button>
         <?php endif; ?>
     </div>
 </div>
+<?php if($role==='teacher'&&$class_id): ?><div class="alert alert-info no-print"><?= $canFullLedger?'Class teacher access: all subjects in this supervised class. Choose All Subjects to view and print the full ledger.':'Subject teacher access: only your selected assigned subject and its assigned sections are printed. Totals and grades below refer to that subject, not the full report card.' ?></div><?php endif; ?>
+<style>@media print{@page{size:landscape;margin:10mm}.ledger-print-card,.ledger-print-card .card-body,.ledger-print-card .table-responsive{overflow:visible!important}.ledger-print-card table{width:100%!important;font-size:8pt!important}.ledger-print-card thead{display:table-header-group}.ledger-print-card tr{break-inside:avoid}.ledger-print-card th,.ledger-print-card td{padding:3px!important;white-space:normal!important}.ledger-print-card .badge{color:#000!important;background:transparent!important}}</style>
 
 <!-- Filters Form -->
 <div class="card mb-4 no-print">
     <div class="card-body">
         <form method="GET" action="" class="row g-3">
-            <div class="col-md-4">
-                <label class="form-label">Select Exam</label>
-                <select name="exam" class="form-select" required onchange="this.form.submit()">
+            <div class="col-md-3">
+                <label class="form-label" for="ledgerExam">Select Exam</label>
+                <select name="exam" id="ledgerExam" class="form-select" required onchange="this.form.elements.subject.value='';this.form.submit()">
                     <option value="">Choose Exam</option>
                     <?php foreach ($exams as $e): ?>
                     <option value="<?= $e['id'] ?>" <?= $exam_id == $e['id'] ? 'selected' : '' ?>>
@@ -191,8 +211,8 @@ ob_start();
                 </select>
             </div>
             <div class="col-md-3">
-                <label class="form-label">Select Class</label>
-                <select name="class" class="form-select" required onchange="this.form.submit()">
+                <label class="form-label" for="ledgerClass">Select Class</label>
+                <select name="class" id="ledgerClass" class="form-select" required onchange="this.form.elements.section.value='';this.form.elements.subject.value='';this.form.submit()">
                     <option value="">Choose Class</option>
                     <?php foreach ($classes as $c): ?>
                     <option value="<?= $c['id'] ?>" <?= $class_id == $c['id'] ? 'selected' : '' ?>>
@@ -202,14 +222,22 @@ ob_start();
                 </select>
             </div>
             <div class="col-md-3">
-                <label class="form-label">Select Section (Optional)</label>
-                <select name="section" class="form-select" onchange="this.form.submit()">
-                    <option value="">All Sections</option>
+                <label class="form-label" for="ledgerSection">Select Section (Optional)</label>
+                <select name="section" id="ledgerSection" class="form-select" onchange="this.form.submit()">
+                    <option value="">All <?= $canFullLedger?'':'Assigned ' ?>Sections</option>
                     <?php foreach ($sections as $s): ?>
                     <option value="<?= $s['id'] ?>" <?= $section_id == $s['id'] ? 'selected' : '' ?>>
                         Section <?= sanitize($s['name']) ?>
                     </option>
                     <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" for="ledgerSubject">Subject</label>
+                <select name="subject" id="ledgerSubject" class="form-select" onchange="this.form.elements.section.value='';this.form.submit()" <?= !$all_subjects?'disabled':'' ?>>
+                    <?php if($canFullLedger): ?><option value="">All Subjects (full-class ledger)</option><?php endif; ?>
+                    <?php if(!$all_subjects): ?><option value="">Select an exam and class first</option><?php endif; ?>
+                    <?php foreach($all_subjects as $sub): ?><option value="<?= (int)$sub['subject_id'] ?>" <?= $subject_id===(int)$sub['subject_id']?'selected':'' ?>><?= sanitize($sub['subject_name'].($sub['subject_code']?' ('.$sub['subject_code'].')':'')) ?></option><?php endforeach; ?>
                 </select>
             </div>
             <div class="col-md-2 d-flex align-items-end">
@@ -232,8 +260,8 @@ ob_start();
                     <select id="sortSelector" class="form-select form-select-sm" onchange="applySorting()">
                         <option value="roll">Roll Number (Ascending)</option>
                         <option value="name">Student Name (A-Z)</option>
-                        <option value="gpa-desc">GPA (High to Low)</option>
-                        <option value="gpa-asc">GPA (Low to High)</option>
+                        <option value="gpa-desc">Grade / percentage (High to Low)</option>
+                        <option value="gpa-asc">Grade / percentage (Low to High)</option>
                     </select>
                 </div>
             </div>
@@ -244,6 +272,8 @@ ob_start();
                         <option value="all">Show All Candidates</option>
                         <option value="pass">Show <?= ($selected_class && $selected_class['grading_type'] === 'gpa') ? 'Graded' : 'Pass' ?> Only</option>
                         <option value="fail">Show <?= ($selected_class && $selected_class['grading_type'] === 'gpa') ? 'Not Graded' : 'Fail / NG' ?> Only</option>
+                        <option value="incomplete">Show Incomplete Only</option>
+                        <option value="na">Show N/A Only</option>
                     </select>
                 </div>
             </div>
@@ -252,15 +282,19 @@ ob_start();
 </div>
 
 <!-- Ledger Grid -->
-<div class="card">
+<div class="card ledger-print-card">
     <div class="card-body p-0">
         <!-- Print Header -->
         <div class="d-none d-print-block text-center mb-4">
-            <h4>MODEL SECONDARY SCHOOL</h4>
-            <h6>Class Result Ledger Sheet</h6>
+            <h4><?= sanitize($school['name_en']??APP_NAME) ?></h4>
+            <?php if(!empty($school['address'])): ?><p class="mb-1"><?= sanitize($school['address']) ?></p><?php endif; ?>
+            <h6><?= $isSubjectLedger?'Subject Marks Ledger':'Full-Class Result Ledger Sheet' ?></h6>
             <p class="mb-0">
                 Exam: <strong><?= sanitize($exams[array_search($exam_id, array_column($exams, 'id'))]['name'] ?? '') ?></strong> | 
-                Class: <strong><?= sanitize($classes[array_search($class_id, array_column($classes, 'id'))]['name'] ?? '') ?></strong>
+                Class: <strong><?= sanitize($selected_class['name']??'') ?></strong> |
+                Academic year: <strong><?= sanitize($exam['year_bs']??$exams[array_search($exam_id,array_column($exams,'id'))]['year_bs']??'') ?></strong> |
+                Section: <strong><?= $section_id?sanitize(schoolRecord($db,'sections',$section_id,(int)$school_id)['name']):($canFullLedger?'All':'All assigned') ?></strong>
+                <?php if($isSubjectLedger): ?><br>Subject: <strong><?= sanitize($subjects[0]['subject_name']) ?></strong><?php endif; ?>
             </p>
             <hr>
         </div>
@@ -270,36 +304,39 @@ ob_start();
                 <thead class="table-light">
                     <tr>
                         <th rowspan="2" class="align-middle">Roll No.</th>
+                        <th rowspan="2" class="align-middle">Symbol No.</th>
                         <th rowspan="2" class="align-middle text-start" style="min-width: 150px;">Student Name</th>
                         <?php foreach ($subjects as $sub): ?>
-                        <th colspan="<?= $exam['type'] === 'unit' ? 1 : 3 ?>" rowspan="<?= $exam['type'] === 'unit' ? 2 : 1 ?>" class="small align-middle">
+                        <th colspan="<?= $subjectColumns ?>" class="small align-middle">
                             <?= sanitize($sub['subject_name']) ?>
                             <?php if ($exam['type'] !== 'unit'): ?>
                                 <?php $ch = $sub['exam_credit_hours'] ?? $sub['class_credit_hours'] ?? $sub['default_credit_hours'] ?? 4; ?>
-                                <br><small class="text-muted">(<?= $ch ?> CH)</small>
+                                <br><small class="text-muted">(<?= $ch ?> CH; FM: <?= ledgerMark((float)$sub['theory_full']+(float)$sub['practical_full']) ?>)</small>
                             <?php else: ?>
                                 <br><small class="text-muted">(FM: <?= $sub['theory_full'] ?>)</small>
                             <?php endif; ?>
                         </th>
                         <?php endforeach; ?>
-                        <th rowspan="2" class="align-middle">Total Obtained</th>
-                        <th rowspan="2" class="align-middle"><?= ($exam['result_system'] ?? 'gpa') === 'percentage' ? 'Percentage' : 'GPA' ?></th>
+                        <th rowspan="2" class="align-middle"><?= $isSubjectLedger?'Subject Total':'Total Obtained' ?></th>
+                        <th rowspan="2" class="align-middle"><?= ($exam['result_system'] ?? 'gpa') === 'percentage' ? ($isSubjectLedger?'Subject %':'Percentage') : ($isSubjectLedger?'Subject GP':'GPA') ?></th>
                         <th rowspan="2" class="align-middle">Result</th>
                     </tr>
-                    <?php if ($exam['type'] !== 'unit'): ?>
                     <tr>
                         <?php foreach ($subjects as $sub): ?>
-                        <th style="font-size: 0.7rem;">TH</th>
+                        <th style="font-size: 0.7rem;"><?= $exam['type']==='unit'?'Marks':'TH' ?></th>
+                        <?php if($exam['type']!=='unit'): ?>
                         <th style="font-size: 0.7rem;">IN</th>
+                        <th style="font-size: 0.7rem;">Total</th>
+                        <?php endif; ?>
                         <th style="font-size: 0.7rem;">GD</th>
                         <?php endforeach; ?>
                     </tr>
-                    <?php endif; ?>
                 </thead>
                 <tbody id="ledgerBody">
                     <?php foreach ($ledger_data as $row): ?>
-                    <tr data-roll="<?= $row['roll'] ?>" data-name="<?= sanitize($row['name']) ?>" data-gpa="<?= $row['gpa'] ?>" data-status="<?= $row['status'] === 'Pass' ? 'pass' : 'fail' ?>">
-                        <td><strong><?= $row['roll'] !== 999 ? $row['roll'] : '-' ?></strong></td>
+                    <tr data-roll="<?= sanitize($row['roll']??999999) ?>" data-name="<?= sanitize($row['name']) ?>" data-gpa="<?= $row['gpa']??-1 ?>" data-status="<?= ['Pass'=>'pass','Incomplete'=>'incomplete','N/A'=>'na'][$row['status']]??'fail' ?>">
+                        <td><strong><?= sanitize($row['roll']??'-') ?></strong></td>
+                        <td><?= sanitize($row['symbol']??'-') ?></td>
                         <td class="text-start"><strong><?= sanitize($row['name']) ?></strong></td>
                         
                         <?php foreach ($subjects as $sub): ?>
@@ -307,27 +344,26 @@ ob_start();
                             $sm = $row['subjects'][$sub['subject_id']] ?? null; 
                             if ($sm === 'N/A'):
                             ?>
-                            <td colspan="<?= $exam['type'] === 'unit' ? 1 : 3 ?>" class="bg-secondary-subtle text-muted">-</td>
+                            <td colspan="<?= $subjectColumns ?>" class="bg-secondary-subtle text-muted">N/A</td>
                             <?php elseif ($sm): ?>
                                 <?php if ($exam['type'] === 'unit'): ?>
-                                    <?php if (($exam['result_system'] ?? 'gpa') === 'percentage'): ?>
-                                        <td><?= $sm['theory'] ?></td>
-                                    <?php else: ?>
-                                        <td class="fw-bold <?= $sm['grade'] === 'NG' ? 'text-danger' : 'text-primary' ?>"><?= $sm['grade'] ?></td>
-                                    <?php endif; ?>
+                                        <td><?= ledgerMark($sm['theory']) ?></td>
+                                        <td class="fw-bold <?= $sm['grade'] === 'NG' ? 'text-danger' : 'text-primary' ?>"><?= $sm['remarks']==='Incomplete'?'—':$sm['grade'] ?></td>
                                 <?php else: ?>
-                                    <td><?= $sm['theory'] ?></td>
-                                    <td><?= $sub['practical_full'] > 0 ? $sm['practical'] : '-' ?></td>
-                                    <td class="fw-bold <?= $sm['grade'] === 'NG' ? 'text-danger' : 'text-primary' ?>"><?= $sm['grade'] ?></td>
+                                    <td><?= ledgerMark($sm['theory']) ?></td>
+                                    <td><?= $sub['practical_full'] > 0 ? ledgerMark($sm['practical']) : '-' ?></td>
+                                    <td><?= ledgerMark($sm['total']) ?></td>
+                                    <td class="fw-bold <?= $sm['grade'] === 'NG' ? 'text-danger' : 'text-primary' ?>"><?= $sm['remarks']==='Incomplete'?'—':$sm['grade'] ?></td>
                                 <?php endif; ?>
                             <?php else: ?>
-                            <td colspan="<?= $exam['type'] === 'unit' ? 1 : 3 ?>" class="text-muted small">Absent</td>
+                            <td colspan="<?= $subjectColumns ?>" class="text-muted small">Incomplete</td>
                             <?php endif; ?>
                         <?php endforeach; ?>
 
-                        <td><?= $row['total_marks'] ?></td>
+                        <td><?= ledgerMark($row['total_marks']) ?></td>
                         <td class="fw-bold text-success font-monospace">
-                            <?php if (($exam['result_system'] ?? 'gpa') === 'percentage'): ?>
+                            <?php if(in_array($row['status'],['Incomplete','N/A'],true)): ?>—
+                            <?php elseif (($exam['result_system'] ?? 'gpa') === 'percentage'): ?>
                                 <?= number_format($row['gpa'], 2) ?>%
                             <?php else: ?>
                                 <?= number_format($row['gpa'], 2) ?>
@@ -335,7 +371,7 @@ ob_start();
                         </td>
                         <td>
                             <span class="badge bg-<?= $row['status'] === 'Pass' ? 'success' : 'danger' ?>">
-                                <?= (($exam['result_system'] ?? 'gpa') === 'gpa') ? ($row['status'] === 'Pass' ? 'Graded' : 'Not Graded') : ($row['status'] === 'Pass' ? 'Passed' : 'Failed') ?>
+                                <?= in_array($row['status'],['Incomplete','N/A'],true)?$row['status']:((($exam['result_system'] ?? 'gpa') === 'gpa') ? ($row['status'] === 'Pass' ? 'Graded' : 'Not Graded') : ($row['status'] === 'Pass' ? 'Passed' : 'Failed')) ?>
                             </span>
                         </td>
                     </tr>
@@ -343,6 +379,7 @@ ob_start();
                 </tbody>
             </table>
         </div>
+        <p class="small text-muted p-3 mb-0">Students: <?= count($ledger_data) ?>. — means an incomplete mark; N/A means the student does not take the optional subject. <?= $isSubjectLedger?'This is a selected-subject ledger, not the overall class result.':'' ?></p>
     </div>
 </div>
 
@@ -379,9 +416,7 @@ function applyFiltering() {
         const status = row.getAttribute('data-status');
         if (filter === 'all') {
             row.style.display = '';
-        } else if (filter === 'pass' && status === 'pass') {
-            row.style.display = '';
-        } else if (filter === 'fail' && status === 'fail') {
+        } else if (filter === status) {
             row.style.display = '';
         } else {
             row.style.display = 'none';

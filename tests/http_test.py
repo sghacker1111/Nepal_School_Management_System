@@ -224,7 +224,10 @@ with tempfile.TemporaryDirectory(prefix='erp-http-') as tmp:
             points=db.execute('SELECT DISTINCT grade_point FROM marks WHERE exam_id=?',(exam,)).fetchall()
             assert points==[(3.6 if grade==1 else 3.8,)],points
             for route in [f'/modules/results/report_card.php?student={student}&exam={exam}','/modules/results/print_bulk.php?'+q,'/modules/results/ledger.php?'+q]:
-                body=request(route);assert ('3.60' if grade==1 else '3.80') in body and 'Incomplete' not in body
+                body=request(route)
+                # Ledger controls can offer an Incomplete filter even when all rows are complete.
+                result_body=re.search(r'<tbody id="ledgerBody">.*?</tbody>',body,re.S).group(0) if '/ledger.php?' in route else body
+                assert ('3.60' if grade==1 else '3.80') in result_body and 'Incomplete' not in result_body,(route,'Completed result is missing or incomplete')
             subject=schemes[0][0]
             if grade==4:
                 bad=dict(values);bad[f'marks[{student}][{subject}][participation]']=5
