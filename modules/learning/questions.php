@@ -16,6 +16,9 @@ $school_id = Auth::getSchoolId();
 $is_admin = (Auth::getRole() === 'super_admin');
 $error = '';
 $success = '';
+$learningRole=(string)Auth::getRole();$learningActor=(int)Auth::getUserId();
+$allowedClasses=learningClasses($db,(int)$school_id,$learningRole,$learningActor);
+
 
 // Fetch school subscription type and permissions
 $permission_status = 'none';
@@ -59,7 +62,7 @@ if (isset($_GET['make_universal'])) {
         Auth::logActivity(Auth::getUserId(), 'Make Question Universal', 'questions', $id);
         redirect(APP_URL . '/modules/learning/questions.php', 'Question is now universal for all schools.');
     } catch (PDOException $e) {
-        $error = "Database error: " . $e->getMessage();
+        $error = schoolPublicError($e);
     }
 }
 
@@ -154,8 +157,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_import_excel']
                     $defaultSubjectId = (int)($_POST['default_subject_id'] ?? 0);
 
                     // Fetch existing classes and subjects for fast resolution
-                    $allClasses = $db->query("SELECT id, name, name_np FROM classes WHERE is_active = 1")->fetchAll(PDO::FETCH_ASSOC);
-                    $allSubjects = $db->query("SELECT id, name_en, name_np, code FROM subjects")->fetchAll(PDO::FETCH_ASSOC);
+                    $allClasses = $allowedClasses;
+                    $allSubjects = []; // Resolved separately for each imported row's permitted class.
 
                     $importedCount = 0;
                     $skippedCount = 0;
@@ -205,13 +208,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_import_excel']
                                 }
                             }
                         }
-                        if (!$resolvedClassId) {
+                        if (!$resolvedClassId && $classVal === '') {
                             $resolvedClassId = $defaultClassId;
                         }
-                        if (!$resolvedClassId && !empty($allClasses)) {
-                            $resolvedClassId = $allClasses[0]['id'];
+                        if (!$resolvedClassId) {
+                            $skippedCount++;
+                            $skippedReasons[] = "Row {$rowNum}: class could not be matched. Supply a valid class or choose a default for blank rows.";
+                            continue;
                         }
 
+                        $allSubjects=learningSubjects($db,(int)$school_id,(int)$resolvedClassId,$learningRole,$learningActor);
                         // Resolve Subject
                         $subVal = $getVal('subject');
                         $resolvedSubjectId = 0;
@@ -226,13 +232,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_import_excel']
                                 }
                             }
                         }
-                        if (!$resolvedSubjectId) {
+                        if (!$resolvedSubjectId && $subVal === '') {
                             $resolvedSubjectId = $defaultSubjectId;
                         }
-                        if (!$resolvedSubjectId && !empty($allSubjects)) {
-                            $resolvedSubjectId = $allSubjects[0]['id'];
-                        }
 
+                        if(!$resolvedClassId||!$resolvedSubjectId){$skippedCount++;$skippedReasons[]="Row {$rowNum}: choose an assigned class subject.";continue;}
+                        try{validateTeacherLearningRequest($db,(int)$school_id,'learning','questions.php',['class_id'=>$resolvedClassId,'subject_id'=>$resolvedSubjectId],[]);}catch(InvalidArgumentException $e){$skippedCount++;$skippedReasons[]="Row {$rowNum}: ".$e->getMessage();continue;}
                         // Resolve Chapter
                         $chapterVal = $getVal('chapter');
                         if (empty($chapterVal)) {
@@ -243,8 +248,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_import_excel']
                         $topicVal = $getVal('topic');
                         $resolvedTopicId = null;
                         if (!empty($topicVal)) {
-                            $stmtT = $db->prepare("SELECT id FROM topics WHERE LOWER(name) = LOWER(?) AND class_id = ? AND subject_id = ? LIMIT 1");
-                            $stmtT->execute([$topicVal, $resolvedClassId, $resolvedSubjectId]);
+                            $stmtT = $db->prepare("SELECT id FROM topics WHERE school_id=? AND LOWER(name) = LOWER(?) AND class_id = ? AND subject_id = ? LIMIT 1");
+                            $stmtT->execute([$school_id,$topicVal, $resolvedClassId, $resolvedSubjectId]);
                             $resolvedTopicId = $stmtT->fetchColumn() ?: null;
                         }
 
@@ -357,67 +362,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_import_excel']
     }
 }
 
-// Handle Quick Add Class
-if (isset($_POST['action_quick_add_class'])) {
-    $class_name = sanitize($_POST['class_name'] ?? '');
-    $class_level = sanitize($_POST['class_level'] ?? 'Basic');
-    $grading_type = 'gpa';
-    
-    if (empty($class_name)) {
-        echo json_encode(['success' => false, 'message' => 'Class name is required.']);
-        exit;
-    }
-    
-    $stmt_c = $db->prepare("SELECT COUNT(*) FROM classes WHERE LOWER(name) = LOWER(?) AND (school_id = ? OR school_id = 0)");
-    $stmt_c->execute([$class_name, $school_id]);
-    if ($stmt_c->fetchColumn() > 0) {
-        echo json_encode(['success' => false, 'message' => 'Class with this name already exists. Class names must be unique.']);
-        exit;
-    }
-    
-    try {
-        $stmt = $db->prepare("INSERT INTO classes (name, name_np, level, grading_type, school_id) VALUES (?, ?, ?, ?, ?)");
-        $stmt->execute([$class_name, $class_name, $class_level, $grading_type, $school_id]);
-        $new_id = $db->lastInsertId();
-        echo json_encode(['success' => true, 'id' => $new_id, 'name' => $class_name]);
-    } catch (Exception $e) {
-        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
-    }
-    exit;
-}
-
-// Handle Quick Add Subject
-if (isset($_POST['action_quick_add_subject'])) {
-    $subject_name = sanitize($_POST['subject_name'] ?? '');
-    $subject_code = sanitize($_POST['subject_code'] ?? '');
-    $credit_hours = (int)($_POST['credit_hours'] ?? 4);
-    
-    if (empty($subject_name)) {
-        echo json_encode(['success' => false, 'message' => 'Subject name is required.']);
-        exit;
-    }
-    if (empty($subject_code)) {
-        $subject_code = strtolower(substr($subject_name, 0, 3)) . rand(10, 99);
-    }
-    
-    try {
-        $stmt = $db->prepare("INSERT INTO subjects (code, name_en, name_np, type, credit_hours, school_id) VALUES (?, ?, ?, 'Theory', ?, ?)");
-        $stmt->execute([$subject_code, $subject_name, $subject_name, $credit_hours, $school_id]);
-        $new_id = $db->lastInsertId();
-        
-        $c_id = (int)($_POST['map_class_id'] ?? 0);
-        if ($c_id > 0) {
-            $stmt_map = $db->prepare("INSERT INTO class_subjects (class_id, subject_id, credit_hours, school_id) VALUES (?, ?, ?, ?)");
-            $stmt_map->execute([$c_id, $new_id, $credit_hours, $school_id]);
-        }
-        
-        echo json_encode(['success' => true, 'id' => $new_id, 'name' => $subject_name]);
-    } catch (Exception $e) {
-        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
-    }
-    exit;
-}
-
+// Class and subject creation belongs to administrator management pages only.
 // Handle Get Chapters AJAX Request
 if (isset($_GET['action_get_chapters'])) {
     header('Content-Type: application/json');
@@ -587,7 +532,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 }
             }
         } catch (PDOException $e) {
-            $error = "Database error: " . $e->getMessage();
+            $error = schoolPublicError($e);
         }
     }
 }
@@ -612,7 +557,7 @@ if (isset($_GET['delete'])) {
             }
         }
     } catch (PDOException $e) {
-        $error = "Database error: " . $e->getMessage();
+        $error = schoolPublicError($e);
     }
 }
 
@@ -653,7 +598,7 @@ if ($filter_class && $filter_subject) {
         WHERE (
             (q.school_id = ? AND q.class_id = ? AND q.subject_id = ?)
             OR
-            (q.school_id = 0 AND c.name = ? AND (s.code = ? OR s.name_en = ?))
+            (q.school_id = 0 AND c.name = ? AND ((s.code <> '' AND s.code = ?) OR s.name_en = ?))
         )
     ";
     $params = [$school_id, $filter_class, $filter_subject, $lvl, $sub_code, $sub_name];
@@ -691,7 +636,7 @@ if ($filter_class && $filter_subject) {
         WHERE (
             (q.school_id = ? AND q.subject_id = ?)
             OR
-            (q.school_id = 0 AND (s.code = ? OR s.name_en = ?))
+            (q.school_id = 0 AND ((s.code <> '' AND s.code = ?) OR s.name_en = ?))
         )
     ";
     $params = [$school_id, $filter_subject, $sub_code, $sub_name];
@@ -708,41 +653,24 @@ if (!empty($filter_cognitive)) {
     $params[] = $filter_cognitive;
 }
 
+$questionSearch=$_GET['search']??'';
+if(!is_string($questionSearch)||mb_strlen($questionSearch)>100)denySchoolRequest('Question search must be at most 100 characters.',422);
+$questionSearch=trim($questionSearch);
+if($questionSearch!==''){$query.=" AND (q.question_text LIKE ? ESCAPE '!' OR q.question_text_np LIKE ? ESCAPE '!' OR q.chapter LIKE ? ESCAPE '!')";$needle='%'.strtr($questionSearch,['!'=>'!!','%'=>'!%','_'=>'!_']).'%';$params[]=$needle;$params[]=$needle;$params[]=$needle;}
 $query .= " ORDER BY q.id DESC";
 $stmt = $db->prepare($query);
 $stmt->execute($params);
 $questions = $stmt->fetchAll();
 
-// Fetch classes and subjects for selects (natural grade order)
-if ($is_admin && !$school_id) {
-    $classes_stmt = $db->prepare("SELECT * FROM classes WHERE school_id=0 AND is_active=1 ORDER BY id ASC");
-    $classes_stmt->execute();
-    $classes = $classes_stmt->fetchAll();
-
-    $subjects_stmt = $db->prepare("SELECT * FROM subjects WHERE school_id=0 ORDER BY name_en");
-    $subjects_stmt->execute();
-    $subjects = $subjects_stmt->fetchAll();
-} else {
-    $classes_stmt = $db->prepare("SELECT * FROM classes WHERE school_id = ? AND is_active = 1 ORDER BY id ASC");
-    $classes_stmt->execute([$school_id]);
-    $classes = $classes_stmt->fetchAll();
-
-    $subjects_stmt = $db->prepare("SELECT * FROM subjects WHERE school_id = ? AND (is_hidden = 0 OR is_hidden IS NULL) ORDER BY name_en");
-    $subjects_stmt->execute([$school_id]);
-    $subjects = $subjects_stmt->fetchAll();
+// One school-scoped, role-scoped, de-duplicated selector for filters, add/edit and import.
+$classes=$allowedClasses;
+$subjects=$filter_class?learningSubjects($db,(int)$school_id,(int)$filter_class,$learningRole,$learningActor):[];
+$class_subjects_map=[];$allowedPairs=[];
+foreach($classes as $c)foreach(learningSubjects($db,(int)$school_id,(int)$c['id'],$learningRole,$learningActor) as $s){
+    $class_subjects_map[]=['class_id'=>$c['id'],'subject_id'=>$s['id'],'name_en'=>$s['name_en'],'name_np'=>$s['name_np'],'code'=>$s['code'],'is_optional'=>$s['type']==='optional'?1:0];
+    $allowedPairs[$c['name'].'|'.mb_strtolower(trim($s['name_en']),'UTF-8')]=true;
 }
-
-// Fetch active class-subject mappings (unticked optional and hidden subjects are excluded)
-$cs_stmt = $db->prepare("
-    SELECT cs.class_id, s.id as subject_id, s.name_en, s.name_np, s.code, cs.is_optional, cs.is_active
-    FROM class_subjects cs
-    JOIN subjects s ON cs.subject_id = s.id
-    WHERE cs.is_active = 1 AND (s.is_hidden = 0 OR s.is_hidden IS NULL)
-    ORDER BY s.name_en ASC
-");
-$cs_stmt->execute();
-$class_subjects_map = $cs_stmt->fetchAll(PDO::FETCH_ASSOC);
-
+if($learningRole==='teacher')$questions=array_values(array_filter($questions,static fn($q)=>isset($allowedPairs[$q['class_name'].'|'.mb_strtolower(trim($q['subject_name']),'UTF-8')])));
 $pageTitle = 'Question Bank';
 $activePage = 'questions';
 
@@ -912,7 +840,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
             <input type="hidden" name="category" value="<?= htmlspecialchars($filter_category) ?>">
             <div class="col-md-4">
                 <label class="form-label fw-bold">Filter Class</label>
-                <select name="class" class="form-select" onchange="this.form.submit()">
+                <select name="class" class="form-select" onchange="this.form.elements.subject.value='';this.form.submit()">
                     <option value="">All Classes</option>
                     <?php foreach ($classes as $c): ?>
                     <option value="<?= $c['id'] ?>" <?= $filter_class == $c['id'] ? 'selected' : '' ?>><?= sanitize($c['name']) ?></option>
@@ -921,8 +849,8 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
             </div>
             <div class="col-md-4">
                 <label class="form-label fw-bold">Filter Subject</label>
-                <select name="subject" class="form-select" onchange="this.form.submit()">
-                    <option value="">All Subjects</option>
+                <select name="subject" class="form-select" <?= !$filter_class?'disabled':'' ?> onchange="this.form.submit()">
+                    <option value=""><?= $filter_class?'All class subjects':'Choose a class first' ?></option>
                     <?php foreach ($subjects as $s): ?>
                     <option value="<?= $s['id'] ?>" <?= $filter_subject == $s['id'] ? 'selected' : '' ?>><?= sanitize($s['name_en']) ?></option>
                     <?php endforeach; ?>
@@ -945,6 +873,9 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
     </div>
 </div>
 
+<form method="GET" class="input-group mb-3">
+<input type="hidden" name="class" value="<?= sanitize($filter_class) ?>"><input type="hidden" name="subject" value="<?= sanitize($filter_subject) ?>"><input type="hidden" name="category" value="<?= sanitize($filter_category) ?>"><input type="hidden" name="cognitive_domain" value="<?= sanitize($filter_cognitive) ?>">
+<input class="form-control" type="search" name="search" maxlength="100" value="<?= sanitize($questionSearch) ?>" aria-label="Search question text or chapter" placeholder="Search question text or chapter"><button class="btn btn-primary">Search questions</button></form>
 <!-- Questions List Table -->
 <div class="card">
     <div class="card-header bg-white py-3">
@@ -1073,7 +1004,6 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                         <div class="col-md-6">
                             <div class="d-flex justify-content-between align-items-center mb-1">
                                 <label class="form-label mb-0 fw-bold">Class *</label>
-                                <button type="button" class="btn btn-link p-0 text-success fw-semibold small text-decoration-none" onclick="quickAddClass()"><i class="fas fa-plus-circle"></i> Quick Add Class</button>
                             </div>
                             <select name="class_id" id="modalClass" class="form-select" required onchange="onModalClassChange()">
                                 <option value="">-- Choose Class --</option>
@@ -1085,7 +1015,6 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                         <div class="col-md-6">
                             <div class="d-flex justify-content-between align-items-center mb-1">
                                 <label class="form-label mb-0 fw-bold">Subject *</label>
-                                <button type="button" class="btn btn-link p-0 text-success fw-semibold small text-decoration-none" onclick="quickAddSubject()"><i class="fas fa-plus-circle"></i> Quick Add Subject</button>
                             </div>
                             <select name="subject_id" id="modalSubject" class="form-select" required onchange="updateChaptersDropdown('')">
                                 <option value="">-- First Select a Class --</option>
@@ -1391,7 +1320,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                         </div>
                         <div class="col-md-6">
                             <label class="form-label small fw-bold">Default Class</label>
-                            <select name="default_class_id" class="form-select form-select-sm">
+                            <select name="default_class_id" id="importClass" class="form-select form-select-sm" onchange="updateImportSubjects()">
                                 <option value="">-- Auto-detect from spreadsheet --</option>
                                 <?php foreach ($classes as $c): ?>
                                 <option value="<?= $c['id'] ?>"><?= sanitize($c['name']) ?></option>
@@ -1400,7 +1329,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                         </div>
                         <div class="col-md-6">
                             <label class="form-label small fw-bold">Default Subject</label>
-                            <select name="default_subject_id" class="form-select form-select-sm">
+                            <select name="default_subject_id" id="importSubject" class="form-select form-select-sm">
                                 <option value="">-- Auto-detect from spreadsheet --</option>
                                 <?php foreach ($subjects as $s): ?>
                                 <option value="<?= $s['id'] ?>"><?= sanitize($s['name_en']) ?></option>
@@ -1430,9 +1359,9 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
 let activeEditorId = '';
 let texModalObj;
 let activeTexSpan = null;
-const classesMap = <?= json_encode(array_column($classes, 'name', 'id')) ?>;
-const subjectsMap = <?= json_encode(array_column($subjects, 'name_en', 'id')) ?>;
-const classSubjectsMap = <?= json_encode($class_subjects_map) ?>;
+const classesMap = <?= json_encode(array_column($classes, 'name', 'id'),JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;
+const subjectsMap = <?= json_encode(array_column($subjects, 'name_en', 'id'),JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;
+const classSubjectsMap = <?= json_encode($class_subjects_map,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;
 const cdcCurriculum = <?= json_encode(require __DIR__ . '/../../config/cdc_curriculum.php') ?>;
 
 function escapeHtml(text) {
@@ -1660,6 +1589,13 @@ $(document).ready(function() {
     }
 });
 
+function updateImportSubjects(){
+ if(!document.getElementById('importClass')||!document.getElementById('importSubject'))return;
+ const classId=document.getElementById('importClass').value,select=document.getElementById('importSubject');
+ select.replaceChildren(new Option(classId?'Choose mapped subject':'Choose class first',''));
+ classSubjectsMap.filter(s=>String(s.class_id)===classId).forEach(s=>select.add(new Option(s.name_en,s.subject_id)));
+}
+document.addEventListener('DOMContentLoaded',updateImportSubjects);
 function onModalClassChange(selectedSubjectId = '') {
     const classId = document.getElementById('modalClass').value;
     const subjectSelect = document.getElementById('modalSubject');
@@ -1682,13 +1618,7 @@ function onModalClassChange(selectedSubjectId = '') {
             subjectSelect.appendChild(opt);
         });
     } else {
-        subjectSelect.innerHTML = '<option value="">-- Choose Subject --</option>';
-        for (const [id, name] of Object.entries(subjectsMap)) {
-            const opt = document.createElement('option');
-            opt.value = id;
-            opt.textContent = name;
-            subjectSelect.appendChild(opt);
-        }
+        subjectSelect.innerHTML = '<option value="">No assigned subjects in this class</option>';
     }
     
     if (selectedSubjectId) {
@@ -1909,83 +1839,6 @@ function editQuestion(q) {
 function hideForm() {
     document.getElementById('questionsListSection').style.display = 'block';
     document.getElementById('questionsFormSection').style.display = 'none';
-}
-
-function quickAddClass() {
-    const className = prompt("Enter Class Name (e.g. Class 10):");
-    if (!className) return;
-    
-    $.ajax({
-        url: window.location.pathname + window.location.search,
-        type: 'POST',
-        data: {
-            action_quick_add_class: 1,
-            class_name: className,
-            class_level: 'Secondary',
-            grading_type: 'gpa'
-        },
-        dataType: 'json',
-        success: function(res) {
-            if (res.success) {
-                alert("Class added successfully!");
-                // Add option to select
-                const select = document.getElementById('modalClass');
-                const opt = document.createElement('option');
-                opt.value = res.id;
-                opt.textContent = res.name;
-                opt.selected = true;
-                select.appendChild(opt);
-                
-                // Update map
-                classesMap[res.id] = res.name;
-                updateChaptersDropdown('');
-            } else {
-                alert("Error: " + res.message);
-            }
-        },
-        error: function() {
-            alert("An error occurred while adding the class.");
-        }
-    });
-}
-
-function quickAddSubject() {
-    const subjectName = prompt("Enter Subject Name (e.g. Science):");
-    if (!subjectName) return;
-    
-    const classId = document.getElementById('modalClass').value;
-    
-    $.ajax({
-        url: window.location.pathname + window.location.search,
-        type: 'POST',
-        data: {
-            action_quick_add_subject: 1,
-            subject_name: subjectName,
-            map_class_id: classId
-        },
-        dataType: 'json',
-        success: function(res) {
-            if (res.success) {
-                alert("Subject added successfully!");
-                // Add option to select
-                const select = document.getElementById('modalSubject');
-                const opt = document.createElement('option');
-                opt.value = res.id;
-                opt.textContent = res.name;
-                opt.selected = true;
-                select.appendChild(opt);
-                
-                // Update map
-                subjectsMap[res.id] = res.name;
-                updateChaptersDropdown('');
-            } else {
-                alert("Error: " + res.message);
-            }
-        },
-        error: function() {
-            alert("An error occurred while adding the subject.");
-        }
-    });
 }
 
 function updateChaptersDropdown(selectedChapterValue = '', selectedTopicId = '') {
@@ -2235,9 +2088,9 @@ function updateTexPreview() {
     
     // Wrap according to selected mode
     if (mode === 'inline') {
-        preview.innerHTML = '\\(' + processedInput + '\\)';
+        preview.textContent = '\\(' + processedInput + '\\)';
     } else {
-        preview.innerHTML = '\\[' + processedInput + '\\]';
+        preview.textContent = '\\[' + processedInput + '\\]';
     }
     
     // Trigger MathJax render
@@ -2267,9 +2120,9 @@ function insertTexIntoEditor() {
                 activeTexSpan.setAttribute('data-tex', input);
                 activeTexSpan.setAttribute('data-mode', mode);
                 if (mode === 'inline') {
-                    activeTexSpan.innerHTML = '\\(' + input + '\\)';
+                    activeTexSpan.textContent = '\\(' + input + '\\)';
                 } else {
-                    activeTexSpan.innerHTML = '\\[' + input + '\\]';
+                    activeTexSpan.textContent = '\\[' + input + '\\]';
                 }
                 editor.save();
                 

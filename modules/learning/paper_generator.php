@@ -21,6 +21,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_save_grid'])) 
     $c_id = (int)($_POST['class_id'] ?? 0);
     $s_id = (int)($_POST['subject_id'] ?? 0);
     $grid_data = $_POST['grid_data'] ?? '';
+    if(!is_string($grid_data)||strlen($grid_data)>50000)denySchoolRequest('Choose a valid grid configuration of at most 50 KB.',422);
+    try{$decoded=json_decode($grid_data,true,32,JSON_THROW_ON_ERROR);if(!is_array($decoded))throw new InvalidArgumentException();}
+    catch(Throwable $e){denySchoolRequest('Choose a valid JSON grid configuration.',422);}
     
     if (empty($grid_name) || !$c_id || !$s_id || empty($grid_data)) {
         echo json_encode(['success' => false, 'message' => 'Invalid parameters.']);
@@ -38,21 +41,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_save_grid'])) 
         
         echo json_encode(['success' => true, 'grid_id' => $grid_id, 'name' => $grid_name]);
     } catch (PDOException $e) {
-        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        echo json_encode(['success' => false, 'message' => schoolPublicError($e)]);
     }
     exit;
 }
 
-// Fetch active classes for current school
-if ($is_admin && !$school_id) {
-    $classes_stmt = $db->prepare("SELECT * FROM classes WHERE school_id=0 AND is_active=1 ORDER BY id ASC");
-    $classes_stmt->execute();
-    $classes = $classes_stmt->fetchAll();
-} else {
-    $classes_stmt = $db->prepare("SELECT * FROM classes WHERE school_id = ? AND is_active = 1 ORDER BY id ASC");
-    $classes_stmt->execute([$school_id]);
-    $classes = $classes_stmt->fetchAll();
-}
+$classes=learningClasses($db,(int)$school_id,(string)Auth::getRole(),(int)Auth::getUserId());
 
 // Fetch exams for current school
 if ($is_admin && !$school_id) {
@@ -79,38 +73,7 @@ if ($school_id) {
     $school = $stmt->fetch();
 }
 
-// Fetch subjects mapped to selected class (compulsory + active optional only)
-$subjects = [];
-if ($class_id) {
-    // Get the name of the selected school class
-    $stmt_name = $db->prepare("SELECT name FROM classes WHERE id = ?");
-    $stmt_name->execute([$class_id]);
-    $target_class_name = $stmt_name->fetchColumn() ?: '';
-
-    if ($is_admin && !$school_id) {
-        $stmt = $db->prepare("
-            SELECT DISTINCT s.* FROM subjects s 
-            JOIN class_subjects cs ON cs.subject_id = s.id 
-            JOIN classes c ON cs.class_id = c.id
-            WHERE (c.id = ? OR (c.name = ? AND cs.school_id = 0 AND c.school_id = 0))
-              AND cs.is_active = 1 AND (s.is_hidden = 0 OR s.is_hidden IS NULL)
-            ORDER BY s.name_en
-        ");
-        $stmt->execute([$class_id, $target_class_name]);
-        $subjects = $stmt->fetchAll();
-    } else {
-        $stmt = $db->prepare("
-            SELECT DISTINCT s.* FROM subjects s 
-            JOIN class_subjects cs ON cs.subject_id = s.id 
-            JOIN classes c ON cs.class_id = c.id
-            WHERE (c.id = ? AND cs.school_id = ? AND c.name = ?)
-              AND cs.is_active = 1 AND (s.is_hidden = 0 OR s.is_hidden IS NULL)
-            ORDER BY s.name_en
-        ");
-        $stmt->execute([$class_id, $school_id, $target_class_name]);
-        $subjects = $stmt->fetchAll();
-    }
-}
+$subjects=learningSubjects($db,(int)$school_id,(int)$class_id,(string)Auth::getRole(),(int)Auth::getUserId());
 
 // Fetch saved grid layouts for this class/subject
 $saved_grids = [];
@@ -188,7 +151,7 @@ if ($class_id && $subject_id) {
             WHERE (
                 (q.school_id = ? AND q.class_id = ? AND q.subject_id = ?)
                 OR
-                (q.school_id = 0 AND c.name = ? AND (s.code = ? OR s.name_en = ?))
+                (q.school_id = 0 AND c.name = ? AND ((s.code <> '' AND s.code = ?) OR s.name_en = ?))
             ) AND q.chapter = ?
             ORDER BY q.id DESC
         ");
@@ -202,7 +165,7 @@ if ($class_id && $subject_id) {
             WHERE (
                 (q.school_id = ? AND q.class_id = ? AND q.subject_id = ?)
                 OR
-                (q.school_id = 0 AND c.name = ? AND (s.code = ? OR s.name_en = ?))
+                (q.school_id = 0 AND c.name = ? AND ((s.code <> '' AND s.code = ?) OR s.name_en = ?))
             )
             ORDER BY q.id DESC
         ");

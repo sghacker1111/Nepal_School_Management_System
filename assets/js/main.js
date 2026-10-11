@@ -434,7 +434,10 @@ function fixDevanagariInMathJax(root) {
                     if (/[\u0900-\u097F]/.test(fullText)) {
                         const first = group[0];
                         first.className = 'mjx-n';
-                        first.innerHTML = '<mjx-utext style="font-family: \'Kokila\', \'Noto Sans Devanagari\', \'Nirmala UI\', \'Mangal\', sans-serif !important; font-style: normal !important;">' + fullText + '</mjx-utext>';
+                        const textNode = first.ownerDocument.createElement('mjx-utext');
+                        textNode.style.cssText = "font-family: 'Kokila', 'Noto Sans Devanagari', 'Nirmala UI', 'Mangal', sans-serif !important; font-style: normal !important;";
+                        textNode.textContent = fullText;
+                        first.replaceChildren(textNode);
                         for (let i = 1; i < group.length; i++) {
                             group[i].remove();
                         }

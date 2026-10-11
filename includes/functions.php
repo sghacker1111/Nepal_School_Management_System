@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/grading.php';
+require_once __DIR__.'/print_signature.php';
 
 /** Explicit CSV escaping for PHP 8.4+; neutralize spreadsheet formula cells. */
 function writeCsvRow($stream, array $fields): int|false {

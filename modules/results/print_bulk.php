@@ -110,7 +110,7 @@ if ($exam_id && $class_id) {
 }
 
 if(!$exam&&$exam_id)foreach($exams as $candidate)if((string)$candidate['id']===(string)$exam_id){$exam=$candidate;break;}
-try{$issue=reportIssueDate($exam??[],$_GET);}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
+try{$issue=reportIssueDate($exam??[],array_replace(['display_calendar'=>'BS','date_format'=>'ymd','issue_calendar'=>'BS'],$_GET));}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
 $issueQuery=http_build_query(['issue_date_mode'=>$issue['mode'],'issue_date'=>$issue['input_date'],'issue_calendar'=>$issue['calendar'],'display_calendar'=>$issue['display'],'date_format'=>$issue['format']]);
 $pageTitle = 'Bulk Report Cards';
 $activePage = 'results';
@@ -658,54 +658,9 @@ ob_start();
                     </div>
                 </div>
 
-                <!-- Signatures -->
-                <div class="row signature-section text-center">
-                    <div class="col-4">
-                        <div class="d-flex flex-column align-items-center justify-content-end" style="height: 40px; margin-bottom: 5px;">
-                            <?php 
-                            $ct_sig = !empty($student['class_teacher_signature']) ? $student['class_teacher_signature'] : '';
-                            if (empty($ct_sig) && !empty($student['class_teacher_name'])) {
-                                $stmt_t_sig = $db->prepare("SELECT signature FROM users WHERE full_name = ? AND role = 'teacher' AND school_id = ? LIMIT 1");
-                                $stmt_t_sig->execute([$student['class_teacher_name'], $school_id]);
-                                $ct_sig = $stmt_t_sig->fetchColumn() ?: '';
-                            }
-                            if (empty($ct_sig)) {
-                                $ct_sig = $school['class_teacher_signature'] ?? '';
-                            }
-                            if (!empty($ct_sig)): 
-                            ?>
-                                <img src="<?= APP_URL ?>/uploads/<?= $ct_sig ?>" style="max-height: 30px; max-width: 100px; object-fit: contain;" alt="Signature">
-                            <?php endif; ?>
-                        </div>
-                        <div class="signature-line" style="margin-top: 0;"></div>
-                        <p class="mb-0 small fw-bold mt-2">Class Teacher</p>
-                        <?php if (!empty($student['class_teacher_name'])): ?>
-                            <p class="mb-0 small text-muted font-monospace">(<?= sanitize($student['class_teacher_name']) ?>)</p>
-                        <?php endif; ?>
-                    </div>
-                    
-                    <div class="col-4">
-                        <div class="d-flex flex-column align-items-center justify-content-end" style="height: 40px; margin-bottom: 5px;">
-                            <?php if (!empty($school['exam_coordinator_signature'])): ?>
-                                <img src="<?= APP_URL ?>/uploads/<?= $school['exam_coordinator_signature'] ?>" style="max-height: 30px; max-width: 100px; object-fit: contain;" alt="Signature">
-                            <?php endif; ?>
-                        </div>
-                        <div class="signature-line" style="margin-top: 0;"></div>
-                        <p class="mb-0 small fw-bold mt-2">Exam Coordinator</p>
-                    </div>
-                    
-                    <div class="col-4">
-                        <div class="d-flex flex-column align-items-center justify-content-end" style="height: 40px; margin-bottom: 5px;">
-                            <?php if (!empty($school['principal_signature'])): ?>
-                                <img src="<?= APP_URL ?>/uploads/<?= $school['principal_signature'] ?>" style="max-height: 30px; max-width: 100px; object-fit: contain;" alt="Signature">
-                            <?php endif; ?>
-                        </div>
-                        <div class="signature-line" style="margin-top: 0;"></div>
-                        <p class="mb-0 small fw-bold mt-2">Head Teacher</p>
-                    </div>
-                </div>
+                <?= schoolPrintSignatures($db,(int)$school_id,$school,(int)$student['class_id']) ?>
 
-                <div class="mt-3 pt-2 border-top small text-muted text-start" style="font-size: 0.65rem; line-height: 1.3;">
+    <div class="mt-3 pt-2 border-top small text-muted text-start" style="font-size: 0.65rem; line-height: 1.3;">
                     <p class="mb-1"><strong>NOTE:</strong> ONE CREDIT HOUR EQUALS TO 32 WORKING HOURS.</p>
                     <?php if ($classType !== '1-3'): ?>
                     <p class="mb-1"><strong>INTERNAL (IN):</strong> THIS COVERS PARTICIPATION, PRACTICAL/PROJECT WORKS, COMMUNITY WORKS, INTERNSHIP, PRESENTATIONS, AND TERMINAL EXAMINATIONS.</p>

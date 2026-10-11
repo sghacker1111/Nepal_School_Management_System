@@ -1,5 +1,6 @@
 <?php
 /** PDO connection. Failed MySQL connections never silently open another database. */
+require_once __DIR__.'/http_security.php';
 class Database {
     private static $instance;
     private $conn;

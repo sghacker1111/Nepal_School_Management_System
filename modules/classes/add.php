@@ -90,7 +90,7 @@ if (isset($_POST['add_class'])) {
             Auth::logActivity(Auth::getUserId(), 'Add Class', 'classes', $new_id);
             redirect(APP_URL . '/modules/classes/index.php', 'Class added successfully');
         } catch (PDOException $e) {
-            $error = 'Database error: ' . $e->getMessage();
+            $error = schoolPublicError($e);
         }
     }
 }
@@ -111,7 +111,7 @@ if (isset($_POST['add_section'])) {
             Auth::logActivity(Auth::getUserId(), 'Add Section', 'sections', $new_id);
             redirect(APP_URL . '/modules/classes/index.php', 'Section added successfully');
         } catch (PDOException $e) {
-            $error = 'Database error: ' . $e->getMessage();
+            $error = schoolPublicError($e);
         }
     }
 }

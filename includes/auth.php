@@ -2,6 +2,7 @@
 /**
  * Authentication & Session Management
  */
+require_once __DIR__.'/http_security.php';
 
 class Auth {
     
@@ -11,7 +12,8 @@ class Auth {
     public static function startSession() {
         if (session_status() === PHP_SESSION_NONE) {
             ini_set('session.use_strict_mode', '1');
-            session_set_cookie_params(['httponly' => true, 'secure' => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off', 'samesite' => 'Lax', 'path' => '/']);
+            ini_set('session.use_only_cookies','1');
+            session_set_cookie_params(['httponly' => true, 'secure' => schoolRequestIsHttps(), 'samesite' => 'Lax', 'path' => '/']);
             session_start();
         }
     }
@@ -21,13 +23,17 @@ class Auth {
      */
     public static function login($username, $password) {
         self::startSession();
+        if(!is_string($username)||!is_string($password)||strlen($username)>100||strlen($password)>1024)return false;
         
         $db = getDB();
         $identity = hash('sha256', strtolower(trim($username)) . '|' . ($_SERVER['REMOTE_ADDR'] ?? 'local'));
+        $accountIdentity=hash('sha256','account|'.strtolower(trim($username)));
+        $networkIdentity=hash('sha256','network|'.($_SERVER['REMOTE_ADDR']??'local'));
         $db->prepare('DELETE FROM login_attempts WHERE attempted_at < ?')->execute([time() - 900]);
         $attempts = $db->prepare('SELECT COUNT(*) FROM login_attempts WHERE identity_key=?');
         $attempts->execute([$identity]);
         if ((int)$attempts->fetchColumn() >= 10) return false;
+        foreach([$accountIdentity=>25,$networkIdentity=>100] as $key=>$limit){$attempts->execute([$key]);if((int)$attempts->fetchColumn()>=$limit)return false;}
         $stmt = $db->prepare("SELECT * FROM users WHERE username = ? AND status = 1");
         $stmt->execute([$username]);
         $user = $stmt->fetch();
@@ -49,7 +55,8 @@ class Auth {
             return true;
         }
         
-        $db->prepare('INSERT INTO login_attempts (identity_key, attempted_at) VALUES (?, ?)')->execute([$identity, time()]);
+        $failure=$db->prepare('INSERT INTO login_attempts (identity_key, attempted_at) VALUES (?, ?)');
+        foreach([$identity,$accountIdentity,$networkIdentity] as $key)$failure->execute([$key,time()]);
         return false;
     }
     

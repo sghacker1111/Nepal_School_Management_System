@@ -38,5 +38,5 @@ try {
         echo json_encode(['success' => false, 'message' => 'Incorrect password']);
     }
 } catch (Exception $e) {
-    echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+    echo json_encode(['success' => false, 'message' => schoolPublicError($e)]);
 }

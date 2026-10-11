@@ -38,6 +38,9 @@ function migrateSchoolExtensions(PDO $db):void {
     $version=$db->query("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'")->fetchColumn();
     if(!ctype_digit((string)$version)||(int)$version>SCHOOL_SCHEMA_VERSION)throw new InvalidArgumentException('This database schema requires a newer application; no downgrade was performed.');
     if((int)$version===SCHOOL_SCHEMA_VERSION)return;
+    // Scheduling periods are independent of CDC grading credits. Existing rows stay intact.
+    if(!in_array('weekly_periods',dbColumns($db,'class_subjects'),true))$db->exec('ALTER TABLE class_subjects ADD COLUMN weekly_periods INTEGER NULL');
+    if(!in_array('exam_coordinator_name',dbColumns($db,'schools'),true))$db->exec('ALTER TABLE schools ADD COLUMN exam_coordinator_name VARCHAR(100) NULL');
     require_once __DIR__.'/packages.php';
     if((int)$version>=8){
         migrateSchoolSubscriptionSchema($db);

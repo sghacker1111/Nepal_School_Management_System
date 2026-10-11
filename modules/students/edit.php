@@ -109,7 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 redirect(APP_URL . '/modules/students/view.php?id=' . $id, 'Student profile updated successfully!');
                 
             } catch (PDOException $e) {
-                $errors[] = "Database error: " . $e->getMessage();
+                $errors[] = schoolPublicError($e);
             }
         }
     }

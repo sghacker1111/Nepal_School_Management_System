@@ -457,31 +457,10 @@ document.getElementById('admit_selector').addEventListener('submit',syncAdmitSel
                 </ol>
             </div>
 
-            <!-- Footer Signatures -->
             <div class="admit-card-footer">
-                <div class="sig-box">
-                    <div class="sig-image-placeholder"></div>
-                    <div class="sig-line">Student's Signature</div>
-                </div>
-                <div class="sig-box">
-                    <?php 
-                    $ct_sig = !empty($class['class_teacher_signature']) ? $class['class_teacher_signature'] : ($school['class_teacher_signature'] ?? '');
-                    if (!empty($ct_sig)): 
-                    ?>
-                    <img src="<?= APP_URL ?>/uploads/<?= $ct_sig ?>" alt="Class Teacher Sig" class="sig-image">
-                    <?php else: ?>
-                    <div class="sig-image-placeholder"></div>
-                    <?php endif; ?>
-                    <div class="sig-line">Class Teacher</div>
-                </div>
-                <div class="sig-box">
-                    <?php if (!empty($school['exam_coordinator_signature'])): ?>
-                    <img src="<?= APP_URL ?>/uploads/<?= $school['exam_coordinator_signature'] ?>" alt="Exam Coordinator Sig" class="sig-image">
-                    <?php else: ?>
-                    <div class="sig-image-placeholder"></div>
-                    <?php endif; ?>
-                    <div class="sig-line">Exam Coordinator</div>
-                </div>
+                <?= printSignature(trim(($student['first_name_en']??'').' '.($student['last_name_en']??'')),'Student') ?>
+                <?= schoolClassTeacherSignature($db,$school_id,$school,$class_id) ?>
+                <?= printSignature($school['exam_coordinator_name']??'','Exam Coordinator',$school['exam_coordinator_signature']??null) ?>
             </div>
         </div>
         <?php endforeach; ?>

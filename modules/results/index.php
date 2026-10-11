@@ -174,7 +174,7 @@ ob_start();
 </div>
 
 <!-- Results sheet -->
-<?php if ($class_id && $exam_id): ?>
+<?php if ($class_id && $exam_id && $students): ?>
 <div class="card">
     <div class="card-header bg-white py-3">
         <h5 class="mb-0 text-success"><i class="fas fa-file-signature"></i> Student Performance Sheet</h5>
@@ -237,6 +237,8 @@ ob_start();
         </div>
     </div>
 </div>
+<?php elseif($class_id && $exam_id): ?>
+<p class="text-muted" role="status">No students found for this exam, class and section.</p>
 <?php else: ?>
 <div class="card text-center py-5 no-print">
     <div class="card-body">
@@ -248,7 +250,7 @@ ob_start();
 
 <script>
 $(document).ready(function() {
-    $('#resultsTable').DataTable({
+    if(document.getElementById('resultsTable')) $('#resultsTable').DataTable({
         pageLength: 25,
         order: [[0, 'asc']]
     });

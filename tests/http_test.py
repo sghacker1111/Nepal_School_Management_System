@@ -78,9 +78,9 @@ with tempfile.TemporaryDirectory(prefix='erp-http-') as tmp:
         report_routes=[f"/modules/results/report_card.php?student={f['student']}&exam={f['exam']}",'/modules/results/print_bulk.php?'+query]
         for route in report_routes:
             body=request(route);assert f'data-issue-date="{today}"' in body and 'Date of Issue:' in body
-            body=request(route+'&issue_date_mode=manual&issue_date=2026-09-25&system=percentage')
+            body=request(route+'&issue_date_mode=manual&issue_date=2026-09-25&system=percentage&issue_calendar=AD&display_calendar=AD&date_format=long')
             assert 'data-issue-date="2026-09-25"' in body and '25 Sep 2026 AD' in body
-            request(route+'&issue_date_mode=manual&issue_date=2026-02-30',expected=422)
+            request(route+'&issue_date_mode=manual&issue_date=2026-02-30&issue_calendar=AD',expected=422)
             request(route+'&issue_date_mode=invalid',expected=422)
         assert db.execute('SELECT issue_date_mode,issue_date FROM exams WHERE id=?',(f['exam'],)).fetchone()==('auto',None)
         request(f"/modules/exams/edit.php?id={f['exam']}",{'name':'Regression Exam','type':'terminal','result_system':'gpa','has_internal':'1','issue_date_mode':'manual','issue_date':'2026-09-25'})
@@ -128,7 +128,9 @@ with tempfile.TemporaryDirectory(prefix='erp-http-') as tmp:
         request('/modules/students/edit.php?id='+str(higher[0]),edit)
         assert db.execute('SELECT emis_registration_number FROM students WHERE id=?',(higher[0],)).fetchone()[0]=='0000456'
         body=request('/modules/students/index.php');assert 'EMIS Reg: 0000456' in body
-        request('/modules/classes/routine.php',{'action':'generate','target_class_id':f['class'],'password':'TestPassword123!'})
+        db.execute('UPDATE class_subjects SET weekly_periods=0 WHERE class_id=?',(f['class'],))
+        db.execute('UPDATE class_subjects SET weekly_periods=5 WHERE class_id=? AND subject_id=?',(f['class'],f['subject']));db.commit()
+        request('/modules/classes/routine.php',{'action':'generate','class_id':f['class'],'password':'TestPassword123!'})
         assert db.execute('SELECT COUNT(*) FROM class_routines WHERE class_id=?',(f['class'],)).fetchone()[0]>0
         upload_csv('/modules/teachers/import_export.php','Full Name,Username,Email,Phone,DOB\nImport Teacher,importteacher,teacher@example.test,9800000000,1990-01-01')
         assert db.execute("SELECT status FROM users WHERE username='importteacher'").fetchone()[0]==0

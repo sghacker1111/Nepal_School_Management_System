@@ -28,7 +28,7 @@ if (isset($_GET['action'])) {
             $subjects=learningSubjects($db,(int)$school_id,$class_id,Auth::getRole(),(int)Auth::getUserId());
             echo json_encode(['success' => true, 'subjects' => $subjects]);
         } catch (Exception $e) {
-            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+            echo json_encode(['success' => false, 'message' => schoolPublicError($e)]);
         }
         exit;
     }
@@ -41,7 +41,7 @@ if (isset($_GET['action'])) {
             $subjects = $stmt->fetchAll(PDO::FETCH_ASSOC);
             echo json_encode(['success' => true, 'subjects' => $subjects]);
         } catch (Exception $e) {
-            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+            echo json_encode(['success' => false, 'message' => schoolPublicError($e)]);
         }
         exit;
     }
@@ -59,7 +59,7 @@ if (isset($_GET['action'])) {
             $chapters = $stmt->fetchAll(PDO::FETCH_ASSOC);
             echo json_encode(['success' => true, 'chapters' => $chapters]);
         } catch (Exception $e) {
-            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+            echo json_encode(['success' => false, 'message' => schoolPublicError($e)]);
         }
         exit;
     }
@@ -76,7 +76,7 @@ if (isset($_GET['action'])) {
             $topics = $stmt->fetchAll(PDO::FETCH_ASSOC);
             echo json_encode(['success' => true, 'topics' => $topics]);
         } catch (Exception $e) {
-            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+            echo json_encode(['success' => false, 'message' => schoolPublicError($e)]);
         }
         exit;
     }
@@ -207,7 +207,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             exit;
         }
     } catch (Exception $e) {
-        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        echo json_encode(['success' => false, 'message' => schoolPublicError($e)]);
     }
     exit;
 }

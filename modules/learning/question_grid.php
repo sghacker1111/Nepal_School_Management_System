@@ -18,24 +18,12 @@ $subject_id = $_GET['subject'] ?? '';
 $num_mcq = isset($_GET['mcq_count']) ? (int)$_GET['mcq_count'] : 5;
 $num_short = isset($_GET['short_count']) ? (int)$_GET['short_count'] : 5;
 $num_long = isset($_GET['long_count']) ? (int)$_GET['long_count'] : 3;
+foreach(['mcq_count','short_count','long_count'] as $key)if(isset($_GET[$key])&&(!is_scalar($_GET[$key])||!preg_match('/^\\d{1,3}$/',(string)$_GET[$key])||(int)$_GET[$key]>200))denySchoolRequest('Question counts must be between 0 and 200.',422);
 $exam_title = sanitize($_GET['exam_title'] ?? 'Terminal Examination - 2083');
 
-$classes_stmt = $db->prepare("SELECT * FROM classes WHERE school_id = ? AND is_active = 1 ORDER BY id ASC");
-$classes_stmt->execute([$school_id]);
-$classes = $classes_stmt->fetchAll();
+$classes=learningClasses($db,(int)$school_id,(string)Auth::getRole(),(int)Auth::getUserId());
 
-$subjects = [];
-if ($class_id) {
-    // Fetch subjects mapped to selected class
-    $stmt = $db->prepare("
-        SELECT s.* FROM subjects s 
-        JOIN class_subjects cs ON cs.subject_id = s.id 
-        WHERE cs.class_id = ? AND (cs.school_id = ?) AND cs.is_active = 1 AND (s.is_hidden = 0 OR s.is_hidden IS NULL)
-        ORDER BY s.name_en
-    ");
-    $stmt->execute([$class_id, $school_id]);
-    $subjects = $stmt->fetchAll();
-}
+$subjects=learningSubjects($db,(int)$school_id,(int)$class_id,(string)Auth::getRole(),(int)Auth::getUserId());
 
 $mcqs = [];
 $shorts = [];
@@ -50,7 +38,7 @@ if ($class_id && $subject_id) {
     $stmt = $db->prepare("
         SELECT * FROM questions 
         WHERE school_id = ? AND class_id = ? AND subject_id = ? AND type = 'MCQ'
-        ORDER BY RANDOM() LIMIT ?
+        ORDER BY ".(DB_TYPE==='mysql'?'RAND()':'RANDOM()')." LIMIT ?
     ");
     $stmt->execute([$school_id, $class_id, $subject_id, $num_mcq]);
     $mcqs = $stmt->fetchAll();
@@ -59,7 +47,7 @@ if ($class_id && $subject_id) {
     $stmt = $db->prepare("
         SELECT * FROM questions 
         WHERE school_id = ? AND class_id = ? AND subject_id = ? AND type = 'Short'
-        ORDER BY RANDOM() LIMIT ?
+        ORDER BY ".(DB_TYPE==='mysql'?'RAND()':'RANDOM()')." LIMIT ?
     ");
     $stmt->execute([$school_id, $class_id, $subject_id, $num_short]);
     $shorts = $stmt->fetchAll();
@@ -68,7 +56,7 @@ if ($class_id && $subject_id) {
     $stmt = $db->prepare("
         SELECT * FROM questions 
         WHERE school_id = ? AND class_id = ? AND subject_id = ? AND type = 'Long'
-        ORDER BY RANDOM() LIMIT ?
+        ORDER BY ".(DB_TYPE==='mysql'?'RAND()':'RANDOM()')." LIMIT ?
     ");
     $stmt->execute([$school_id, $class_id, $subject_id, $num_long]);
     $longs = $stmt->fetchAll();
