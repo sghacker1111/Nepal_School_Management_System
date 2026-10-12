@@ -246,6 +246,7 @@ class Auth {
      */
     public static function hasAccess($module) {
         require_once __DIR__.'/packages.php';
+        if(self::getRole()==='student'&&!in_array($module,['learning','auth'],true))return false;
         if(self::getRole()==='super_admin'&&!self::getSchoolId())return true;
         $school=self::getSubscription();
         return $school&&schoolSubscriptionAllows($school,(string)$module);
@@ -257,6 +258,7 @@ class Auth {
     }
     public static function canAddQuestions():bool {
         require_once __DIR__.'/packages.php';
+        if(self::getRole()==='student')return false;
         return self::getRole()==='super_admin'||schoolSubscriptionCanAddQuestions(self::getSubscription());
     }
 

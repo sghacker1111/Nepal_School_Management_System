@@ -191,6 +191,7 @@ window.MathJax = {
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="fas fa-book-open text-primary"></i> Learning Hub</h2>
     <div>
+        <a href="<?= APP_URL ?>/modules/learning/practice_mcqs.php" class="btn btn-success"><i class="fas fa-circle-check"></i> Practice MCQs</a>
         <?php if ($is_admin): ?>
         <button class="btn btn-primary" onclick="showAddNoteModal()">
             <i class="fas fa-plus"></i> Add Study Note

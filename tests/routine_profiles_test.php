@@ -10,7 +10,7 @@ $legacySlot=(int)$db->lastInsertId();$userIds=$db->query('SELECT id FROM users O
 foreach(['routine_profiles','routine_profile_history','class_routine_layouts','routine_layout_history'] as $table)$db->exec('DROP TABLE '.$table);
 foreach(['class_routines','class_routines_history'] as $table)foreach(['start_time','end_time'] as $column)$db->exec("ALTER TABLE $table DROP COLUMN $column");
 $db->exec("UPDATE app_meta SET meta_value='10' WHERE meta_key='workflow_schema'");migrateSchoolExtensions($db);
-erpEqual($db->query("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'")->fetchColumn(),'13','Schema10 upgrade reaches13');
+erpEqual($db->query("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'")->fetchColumn(),'14','Schema10 upgrade reaches14');
 erpEqual($db->query('SELECT id FROM class_routines')->fetchColumn(),$legacySlot,'Schema10 upgrade retains routine slot ID');
 erpEqual($db->query('SELECT id FROM users ORDER BY id')->fetchAll(PDO::FETCH_COLUMN),$userIds,'Schema10 upgrade retains user IDs');
 erpEqual($db->query('SELECT start_time FROM class_routines')->fetchColumn(),null,'Legacy times remain unconfigured');
