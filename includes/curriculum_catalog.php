@@ -33,6 +33,16 @@ function curriculumTopics(PDO $db,int $school,int $chapter):array {
     $q=$db->prepare('SELECT * FROM topics WHERE school_id=? AND chapter_id IN ('.implode(',',array_fill(0,count($ids),'?')).') ORDER BY sort_order,id');$q->execute([$school,...$ids]);
     $rows=$q->fetchAll();foreach($rows as &$row){$row['name']=curriculumName((string)$row['name']);$row['name_np']=curriculumName((string)($row['name_np']??''));}unset($row);return $rows;
 }
+/** Unique choices retain every historical ID so existing questions can keep their links. */
+function curriculumTopicChoices(PDO $db,int $school,int $chapter):array {
+    $choices=[];
+    foreach(curriculumTopics($db,$school,$chapter) as $row){
+        $key=curriculumNameKey($row['name']);
+        if(!isset($choices[$key])){$row['alias_ids']=[];$choices[$key]=$row;}
+        $choices[$key]['alias_ids'][]=(int)$row['id'];
+    }
+    return array_values($choices);
+}
 function curriculumEnsureTopic(PDO $db,int $school,int $chapter,string $name,string $nepali='',int $order=0):int {
     $name=curriculumName($name);$nepali=curriculumName($nepali);
     if($name===''||mb_strlen($name)>255||mb_strlen($nepali)>255)throw new InvalidArgumentException('Enter a topic name of 1 to 255 characters.');
