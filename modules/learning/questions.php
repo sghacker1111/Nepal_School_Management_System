@@ -8,6 +8,7 @@ require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/xlsx_helper.php';
 require_once __DIR__.'/../../includes/curriculum_catalog.php';
+require_once __DIR__.'/../../includes/question_import.php';
 
 Auth::requireRole(['super_admin', 'school_admin', 'principal', 'teacher', 'exam_officer']);
 Auth::requireAccess('questions');
@@ -111,6 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_import_excel']
         if (!in_array($fileExt, ['xlsx', 'csv', 'txt'])) {
             $error = "Only .xlsx and .csv files are supported.";
         } else {
+            $importTransactionOwned=false;
             try {
                 $rows = XlsxHelper::read($fileTmp);
                 if (empty($rows) || count($rows) < 2) {
@@ -159,12 +161,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_import_excel']
 
                     // Fetch existing classes and subjects for fast resolution
                     $allClasses = $allowedClasses;
-                    $allSubjects = []; // Resolved separately for each imported row's permitted class.
+                    $subjectCache = []; // Resolve once per permitted class, not once per question.
 
                     $importedCount = 0;
                     $skippedCount = 0;
                     $skippedReasons = [];
                     $q_school_id = $is_admin ? 0 : $school_id;
+                    $db->beginTransaction();
+                    $importTransactionOwned=true;
+                    $stmtIns=$db->prepare('INSERT INTO questions (class_id,subject_id,chapter,type,question_text,question_text_np,options,options_np,correct_option,marks,answer,answer_np,school_id,topic_id,cognitive_domain) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
 
                     for ($r = 1; $r < count($rows); $r++) {
                         $row = $rows[$r];
@@ -218,20 +223,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_import_excel']
                             continue;
                         }
 
-                        $allSubjects=learningSubjects($db,(int)$school_id,(int)$resolvedClassId,$learningRole,$learningActor);
+                        if(!in_array((int)$resolvedClassId,array_map('intval',array_column($allClasses,'id')),true)){
+                            $skippedCount++;$skippedReasons[]="Row {$rowNum}: choose an available class in your school.";continue;
+                        }
+                        $allSubjects=$subjectCache[$resolvedClassId]??=learningSubjects($db,(int)$school_id,(int)$resolvedClassId,$learningRole,$learningActor);
                         // Resolve Subject
                         $subVal = $getVal('subject');
                         $resolvedSubjectId = 0;
-                        if (!empty($subVal)) {
-                            $subValClean = strtolower(trim($subVal));
-                            foreach ($allSubjects as $s) {
-                                if (strtolower($s['name_en']) === $subValClean || 
-                                    strtolower($s['name_np']) === $subValClean || 
-                                    (!empty($s['code']) && strtolower($s['code']) === $subValClean)) {
-                                    $resolvedSubjectId = $s['id'];
-                                    break;
-                                }
-                            }
+                        if ($subVal !== '') {
+                            try{$resolvedSubjectId=questionImportSubjectId($allSubjects,$subVal);}
+                            catch(InvalidArgumentException $e){$skippedCount++;$skippedReasons[]="Row {$rowNum}: ".$e->getMessage();continue;}
                         }
                         if (!$resolvedSubjectId && $subVal === '') {
                             $resolvedSubjectId = $defaultSubjectId;
@@ -325,11 +326,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_import_excel']
                         $answerNp = fixNepaliInLatex($getVal('answer_np'));
 
                         // Insert into questions
-                        $stmtIns = $db->prepare("
-                            INSERT INTO questions 
-                            (class_id, subject_id, chapter, type, question_text, question_text_np, options, options_np, correct_option, marks, answer, answer_np, school_id, topic_id, cognitive_domain)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        ");
                         $stmtIns->execute([
                             $resolvedClassId,
                             $resolvedSubjectId,
@@ -350,14 +346,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_import_excel']
                         $importedCount++;
                     }
 
-                    Auth::logActivity(Auth::getUserId(), "Bulk Imported $importedCount Questions from Excel", 'questions', 0);
-                    $success = "Successfully imported <strong>$importedCount</strong> questions into the Question Bank!";
-                    if ($skippedCount > 0) {
-                        $success .= " (" . $skippedCount . " row(s) skipped: " . implode("; ", array_slice($skippedReasons, 0, 3)) . ")";
+                    $skipDetails=$skippedCount>0?' '.$skippedCount.' row(s) skipped: '.implode('; ',array_slice($skippedReasons,0,3)):'';
+                    if($importedCount===0){
+                        $db->rollBack();$importTransactionOwned=false;
+                        $error='No questions were imported.'.$skipDetails;
+                    }else{
+                        Auth::logActivity(Auth::getUserId(), "Bulk Imported $importedCount Questions from Excel", 'questions', 0);
+                        $db->commit();$importTransactionOwned=false;
+                        // One import outcome, and GET after POST prevents refresh from importing again.
+                        unset($_SESSION['action_notice']);
+                        redirect(APP_URL.'/modules/learning/questions.php?category=all','Successfully imported '.$importedCount.' questions into the Question Bank.'.$skipDetails,$skippedCount>0?'warning':'success');
                     }
                 }
-            } catch (Exception $e) {
-                $error = "Error importing Excel file: " . $e->getMessage();
+            } catch (Throwable $e) {
+                if($importTransactionOwned&&$db->inTransaction())$db->rollBack();
+                unset($_SESSION['action_notice']);
+                $error = 'Error importing Excel file: '.schoolPublicError($e);
             }
         }
     }
