@@ -19,8 +19,20 @@ with ERPHttpFixture() as app:
     assert any(int(t['id'])==tid and t['name']==topic_name for t in topics)
     duplicate=json.loads(app.request(curriculum,{'action':'add_topic','class_id':cls,'subject_id':subject,'chapter_id':chapter['id'],'name':topic_name}))
     assert duplicate['success'] and int(duplicate['id'])==tid,'Duplicate topic reuses shared ID'
+    # Existing duplicate rows remain intact, but the Question Bank offers each name once.
+    legacy_tid=app.db.execute('INSERT INTO topics(school_id,class_id,subject_id,chapter_id,name) VALUES(0,?,?,?,?)',(cls,subject,chapter['id'],topic_name.upper())).lastrowid
+    app.db.commit()
+    topic_snapshot=app.snapshot('topics')
+    choices=json.loads(app.request(f'{questions}?action_get_topics=1&chapter_id={chapter["id"]}'))
+    assert len(choices)==1, 'Historical duplicate labels must be one topic choice'
+    assert set(choices[0]['alias_ids'])=={tid,legacy_tid}, 'Retain IDs needed when editing existing questions'
+    assert app.snapshot('topics')==topic_snapshot, 'Listing topics must never delete historical records'
     payload={'action':'add','class_id':cls,'subject_id':subject,'chapter':chapter['name'],'topic_id':tid,'type':'Short','question_text':'Synthetic linked question','marks':'2'}
     app.request(questions,payload)
+    app.request(questions,{**payload,'topic_id':legacy_tid,'question_text':'Synthetic legacy linked question'})
+    legacy_qid=app.db.execute("SELECT id FROM questions WHERE question_text='Synthetic legacy linked question'").fetchone()[0]
+    app.request(questions,{**payload,'action':'edit','question_id':legacy_qid,'topic_id':legacy_tid,'question_text':'Synthetic legacy linked question edited'})
+    assert app.db.execute('SELECT topic_id FROM questions WHERE id=?',(legacy_qid,)).fetchone()==(legacy_tid,), 'Editing keeps legacy topic links valid'
     qid=app.db.execute("SELECT id FROM questions WHERE question_text='Synthetic linked question'").fetchone()[0]
     before=app.snapshot('questions')
     denied=json.loads(app.request(curriculum,{'action':'delete_topic','id':tid}))

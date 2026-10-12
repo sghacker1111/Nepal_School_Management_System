@@ -383,10 +383,10 @@ if (isset($_GET['action_get_topics'])) {
     $chapter_name = sanitize($_GET['chapter_name'] ?? '');
     
     $topics=[];
-    if($chapter_id>0)$topics=curriculumTopics($db,(int)$school_id,$chapter_id);
+    if($chapter_id>0)$topics=curriculumTopicChoices($db,(int)$school_id,$chapter_id);
     elseif($chapter_name!==''){
         foreach(curriculumChapters($db,(int)$school_id,(int)($_GET['class_id']??0),(int)($_GET['subject_id']??0)) as $chapter)
-            if(curriculumNameKey($chapter['name'])===curriculumNameKey($chapter_name)){$topics=curriculumTopics($db,(int)$school_id,(int)$chapter['id']);break;}
+            if(curriculumNameKey($chapter['name'])===curriculumNameKey($chapter_name)){$topics=curriculumTopicChoices($db,(int)$school_id,(int)$chapter['id']);break;}
     }
     
     echo json_encode($topics);
@@ -1366,9 +1366,6 @@ function convertLatexToSpan(content) {
 }
 
 $(document).ready(function() {
-    document.getElementById('modalClass').addEventListener('change', () => updateChaptersDropdown());
-    document.getElementById('modalSubject').addEventListener('change', () => updateChaptersDropdown());
-    
     // Initialize TeX Modal
     texModalObj = new bootstrap.Modal(document.getElementById('texModal'));
     
@@ -1561,7 +1558,7 @@ function updateImportSubjects(){
  classSubjectsMap.filter(s=>String(s.class_id)===classId).forEach(s=>select.add(new Option(s.name_en,s.subject_id)));
 }
 document.addEventListener('DOMContentLoaded',updateImportSubjects);
-function onModalClassChange(selectedSubjectId = '') {
+function onModalClassChange(selectedSubjectId = '', selectedChapterValue = '', selectedTopicId = '') {
     const classId = document.getElementById('modalClass').value;
     const subjectSelect = document.getElementById('modalSubject');
     subjectSelect.innerHTML = '';
@@ -1590,7 +1587,7 @@ function onModalClassChange(selectedSubjectId = '') {
         subjectSelect.value = selectedSubjectId;
     }
     
-    updateChaptersDropdown('');
+    updateChaptersDropdown(selectedChapterValue, selectedTopicId);
 }
 
 function showAddForm(category = 'MCQ') {
@@ -1667,7 +1664,6 @@ function showAddForm(category = 'MCQ') {
     setOptionVal('modalOptDNp', '');
     selectCorrectOption('A');
     
-    updateChaptersDropdown('');
     toggleMCQFields();
     
     // Scroll to top
@@ -1756,7 +1752,7 @@ function editQuestion(q) {
     }
     
     document.getElementById('modalClass').value = q.class_id;
-    onModalClassChange(q.subject_id);
+    onModalClassChange(q.subject_id, q.chapter, q.topic_id);
     document.getElementById('modalType').value = q.type;
     document.getElementById('modalMarks').value = q.marks;
     if (document.getElementById('modalCognitiveDomain')) {
@@ -1794,7 +1790,6 @@ function editQuestion(q) {
         setOptionVal('modalOptDNp', '');
     }
     
-    updateChaptersDropdown(q.chapter, q.topic_id);
     toggleMCQFields();
     
     // Scroll to top
@@ -1806,7 +1801,13 @@ function hideForm() {
     document.getElementById('questionsFormSection').style.display = 'none';
 }
 
+let chapterDropdownRequestVersion = 0;
+let topicDropdownRequestVersion = 0;
+
 function updateChaptersDropdown(selectedChapterValue = '', selectedTopicId = '') {
+    const requestVersion = ++chapterDropdownRequestVersion;
+    ++topicDropdownRequestVersion;
+    document.getElementById('modalTopicSelect').innerHTML = '<option value="">Choose Topic</option>';
     const classId = document.getElementById('modalClass').value;
     const subjectId = document.getElementById('modalSubject').value;
     
@@ -1839,6 +1840,7 @@ function updateChaptersDropdown(selectedChapterValue = '', selectedTopicId = '')
         },
         dataType: 'json',
         success: function(chapters) {
+            if (requestVersion !== chapterDropdownRequestVersion) return;
             select.innerHTML = '';
             if (chapters && chapters.length > 0) {
                 chapters.forEach(ch => {
@@ -1895,6 +1897,7 @@ function updateChaptersDropdown(selectedChapterValue = '', selectedTopicId = '')
             }
         },
         error: function() {
+            if (requestVersion !== chapterDropdownRequestVersion) return;
             const optCustom = document.createElement('option');
             optCustom.value = '__custom__';
             optCustom.textContent = 'Type Custom Chapter';
@@ -1910,11 +1913,13 @@ function updateChaptersDropdown(selectedChapterValue = '', selectedTopicId = '')
 }
 
 function updateTopicsDropdown(chapterId, chapterName, selectedTopicId = '') {
+    const requestVersion = ++topicDropdownRequestVersion;
     const classId = document.getElementById('modalClass').value;
     const subjectId = document.getElementById('modalSubject').value;
     const select = document.getElementById('modalTopicSelect');
     
     select.innerHTML = '<option value="">Choose Topic</option>';
+    if (!classId || !subjectId || (!chapterId && !chapterName)) return;
     
     $.ajax({
         url: window.location.pathname,
@@ -1927,11 +1932,22 @@ function updateTopicsDropdown(chapterId, chapterName, selectedTopicId = '') {
         },
         dataType: 'json',
         success: function(topics) {
-            if (topics && topics.length > 0) {
+            if (requestVersion !== topicDropdownRequestVersion) return;
+            select.innerHTML = '<option value="">Choose Topic</option>';
+            if (Array.isArray(topics) && topics.length > 0) {
+                const choices = new Map();
                 topics.forEach(t => {
+                    const key = String(t.name).trim().replace(/\s+/g, ' ').toLowerCase();
+                    if (!key) return;
+                    const aliases = [t.id, ...(Array.isArray(t.alias_ids) ? t.alias_ids : [])].map(String);
+                    const isSelected = selectedTopicId !== '' && aliases.includes(String(selectedTopicId));
+                    if (!choices.has(key)) choices.set(key, {topic: t, value: t.id});
+                    if (isSelected) choices.get(key).value = selectedTopicId;
+                });
+                choices.forEach(({topic, value}) => {
                     const opt = document.createElement('option');
-                    opt.value = t.id;
-                    opt.textContent = t.name;
+                    opt.value = value;
+                    opt.textContent = topic.name;
                     select.appendChild(opt);
                 });
                 if (selectedTopicId) {
