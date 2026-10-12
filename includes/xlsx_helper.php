@@ -494,8 +494,42 @@ class XlsxHelper {
     }
 
     /**
-     * Get Sample Template Headers and Data for Other Questions (Subjective)
+     * Get mode-specific HTML source examples for MCQ or subjective imports.
      */
+    public static function getHtmlSample(string $type): array {
+        $sample = $type === 'mcq' ? self::getMcqSample() : self::getOtherSample();
+        foreach ($sample['headers'] as &$header) {
+            if (preg_match('/Question \(|Option [ABCD] \(|Model Answer \(/', $header)) $header .= ' HTML';
+        }
+        unset($header);
+        if ($type === 'mcq') {
+            $sample['headers'][] = 'Model Answer (English) HTML';
+            $sample['headers'][] = 'Model Answer (Nepali) HTML';
+            $sample['rows'] = [
+                ['Class 10', 'Compulsory Mathematics', 'Algebra', 'Quadratic Equations', 'Application (A)',
+                 '<p>Solve <strong>the equation</strong> \\(x^2=4\\). What is the positive root?</p>',
+                 '<p>\\(x^2=4\\) को धनात्मक मूल कुन हो?</p>',
+                 '<p>\\(1\\)</p>', '१', '<p><strong>\\(2\\)</strong></p>', '२', '<p>\\(4\\)</p>', '४', '<p>\\(8\\)</p>', '८', 'B', '1',
+                 '<p>Taking square roots gives \\(x=\\pm 2\\); the positive root is <strong>2</strong>.</p>', '<p>धनात्मक मूल २ हो।</p>'],
+                ['Class 10', 'Compulsory Mathematics', 'Algebra', 'Fractions', 'Knowledge (K)',
+                 '<p>What is \\(\\frac{1}{2}+\\frac{1}{2}\\)?</p>', '<p>\\(\\frac{1}{2}+\\frac{1}{2}\\) कति हुन्छ?</p>',
+                 '<p>\\(1\\)</p>', '१', '<p>\\(2\\)</p>', '२', '<p>\\(\\frac{1}{2}\\)</p>', 'आधा', '<p>\\(0\\)</p>', '०', 'A', '1',
+                 '<p>\\[\\frac{1+1}{2}=1\\]</p>', '<p>उत्तर १ हो।</p>'],
+            ];
+        } else {
+            $sample['rows'] = [
+                ['Class 10', 'Compulsory Mathematics', 'Algebra', 'Quadratic Equations', 'Short', 'Application (A)',
+                 '<p>Solve \\(x^2-5x+6=0\\). <strong>Show your steps.</strong></p>', '<p>\\(x^2-5x+6=0\\) हल गर्नुहोस्।</p>', '2',
+                 '<ol><li>Factor: \\((x-2)(x-3)=0\\).</li><li>So \\(x=2\\) or \\(x=3\\).</li></ol>', '<p>मूलहरू २ र ३ हुन्।</p>'],
+                ['Class 10', 'Compulsory Mathematics', 'Algebra', 'Fractions', 'Very Short', 'Knowledge (K)',
+                 '<p>Write \\(\\frac{1}{2}\\) as a decimal.</p>', '<p>\\(\\frac{1}{2}\\) लाई दशमलवमा लेख्नुहोस्।</p>', '1',
+                 '<p><strong>0.5</strong></p>', '<p>०.५</p>'],
+            ];
+        }
+        return $sample;
+    }
+
+    /** Get normal-text sample headers and data for subjective questions. */
     public static function getOtherSample() {
         $headers = [
             'Class',

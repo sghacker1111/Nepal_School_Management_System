@@ -72,6 +72,7 @@ if (isset($_GET['make_universal'])) {
 if (isset($_GET['action']) && $_GET['action'] === 'download_template') {
     $type = strtolower($_GET['type'] ?? 'mcq');
     $format = strtolower($_GET['format'] ?? 'xlsx');
+    try{$contentMode=questionImportFormat($_GET['content_mode']??'normal');}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
     
     if ($type === 'mcq') {
         $sample = XlsxHelper::getMcqSample();
@@ -80,6 +81,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'download_template') {
         $sample = XlsxHelper::getOtherSample();
         $filename = 'sample_other_questions_template';
     }
+    if($contentMode==='html'){$sample=XlsxHelper::getHtmlSample($type);$filename.='_html_source';}
     
     if ($format === 'csv') {
         $content = XlsxHelper::generateCsv($sample['headers'], $sample['rows']);
@@ -114,6 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_import_excel']
         } else {
             $importTransactionOwned=false;
             try {
+                $importContentMode=questionImportFormat($_POST['import_content_mode']??'normal');
                 $rows = XlsxHelper::read($fileTmp);
                 if (empty($rows) || count($rows) < 2) {
                     $error = "Uploaded file contains no data or only the header row.";
@@ -132,8 +135,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_import_excel']
                         'question_text' => ['question', 'questiontext', 'questionenglish', 'questionen', 'qenglish', 'qtext', 'englishquestion'],
                         'question_text_np' => ['questionnepali', 'questionnp', 'qnepali', 'qtextnp', 'nepaliquestion', 'nepali'],
                         'marks' => ['marks', 'mark', 'weightage', 'point', 'points'],
-                        'answer' => ['answer', 'answermodelen', 'modelanswer', 'modelanswerenglish', 'expectedanswer', 'expectedansweren'],
-                        'answer_np' => ['answernp', 'answermodelnp', 'modelanswernepali', 'expectedanswernp', 'expectedanswernepali'],
+                        'answer' => ['answer', 'answeren', 'answerenglish', 'answermodelen', 'modelanswer', 'modelanswerenglish', 'expectedanswer', 'expectedansweren'],
+                        'answer_np' => ['answernp', 'answernepali', 'answermodelnp', 'modelanswernepali', 'expectedanswernp', 'expectedanswernepali'],
                         'option_a' => ['optiona', 'optionaen', 'optionaenglish', 'opta', 'optaen', 'optaenglish', 'choicea', 'choiceaen', 'a'],
                         'option_a_np' => ['optionanp', 'optionanepali', 'optanp', 'optanepali', 'choiceanp', 'choiceanepali', 'anp'],
                         'option_b' => ['optionb', 'optionben', 'optionbenglish', 'optb', 'optben', 'optbenglish', 'choiceb', 'choiceben', 'b'],
@@ -145,11 +148,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_import_excel']
                         'correct_option' => ['correctoption', 'correct', 'answerkey', 'key', 'correctanswer', 'correctchoice']
                     ];
 
+                    $colPriority=[];
                     foreach ($headerRow as $idx => $headerText) {
                         $clean = strtolower(preg_replace('/[^a-z0-9]/i', '', (string)$headerText));
+                        $sourceHeader=(str_contains($clean,'html')||str_contains($clean,'source'))&&preg_match('/question|answer|option|choice/',$clean);
+                        if($sourceHeader)$clean=str_replace(['html','source'],'',$clean);
                         foreach ($aliasMap as $targetKey => $aliases) {
                             if (in_array($clean, $aliases)) {
-                                $colMap[$targetKey] = $idx;
+                                $priority=$sourceHeader?($importContentMode==='html'?2:0):1;
+                                if(!isset($colPriority[$targetKey])||$priority>$colPriority[$targetKey]){$colMap[$targetKey]=$idx;$colPriority[$targetKey]=$priority;}
                                 break;
                             }
                         }
@@ -183,19 +190,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_import_excel']
                             return '';
                         };
 
-                        $qText = fixNepaliInLatex($getVal('question_text'));
-                        $qTextNp = fixNepaliInLatex($getVal('question_text_np'));
-
-                        if (empty($qText) && !empty($qTextNp)) {
-                            // If English is empty but Nepali is provided, duplicate
-                            $qText = $qTextNp;
-                        }
-
-                        if (empty($qText)) {
-                            $skippedCount++;
-                            $skippedReasons[] = "Row {$rowNum}: Question text is empty.";
-                            continue;
-                        }
+                        try{$content=questionImportRowContent($getVal,$importContentMode);}catch(InvalidArgumentException $e){$skippedCount++;$skippedReasons[]="Row {$rowNum}: ".$e->getMessage();continue;}
 
                         // Resolve Class
                         $classVal = $getVal('class');
@@ -266,79 +261,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_import_excel']
                         $cdClean = strtolower(preg_replace('/[^a-z0-9]/i', '', $cdRaw));
                         $cognitiveDomain = $cdMap[$cdClean] ?? 'Knowledge';
 
-                        // Resolve Type
-                        $typeVal = ucfirst(strtolower($getVal('type')));
-                        $optA = fixNepaliInLatex($getVal('option_a'));
-                        $optB = fixNepaliInLatex($getVal('option_b'));
-                        $optC = fixNepaliInLatex($getVal('option_c'));
-                        $optD = fixNepaliInLatex($getVal('option_d'));
-
-                        $optANp = fixNepaliInLatex($getVal('option_a_np'));
-                        $optBNp = fixNepaliInLatex($getVal('option_b_np'));
-                        $optCNp = fixNepaliInLatex($getVal('option_c_np'));
-                        $optDNp = fixNepaliInLatex($getVal('option_d_np'));
-
-                        $correctOpt = strtoupper(trim($getVal('correct_option')));
-                        if (!in_array($correctOpt, ['A', 'B', 'C', 'D'])) {
-                            $correctOpt = 'A';
-                        }
-
-                        $optionsJson = null;
-                        $optionsNpJson = null;
-
-                        if (!empty($optA) || !empty($optB) || $typeVal === 'Mcq' || $typeVal === 'MCQ') {
-                            $typeVal = 'MCQ';
-                            $optionsJson = json_encode([
-                                'A' => $optA,
-                                'B' => $optB,
-                                'C' => $optC,
-                                'D' => $optD
-                            ]);
-                            $optionsNpJson = json_encode([
-                                'A' => $optANp,
-                                'B' => $optBNp,
-                                'C' => $optCNp,
-                                'D' => $optDNp
-                            ]);
-                        } else {
-                            if (!in_array($typeVal, ['Very Short', 'Short', 'Long', 'Reasoning', 'Difference Between'])) {
-                                $typeVal = 'Short';
-                            }
-                            $correctOpt = null;
-                        }
-
-                        // Resolve Marks
-                        $marksVal = (int)$getVal('marks');
-                        if ($marksVal <= 0) {
-                            if ($typeVal === 'MCQ' || $typeVal === 'Very Short') {
-                                $marksVal = 1;
-                            } elseif ($typeVal === 'Long') {
-                                $marksVal = 8;
-                            } elseif ($typeVal === 'Reasoning' || $typeVal === 'Difference Between') {
-                                $marksVal = 4;
-                            } else {
-                                $marksVal = 5;
-                            }
-                        }
-
-                        // Resolve Model Answer
-                        $answer = fixNepaliInLatex($getVal('answer'));
-                        $answerNp = fixNepaliInLatex($getVal('answer_np'));
-
                         // Insert into questions
                         $stmtIns->execute([
                             $resolvedClassId,
                             $resolvedSubjectId,
                             $chapterVal,
-                            $typeVal,
-                            $qText,
-                            $qTextNp,
-                            $optionsJson,
-                            $optionsNpJson,
-                            $correctOpt,
-                            $marksVal,
-                            $answer,
-                            $answerNp,
+                            $content['type'],
+                            $content['question_text'],
+                            $content['question_text_np'],
+                            $content['options'],
+                            $content['options_np'],
+                            $content['correct_option'],
+                            $content['marks'],
+                            $content['answer'],
+                            $content['answer_np'],
                             $q_school_id,
                             $resolvedTopicId,
                             $cognitiveDomain
@@ -653,8 +589,9 @@ ob_start();
 <script>
 window.MathJax = {
     tex: {
-        inlineMath: [['\\(', '\\)']],
-        displayMath: [['\\[', '\\]']]
+        inlineMath: [['\\(', '\\)'],['$','$']],
+        displayMath: [['\\[', '\\]'],['$$','$$']],
+        processEscapes: true
     },
     startup: {
         ready: () => {
@@ -733,7 +670,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
             <i class="fas fa-pen-nib me-1"></i> Add Questions
         </button>
         <button class="btn btn-info text-white fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#importExcelModal">
-            <i class="fas fa-file-excel me-1"></i> Import from Excel (.xlsx)
+            <i class="fas fa-file-excel me-1"></i> Import Excel / CSV
         </button>
         <?php endif; ?>
     </div>
@@ -1243,13 +1180,19 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
         <div class="modal-content shadow-lg border-0">
             <div class="modal-header bg-primary text-white">
                 <h5 class="modal-title fw-bold" id="importExcelModalLabel">
-                    <i class="fas fa-file-excel me-2"></i> Import Questions from Excel (.xlsx)
+                    <i class="fas fa-file-excel me-2"></i> Import Questions from Excel / CSV
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form method="POST" action="" enctype="multipart/form-data">
                 <input type="hidden" name="action_import_excel" value="1">
                 <div class="modal-body p-4">
+                    <fieldset class="mb-4"><legend class="fs-6 fw-bold">Import method</legend>
+                        <div class="form-check"><input class="form-check-input" type="radio" name="import_content_mode" id="importNormal" value="normal" <?= ($importContentMode??'normal')==='html'?'':'checked' ?>><label class="form-check-label" for="importNormal">Normal Text</label></div>
+                        <div class="form-check"><input class="form-check-input" type="radio" name="import_content_mode" id="importHtml" value="html" <?= ($importContentMode??'normal')==='html'?'checked':'' ?>><label class="form-check-label" for="importHtml">HTML Source (formatted questions and answers)</label></div>
+                        <p id="importModeHelp" class="small text-muted mt-2 mb-0" role="status"></p>
+                        <small class="text-muted d-block">Class, Subject, Chapter and Topic remain normal text in both methods. Existing class/subject permissions still apply. Use Correct Option A, B, C or D for MCQs.</small>
+                    </fieldset>
                     <!-- Download Templates Section -->
                     <div class="card bg-light border-0 shadow-sm mb-4">
                         <div class="card-body">
@@ -1258,16 +1201,16 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                                 Download sample template files below to see the required column format. The first row in your Excel spreadsheet is automatically scanned as the column header.
                             </p>
                             <div class="d-flex gap-2 flex-wrap">
-                                <a href="?action=download_template&type=mcq&format=xlsx" class="btn btn-sm btn-outline-primary fw-bold">
+                                <a data-import-template href="?action=download_template&type=mcq&format=xlsx" class="btn btn-sm btn-outline-primary fw-bold">
                                     <i class="fas fa-file-excel text-success me-1"></i> Sample MCQs Template (.xlsx)
                                 </a>
-                                <a href="?action=download_template&type=other&format=xlsx" class="btn btn-sm btn-outline-success fw-bold">
+                                <a data-import-template href="?action=download_template&type=other&format=xlsx" class="btn btn-sm btn-outline-success fw-bold">
                                     <i class="fas fa-file-excel text-success me-1"></i> Sample Other Questions Template (.xlsx)
                                 </a>
-                                <a href="?action=download_template&type=mcq&format=csv" class="btn btn-sm btn-outline-secondary">
+                                <a data-import-template href="?action=download_template&type=mcq&format=csv" class="btn btn-sm btn-outline-secondary">
                                     <i class="fas fa-file-csv me-1"></i> Sample MCQs (.csv)
                                 </a>
-                                <a href="?action=download_template&type=other&format=csv" class="btn btn-sm btn-outline-secondary">
+                                <a data-import-template href="?action=download_template&type=other&format=csv" class="btn btn-sm btn-outline-secondary">
                                     <i class="fas fa-file-csv me-1"></i> Sample Other (.csv)
                                 </a>
                             </div>
@@ -1356,17 +1299,23 @@ function fixNepaliInLatex(tex) {
 
 function convertLatexToSpan(content) {
     if (!content) return content;
-    // Match inline LaTeX math \( ... \)
-    content = content.replace(/\\\(([\s\S]*?)\\\)/g, function(match, tex) {
-        tex = fixNepaliInLatex(tex);
-        return '<span class="math-tex" data-tex="' + escapeHtml(tex) + '" data-mode="inline">\\(' + tex + '\\)</span>';
-    });
-    // Match block LaTeX math \[ ... \]
-    content = content.replace(/\\\[([\s\S]*?)\\\]/g, function(match, tex) {
-        tex = fixNepaliInLatex(tex);
-        return '<span class="math-tex" data-tex="' + escapeHtml(tex) + '" data-mode="block">\\[' + tex + '\\]</span>';
-    });
-    return content;
+    const root=document.createElement('div');root.innerHTML=content;
+    const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT),nodes=[];
+    while(walker.nextNode())if(!walker.currentNode.parentElement.closest('.math-tex,script,style'))nodes.push(walker.currentNode);
+    // Only text nodes are converted: never HTML attributes or existing widgets.
+    // Every supported delimiter becomes a portable widget that saves back to TeX.
+    for(const node of nodes){
+        const pattern=/\\\(([\s\S]*?)\\\)|\\\[([\s\S]*?)\\\]|\$\$([\s\S]*?)\$\$|(?<!\\)\$(?!\$)([^$\r\n]+)(?<!\\)\$/g;
+        const fragment=document.createDocumentFragment();let end=0,matched=false;
+        for(const match of node.textContent.matchAll(pattern)){
+            matched=true;fragment.append(document.createTextNode(node.textContent.slice(end,match.index)));
+            const block=match[2]!==undefined||match[3]!==undefined,tex=fixNepaliInLatex(match[1]??match[2]??match[3]??match[4]);
+            const span=document.createElement('span');span.className='math-tex';span.setAttribute('data-tex',tex);span.setAttribute('data-mode',block?'block':'inline');
+            span.textContent=(block?'\\[':'\\(')+tex+(block?'\\]':'\\)');fragment.append(span);end=match.index+match[0].length;
+        }
+        if(matched){fragment.append(document.createTextNode(node.textContent.slice(end)));node.replaceWith(fragment);}
+    }
+    return root.innerHTML;
 }
 
 $(document).ready(function() {
@@ -1464,7 +1413,7 @@ $(document).ready(function() {
                         const tex = span.getAttribute('data-tex');
                         const mode = span.getAttribute('data-mode') || 'inline';
                         const replacement = (mode === 'inline') ? '\\(' + tex + '\\)' : '\\[' + tex + '\\]';
-                        span.outerHTML = replacement;
+                        span.replaceWith(document.createTextNode(replacement));
                     });
                     e.content = tempDiv.innerHTML;
                 });
@@ -1485,17 +1434,17 @@ $(document).ready(function() {
                         doc.body.style.fontSize = "15px";
                     }
 
-                    // Attach MathJax Devanagari observer to editor iframe
-                    if (typeof observeMathJaxDevanagari === 'function') {
-                        observeMathJaxDevanagari(doc);
-                    }
+                    // Repair the iframe after typesetting (below and on SetContent).
+                    // A parent-window MutationObserver can reject TinyMCE's body;
+                    // editor events already cover all content changes here.
                     
                     const configScript = doc.createElement('script');
                     configScript.text = `
                         window.MathJax = {
                             tex: {
-                                inlineMath: [['\\\\(', '\\\\)']],
-                                displayMath: [['\\\\[', '\\\\]']]
+                                inlineMath: [['\\\\(', '\\\\)'], ['$', '$']],
+                                displayMath: [['\\\\[', '\\\\]'], ['$$', '$$']],
+                                processEscapes: true
                             },
                             startup: {
                                 typeset: false
@@ -1519,17 +1468,21 @@ $(document).ready(function() {
                     doc.head.appendChild(script);
                 });
                 
-                // Render MathJax whenever text changes (only on user-driven input to avoid infinite recursion)
-                editor.on('change keyup', function () {
-                    editor.save(); // Sync back to textarea
+                // Imported content must also render when reopened, not just after typing.
+                function typesetEditorMath() {
                     const win = editor.getWin();
                     if (win.MathJax && win.MathJax.typesetPromise) {
-                        win.MathJax.typesetPromise().then(() => {
+                        (win.MathJax.startup?.promise || Promise.resolve()).then(() => win.MathJax.typesetPromise()).then(() => {
                             if (typeof fixDevanagariInMathJax === 'function') {
                                 fixDevanagariInMathJax(editor.getDoc());
                             }
-                        });
+                        }).catch(() => {});
                     }
+                }
+                editor.on('SetContent', typesetEditorMath);
+                editor.on('change keyup', function () {
+                    editor.save(); // Sync back to textarea
+                    typesetEditorMath();
                 });
 
                 // Double click formula widget to trigger TeX editing modal
@@ -1562,6 +1515,20 @@ function updateImportSubjects(){
  classSubjectsMap.filter(s=>String(s.class_id)===classId).forEach(s=>select.add(new Option(s.name_en,s.subject_id)));
 }
 document.addEventListener('DOMContentLoaded',updateImportSubjects);
+function updateImportContentMode(){
+ const mode=document.querySelector('input[name="import_content_mode"]:checked')?.value||'normal';
+ document.querySelectorAll('[data-import-template]').forEach(link=>{
+  const url=new URL(link.href,window.location.href);url.searchParams.set('content_mode',mode);link.href=url.href;
+ });
+ const help=document.getElementById('importModeHelp');
+ if(help)help.textContent=mode==='html'
+  ?'HTML Source: supported HTML formatting and LaTeX in questions, options and model answers are saved. Scripts and unsafe attributes are removed. Use \\( ... \\), \\[ ... \\], $ ... $ or $$ ... $$ for maths. The templates below contain HTML examples.'
+  :'Normal Text: questions, options and model answers are imported as plain text with line breaks. LaTeX is supported; HTML tags are displayed as text. The templates below contain normal-text examples.';
+}
+document.addEventListener('DOMContentLoaded',()=>{
+ document.querySelectorAll('input[name="import_content_mode"]').forEach(radio=>radio.addEventListener('change',updateImportContentMode));
+ updateImportContentMode();
+});
 function onModalClassChange(selectedSubjectId = '', selectedChapterValue = '', selectedTopicId = '') {
     const classId = document.getElementById('modalClass').value;
     const subjectSelect = document.getElementById('modalSubject');
@@ -1795,8 +1762,8 @@ function editQuestion(q) {
     }
     
     toggleMCQFields();
-    
-    // Scroll to top
+    // Type-change defaults apply to new questions, not an existing saved weight.
+    document.getElementById('modalMarks').value = q.marks;
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -1995,7 +1962,7 @@ function toggleMCQFields() {
     
     if (type === 'MCQ') {
         mcqDiv.style.display = 'block';
-        ansDiv.style.display = 'none';
+        ansDiv.style.display = 'block';
         mcqInputs.forEach(i => i.setAttribute('required', 'required'));
         marksField.value = '1';
     } else {

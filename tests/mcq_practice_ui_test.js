@@ -42,7 +42,8 @@ async function fire(id,event='click',arg={preventDefault(){}}){await el(id).list
  await fire('practiceNext');await el('practiceOptions').children[1].listeners.click();assert(tones.includes(660)&&tones.includes(880),'Correct answer plays rising chime');assert.equal(el('practiceFeedback').children[0].textContent,'✓ Correct!');
  await fire('practiceSound');assert.equal(stores.get('school.practice.sound'),'off');assert.equal(el('practiceSound').attrs['aria-pressed'],'false');
  await fire('practiceAgain');await fire('practiceSetupForm','submit');before=tones.length;await el('practiceOptions').children[1].listeners.click();assert.equal(tones.length,before,'Mute suppresses audio');
+ await fire('practiceReviewBack');assert.equal(requests.at(-1).action,'reset');assert.equal(el('practiceSetup').hidden,false,'Review Back restores class/subject selection');assert.equal(el('practiceSummary').hidden,true);
  await fire('practiceFullscreen');assert.equal(el('practiceFullscreen').textContent,'Exit full screen');await fire('practiceFullscreen');assert.equal(el('practiceFullscreen').textContent,'Full screen');
  assert(gains.every(n=>n<=.09),'Audio levels remain modest');
- console.log('MCQ client checks passed: colours, feedback, boom/chime, mute, full screen, four choices, CSRF and duplicate-click guard.');
+ console.log('MCQ client checks passed: colours, feedback, boom/chime, mute, full screen, review Back, four choices, CSRF and duplicate-click guard.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

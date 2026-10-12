@@ -194,7 +194,7 @@ function fixNepaliInLatex($tex) {
     if (empty($tex) || !is_string($tex)) return $tex;
     if (!preg_match('/[\x{0900}-\x{097F}]/u', $tex)) return $tex;
     
-    return preg_replace_callback(
+    $wrap = static fn(string $math):string => preg_replace_callback(
         '/(\\\\(?:text|mbox|mathrm|mathbf|mathit)\{[^{}]*\})|(\\\\[a-zA-Z]+)|([\x{0900}-\x{097F}]+(?:[ \t\x{00A0}]+[\x{0900}-\x{097F}]+)*)/u',
         function($matches) {
             if (!empty($matches[1])) return $matches[1];
@@ -202,8 +202,11 @@ function fixNepaliInLatex($tex) {
             if (!empty($matches[3])) return '\\text{' . $matches[3] . '}';
             return $matches[0];
         },
-        $tex
+        $math
     );
+    // Only math-delimited text needs TeX wrapping. Ordinary Nepali prose and HTML
+    // must remain readable, and an existing \text{...} must not be wrapped again.
+    return preg_replace_callback('/\\\\\((.*?)\\\\\)|\\\\\[(.*?)\\\\\]|\$\$(.*?)\$\$|(?<!\\\\)\$(?!\$)([^$\r\n]+)(?<!\\\\)\$/su',static fn($m)=>$wrap($m[0]),$tex);
 }
 
 /** Allow formatted lesson content without executing stored scripts or event handlers. */

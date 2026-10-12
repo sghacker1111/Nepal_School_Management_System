@@ -469,9 +469,12 @@ window.fixDevanagariInMathJax = fixDevanagariInMathJax;
  */
 function observeMathJaxDevanagari(targetDoc) {
     targetDoc = targetDoc || document;
-    if (!targetDoc || !targetDoc.body || typeof MutationObserver === 'undefined') return null;
+    const Observer = targetDoc?.defaultView?.MutationObserver || (typeof MutationObserver === 'undefined' ? null : MutationObserver);
+    if (!targetDoc || !targetDoc.body || !Observer) return null;
 
-    const observer = new MutationObserver(mutations => {
+    // TinyMCE documents belong to a different window. Use that window's native
+    // observer so its body is accepted as a Node in the correct realm.
+    const observer = new Observer(mutations => {
         let needsFix = false;
         for (const m of mutations) {
             for (const node of m.addedNodes) {

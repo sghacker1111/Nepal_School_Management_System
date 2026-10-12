@@ -42,7 +42,7 @@ if(isset($_SESSION['mcq_practice'])){
 $pageTitle='Practice MCQs';$activePage='practice_mcqs';ob_start();
 ?>
 <link rel="stylesheet" href="<?= APP_URL ?>/assets/css/mcq-practice.css">
-<script>window.MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script>window.MathJax={tex:{inlineMath:[['\\(','\\)'],['$','$']],displayMath:[['\\[','\\]'],['$$','$$']],processEscapes:true}};</script>
 <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 <section id="practiceApp" class="mcq-practice" aria-label="MCQ practice">
  <header class="practice-heading"><div><span class="practice-eyebrow">LEARNING · ONE QUESTION AT A TIME</span><h1>Practice MCQs</h1><p>Choose your questions and get instant feedback.</p></div><div class="practice-tools"><button type="button" id="practiceSound" class="btn btn-outline-secondary" aria-pressed="true">Sound on</button><button type="button" id="practiceFullscreen" class="btn btn-outline-primary">Full screen</button></div></header>
@@ -68,7 +68,7 @@ $pageTitle='Practice MCQs';$activePage='practice_mcqs';ob_start();
   <div id="practiceFeedback" class="practice-feedback" role="status" aria-live="polite" hidden></div>
   <div class="practice-next"><button id="practiceLeave" class="btn btn-outline-secondary" type="button">End practice</button><button id="practiceNext" class="btn btn-primary" type="button" hidden>Next question →</button></div>
  </div>
- <div id="practiceSummary" class="practice-panel practice-summary" hidden><span class="practice-eyebrow">PRACTICE COMPLETE</span><h2>Keep learning, one question at a time.</h2><div id="practiceScore" class="practice-score"></div><p id="practiceSummaryText"></p><button id="practiceAgain" class="btn btn-primary" type="button">Choose another practice</button><details class="practice-review"><summary>Review your answers</summary><div id="practiceReview"></div></details></div>
+ <div id="practiceSummary" class="practice-panel practice-summary" hidden><span class="practice-eyebrow">PRACTICE COMPLETE</span><h2>Keep learning, one question at a time.</h2><div id="practiceScore" class="practice-score"></div><p id="practiceSummaryText"></p><button id="practiceAgain" class="btn btn-primary" type="button">Back to class &amp; subject selection</button><details class="practice-review"><summary>Review your answers</summary><div id="practiceReview"></div><button id="practiceReviewBack" class="btn btn-outline-primary mt-3" type="button">Back to class &amp; subject selection</button></details></div>
  <noscript><p class="alert alert-info">Enable JavaScript to use interactive MCQ practice.</p></noscript>
 </section>
 <script id="practiceBootstrap" type="application/json"><?= json_encode(['current'=>$current,'limit'=>MCQ_PRACTICE_LIMIT],JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_INVALID_UTF8_SUBSTITUTE) ?></script>
