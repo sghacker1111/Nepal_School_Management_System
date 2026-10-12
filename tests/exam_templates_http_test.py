@@ -34,7 +34,7 @@ with ERPHttpFixture() as app:
     assert app.db.execute('SELECT symbol_no FROM exam_symbols WHERE exam_id=? AND student_id=?',(eid,f['student'])).fetchone()==('7001',)
     app.login('teacher')
     marks_url=f'/modules/results/marks_entry.php?exam={eid}&class={f["class"]}&subject={f["subject"]}'
-    entered={'save_marks':1,'exam_id':eid,'class_id':f['class'],f'marks[{f["student"]}][{f["subject"]}][theory]':60,f'marks[{f["student"]}][{f["subject"]}][participation]':3,f'marks[{f["student"]}][{f["subject"]}][project_work]':12,f'marks[{f["student"]}][{f["subject"]}][previous_exam]':5}
+    entered={'save_marks':1,'marks_complete':'1','exam_id':eid,'class_id':f['class'],f'marks[{f["student"]}][{f["subject"]}][theory]':60,f'marks[{f["student"]}][{f["subject"]}][participation]':3,f'marks[{f["student"]}][{f["subject"]}][project_work]':12,f'marks[{f["student"]}][{f["subject"]}][previous_exam]':5}
     body=app.request(marks_url,entered);assert 'Marks and attendance saved successfully' in body
     assert app.db.execute('SELECT theory_obtained,practical_obtained FROM marks WHERE exam_id=? AND student_id=?',(eid,f['student'])).fetchone()==(60,20)
     app.login('school_admin')

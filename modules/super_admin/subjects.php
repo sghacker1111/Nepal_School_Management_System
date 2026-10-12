@@ -7,6 +7,7 @@ require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/catalog_validation.php';
+require_once __DIR__.'/../../includes/curriculum_catalog.php';
 
 Auth::requireRole('super_admin');
 
@@ -24,7 +25,7 @@ $catalogReturn=APP_URL.'/modules/super_admin/subjects.php?'.http_build_query(['f
 if(isset($_GET['action_get_chapters'])){
     header('Content-Type: application/json');
     try{$c=(int)($_GET['class_id']??0);$s=(int)($_GET['subject_id']??0);schoolRecord($db,'classes',$c,0);schoolRecord($db,'subjects',$s,0);
-        $q=$db->prepare('SELECT id,name FROM chapters WHERE school_id=0 AND class_id=? AND subject_id=? ORDER BY sort_order,id');$q->execute([$c,$s]);echo json_encode($q->fetchAll());
+        echo json_encode(curriculumChapters($db,0,$c,$s));
     }catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),404);}exit;
 }
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_chapter'])) {
@@ -47,10 +48,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_chapter'])) {
         }
         
         try {
-            $stmt = $db->prepare("INSERT INTO chapters (school_id, class_id, subject_id, name, name_np, sort_order) VALUES (0, ?, ?, ?, ?, ?)");
-            $stmt->execute([$c_id, $s_id, $name, $name_np, $sort_order]);
+            curriculumEnsureChapter($db,0,$c_id,$s_id,$name,$name_np,$sort_order);
             echo json_encode(['success' => true]);
-        } catch (PDOException $e) {
+        } catch (PDOException|InvalidArgumentException $e) {
             echo json_encode(['success' => false, 'message' => schoolPublicError($e)]);
         }
         exit;
@@ -59,10 +59,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_chapter'])) {
     if ($action === 'delete') {
         $ch_id = (int)$_POST['chapter_id'];
         try {
-            $stmt = $db->prepare("DELETE FROM chapters WHERE id = ? AND school_id = 0");
-            $stmt->execute([$ch_id]);
+            curriculumDelete($db,0,'chapters',$ch_id);
             echo json_encode(['success' => true]);
-        } catch (PDOException $e) {
+        } catch (PDOException|InvalidArgumentException $e) {
             echo json_encode(['success' => false, 'message' => schoolPublicError($e)]);
         }
         exit;
@@ -73,10 +72,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_chapter'])) {
         $s_id = (int)$_POST['subject_id'];
         $name = trim($_POST['name'] ?? '');
         try {
-            $stmt = $db->prepare("DELETE FROM chapters WHERE school_id = 0 AND class_id = ? AND subject_id = ? AND name = ?");
-            $stmt->execute([$c_id, $s_id, $name]);
+            foreach(curriculumChapters($db,0,$c_id,$s_id) as $chapter)if(curriculumNameKey($chapter['name'])===curriculumNameKey($name))curriculumDelete($db,0,'chapters',(int)$chapter['id']);
             echo json_encode(['success' => true]);
-        } catch (PDOException $e) {
+        } catch (PDOException|InvalidArgumentException $e) {
             echo json_encode(['success' => false, 'message' => schoolPublicError($e)]);
         }
         exit;

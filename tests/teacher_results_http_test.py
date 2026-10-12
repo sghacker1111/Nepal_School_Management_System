@@ -17,7 +17,7 @@ with ERPHttpFixture() as app:
     app.db.execute("INSERT INTO exam_symbols(exam_id,student_id,school_id,symbol_no) VALUES(?,?,1,'RESULT-2001')",(exam,sid));app.db.commit()
     marks_path=f'/modules/results/marks_entry.php?exam={exam}&class={cls}';ledger_path=f'/modules/results/ledger.php?exam={exam}&class={cls}'
     def marks_input(student,subject,th):
-        return {'save_marks':'1','exam_id':exam,'class_id':cls,f'marks[{student}][{subject}][theory]':str(th),f'marks[{student}][{subject}][participation]':'3',f'marks[{student}][{subject}][project_work]':'12',f'marks[{student}][{subject}][previous_exam]':'5'}
+        return {'save_marks':'1','marks_complete':'1','exam_id':exam,'class_id':cls,f'marks[{student}][{subject}][theory]':str(th),f'marks[{student}][{subject}][participation]':'3',f'marks[{student}][{subject}][project_work]':'12',f'marks[{student}][{subject}][previous_exam]':'5'}
     app.login('teacher');body=app.request(marks_path,marks_input(sid,own,55));assert 'Marks and attendance saved successfully' in body
     before=app.snapshot('marks');body=app.request(marks_path,marks_input(sid,other,61));assert 'Subject teachers may enter marks only' in body and app.snapshot('marks')==before
     body=app.request(ledger_path);table=ledger_table(body);assert own_name in table and other_name in table and 'All Subjects (full-class ledger)' in body and 'SecondSection Student' in table

@@ -7,6 +7,7 @@ require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/xlsx_helper.php';
+require_once __DIR__.'/../../includes/curriculum_catalog.php';
 
 Auth::requireRole(['super_admin', 'school_admin', 'principal', 'teacher', 'exam_officer']);
 Auth::requireAccess('questions');
@@ -247,10 +248,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_import_excel']
                         // Resolve Topic
                         $topicVal = $getVal('topic');
                         $resolvedTopicId = null;
+                        $chapterId=curriculumEnsureChapter($db,(int)$school_id,$resolvedClassId,$resolvedSubjectId,$chapterVal);
+                        $chapterVal=curriculumName((string)schoolRecord($db,'chapters',$chapterId,(int)$school_id)['name']);
                         if (!empty($topicVal)) {
-                            $stmtT = $db->prepare("SELECT id FROM topics WHERE school_id=? AND LOWER(name) = LOWER(?) AND class_id = ? AND subject_id = ? LIMIT 1");
-                            $stmtT->execute([$school_id,$topicVal, $resolvedClassId, $resolvedSubjectId]);
-                            $resolvedTopicId = $stmtT->fetchColumn() ?: null;
+                            $resolvedTopicId=curriculumEnsureTopic($db,(int)$school_id,$chapterId,$topicVal);
                         }
 
                         // Resolve Cognitive Level (K, U, A, HA)
@@ -369,31 +370,7 @@ if (isset($_GET['action_get_chapters'])) {
     $c_id = (int)($_GET['class_id'] ?? 0);
     $s_id = (int)($_GET['subject_id'] ?? 0);
     
-    // Fetch class name and subject name for CDC lookup fallback
-    $stmt = $db->prepare("SELECT name FROM classes WHERE id = ?");
-    $stmt->execute([$c_id]);
-    $c_name = $stmt->fetchColumn() ?: '';
-    
-    $stmt = $db->prepare("SELECT name_en FROM subjects WHERE id = ?");
-    $stmt->execute([$s_id]);
-    $s_name = $stmt->fetchColumn() ?: '';
-    
-    // Query DB chapters
-    $stmt = $db->prepare("SELECT id, name FROM chapters WHERE (school_id = ? OR school_id = 0) AND class_id = ? AND subject_id = ? ORDER BY sort_order, id");
-    $stmt->execute([$school_id ?: 0, $c_id, $s_id]);
-    $chapters = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    if (empty($chapters)) {
-        // Fallback to static cdcCurriculum
-        $curriculum = require __DIR__ . '/../../config/cdc_curriculum.php';
-        if (isset($curriculum[$s_name][$c_name])) {
-            $static_chapters = $curriculum[$s_name][$c_name];
-            foreach ($static_chapters as $idx => $name) {
-                // Use negative index for fallbacks
-                $chapters[] = ['id' => -($idx + 1), 'name' => $name];
-            }
-        }
-    }
+    $chapters=curriculumChapters($db,(int)$school_id,$c_id,$s_id);
     
     echo json_encode($chapters);
     exit;
@@ -405,24 +382,11 @@ if (isset($_GET['action_get_topics'])) {
     $chapter_id = (int)($_GET['chapter_id'] ?? 0);
     $chapter_name = sanitize($_GET['chapter_name'] ?? '');
     
-    $topics = [];
-    if ($chapter_id > 0) {
-        $stmt = $db->prepare("SELECT id, name FROM topics WHERE chapter_id = ? AND (school_id = ? OR school_id = 0) ORDER BY sort_order, id");
-        $stmt->execute([$chapter_id, $school_id ?: 0]);
-        $topics = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    } elseif ($chapter_id <= 0 && !empty($chapter_name)) {
-        // Look up by matching name
-        $c_id = (int)($_GET['class_id'] ?? 0);
-        $s_id = (int)($_GET['subject_id'] ?? 0);
-        
-        $stmt = $db->prepare("SELECT id FROM chapters WHERE name = ? AND class_id = ? AND subject_id = ? AND (school_id = ? OR school_id = 0) LIMIT 1");
-        $stmt->execute([$chapter_name, $c_id, $s_id, $school_id ?: 0]);
-        $db_ch_id = $stmt->fetchColumn();
-        if ($db_ch_id) {
-            $stmt_t = $db->prepare("SELECT id, name FROM topics WHERE chapter_id = ? AND (school_id = ? OR school_id = 0) ORDER BY sort_order, id");
-            $stmt_t->execute([$db_ch_id, $school_id ?: 0]);
-            $topics = $stmt_t->fetchAll(PDO::FETCH_ASSOC);
-        }
+    $topics=[];
+    if($chapter_id>0)$topics=curriculumTopics($db,(int)$school_id,$chapter_id);
+    elseif($chapter_name!==''){
+        foreach(curriculumChapters($db,(int)$school_id,(int)($_GET['class_id']??0),(int)($_GET['subject_id']??0)) as $chapter)
+            if(curriculumNameKey($chapter['name'])===curriculumNameKey($chapter_name)){$topics=curriculumTopics($db,(int)$school_id,(int)$chapter['id']);break;}
     }
     
     echo json_encode($topics);
@@ -500,6 +464,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $error = "Unauthorized class or subject selection.";
             } else {
                 $q_school_id = $is_admin ? 0 : $school_id;
+                $chapter=curriculumQuestionChapter($db,(int)$q_school_id,$class_id,$subject_id,$chapter,$topic_id);
                 
                 if ($action === 'add') {
                     $stmt = $db->prepare("
@@ -531,7 +496,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $success = "Question updated successfully.";
                 }
             }
-        } catch (PDOException $e) {
+        } catch (PDOException|InvalidArgumentException $e) {
             $error = schoolPublicError($e);
         }
     }
@@ -1866,7 +1831,7 @@ function updateChaptersDropdown(selectedChapterValue = '', selectedTopicId = '')
     }
     
     $.ajax({
-        url: window.location.pathname + window.location.search,
+        url: window.location.pathname,
         data: {
             action_get_chapters: 1,
             class_id: classId,
@@ -1952,7 +1917,7 @@ function updateTopicsDropdown(chapterId, chapterName, selectedTopicId = '') {
     select.innerHTML = '<option value="">Choose Topic</option>';
     
     $.ajax({
-        url: window.location.pathname + window.location.search,
+        url: window.location.pathname,
         data: {
             action_get_topics: 1,
             chapter_id: chapterId,

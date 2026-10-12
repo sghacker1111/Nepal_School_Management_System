@@ -41,7 +41,7 @@ with ERPHttpFixture() as app:
     app.request(grid_path,{**grid,'action':'edit','grid_id':other_grid},status=422)
     app.request(f'{grid_path}?delete={other_grid}',{},status=422);assert app.snapshot('specification_grids')==before
     marks_path=f'/modules/results/marks_entry.php?exam={f["exam"]}&class={cls}'
-    marks={'save_marks':'1','exam_id':f['exam'],'class_id':cls,f'marks[{f["student"]}][{own}][theory]':'58',f'marks[{f["student"]}][{own}][participation]':'3',f'marks[{f["student"]}][{own}][project_work]':'12',f'marks[{f["student"]}][{own}][previous_exam]':'5'}
+    marks={'save_marks':'1','marks_complete':'1','exam_id':f['exam'],'class_id':cls,f'marks[{f["student"]}][{own}][theory]':'58',f'marks[{f["student"]}][{own}][participation]':'3',f'marks[{f["student"]}][{own}][project_work]':'12',f'marks[{f["student"]}][{own}][previous_exam]':'5'}
     app.request(marks_path,marks)
     app.login('school_admin');app.request(f'/modules/exams/index.php?lock={f["exam"]}',{})
     app.login('teacher');before=app.snapshot('marks');body=app.request(marks_path)

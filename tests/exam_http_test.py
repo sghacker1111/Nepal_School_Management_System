@@ -89,7 +89,7 @@ with tempfile.TemporaryDirectory(prefix='erp-exam-http-') as tmp:
         assert 'value="4.2"' in field,field
         assert db.execute('SELECT COUNT(*) FROM marks WHERE exam_id=?',(target,)).fetchone()[0]==count_before,'Loading is read only'
         body=request(get('/modules/results/marks_entry.php',{**q,'prev_exams[]':[future],'load_previous':1}));assert 'must be earlier exams' in body
-        values={'save_marks':1,'exam_id':target,'class_id':cid}
+        values={'save_marks':1,'marks_complete':'1','exam_id':target,'class_id':cid}
         for k,v in {'theory':60,'participation':3,'project_work':12,'previous_exam':4.2}.items():values[f'marks[{sid}][{sub}][{k}]']=v
         request(get('/modules/results/marks_entry.php',q),values)
         mapping=db.execute('SELECT id FROM exam_subjects WHERE exam_id=? AND class_id=? AND subject_id=?',(target,cid,sub)).fetchone()[0]

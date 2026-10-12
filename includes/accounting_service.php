@@ -24,6 +24,7 @@ function accountingRouteAction(string $file,array $input):?string {
     $action=(string)($input['action']??'');
     return match($file){
         'create_bill.php'=>'invoice','generate.php'=>'invoice','payments.php'=>'payment',
+        'receipt.php'=>$action==='reverse'?'reverse':null,
         'invoice.php'=>['issue'=>'invoice','advance'=>'advance','credit'=>'credit','update'=>'invoice'][$action]??null,
         'fees.php'=>['category'=>'catalog','item'=>'catalog','rule'=>'fees','scholarship'=>'approve','copy_preview'=>'fees','copy'=>'fees','fine_policy'=>'approve'][$action]??null,
         'settings.php'=>['settings'=>'settings','method'=>'settings','period'=>'period','period_state'=>'period','close_preview'=>'period'][$action]??null,
@@ -121,7 +122,7 @@ final class SchoolAccounting {
         if($refs['student_id']&&($refs['student_id']['academic_year_id']!=$year['id']||($refs['class_id']&&$refs['student_id']['class_id']!=$refs['class_id']['id'])))throw new InvalidArgumentException('Student, class and academic year must match for a new fee assignment.');
         $start=$this->date($in['effective_from']??'');$end=!empty($in['effective_to'])?$this->date($in['effective_to']):null;if($end&&$end<$start)throw new InvalidArgumentException('The effective end date precedes the start date.');
         $amount=acDecimalUnits($in['amount']??'0');$discount=acDecimalUnits($in['discount']??'0');$pct=acDecimalUnits($in['discount_percent']??'0');if($discount>$amount||$pct>10000)throw new InvalidArgumentException('Discount cannot exceed the fee.');if(($discount||$pct||!empty($in['is_exempt']))&&!$this->can('approve'))throw new InvalidArgumentException('Scholarships, waivers and fee discounts require administrator approval.');
-        return $this->atomic(function()use($in,$item,$year,$refs,$start,$end,$amount,$discount,$pct){$values=[$this->school,$item['id'],$year['id'],...array_map(fn($r)=>$r['id']??null,$refs),trim($in['stream']??''),$amount,$discount,$pct,empty($in['is_exempt'])?0:1,empty($in['is_optional'])?0:1,$start,$end,$this->user];
+        return $this->atomic(function()use($in,$item,$year,$refs,$start,$end,$amount,$discount,$pct){$values=[$this->school,$item['id'],$year['id'],...array_values(array_map(fn($r)=>$r['id']??null,$refs)),trim($in['stream']??''),$amount,$discount,$pct,empty($in['is_exempt'])?0:1,empty($in['is_optional'])?0:1,$start,$end,$this->user];
             $this->db->prepare('INSERT INTO ac_fee_rules(school_id,item_id,academic_year_id,class_id,section_id,student_id,exam_id,subject_id,stream,amount_minor,discount_minor,discount_basis_points,is_exempt,is_optional,effective_from,effective_to,created_by) VALUES('.implode(',',array_fill(0,17,'?')).')')->execute($values);$id=(int)$this->db->lastInsertId();$this->audit('Assign historical fee rate','ac_fee_rules',$id,[],$in);return $id;
         });
     }
@@ -228,6 +229,15 @@ final class SchoolAccounting {
     public function invoiceStatus(array $i):string {if(in_array($i['status'],['draft','void'],true))return $i['status'];$balance=$this->invoiceBalance((int)$i['id']);if($balance===0)return 'paid';if($i['due_date']<date('Y-m-d'))return 'overdue';return $balance<(int)$i['total_minor']?'partially_paid':'unpaid';}
     public function outstanding(?int $student=null):int{$ids=$this->rows("SELECT id FROM ac_invoices WHERE school_id=? AND status='issued'".($student!==null?' AND student_id=?':''),$student!==null?[$this->school,$student]:[$this->school]);$sum=0;foreach($ids as $r)$sum=acCheckedAdd($sum,$this->invoiceBalance((int)$r['id']));return $sum;}
     public function advanceBalance(int $student):int {schoolRecord($this->db,'students',$student,$this->school);return $this->scalar('SELECT COALESCE(SUM(amount_minor),0) FROM ac_advance_entries WHERE school_id=? AND student_id=?',[$this->school,$student]);}
+    /** Called under the school posting lock: a backdated debit must not overdraw any later day. */
+    private function requireDatedAdvance(int $student,int $amount,string $date):void {
+        $balance=$this->scalar('SELECT COALESCE(SUM(amount_minor),0) FROM ac_advance_entries WHERE school_id=? AND student_id=? AND entry_date<=?',[$this->school,$student,$date]);
+        $minimum=$balance;
+        foreach($this->rows('SELECT entry_date,SUM(amount_minor) movement FROM ac_advance_entries WHERE school_id=? AND student_id=? AND entry_date>? GROUP BY entry_date ORDER BY entry_date',[$this->school,$student,$date]) as $day){
+            $balance=acCheckedAdd($balance,(int)$day['movement']);$minimum=min($minimum,$balance);
+        }
+        if($amount>$minimum)throw new InvalidArgumentException('Advance is insufficient on this date or is already committed to a later transaction. Choose a funded date or correct the later transaction first.');
+    }
     public function recordPayment(array $in):int {
         $this->authorize('payment');$key=$this->key($in);$amount=acDecimalUnits($in['amount']??'0');
         if(!$amount)throw new InvalidArgumentException('Payment amount must be positive.');
@@ -275,7 +285,9 @@ final class SchoolAccounting {
     public function applyAdvance(array $in):int {
         $this->authorize('advance');$key=$this->key($in);$amount=acDecimalUnits($in['amount']??'0');$date=$this->date($in['date']??'');if(!$amount)throw new InvalidArgumentException('Enter a positive advance allocation.');
         return $this->atomic(function()use($in,$key,$amount,$date){$r=$this->one('SELECT * FROM ac_advance_entries WHERE school_id=? AND reference_key=?',[$this->school,'apply:'.$key]);if($r){if((int)$r['invoice_id']!==(int)$in['invoice_id']||-(int)$r['amount_minor']!==$amount||$r['entry_date']!==$date)throw new InvalidArgumentException('This key was already used for different advance data.');return (int)$r['id'];}
-            $i=$this->record('ac_invoices',(int)$in['invoice_id'],true);if(!$i['student_id']||$i['status']!=='issued'||$amount>$this->invoiceBalance((int)$i['id'])||$amount>$this->advanceBalance((int)$i['student_id']))throw new InvalidArgumentException('Advance or invoice balance is insufficient.');
+            $i=$this->record('ac_invoices',(int)$in['invoice_id'],true);if(!$i['student_id']||$i['status']!=='issued'||$amount>$this->invoiceBalance((int)$i['id']))throw new InvalidArgumentException('Advance or invoice balance is insufficient.');
+            if($date<$i['bill_date'])throw new InvalidArgumentException('Advance application cannot precede the invoice date.');
+            $this->requireDatedAdvance((int)$i['student_id'],$amount,$date);
             $this->db->prepare("INSERT INTO ac_advance_entries(school_id,student_id,invoice_id,amount_minor,entry_date,kind,reference_key,created_by) VALUES(?,?,?,?,?,'apply',?,?)")->execute([$this->school,$i['student_id'],$i['id'],-$amount,$date,'apply:'.$key,$this->user]);$id=(int)$this->db->lastInsertId();$this->journal('advance_apply',$id,$date,'Apply student advance',[[$this->control('advance'),$amount,0,$i['student_id']],[$this->control('receivable'),0,$amount,$i['student_id']]]);$this->audit('Apply advance','ac_advance_entries',$id,[],['invoice'=>$i['id'],'amount_minor'=>$amount]);return $id;
         });
     }
@@ -351,7 +363,7 @@ final class SchoolAccounting {
         $this->authorize('reverse');$date=$this->date($date);if(!$confirmed||trim($reason)==='')throw new InvalidArgumentException('Confirm reversal and provide a reason.');
         $this->atomic(function()use($id,$date,$reason){$p=$this->record('ac_payments',$id,true);if($p['status']==='reversed')return;
             if($this->scalar('SELECT COUNT(*) FROM ac_allocations a JOIN ac_credits c ON c.invoice_id=a.invoice_id WHERE a.payment_id=? AND c.school_id=? AND c.refund_minor>0',[$id,$this->school]))throw new InvalidArgumentException('This payment is linked to an approved credit refund; it cannot also be reversed.');
-            $advance=$this->scalar("SELECT COALESCE(SUM(amount_minor),0) FROM ac_advance_entries WHERE school_id=? AND payment_id=? AND kind='receive'",[$this->school,$id]);if($advance&&$advance>$this->advanceBalance((int)$p['student_id']))throw new InvalidArgumentException('This payment advance has been used or refunded. Restore it before reversal.');
+            $advance=$this->scalar("SELECT COALESCE(SUM(amount_minor),0) FROM ac_advance_entries WHERE school_id=? AND payment_id=? AND kind='receive'",[$this->school,$id]);if($advance)$this->requireDatedAdvance((int)$p['student_id'],$advance,$date);
             $j=$this->one("SELECT * FROM ac_journals WHERE school_id=? AND reference_type='payment' AND reference_id=?",[$this->school,$id]);if(!$j)throw new InvalidArgumentException('The original payment journal is missing.');$lines=[];foreach($this->rows('SELECT * FROM ac_journal_lines WHERE journal_id=?',[$j['id']]) as $l)$lines[]=[(int)$l['account_id'],(int)$l['credit_minor'],(int)$l['debit_minor'],$l['student_id']];$this->journal('payment_reverse',$id,$date,$reason,$lines,(int)$j['id']);
             if($advance)$this->db->prepare("INSERT INTO ac_advance_entries(school_id,student_id,payment_id,amount_minor,entry_date,kind,reference_key,created_by) VALUES(?,?,?,?,?,'reverse',?,?)")->execute([$this->school,$p['student_id'],$id,-$advance,$date,'reverse:'.$id,$this->user]);$this->db->prepare("UPDATE ac_payments SET status='reversed' WHERE id=? AND school_id=?")->execute([$id,$this->school]);$this->audit('Reverse payment','ac_payments',$id,$p,['status'=>'reversed'],$reason);
         });
@@ -360,7 +372,7 @@ final class SchoolAccounting {
     public function refundAdvance(array $in):int {
         $this->authorize('refund');if(empty($in['confirm']))throw new InvalidArgumentException('Confirm the refund warning.');$key=$this->key($in);$amount=acDecimalUnits($in['amount']??'0');$date=$this->date($in['date']??'');$reason=trim($in['reason']??'');if(!$amount||!$reason)throw new InvalidArgumentException('A positive refund and reason are required.');
         return $this->atomic(function()use($in,$key,$amount,$date,$reason){$old=$this->one('SELECT * FROM ac_refunds WHERE school_id=? AND idempotency_key=?',[$this->school,$key]);if($old){if((int)$old['student_id']!==(int)$in['student_id']||(int)$old['amount_minor']!==$amount||$old['refund_date']!==$date||$old['reason']!==$reason||(int)$old['account_id']!==(int)$in['account_id'])throw new InvalidArgumentException('This refund key already has different data.');return (int)$old['id'];}
-            $student=schoolRecord($this->db,'students',(int)$in['student_id'],$this->school);$account=$this->cashBankAccount((int)$in['account_id']);if($amount>$this->advanceBalance((int)$student['id']))throw new InvalidArgumentException('Refund amount exceeds available advance.');
+            $student=schoolRecord($this->db,'students',(int)$in['student_id'],$this->school);$account=$this->cashBankAccount((int)$in['account_id']);$this->requireDatedAdvance((int)$student['id'],$amount,$date);
             $this->db->prepare('INSERT INTO ac_refunds(school_id,student_id,amount_minor,refund_date,account_id,reason,approved_by,idempotency_key) VALUES(?,?,?,?,?,?,?,?)')->execute([$this->school,$student['id'],$amount,$date,$account['id'],$reason,$this->user,$key]);$id=(int)$this->db->lastInsertId();$this->db->prepare("INSERT INTO ac_advance_entries(school_id,student_id,amount_minor,entry_date,kind,reference_key,created_by) VALUES(?,?,?,?,'refund',?,?)")->execute([$this->school,$student['id'],-$amount,$date,'refund:'.$id,$this->user]);$this->journal('refund',$id,$date,$reason,[[$this->control('advance'),$amount,0,$student['id']],[(int)$account['id'],0,$amount,$student['id']]]);$this->audit('Approve advance refund','ac_refunds',$id,[],['amount_minor'=>$amount],$reason);return $id;
         });
     }
@@ -420,55 +432,120 @@ final class SchoolAccounting {
         if(!preg_match('/^\d{4}-\d{2}$/',$period)||!in_array($calendar,['BS','AD'],true))throw new InvalidArgumentException('Choose a billing month as YYYY-MM in AD or BS.');
         $start=$this->date(schoolDateToAd($period.'-01',$calendar));if($calendar==='BS'){[$year,$month]=array_map('intval',explode('-',$period));$day=schoolCalendar()['years'][$year][$month-1];$end=$this->date(schoolDateToAd($period.'-'.sprintf('%02d',$day),'BS'));}else $end=(new DateTimeImmutable($start))->format('Y-m-t');return [$start,$end];
     }
-    /** Rate precedence: student exception, then section, then class; latest effective revision wins. */
+    /** Resolve each effective-date segment; never replace an earlier rate with a later one for the whole month. */
     public function studentFeeItems(array $s,int $year,string $start,string $end,?int $exam=null,string $frequency='monthly'):array {
-        $rules=$this->rows('SELECT r.*,i.frequency,i.name,i.fine_eligible FROM ac_fee_rules r JOIN ac_items i ON i.id=r.item_id AND i.school_id=r.school_id WHERE r.school_id=? AND r.academic_year_id=? AND i.is_active=1 AND r.effective_from<=? AND (r.effective_to IS NULL OR r.effective_to>=?) AND (r.student_id=? OR (r.student_id IS NULL AND r.class_id=?)) AND (r.section_id IS NULL OR r.section_id=?) ORDER BY r.effective_from DESC,r.id DESC',[$this->school,$year,$end,$start,$s['id'],$s['class_id'],$s['section_id']]);
-        usort($rules,fn($a,$b)=>[(int)!empty($b['student_id']),(int)!empty($b['section_id']),$b['effective_from'],(int)$b['id']]<=>[(int)!empty($a['student_id']),(int)!empty($a['section_id']),$a['effective_from'],(int)$a['id']]);$chosen=[];$items=[];
-        foreach($rules as $r){if(isset($chosen[$r['item_id']]))continue;if($r['frequency']!==$frequency||($r['exam_id']&&$r['exam_id']!==$exam))continue;
-            if($r['stream']){ $c=schoolRecord($this->db,'classes',(int)$s['class_id'],$this->school);if(strcasecmp(trim((string)($c['stream']??$c['faculty']??'')),trim($r['stream']))!==0)continue;}
+        $admission=$s['admission_date']?:substr($s['created_at']??$start,0,10);
+        $first=max($start,$admission);$last=min($end,$s['withdrawal_date']?:$end);if($last<$first)return [];
+        $rules=$this->rows('SELECT r.*,i.frequency,i.name FROM ac_fee_rules r JOIN ac_items i ON i.id=r.item_id AND i.school_id=r.school_id WHERE r.school_id=? AND r.academic_year_id=? AND i.is_active=1 AND r.effective_from<=? AND (r.effective_to IS NULL OR r.effective_to>=?) AND (r.student_id=? OR (r.student_id IS NULL AND r.class_id=?)) AND (r.section_id IS NULL OR r.section_id=?) ORDER BY r.effective_from DESC,r.id DESC',[$this->school,$year,$last,$first,$s['id'],$s['class_id'],$s['section_id']]);
+        usort($rules,fn($a,$b)=>[(int)!empty($b['student_id']),(int)!empty($b['section_id']),$b['effective_from'],(int)$b['id']]<=>[(int)!empty($a['student_id']),(int)!empty($a['section_id']),$a['effective_from'],(int)$a['id']]);
+        $class=schoolRecord($this->db,'classes',(int)$s['class_id'],$this->school);$byItem=[];
+        foreach($rules as $r){
+            if($r['frequency']!==$frequency||($r['exam_id']&&(int)$r['exam_id']!==$exam))continue;
+            if($r['stream']&&strcasecmp(trim((string)($s['academic_stream']?:($class['stream']??$class['faculty']??''))),trim($r['stream']))!==0)continue;
             if($r['subject_id']&&!in_array((int)$r['subject_id'],array_map('intval',[$s['optional_subject_i'],$s['optional_subject_ii'],$s['optional_subject_iii']??0]),true)&&!$this->scalar('SELECT COUNT(*) FROM class_subjects WHERE school_id=? AND class_id=? AND subject_id=? AND is_optional=0',[$this->school,$s['class_id'],$r['subject_id']]))continue;
-            if($r['is_optional']&&!$r['student_id'])continue;$chosen[$r['item_id']]=true;if($r['is_exempt'])continue;
-            $amount=(int)$r['amount_minor'];$effectiveStart=max($start,$r['effective_from']);$effectiveEnd=min($end,$r['effective_to']?:$end);
-            // Student creation is the existing admission timestamp; effective fee dates can restrict it further.
-            $admission=substr($s['created_at']??$start,0,10);if($admission>$end)continue;$effectiveStart=max($effectiveStart,$admission);
-            if($this->settings['prorate']&&$frequency==='monthly'){$all=(int)(new DateTimeImmutable($start))->diff(new DateTimeImmutable($end))->days+1;$days=(int)(new DateTimeImmutable($effectiveStart))->diff(new DateTimeImmutable($effectiveEnd))->days+1;$amount=acMulDiv($amount,$days,$all);}
-            $discount=min($amount,acCheckedAdd((int)$r['discount_minor'],acMulDiv($amount,(int)$r['discount_basis_points'],10000)));
-            foreach($this->rows('SELECT * FROM ac_scholarships WHERE school_id=? AND student_id=? AND academic_year_id=? AND (item_id IS NULL OR item_id=?) AND effective_from<=? AND (effective_to IS NULL OR effective_to>=?)',[$this->school,$s['id'],$year,$r['item_id'],$effectiveEnd,$effectiveStart]) as $sch)$discount=min($amount,acCheckedAdd(acCheckedAdd($discount,(int)$sch['amount_minor']),acMulDiv($amount,(int)$sch['basis_points'],10000)));
-            $items[]=['item_id'=>(int)$r['item_id'],'particular'=>$r['name'],'quantity'=>'1','rate'=>acAmount($amount),'discount'=>acAmount($discount)];
-        }return $items;
+            if($r['is_optional']&&!$r['student_id'])continue;
+            $byItem[(int)$r['item_id']][]=$r;
+        }
+        $scholarships=$this->rows('SELECT * FROM ac_scholarships WHERE school_id=? AND student_id=? AND academic_year_id=? AND effective_from<=? AND (effective_to IS NULL OR effective_to>=?) ORDER BY id',[$this->school,$s['id'],$year,$last,$first]);
+        $monthDays=(int)(new DateTimeImmutable($start))->diff(new DateTimeImmutable($end))->days+1;$items=[];
+        foreach($byItem as $itemId=>$candidates){
+            $segments=[];$covered=0;
+            for($day=$first;$day<=$last;$day=(new DateTimeImmutable($day))->modify('+1 day')->format('Y-m-d')){
+                $rule=null;foreach($candidates as $r)if($r['effective_from']<=$day&&(!$r['effective_to']||$r['effective_to']>=$day)){$rule=$r;break;}
+                if(!$rule)continue;$covered++;$amount=$rule['is_exempt']?0:(int)$rule['amount_minor'];
+                $discount=min($amount,acCheckedAdd((int)$rule['discount_minor'],acMulDiv($amount,(int)$rule['discount_basis_points'],10000)));
+                foreach($scholarships as $sch)if((!$sch['item_id']||(int)$sch['item_id']===$itemId)&&$sch['effective_from']<=$day&&(!$sch['effective_to']||$sch['effective_to']>=$day))$discount=min($amount,acCheckedAdd(acCheckedAdd($discount,(int)$sch['amount_minor']),acMulDiv($amount,(int)$sch['basis_points'],10000)));
+                $key=$rule['id'].':'.$amount.':'.$discount;
+                if(!isset($segments[$key]))$segments[$key]=['amount'=>$amount,'discount'=>$discount,'days'=>0];
+                $segments[$key]['days']++;$latest=['amount'=>$amount,'discount'=>$discount];
+            }
+            if(!$covered)continue;
+            if($frequency!=='monthly'){$amount=$latest['amount'];$discount=$latest['discount'];}
+            else{$denominator=$this->settings['prorate']?$monthDays:$covered;$amount=0;$discount=0;
+                foreach($segments as $segment){$amount=acCheckedAdd($amount,acMulDiv($segment['amount'],$segment['days'],$denominator));$discount=acCheckedAdd($discount,acMulDiv($segment['discount'],$segment['days'],$denominator));}
+            }
+            if(!$amount)continue;
+            $items[]=['item_id'=>$itemId,'particular'=>$candidates[0]['name'],'quantity'=>'1','rate'=>acAmount($amount),'discount'=>acAmount(min($amount,$discount))];
+        }
+        return $items;
+    }
+    private function recurringInput(array $in):array {
+        $out=[];foreach(['academic_year_id','class_id','section_id','student_id','exam_id'] as $field)$out[$field]=(int)($in[$field]??0);
+        $out['billing_calendar']=(string)($in['billing_calendar']??'BS');$out['billing_period']=(string)($in['billing_period']??'');$out['frequency']=(string)($in['frequency']??'monthly');return $out;
     }
     public function recurringPreview(array $in):array {
-        $year=schoolRecord($this->db,'academic_years',(int)($in['academic_year_id']??0),$this->school);[$start,$end]=$this->billingWindow($in['billing_period']??'',$in['billing_calendar']??'BS');$params=[$this->school,$year['id']];$sql="SELECT * FROM students WHERE school_id=? AND academic_year_id=? AND status='active'";
-        foreach(['class_id','section_id','student_id'] as $field)if(!empty($in[$field])){schoolRecord($this->db,$field==='class_id'?'classes':($field==='section_id'?'sections':'students'),(int)$in[$field],$this->school);$sql.=' AND '.($field==='student_id'?'id':$field).'=?';$params[]=(int)$in[$field];}
-        $frequency=$in['frequency']??'monthly';if(!in_array($frequency,['monthly','annual','one_time','exam'],true))throw new InvalidArgumentException('Choose a supported billing frequency.');$exam=!empty($in['exam_id'])?(int)$in['exam_id']:null;if($exam)schoolRecord($this->db,'exams',$exam,$this->school);if($frequency==='exam'&&!$exam)throw new InvalidArgumentException('Select the examination to bill.');
-        $result=[];foreach($this->rows($sql.' ORDER BY first_name_en,last_name_en,id',$params) as $s){$items=$this->studentFeeItems($s,(int)$year['id'],$start,$end,$exam,$frequency);if(!$items)continue;$key='fees:'.$frequency.':'.$year['id'].':'.$s['id'].':'.($frequency==='exam'?$exam:($frequency==='monthly'?($in['billing_calendar']??'BS').':'.$in['billing_period']:$year['id']));$draft=['student_id'=>$s['id'],'academic_year_id'=>$year['id'],'bill_date'=>$start,'due_date'=>(new DateTimeImmutable($start))->modify('+'.(int)$this->settings['due_days'].' days')->format('Y-m-d'),'billing_period'=>($in['billing_calendar']??'BS').' '.$in['billing_period'],'items'=>$items,'idempotency_key'=>$key];
-            $this->approvedGeneration=true;try{$preview=$this->previewInvoice($draft);}finally{$this->approvedGeneration=false;}$existing=$this->one('SELECT id,status FROM ac_invoices WHERE school_id=? AND idempotency_key=?',[$this->school,$key]);$result[]=['student'=>$s,'input'=>$draft,'total_minor'=>$preview['total_minor'],'existing'=>$existing];
-        }return $result;
+        $in=$this->recurringInput($in);$year=schoolRecord($this->db,'academic_years',$in['academic_year_id'],$this->school);[$start,$end]=$this->billingWindow($in['billing_period'],$in['billing_calendar']);$params=[$this->school,$year['id']];$sql="SELECT * FROM students WHERE school_id=? AND academic_year_id=? AND status='active'";
+        foreach(['class_id','section_id','student_id'] as $field)if($in[$field]){schoolRecord($this->db,$field==='class_id'?'classes':($field==='section_id'?'sections':'students'),$in[$field],$this->school);$sql.=' AND '.($field==='student_id'?'id':$field).'=?';$params[]=$in[$field];}
+        $frequency=$in['frequency'];if(!in_array($frequency,['monthly','annual','one_time','exam'],true))throw new InvalidArgumentException('Choose a supported billing frequency.');$exam=$in['exam_id']?:null;if($exam)schoolRecord($this->db,'exams',$exam,$this->school);if($frequency==='exam'&&!$exam)throw new InvalidArgumentException('Select the examination to bill.');
+        $result=[];foreach($this->rows($sql.' ORDER BY first_name_en,last_name_en,id',$params) as $s){
+            $items=$this->studentFeeItems($s,(int)$year['id'],$start,$end,$exam,$frequency);if(!$items)continue;
+            $cycle='fees:'.$frequency.':'.$year['id'].':'.$s['id'].':'.($frequency==='exam'?$exam:($frequency==='monthly'?$in['billing_calendar'].':'.$in['billing_period']:$year['id']));
+            $legacy=$this->one('SELECT id,status FROM ac_invoices WHERE school_id=? AND idempotency_key=?',[$this->school,$cycle]);
+            $charged=$this->rows('SELECT item_id,invoice_id FROM ac_charge_posts WHERE school_id=? AND student_id=? AND cycle_key=? ORDER BY item_id',[$this->school,$s['id'],$cycle]);
+            if($legacy)foreach($this->rows('SELECT item_id FROM ac_invoice_items WHERE invoice_id=?',[$legacy['id']]) as $line)$charged[]=['item_id'=>$line['item_id'],'invoice_id'=>$legacy['id']];
+            $billed=array_map('intval',array_column($charged,'item_id'));
+            $pending=array_values(array_filter($items,fn($item)=>!in_array($item['item_id'],$billed,true)));
+            if($legacy&&$legacy['status']==='draft')$pending=[]; // Review the existing legacy draft; never bill around it.
+            $existing=$pending?[]:($legacy?:['id'=>$charged[0]['invoice_id']??0,'status'=>'issued']);
+            $draft=['student_id'=>$s['id'],'academic_year_id'=>$year['id'],'bill_date'=>$start,'due_date'=>(new DateTimeImmutable($start))->modify('+'.(int)$this->settings['due_days'].' days')->format('Y-m-d'),'billing_period'=>$in['billing_calendar'].' '.$in['billing_period'],'items'=>$pending,'idempotency_key'=>'fees-run:'.hash('sha256',$cycle.':'.implode(',',array_column($pending,'item_id')))];
+            $calculation=[];if($pending){$this->approvedGeneration=true;try{$calculation=$this->previewInvoice($draft);}finally{$this->approvedGeneration=false;}}
+            $result[]=['student'=>$s,'input'=>$draft,'cycle_key'=>$cycle,'total_minor'=>$calculation['total_minor']??0,'existing'=>$existing,'calculation'=>$calculation];
+        }
+        return $result;
+    }
+    public function reviewRecurring(array $in):array {
+        $this->authorize('invoice');return $this->atomic(function()use($in){
+            $input=$this->recurringInput($in);$rows=$this->recurringPreview($input);$payload=json_encode($rows,JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR);$token=bin2hex(random_bytes(32));
+            $this->db->prepare("INSERT INTO ac_generation_previews(school_id,kind,token,actor_id,input_json,payload_json,fingerprint,expires_at) VALUES(?,'fees',?,?,?,?,?,?)")->execute([$this->school,$token,$this->user,json_encode($input,JSON_THROW_ON_ERROR),$payload,hash('sha256',$payload),date('Y-m-d H:i:s',time()+1800)]);
+            return ['rows'=>$rows,'token'=>$token];
+        });
     }
     public function generateRecurring(array $in):array {
-        $this->authorize('invoice');if(empty($in['confirm']))throw new InvalidArgumentException('Preview and confirm the affected students before generating bills.');$preview=$this->recurringPreview($in);$result=['issued'=>[],'skipped'=>[],'errors'=>[]];
-        foreach($preview as $p){try{if($p['existing']){$result['skipped'][]=$p['existing']['id'];continue;}$this->approvedGeneration=true;$result['issued'][]=$this->createInvoice($p['input'],true);}catch(Throwable $e){$result['errors'][]=['student_id'=>$p['student']['id'],'error'=>$e instanceof InvalidArgumentException?$e->getMessage():'Transaction failed; retry this student.'];error_log($e->getMessage());}finally{$this->approvedGeneration=false;}}
-        $this->atomic(function()use($in,$result){$this->db->prepare("INSERT INTO ac_runs(school_id,kind,period_key,details,created_by) VALUES(?,'fees',?,?,?)")->execute([$this->school,$in['billing_period'],json_encode($result),$this->user]);});return $result;
+        $this->authorize('invoice');if(empty($in['confirm']))throw new InvalidArgumentException('Preview and confirm the affected students before generating bills.');
+        return $this->atomic(function()use($in){
+            $token=(string)($in['preview_token']??'');$review=$this->one('SELECT * FROM ac_generation_previews WHERE school_id=? AND actor_id=? AND token=?',[$this->school,$this->user,$token]);
+            if(!$review||!in_array($review['kind'],['fees','fees_done'],true)||$review['expires_at']<date('Y-m-d H:i:s')||json_decode($review['input_json'],true)!==$this->recurringInput($in))throw new InvalidArgumentException('Preview these billing filters again before issuing bills; the review is missing, changed or expired.');
+            if($review['kind']==='fees_done')return json_decode($review['payload_json'],true,512,JSON_THROW_ON_ERROR);
+            $preview=$this->recurringPreview($in);$payload=json_encode($preview,JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR);
+            if(!hash_equals($review['fingerprint'],hash('sha256',$payload)))throw new InvalidArgumentException('Fees or students changed after preview. Nothing was issued. Preview and review the updated amounts again.');
+            $result=['issued'=>[],'skipped'=>[],'errors'=>[]];
+            foreach($preview as $p){
+                if($p['existing']){$result['skipped'][]=$p['existing']['id'];continue;}
+                $this->approvedGeneration=true;try{$id=$this->createInvoiceInside($p['input'],true);}finally{$this->approvedGeneration=false;}
+                foreach($p['input']['items'] as $item)$this->db->prepare('INSERT INTO ac_charge_posts(school_id,student_id,item_id,cycle_key,business_key,invoice_id) VALUES(?,?,?,?,?,?)')->execute([$this->school,$p['student']['id'],$item['item_id'],$p['cycle_key'],'feeitem:'.hash('sha256',$p['cycle_key'].':'.$item['item_id']),$id]);
+                $result['issued'][]=$id;
+            }
+            $json=json_encode($result,JSON_THROW_ON_ERROR);$this->db->prepare("INSERT INTO ac_runs(school_id,kind,period_key,details,created_by) VALUES(?,'fees',?,?,?)")->execute([$this->school,$in['billing_period'],$json,$this->user]);
+            $this->db->prepare("UPDATE ac_generation_previews SET kind='fees_done',payload_json=? WHERE id=? AND school_id=?")->execute([$json,$review['id'],$this->school]);return $result;
+        });
     }
     public function saveSubscription(array $in):int {
         $this->authorize('invoice');$item=$this->record('ac_items',(int)($in['item_id']??0));$student=!empty($in['student_id'])?schoolRecord($this->db,'students',(int)$in['student_id'],$this->school):null;$name=$student?trim($student['first_name_en'].' '.$student['last_name_en']):trim($in['customer_name']??'');$frequency=$in['frequency']??'';$amount=acDecimalUnits($in['amount']??'0');$start=$this->date($in['start_date']??'');$end=!empty($in['end_date'])?$this->date($in['end_date']):null;
         if(!$name||!$amount||!in_array($frequency,['monthly','quarterly','annual','one_time'],true)||($end&&$end<$start))throw new InvalidArgumentException('Enter valid subscription details, amount and dates.');
-        return $this->atomic(function()use($in,$item,$student,$name,$frequency,$amount,$start,$end){$this->db->prepare('INSERT INTO ac_subscriptions(school_id,item_id,student_id,customer_name,frequency,amount_minor,start_date,end_date,next_date,renewal,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?)')->execute([$this->school,$item['id'],$student['id']??null,$name,$frequency,$amount,$start,$end,$start,empty($in['renewal'])?0:1,$this->user]);$id=(int)$this->db->lastInsertId();$this->audit('Create subscription','ac_subscriptions',$id,[],$in);return $id;});
+        return $this->atomic(function()use($in,$item,$student,$name,$frequency,$amount,$start,$end){$this->db->prepare('INSERT INTO ac_subscriptions(school_id,item_id,student_id,customer_name,frequency,amount_minor,start_date,end_date,next_date,renewal,created_by,anchor_day) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)')->execute([$this->school,$item['id'],$student['id']??null,$name,$frequency,$amount,$start,$end,$start,empty($in['renewal'])?0:1,$this->user,(int)substr($start,8,2)]);$id=(int)$this->db->lastInsertId();$this->audit('Create subscription','ac_subscriptions',$id,[],$in);return $id;});
     }
     public function changeSubscription(int $id,string $status,string $date):void {
         $this->authorize('invoice');if(!in_array($status,['active','paused','cancelled'],true))throw new InvalidArgumentException('Choose an active, paused or cancelled state.');$date=$this->date($date);$this->atomic(function()use($id,$status,$date){$s=$this->record('ac_subscriptions',$id,true);if(in_array($s['status'],['cancelled','expired'],true))throw new InvalidArgumentException('Cancelled/expired subscriptions cannot be resumed. Create a reviewed renewal instead.');if($status==='active'&&$s['end_date']&&$s['end_date']<$date)throw new InvalidArgumentException('Subscription end date has passed.');$next=$status==='active'?max($s['next_date'],$date):$s['next_date'];$this->db->prepare('UPDATE ac_subscriptions SET status=?,next_date=? WHERE id=? AND school_id=?')->execute([$status,$next,$id,$this->school]);$this->audit('Change subscription state','ac_subscriptions',$id,$s,['status'=>$status,'next_date'=>$next]);});
     }
-    private function subscriptionNext(string $date,string $frequency):?string {
-        if($frequency==='one_time')return null;$months=['monthly'=>1,'quarterly'=>3,'annual'=>12][$frequency];$d=new DateTimeImmutable($date);$first=$d->modify('first day of this month')->modify('+'.$months.' months');$day=min((int)$d->format('d'),(int)$first->format('t'));return $first->format('Y-m-').sprintf('%02d',$day);
+    private function subscriptionNext(string $date,string $frequency,int $anchor):?string {
+        if($frequency==='one_time')return null;$months=['monthly'=>1,'quarterly'=>3,'annual'=>12][$frequency];$d=new DateTimeImmutable($date);$first=$d->modify('first day of this month')->modify('+'.$months.' months');$day=min(max(1,min(31,$anchor)),(int)$first->format('t'));return $first->format('Y-m-').sprintf('%02d',$day);
     }
     public function generateSubscriptions(string $through):array {
         $this->authorize('invoice');$through=$this->date($through);$out=['issued'=>[],'errors'=>[]];
         foreach($this->rows("SELECT id FROM ac_subscriptions WHERE school_id=? AND status='active' AND next_date<=?",[$this->school,$through]) as $record){
-            for($limit=0;$limit<120;$limit++){ $s=$this->record('ac_subscriptions',(int)$record['id']);if($s['status']!=='active'||$s['next_date']>$through)break;if($s['end_date']&&$s['next_date']>$s['end_date']){$this->atomic(fn()=>$this->db->prepare("UPDATE ac_subscriptions SET status='expired' WHERE id=? AND school_id=?")->execute([$s['id'],$this->school]));break;}
-                if($s['student_id']&&schoolRecord($this->db,'students',(int)$s['student_id'],$this->school)['status']!=='active')break;
-                $item=$this->record('ac_items',(int)$s['item_id']);$due=(new DateTimeImmutable($s['next_date']))->modify('+'.(int)$this->settings['due_days'].' days')->format('Y-m-d');$key='subscription:'.$s['id'].':'.$s['next_date'];$draft=['student_id'=>$s['student_id'],'customer_name'=>$s['customer_name'],'customer_type'=>'external','bill_date'=>$s['next_date'],'due_date'=>$due,'billing_period'=>$s['next_date'],'description'=>'Subscription '.$s['id'],'items'=>[['item_id'=>$item['id'],'particular'=>$item['name'],'quantity'=>'1','rate'=>acAmount((int)$s['amount_minor'])]],'idempotency_key'=>$key];
-                try{$out['issued'][]=$this->createInvoice($draft,true);$this->atomic(function()use($s){$current=$this->record('ac_subscriptions',(int)$s['id'],true);if($current['next_date']!==$s['next_date'])return;$next=$this->subscriptionNext($s['next_date'],$s['frequency']);$status=$next&&(!$s['end_date']||$next<=$s['end_date'])?'active':'expired';$this->db->prepare('UPDATE ac_subscriptions SET next_date=?,status=? WHERE id=? AND school_id=?')->execute([$next??$s['next_date'],$status,$s['id'],$this->school]);$this->audit('Subscription billing cycle','ac_subscriptions',(int)$s['id'],$s,['next_date'=>$next,'status'=>$status]);});}
-                catch(Throwable $e){$out['errors'][]=['subscription'=>$s['id'],'error'=>$e instanceof InvalidArgumentException?$e->getMessage():'Posting failed; retry.'];break;}
+            for($limit=0;$limit<120;$limit++){
+                try{$invoice=$this->atomic(function()use($record,$through){
+                    // Eligibility, invoice and cycle advancement share the same school lock and commit.
+                    $s=$this->record('ac_subscriptions',(int)$record['id'],true);
+                    if($s['status']!=='active'||$s['next_date']>$through)return null;
+                    if($s['end_date']&&$s['next_date']>$s['end_date']){$this->db->prepare("UPDATE ac_subscriptions SET status='expired' WHERE id=? AND school_id=?")->execute([$s['id'],$this->school]);return null;}
+                    if($s['student_id']&&schoolRecord($this->db,'students',(int)$s['student_id'],$this->school)['status']!=='active')return null;
+                    $item=$this->record('ac_items',(int)$s['item_id']);$due=(new DateTimeImmutable($s['next_date']))->modify('+'.(int)$this->settings['due_days'].' days')->format('Y-m-d');
+                    $draft=['student_id'=>$s['student_id'],'customer_name'=>$s['customer_name'],'customer_type'=>'external','bill_date'=>$s['next_date'],'due_date'=>$due,'billing_period'=>$s['next_date'],'description'=>'Subscription '.$s['id'],'items'=>[['item_id'=>$item['id'],'particular'=>$item['name'],'quantity'=>'1','rate'=>acAmount((int)$s['amount_minor'])]],'idempotency_key'=>'subscription:'.$s['id'].':'.$s['next_date']];
+                    $id=$this->createInvoiceInside($draft,true);$next=$this->subscriptionNext($s['next_date'],$s['frequency'],(int)($s['anchor_day']?:substr($s['start_date'],8,2)));$status=$next&&(!$s['end_date']||$next<=$s['end_date'])?'active':'expired';
+                    $this->db->prepare('UPDATE ac_subscriptions SET next_date=?,status=? WHERE id=? AND school_id=?')->execute([$next??$s['next_date'],$status,$s['id'],$this->school]);$this->audit('Subscription billing cycle','ac_subscriptions',(int)$s['id'],$s,['next_date'=>$next,'status'=>$status]);return $id;
+                });if($invoice===null)break;$out['issued'][]=$invoice;}
+                catch(Throwable $e){$out['errors'][]=['subscription'=>$record['id'],'error'=>$e instanceof InvalidArgumentException?$e->getMessage():'Posting failed; retry.'];break;}
             }
         }return $out;
     }
@@ -486,6 +563,7 @@ final class SchoolAccounting {
     public function dashboard(string $from,string $to):array {
         $balances=$this->balances($from,$to);$income=0;$expense=0;foreach($balances as $a){if(in_array($a['type'],['income','contra_income'],true))$income=acCheckedAdd($income,(int)$a['credit_minor']-(int)$a['debit_minor']);if($a['type']==='expense')$expense=acCheckedAdd($expense,(int)$a['debit_minor']-(int)$a['credit_minor']);}
         $collected=$this->scalar("SELECT COALESCE(SUM(amount_minor),0) FROM ac_payments WHERE school_id=? AND status='posted' AND payment_date>=? AND payment_date<=?",[$this->school,$from,$to]);$refunds=$this->scalar('SELECT COALESCE(SUM(amount_minor),0) FROM ac_refunds WHERE school_id=? AND refund_date>=? AND refund_date<=?',[$this->school,$from,$to]);
+        $refunds=acCheckedAdd($refunds,$this->scalar('SELECT COALESCE(SUM(amount_minor),0) FROM ac_credit_refunds WHERE school_id=? AND refund_date>=? AND refund_date<=?',[$this->school,$from,$to]));
         $billed=$this->scalar("SELECT COALESCE(SUM(total_minor),0) FROM ac_invoices WHERE school_id=? AND status='issued' AND bill_date>=? AND bill_date<=? AND idempotency_key NOT LIKE 'opening:%'",[$this->school,$from,$to]);return ['billed'=>$billed,'collected'=>$collected,'refunds'=>$refunds,'outstanding'=>$this->outstanding(),'advances'=>$this->scalar('SELECT COALESCE(SUM(amount_minor),0) FROM ac_advance_entries WHERE school_id=?',[$this->school]),'income'=>$income,'expense'=>$expense,'net'=>acCheckedAdd($income,-$expense)];
     }
 }

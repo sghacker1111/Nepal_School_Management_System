@@ -38,6 +38,8 @@ function migrateSchoolExtensions(PDO $db):void {
     $version=$db->query("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'")->fetchColumn();
     if(!ctype_digit((string)$version)||(int)$version>SCHOOL_SCHEMA_VERSION)throw new InvalidArgumentException('This database schema requires a newer application; no downgrade was performed.');
     if((int)$version===SCHOOL_SCHEMA_VERSION)return;
+    require_once __DIR__.'/curriculum_catalog.php';
+    if((int)$version<13)migrateSharedCurriculum($db);
     require_once __DIR__.'/routine_schema.php';
     migrateRoutineProfiles($db);
     require_once __DIR__.'/exam_template_schema.php';

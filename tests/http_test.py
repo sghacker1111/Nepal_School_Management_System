@@ -57,7 +57,7 @@ with tempfile.TemporaryDirectory(prefix='erp-http-') as tmp:
         for route in routes:request(route)
         for route in [f"/modules/students/edit.php?id={f['student']}",f"/modules/students/view.php?id={f['student']}",f"/modules/classes/edit.php?class_id={f['class']}",f"/modules/classes/subjects.php?class_id={f['class']}",f"/modules/teachers/edit.php?id={f['ids']['teacher']}",f"/modules/exams/view.php?id={f['exam']}",f"/modules/exams/edit.php?id={f['exam']}",f"/modules/subjects/edit.php?id={f['subject']}"]:request(route)
         query=urlencode({'exam':f['exam'],'class':f['class'],'section':f['section']})
-        marks={'save_marks':'1','exam_id':f['exam'],'class_id':f['class'],'section_id':f['section'],f"attendance[{f['student']}]":'120'}
+        marks={'save_marks':'1','marks_complete':'1','exam_id':f['exam'],'class_id':f['class'],'section_id':f['section'],f"attendance[{f['student']}]":'120'}
         for key,val in [('theory','60'),('participation','3'),('project_work','12'),('previous_exam','5')]:marks[f"marks[{f['student']}][{f['subject']}][{key}]"]=val
         body=request('/modules/results/marks_entry.php?'+query,marks)
         assert 'saved successfully' in body
@@ -192,7 +192,7 @@ with tempfile.TemporaryDirectory(prefix='erp-http-') as tmp:
             assert all(s[1]==('THEMATIC_CONTINUOUS' if grade==1 else 'DUAL_50_50') for s in schemes)
             q=urlencode({'exam':exam,'class':c})
             # Enter TH first, then enable IN on the real edit endpoint without rewriting TH.
-            theory_values={'save_marks':'1','exam_id':exam,'class_id':c}
+            theory_values={'save_marks':'1','marks_complete':'1','exam_id':exam,'class_id':c}
             for subject,*_ in schemes:theory_values[f'marks[{student}][{subject}][theory]']=80 if grade==1 else 40
             request('/modules/results/marks_entry.php?'+q,theory_values)
             theory_before=db.execute('SELECT id,student_id,subject_id,theory_obtained FROM marks WHERE exam_id=? ORDER BY id',(exam,)).fetchall()
@@ -218,7 +218,7 @@ with tempfile.TemporaryDirectory(prefix='erp-http-') as tmp:
             assert db.execute('SELECT COUNT(*) FROM exam_subjects WHERE exam_id=?',(exam,)).fetchone()[0]==len(schemes)
             body=request('/modules/results/marks_entry.php?'+q)
             assert ('Achievement (%)' if grade==1 else 'Second trimester contribution') in body
-            values={'save_marks':'1','exam_id':exam,'class_id':c}
+            values={'save_marks':'1','marks_complete':'1','exam_id':exam,'class_id':c}
             for subject,*_ in schemes:
                 parts={'theory':80} if grade==1 else {'theory':40,'participation':4,'project_work':36,'first_trimester':5,'second_trimester':5}
                 for k,v in parts.items():values[f'marks[{student}][{subject}][{k}]']=v
