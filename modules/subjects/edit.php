@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/catalog_validation.php';
 
 Auth::requireRole(['super_admin', 'school_admin']);
 
@@ -100,6 +101,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             try {
                 $db->beginTransaction();
+                catalogWriteLock($db,(int)$school_id);
+                $mappedClasses=$db->prepare('SELECT DISTINCT class_id FROM class_subjects WHERE school_id=? AND subject_id=?');$mappedClasses->execute([$school_id,$id]);
+                foreach(array_unique([$class_id,...$mappedClasses->fetchAll(PDO::FETCH_COLUMN)]) as $mappedClass)validateUniqueClassSubject($db,(int)$school_id,(int)$mappedClass,['name_en'=>$name_en,'name_np'=>$name_np,'code'=>$code],$id);
+                $duplicate=$db->prepare('SELECT id FROM class_subjects WHERE school_id=? AND class_id=? AND subject_id=? AND id<>?');$duplicate->execute([$school_id,$class_id,$id,$mapping['id']??0]);
+                if($duplicate->fetchColumn())throw new InvalidArgumentException('Duplicate Subject Blocked: this subject is already mapped to the selected class.');
                 
                 // 1. Update Subject with TH and IN fields
                 $stmt = $db->prepare("
@@ -145,11 +151,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 Auth::logActivity(Auth::getUserId(), 'Edit Subject and Class Mapping', 'subjects', $id);
                 redirect(APP_URL . '/modules/subjects/index.php', 'Subject and Theory/Internal components updated successfully');
-            } catch (PDOException $e) {
+            } catch (PDOException|InvalidArgumentException $e) {
                 if ($db->inTransaction()) {
                     $db->rollBack();
                 }
-                if (strpos($e->getMessage(), 'UNIQUE constraint failed') !== false) {
+                if ($e instanceof InvalidArgumentException) {
+                    $error=$e->getMessage();
+                } elseif (strpos($e->getMessage(), 'UNIQUE constraint failed') !== false) {
                     $error = 'Duplicate Subject Blocked: This subject is already assigned to this class.';
                 } else {
                     $error = schoolPublicError($e);

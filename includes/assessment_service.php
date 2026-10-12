@@ -30,6 +30,7 @@ function saveInternalAssessment(PDO $db,int $school,int $actor,string $role,int 
     if(!$examId&&!in_array($role,['super_admin','school_admin'],true))throw new InvalidArgumentException('Only administrators can change future class defaults.');
     if(empty($input['confirm_assessment_change']))throw new InvalidArgumentException('Confirm the warning before editing internal assessment.');
     $exam=$examId?schoolRecord($db,'exams',$examId,$school):['type'=>'terminal'];
+    if($examId)assertExamConfigurationEditable($exam);
     if($examId){$q=$db->prepare('SELECT * FROM exam_subjects WHERE id=? AND exam_id=?');$q->execute([$mappingId,$examId]);$row=$q->fetch();}
     else $row=schoolRecord($db,'class_subjects',$mappingId,$school);
     if(!$row)throw new InvalidArgumentException('The subject configuration no longer exists.');

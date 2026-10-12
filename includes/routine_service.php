@@ -1,9 +1,15 @@
 <?php
 require_once __DIR__.'/school_validation.php';
-function routineTeacherAvailable(PDO $db,int $school,int $class,int $day,int $period,?int $teacher):bool {
+function routineTeacherAvailable(PDO $db,int $school,int $class,int $day,int $period,?int $teacher,?string $start=null,?string $end=null):bool {
     if(!$teacher)return true;
-    $q=$db->prepare('SELECT id FROM class_routines WHERE school_id=? AND class_id<>? AND day_of_week=? AND period_number=? AND teacher_id=?');
-    $q->execute([$school,$class,$day,$period,$teacher]);return !$q->fetchColumn();
+    $q=$db->prepare('SELECT r.period_number,r.start_time,r.end_time FROM class_routines r JOIN classes c ON c.id=r.class_id AND c.school_id=r.school_id AND c.is_active=1 WHERE r.school_id=? AND r.class_id<>? AND r.day_of_week=? AND r.teacher_id=?');
+    $q->execute([$school,$class,$day,$teacher]);
+    foreach($q as $slot){
+        if($start&&$end&&$slot['start_time']&&$slot['end_time']){
+            if($start<$slot['end_time']&&$end>$slot['start_time'])return false;
+        }elseif((int)$slot['period_number']===$period)return false;
+    }
+    return true;
 }
 function routineSubjects(PDO $db,int $school,int $class):array {
     $q=$db->prepare('SELECT cs.*,s.name_en,s.name_np,sc.name section_name FROM class_subjects cs JOIN subjects s ON s.id=cs.subject_id AND s.school_id=cs.school_id LEFT JOIN sections sc ON sc.id=cs.section_id WHERE cs.school_id=? AND cs.class_id=? AND (cs.is_active=1 OR cs.is_optional=1) AND COALESCE(s.is_hidden,0)=0 ORDER BY CASE WHEN cs.is_optional=1 THEN 1 ELSE 0 END,cs.subject_order,s.id,cs.id');
@@ -13,7 +19,7 @@ function routineWeeklyPeriods(array $subject):int {
     // Backward-compatible suggestion only; a saved override never changes grading credit hours.
     return $subject['weekly_periods']!==null?(int)$subject['weekly_periods']:max(0,(int)round((float)($subject['credit_hours']??0)));
 }
-function buildClassRoutine(PDO $db,int $school,array $class,array $subjects,array $days,int $periods):array {
+function buildClassRoutine(PDO $db,int $school,array $class,array $subjects,array $days,int $periods,?array $layout=null,bool $checkAvailability=true):array {
     if(!$days||array_diff($days,[1,2,3,4,5])||$periods<1||$periods>10)throw new InvalidArgumentException('School days are Monday to Friday, with 1–10 periods per day.');
     $remaining=[];$grid=[];$teachers=[];$ct=(int)($class['class_teacher_id']??0);
     foreach($subjects as $subject){
@@ -22,22 +28,26 @@ function buildClassRoutine(PDO $db,int $school,array $class,array $subjects,arra
         $ids=!empty($class['is_grading_teaching'])?[$ct]:array_map('intval',explode(',',(string)$subject['teacher_id']));
         foreach($ids as $idTeacher){if(!$idTeacher)continue;$teacher=schoolRecord($db,'users',$idTeacher,$school);if($teacher['role']==='teacher'&&$teacher['status'])$teachers[$id][$idTeacher]=$idTeacher;}
     }
-    if(array_sum($remaining)>count($days)*$periods)throw new InvalidArgumentException('Weekly subject periods exceed the available Monday–Friday timetable slots.');
+    $capacity=$layout?array_sum(array_column($layout,'count')):count($days)*$periods;
+    if(array_sum($remaining)>$capacity)throw new InvalidArgumentException('Weekly subject periods exceed the available Monday–Friday timetable slots.');
     if($ct){
         $ctSubjects=array_keys(array_filter($teachers,static fn($ids)=>isset($ids[$ct])));
         if(array_sum(array_intersect_key($remaining,array_flip($ctSubjects)))<count($days))throw new InvalidArgumentException('Assign the class teacher to a class subject and give their subjects at least five weekly periods for daily first periods.');
         foreach($days as $day){
-            if(!routineTeacherAvailable($db,$school,(int)$class['id'],$day,1,$ct))throw new InvalidArgumentException('The class teacher is already booked in another class during first period. Resolve that conflict before generating.');
+            $time=$layout[$day]['times'][1]??[];
+            if($checkAvailability&&!routineTeacherAvailable($db,$school,(int)$class['id'],$day,1,$ct,$time['start']??null,$time['end']??null))throw new InvalidArgumentException('The class teacher is already booked in another class during first period. Resolve that conflict before generating.');
             arsort($remaining);foreach($remaining as $id=>$left)if($left>0&&in_array($id,$ctSubjects,true)){$grid[$day][1]=['subject_id'=>$id,'teacher_id'=>$ct];$remaining[$id]--;break;}
         }
     }
     for($period=1;$period<=$periods;$period++)foreach($days as $day){
+        if($layout&&$period>$layout[$day]['count'])continue;
         if(isset($grid[$day][$period]))continue;
         arsort($remaining);$slot=['subject_id'=>null,'teacher_id'=>null];
         foreach($remaining as $id=>$left){
             if($left<=0)continue;
             foreach($teachers[$id]??[] as $teacher){
-                if(!routineTeacherAvailable($db,$school,(int)$class['id'],$day,$period,$teacher))continue;
+                $time=$layout[$day]['times'][$period]??[];
+                if($checkAvailability&&!routineTeacherAvailable($db,$school,(int)$class['id'],$day,$period,$teacher,$time['start']??null,$time['end']??null))continue;
                 $slot=['subject_id'=>$id,'teacher_id'=>$teacher];$remaining[$id]--;break 2;
             }
         }
@@ -45,7 +55,7 @@ function buildClassRoutine(PDO $db,int $school,array $class,array $subjects,arra
     }
     return ['grid'=>$grid,'unplaced'=>array_sum($remaining)];
 }
-function validateRoutineSlot(PDO $db,int $school,int $class,int $day,int $period,?int $subject,?int $teacher):void {
+function validateRoutineSlot(PDO $db,int $school,int $class,int $day,int $period,?int $subject,?int $teacher,?string $start=null,?string $end=null,bool $checkAvailability=true):void {
     $classRow=schoolRecord($db,'classes',$class,$school);
     if(!in_array($day,[1,2,3,4,5],true)||$period<1||$period>10)throw new InvalidArgumentException('Choose Monday–Friday and a valid period.');
     if((bool)$subject!==(bool)$teacher)throw new InvalidArgumentException('Choose both a subject and its teacher, or leave both blank for a free period.');
@@ -63,12 +73,12 @@ function validateRoutineSlot(PDO $db,int $school,int $class,int $day,int $period
         if(empty($classRow['class_teacher_id']))throw new InvalidArgumentException('Assign a class teacher before creating the first period.');
         if($teacher!==(int)$classRow['class_teacher_id'])throw new InvalidArgumentException('First period must use this class teacher and one of their assigned subjects.');
     }
-    if(!routineTeacherAvailable($db,$school,$class,$day,$period,$teacher))throw new InvalidArgumentException('This teacher is already scheduled in another class for this period.');
+    if($checkAvailability&&!routineTeacherAvailable($db,$school,$class,$day,$period,$teacher,$start,$end))throw new InvalidArgumentException('This teacher is already scheduled in another class for this period or overlapping time.');
 }
 function routineArchive(PDO $db,int $school,int $actor,int $class,?int $day=null):void {
     $q=$db->prepare('SELECT COALESCE(MAX(version_id),0)+1 FROM class_routines_history WHERE school_id=?');$q->execute([$school]);$version=(int)$q->fetchColumn();
     $where='school_id=? AND class_id=?';$params=[$school,$class];if($day!==null){$where.=' AND day_of_week=?';$params[]=$day;}
-    $db->prepare('INSERT INTO class_routines_history(version_id,class_id,day_of_week,period_number,subject_id,teacher_id,school_id,changed_by_user_id) SELECT ?,class_id,day_of_week,period_number,subject_id,teacher_id,school_id,? FROM class_routines WHERE '.$where)->execute([$version,$actor,...$params]);
+    $db->prepare('INSERT INTO class_routines_history(version_id,class_id,day_of_week,period_number,subject_id,teacher_id,school_id,changed_by_user_id,start_time,end_time) SELECT ?,class_id,day_of_week,period_number,subject_id,teacher_id,school_id,?,start_time,end_time FROM class_routines WHERE '.$where)->execute([$version,$actor,...$params]);
     $db->prepare('DELETE FROM class_routines WHERE '.$where)->execute($params);
 }
 function saveRoutineRequirements(PDO $db,int $school,int $class,array $input):void {

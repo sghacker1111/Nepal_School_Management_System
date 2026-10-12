@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/catalog_validation.php';
 
 Auth::requireRole(['super_admin', 'school_admin', 'principal', 'teacher', 'exam_officer']);
 
@@ -14,6 +15,28 @@ if (Auth::getRole() === 'super_admin' && !$school_id) {
     $school_id = 0;
 }
 $db = getDB();
+$showArchived=Auth::hasRole(['super_admin','school_admin'])&&(string)($_GET['show_archived']??'0')==='1';
+$cleanupError='';
+if($_SERVER['REQUEST_METHOD']==='POST'&&in_array($_POST['action']??'', ['remove_legacy_seven','restore_class'],true)){
+    if(!Auth::hasRole(['super_admin','school_admin'])||Auth::isReadOnly())denySchoolRequest('Only administrators may change classes.',403);
+    try{
+        $globalAdmin=Auth::getRole()==='super_admin';
+        $q=$db->prepare('SELECT password FROM users WHERE id=? AND status=1'.($globalAdmin?" AND role='super_admin'":' AND school_id=?'));
+        $q->execute($globalAdmin?[Auth::getUserId()]:[Auth::getUserId(),$school_id]);
+        if(!is_string($_POST['password']??null)||!password_verify($_POST['password'],$q->fetchColumn()?:''))throw new InvalidArgumentException('Enter your current administrator password.');
+        $db->beginTransaction();catalogWriteLock($db,(int)$school_id);$id=(int)($_POST['class_id']??0);
+        if($_POST['action']==='remove_legacy_seven'){
+            if(($_POST['confirm_cleanup']??'')!=='1')throw new InvalidArgumentException('Confirm removal of the legacy class from active lists.');
+            archiveLegacySevenClass($db,(int)$school_id,$id);$message='Legacy class 7 removed from active lists. All linked records are retained and recoverable.';
+            Auth::logActivity(Auth::getUserId(),'Archive legacy class named exactly 7; retain all linked records','classes',$id);
+        }else{
+            $row=schoolRecord($db,'classes',$id,(int)$school_id);validateUniqueClassName($db,(int)$school_id,$row['name'],$id);
+            $db->prepare('UPDATE classes SET is_active=1 WHERE id=? AND school_id=?')->execute([$id,$school_id]);$message='Class restored successfully.';
+            Auth::logActivity(Auth::getUserId(),'Restore archived class','classes',$id);
+        }
+        $db->commit();redirect(APP_URL.'/modules/classes/index.php',$message,'success');
+    }catch(Throwable $e){if($db->inTransaction())$db->rollBack();$cleanupError=$e instanceof InvalidArgumentException?$e->getMessage():schoolPublicError($e);}
+}
 
 // Handle deletes
 if (isset($_GET['delete_class']) && Auth::hasRole(['super_admin', 'school_admin'])) {
@@ -35,9 +58,11 @@ if (isset($_GET['delete_section']) && Auth::hasRole(['super_admin', 'school_admi
 }
 
 // Fetch classes
-$stmt = $db->prepare("SELECT * FROM classes WHERE (school_id = ?) ORDER BY id ASC");
+$stmt = $db->prepare('SELECT * FROM classes WHERE school_id = ?'.($showArchived?'':' AND is_active=1').' ORDER BY id ASC');
 $stmt->execute([$school_id]);
 $classes = $stmt->fetchAll();
+$legacyClasses=[];
+if(Auth::hasRole(['super_admin','school_admin'])&&$school_id>0){$q=$db->prepare("SELECT c.id FROM classes c WHERE c.school_id=? AND c.name='7' AND c.is_active=1 AND EXISTS(SELECT 1 FROM users u WHERE u.school_id=c.school_id AND u.username='sgsunil' AND u.role='teacher')");$q->execute([$school_id]);$legacyClasses=$q->fetchAll(PDO::FETCH_COLUMN);}
 
 // Fetch sections with class name and teacher name
 $stmt = $db->prepare("
@@ -45,7 +70,7 @@ $stmt = $db->prepare("
     FROM sections s 
     JOIN classes c ON s.class_id = c.id 
     LEFT JOIN users u ON s.class_teacher_id = u.id AND u.role = 'teacher'
-    WHERE (s.school_id = ?)
+    WHERE s.school_id = ? ".($showArchived?'':' AND c.is_active=1')."
     ORDER BY c.id, s.name
 ");
 $stmt->execute([$school_id]);
@@ -67,6 +92,9 @@ ob_start();
 </div>
 
 <div class="row">
+    <?php if($cleanupError): ?><div class="alert alert-danger" role="alert"><?= sanitize($cleanupError) ?></div><?php endif; ?>
+    <?php if(Auth::hasRole(['super_admin','school_admin'])): ?><div class="mb-3"><a href="?show_archived=<?= $showArchived?'0':'1' ?>" class="btn btn-outline-secondary"><?= $showArchived?'Hide archived classes':'Show archived classes' ?></a></div><?php endif; ?>
+    <?php foreach($legacyClasses as $legacyId): ?><div class="col-12 mb-3"><div class="alert alert-warning"><h5>Remove legacy class “7” (ID <?= (int)$legacyId ?>)</h5><p>This school contains teacher sgsunil. Remove this incorrect class from active lists without deleting its students, marks, fees, subjects or history.</p><form method="POST" onsubmit="return confirm('Remove only this class named exactly 7 from active lists? Its linked records will be retained.')"><input type="hidden" name="action" value="remove_legacy_seven"><input type="hidden" name="class_id" value="<?= (int)$legacyId ?>"><label class="d-block mb-2"><input type="checkbox" name="confirm_cleanup" value="1" required> Confirm this is the incorrect class</label><label>Current administrator password<input class="form-control" type="password" name="password" autocomplete="current-password" required></label><button class="btn btn-danger ms-2">Remove legacy class 7</button></form></div></div><?php endforeach; ?>
     <!-- Classes Column -->
     <div class="col-md-7 mb-4">
         <div class="card h-100 shadow-sm border-0">
@@ -93,7 +121,7 @@ ob_start();
                                 <?php foreach ($classes as $class): ?>
                                 <tr>
                                     <td><strong><?= sanitize($class['name']) ?></strong></td>
-                                    <td><?= sanitize($class['name_np'] ?? '-') ?></td>
+                                    <td><?= sanitize($class['name_np'] ?? '-') ?><?php if(!$class['is_active']): ?><span class="badge bg-secondary ms-1">Archived</span><?php endif; ?></td>
                                     <td>
                                         <?php
                                         $levelBadge = ($class['level'] === 'Secondary') ? 'bg-success' : 'bg-primary';
@@ -118,9 +146,11 @@ ob_start();
                                          <a href="<?= APP_URL ?>/modules/classes/subjects.php?class_id=<?= $class['id'] ?>" class="btn btn-sm btn-outline-primary me-1" title="Configure Subjects">
                                              <i class="fas fa-book"></i> Subjects
                                          </a>
-                                         <button onclick="confirmDeleteClass(<?= $class['id'] ?>)" class="btn btn-sm btn-outline-danger" title="Delete">
+                                         <?php if(!$class['is_active']): ?><details class="d-inline-block"><summary class="btn btn-sm btn-outline-success">Restore</summary><form method="POST"><input type="hidden" name="action" value="restore_class"><input type="hidden" name="class_id" value="<?= (int)$class['id'] ?>"><label>Current administrator password<input type="password" class="form-control" name="password" autocomplete="current-password" required></label><button class="btn btn-sm btn-success">Confirm restore</button></form></details><?php else: ?>
+                                         <button onclick="confirmDeleteClass(<?= $class['id'] ?>)" class="btn btn-sm btn-outline-danger" title="Archive class">
                                              <i class="fas fa-trash"></i>
                                          </button>
+                                         <?php endif; ?>
                                      </td>
                                      <?php endif; ?>
                                 </tr>
@@ -190,7 +220,7 @@ ob_start();
 function confirmDeleteClass(id) {
     verifyPasswordAndProceed(function() {
         window.location.href = '<?= APP_URL ?>/modules/classes/index.php?delete_class=' + id;
-    }, 'Confirm Deletion', 'Please enter your administrator password to permanently delete this class and all associated data:');
+    }, 'Confirm Archive', 'Please enter your administrator password to archive this class. Its students, marks and all linked records will be retained:');
 }
 
 function confirmDeleteSection(id) {

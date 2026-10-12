@@ -60,6 +60,7 @@ php tests/content_test.php
 php tests/operations_test.php
 php tests/exam_enhancements_test.php
 php tests/exam_workflows_test.php
+php tests/exam_templates_test.php
 php tests/cdc_2083_test.php
 php tests/assessment_test.php
 php tests/packages_test.php
@@ -70,6 +71,7 @@ php tests/subscription_teaching_test.php
 php tests/teacher_results_test.php
 php tests/attendance_filters_test.php
 php tests/routine_learning_test.php
+php tests/routine_profiles_test.php
 node tests/accounting_preview_test.js
 node tests/date_controls_test.js
 node tests/attendance_controls_test.js
@@ -83,6 +85,10 @@ python tests/subscription_teaching_http_test.py
 python tests/teacher_results_http_test.py
 python tests/attendance_filters_http_test.py
 python tests/routine_learning_http_test.py
+python tests/routine_profiles_http_test.py
+python tests/progress_print_http_test.py
+python tests/class_isolation_http_test.py
+python tests/exam_templates_http_test.py
 python tests/deployment_test.py
 ```
 
@@ -96,7 +102,7 @@ Schema 9 adds subscription fields without assigning invented expiry dates to exi
 
 Teachers can manage chapters, topics and specification grids only for active subjects assigned to them in the selected class. Subject selectors remove duplicate section mappings and show the subject code. These permissions are enforced on submitted requests as well as in the interface. Locked/published exams show saved marks read-only; only school/system administrators may reopen marks. After reopening, a subject teacher can save only their assigned subjects and sections. The active teacher assigned as **Class Teacher** in Classes may review and correct all configured subjects and sections in that supervised class, including subjects they do not teach; this never grants chapter/topic ownership or extends marks-entry/ledger authority to another class.
 
-Use **Marks & results → Ledger Grid** or the **Full-class ledger / Subject ledger** links in Marks Entry to view and print. All teachers may view and print all classes, sections and subjects within their own school. Select **All Subjects** for the full-class ledger or a single subject. Broader ledger viewing never grants extra marks-entry permissions: subject teachers edit only their assigned subjects/sections; class teachers correct their supervised class; locks still apply. Subject totals/GP/percentage refer only to the selected subject, never the overall report card. Dedicated print CSS specifies **A4 landscape**, including a named ledger page; printers that override CSS must be set to Landscape in their dialog. Print layouts include the actual school name, exam/class/section, rolls, exam-specific symbols, numeric TH/IN/total marks and grades; incomplete marks and untaken optional subjects remain distinct.
+Use **Marks & results → Ledger Grid** or the **Full-class ledger / Subject ledger** links in Marks Entry to view and print. All teachers may view and print all classes, sections and subjects within their own school. Select **All Subjects** for the full-class ledger or a single subject. Broader ledger viewing never grants extra marks-entry permissions: subject teachers edit only their assigned subjects/sections; class teachers correct their supervised class; locks still apply. **Grade Only** (default) shows GRADE (TH), GRADE (IN), FINAL GRADE and GRADE POINT, with only total CH below each subject. **Marks Only** shows TH, PR and TOTAL, with only total FM below each subject, and an aggregate percentage/division. Subject summaries refer only to the selected subject, never the overall report card. Dedicated print CSS specifies **A4 landscape**, including a named ledger page; printers that override CSS must be set to Landscape in their dialog. Print layouts include the actual school name, exam/class/section, rolls and exam-specific symbols. Missing marks, nonapplicable components and untaken optional subjects remain distinct.
 
 ## Attendance and student filters
 
@@ -104,17 +110,33 @@ Attendance supports **Daily, Monthly, Yearly and Date range** views in AD or BS.
 
 Student Management uses exact class and section IDs and exact statuses on the server. Class 1 does not match Class 10. Free-text search is limited to names (English/Nepali), rolls, student IDs and EMIS numbers, not class names, gender or statuses. Search wildcards are treated literally, and every filter remains school-scoped.
 
+Subject Management also uses an exact school-owned class ID on the server, rather than a partial DataTables text search. Selecting Class 1 excludes Classes 10, 11 and 12. Cross-section isolation is covered by real HTTP checks for subjects, students, curriculum selectors, attendance, results, ledgers, marks entry, report/admit cards and question lists.
+
+## Super-admin exam defaults
+
+Use **System → Default exams** to edit First, Second and Third / Final term templates. Choose a universal class to customize that template's TH/IN full/pass marks and credit hours. Templates are revisioned and may be deactivated for future use; earlier revisions remain in history. Initially, subject defaults come from the system's universal catalog. These are configurable school-management defaults, not certification of every CDC offering.
+
+In **Exams → Create New Exam**, select **Manual** (customize a copy) or **Automatic** (locked defaults), then choose a template. Both modes copy subject schemes and retain a template snapshot. Schools choose their academic year and exam dates at creation. Manual exams may be renamed and configured under the usual marks/lock safeguards. Automatic exams cannot change names, types, result systems, subject limits, credits or IN allocation, including through forged POST requests; marks, symbols, print and lock/reopen operations keep their existing permissions. Additional class subjects may be initialized only from the saved snapshot, never from a later-edited template. Settings are not retroactively changed when an administrator edits a default. School-specific subjects without a system default require Manual mode or an administrator-supplied default; automatic creation fails atomically instead of silently dropping them.
+
+Schema 12 adds template/history tables and nullable template references/snapshots. Existing exams remain Manual with unchanged IDs, marks and schemes. The migration retains the SQLite pre-upgrade backup and idempotency safeguards. MySQL schema is supported statically but still requires staging verification.
+
 ## Weekly routine and class-subject selectors
 
 Routine settings use Monday–Friday; Saturday and Sunday are holidays. Administrators select a class, edit subject teachers and **total periods per week**, then generate or modify daily cells. Weekly periods are independent of TH/IN grading credit hours; unsaved values suggest rounded credits. The same value is editable in Class Subject Mapping. First periods require the class teacher and their assigned subject every school day, so their subjects need at least five weekly periods. Generation checks teacher collisions and capacity; infeasible schedules roll back entirely. Existing routines are archived before replacement. Section requirements are displayed separately, but the timetable is class-wide and uses the largest per-subject requirement.
+
+Weekly routines now support named profiles (e.g. summer/winter). Load a profile to preview it; only administrators may save or activate it, with CSRF and current-password confirmation. Manual mode edits every day's subjects and teachers; automatic mode uses weekly requirements. Each day has its own 1–10 period count, individual start/end times, short break and tiffin/long break. Breaks must fit in gaps between lessons. Teacher labels use initials, with full-name tooltips and a printed legend. Saving a draft does not change the active timetable: manual and automatic drafts may overlap another class, and manual drafts may contain fewer than the required weekly periods. Activation requires each subject's full weekly allocation and checks time-overlap conflicts across classes, preserving the previous slots and layout on failure. A validation error retains valid manual selections and clock entries in the editor without changing the active preview. Profile revisions prevent stale edits and prior versions remain in history.
+
+Class names are compared by normalized grade identity (`7`, `Class 7`, `Grade 7`, `कक्षा ७`), case and whitespace. Subject creation, mapping and rename check names and codes within each class, including hidden/optional mappings. Catalog changes are serialized per school. Teachers cannot create classes or subjects. In Class Management, a school administrator can remove a legacy class named exactly `7` from active lists when that school contains teacher `sgsunil`; password and explicit confirmation are required. This archives the class and retains linked records, rather than permanently deleting educational data. Archived classes can be reviewed; rename an invalid duplicate before restoring it.
 
 Question Bank, both paper generators, Learning Hub and curriculum selectors use school-scoped class mappings. Assigned optional subjects appear when the catalogue subject is not hidden. Teachers see only their teaching classes/subjects. Duplicate section/name entries are removed. Choose a class before a subject; changing class resets subject. Question Bank supports class, subject, category, cognitive level and text/chapter search. Quick Add Class/Subject is removed, including crafted requests; administrators use management pages.
 
 The universal CDC catalogue has a class-first filter and include-hidden/inactive option. Visibility uses POST with an explicit target state and a redirect, preventing refresh/back from toggling it again. Existing school copies retain their own settings.
 
-Bulk cards default to **BS only, YYYY-MM-DD**; explicit calendar/format choices still work. Shared signatures print image/signing space, content-width rule, name, then post. Configure the coordinator name in School Settings. Empty result classes show no results table.
+Individual and bulk progress cards default to **GPA, BS-only dates, BS manual date entry and YYYY-MM-DD**, independently of the saved exam's presentation settings. Issue dates and birth dates follow the selected print calendar; explicit AD/both and other date-format choices still work. The GPA title is **GRADE SHEET**; the percentage title is **MARKS SHEET**. Shared signatures print image/signing space, content-width rule, name, then post. Configure the coordinator name in School Settings. Empty result classes show no results table.
 
-Schema 10 adds nullable weekly-period/coordinator-name fields only. Pre-upgrade SQLite backups and idempotent migration remain enabled; records and money are preserved.
+Percentage report cards use six columns: S.N., Subject, Full Marks, Obtained Marks, Total Obtained and Remarks. Subject entries have TH/PR rows, with a dash for nonapplicable PR; thematic continuous assessments use one overall-assessment row without inventing TH/PR marks. Shared serial/total/remarks cells avoid duplicated totals, and missing required marks remain Incomplete. Individual and bulk cards share the same renderer and show a division key, final total percentage and division instead of the GPA grading key/credit-hour note/abbreviation legend. Divisions are 80–100% Distinction, 60–<80% First, 45–<60% Second and 35–<45% Third; below 35% or a failed required component is Failed. Stored exam schemes and GPA calculations are unchanged.
+
+Schema 11 adds nullable routine times and school/class-scoped profile, layout and history tables. Pre-upgrade SQLite backups and idempotent migration remain enabled; records and money are preserved. Legacy routines retain their slots, with times shown only after a timed profile is activated.
 
 See [security review and hosting requirements](docs/security-review-2026-10-11.md). These checks reduce risk; they are not a guarantee against all attacks or a production penetration test.
 

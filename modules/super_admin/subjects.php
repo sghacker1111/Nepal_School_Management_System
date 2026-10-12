@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/catalog_validation.php';
 
 Auth::requireRole('super_admin');
 
@@ -118,6 +119,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_subject'])) {
             $map_class_id=(int)($_POST['map_class_id']??0);
             if($map_class_id)schoolRecord($db,'classes',$map_class_id,0);
             if($action==='edit')schoolRecord($db,'subjects',(int)($_POST['subject_id']??0),0);
+            $db->beginTransaction();catalogWriteLock($db,0);
+            if($action==='add'&&$map_class_id)validateUniqueClassSubject($db,0,$map_class_id,['name_en'=>$name_en,'name_np'=>$name_np,'code'=>$code]);
+            if($action==='edit'){
+                $q=$db->prepare('SELECT DISTINCT class_id FROM class_subjects WHERE school_id=0 AND subject_id=?');$q->execute([(int)$_POST['subject_id']]);
+                foreach($q->fetchAll(PDO::FETCH_COLUMN) as $mappedClass)validateUniqueClassSubject($db,0,(int)$mappedClass,['name_en'=>$name_en,'name_np'=>$name_np,'code'=>$code],(int)$_POST['subject_id']);
+            }
             if ($action === 'add') {
                 $stmt = $db->prepare("
                     INSERT INTO subjects (
@@ -178,8 +185,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_subject'])) {
                 ]);
                 $success = "Universal subject updated successfully.";
             }
+            $db->commit();
         } catch (Throwable $e) {
-            $error = schoolPublicError($e);
+            if($db->inTransaction())$db->rollBack();
+            $error = $e instanceof InvalidArgumentException?$e->getMessage():schoolPublicError($e);
         }
     }
 }
@@ -209,7 +218,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_map'])) {
     } else {
         try {
             schoolRecord($db,'classes',$class_id,0);
-            schoolRecord($db,'subjects',$subject_id,0);
+            $targetSubject=schoolRecord($db,'subjects',$subject_id,0);
+            $db->beginTransaction();catalogWriteLock($db,0);
+            validateUniqueClassSubject($db,0,$class_id,$targetSubject);
             // Check if already mapped by ID or by matching name
             $stmt = $db->prepare("
                 SELECT s.name_en FROM class_subjects cs
@@ -248,8 +259,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_map'])) {
                 $stmt->execute([$class_id, $subject_id, $ch, $th_ch, $in_ch, $th_fm, $th_pm, $in_fm, $in_pm, $is_opt]);
                 $success = "Subject mapped to class successfully.";
             }
+            if($error)$db->rollBack();else $db->commit();
         } catch (Throwable $e) {
-            if ($e instanceof PDOException && strpos($e->getMessage(), 'UNIQUE constraint failed') !== false) {
+            if($db->inTransaction())$db->rollBack();
+            if($e instanceof InvalidArgumentException)$error=$e->getMessage();
+            elseif ($e instanceof PDOException && strpos($e->getMessage(), 'UNIQUE constraint failed') !== false) {
                 $error = "Duplicate Subject Blocked: This subject is already assigned to this class.";
             } else {
                 $error = schoolPublicError($e);

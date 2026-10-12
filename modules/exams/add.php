@@ -7,48 +7,42 @@ require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/report_issue.php';
+require_once __DIR__.'/../../includes/exam_template_service.php';
 
 Auth::requireRole(['super_admin', 'school_admin', 'exam_officer']);
 
 $db = getDB();
 $school_id = Auth::getSchoolId();
 $error = '';
+$templates=examTemplates($db);
+$mode=$_POST['creation_mode']??$_GET['creation_mode']??'manual';
+if(!in_array($mode,['manual','automatic'],true))denySchoolRequest('Choose automatic or manual exam creation.',422);
+try{$templateId=examTemplateId($_POST['template_id']??$_GET['template_id']??($templates[0]['id']??0));$template=examTemplate($db,$templateId,true);}
+catch(InvalidArgumentException $e){if($_SERVER['REQUEST_METHOD']!=='POST')denySchoolRequest($e->getMessage(),422);$error=$e->getMessage();$template=$templates[0]??['name'=>'','type'=>'terminal','has_internal'=>1,'result_system'=>'gpa','date_calendar'=>'BS','date_format'=>'ymd'];$templateId=(int)($template['id']??0);}
 
-// Fetch active academic year
-$stmt = $db->prepare("SELECT * FROM academic_years WHERE school_id = ? AND is_active = 1 LIMIT 1");
+// Choose any visible school year, with the active year selected by default.
+$stmt = $db->prepare("SELECT * FROM academic_years WHERE school_id = ? AND COALESCE(is_hidden,0)=0 ORDER BY is_active DESC,id DESC");
 $stmt->execute([$school_id]);
-$academicYear = $stmt->fetch();
+$academicYears = $stmt->fetchAll();
+$academicYearId=is_scalar($_POST['academic_year_id']??null)?(int)$_POST['academic_year_id']:(int)($academicYears[0]['id']??0);
 
-if (!$academicYear) {
-    redirect(APP_URL . '/modules/exams/index.php', 'No active academic year set in settings!', 'error');
+if (!$academicYears) {
+    redirect(APP_URL . '/modules/exams/index.php', 'Add an academic year in school settings before creating an exam.', 'error');
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $name = sanitize($_POST['name'] ?? '');
-    $type = sanitize($_POST['type'] ?? 'terminal');
-    $start_date = ($_POST['start_date'] ?? '') ?: null;
-    $end_date = ($_POST['end_date'] ?? '') ?: null;
-    $has_internal = isset($_POST['has_internal']) ? (int)$_POST['has_internal'] : 0;
-    $result_system = sanitize($_POST['result_system'] ?? 'gpa');
-    
-    if (empty($name)) {
-        $error = 'Exam name is required';
-    } else {
+if ($_SERVER['REQUEST_METHOD'] === 'POST'&&$error==='') {
         try {
-            $issue=reportIssueDate([],$_POST);$dates=examDateInputs($_POST);$start_date=$dates['start_date'];$end_date=$dates['end_date'];
-            $stmt = $db->prepare("INSERT INTO exams (name, type, academic_year_id, start_date, end_date, is_published, is_locked, school_id, has_internal, result_system,issue_date_mode,issue_date,date_calendar,date_format) VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$name, $type, $academicYear['id'], $start_date, $end_date, $school_id, $type==='unit'?0:$has_internal, $result_system,$issue['mode'],$issue['manual']?:null,$issue['display'],$issue['format']]);
-            $new_id = $db->lastInsertId();
+            $new_id=createExamFromTemplate($db,(int)$school_id,(int)Auth::getUserId(),$_POST);
             
             Auth::logActivity(Auth::getUserId(), 'Create Exam', 'exams', $new_id);
-            redirect(APP_URL . '/modules/exams/view.php?id=' . $new_id, 'Exam created successfully. Now configure subjects and weightage.');
+            redirect(APP_URL . '/modules/exams/view.php?id=' . $new_id, $mode==='automatic'?'Exam created successfully with locked default settings. You can now assign symbols and enter marks.':'Exam created successfully. Now review subjects and weightage.');
         } catch (InvalidArgumentException $e) { $error=$e->getMessage(); }
         catch (PDOException $e) {
             $error = schoolPublicError($e);
         }
-    }
 }
-try{$issue=reportIssueDate([],$_SERVER['REQUEST_METHOD']==='POST'?$_POST:[]);}catch(InvalidArgumentException $e){$issue=reportIssueDate([]);}
+try{$issue=reportIssueDate([],array_replace(['display_calendar'=>$template['date_calendar'],'date_format'=>$template['date_format'],'issue_calendar'=>'BS'],$_SERVER['REQUEST_METHOD']==='POST'?$_POST:[]));}catch(InvalidArgumentException $e){$issue=reportIssueDate([]);}
+$form=$template;if($mode==='manual'&&$_SERVER['REQUEST_METHOD']==='POST')foreach(['name','type','result_system','has_internal'] as $k)if(is_scalar($_POST[$k]??null))$form[$k]=$_POST[$k];
 
 $pageTitle = 'Create New Exam';
 $activePage = 'exams';
@@ -65,7 +59,7 @@ ob_start();
 
 <?php if ($error): ?>
 <div class="alert alert-danger mb-4">
-    <i class="fas fa-exclamation-circle"></i> <?= $error ?>
+    <i class="fas fa-exclamation-circle"></i> <?= sanitize($error) ?>
 </div>
 <?php endif; ?>
 
@@ -74,38 +68,39 @@ ob_start();
         <h5 class="mb-0"><i class="fas fa-file-invoice"></i> Exam Definition Details</h5>
     </div>
     <div class="card-body p-4">
+        <form method="GET" class="row g-3 mb-4"><div class="col-md-6"><label for="creationMode" class="form-label">Creation mode</label><select id="creationMode" name="creation_mode" class="form-select" onchange="this.form.submit()"><option value="manual" <?= $mode==='manual'?'selected':'' ?>>Manual — customize defaults</option><option value="automatic" <?= $mode==='automatic'?'selected':'' ?>>Automatic — locked default settings</option></select></div><div class="col-md-6"><label for="examTemplate" class="form-label">Super-admin default exam</label><select id="examTemplate" name="template_id" class="form-select" onchange="this.form.submit()"><?php foreach($templates as $t): ?><option value="<?= (int)$t['id'] ?>" <?= $templateId===(int)$t['id']?'selected':'' ?>><?= sanitize($t['name']) ?></option><?php endforeach; ?></select></div></form>
+        <div class="alert alert-info"><?= $mode==='automatic'?'Automatic exam: default settings are read-only. Choose your school dates below. Marks, schedules, symbols and lock/reopen remain available.':'Manual exam: defaults are loaded from the selected template. Edit them to suit your school; existing exams are not changed.' ?></div>
         <form method="POST" action="">
+            <input type="hidden" name="creation_mode" value="<?= sanitize($mode) ?>"><input type="hidden" name="template_id" value="<?= $templateId ?>"><input type="hidden" name="template_revision" value="<?= (int)($template['revision']??0) ?>">
             <div class="mb-3">
-                <label class="form-label">Active Academic Year</label>
-                <input type="text" class="form-control bg-light text-muted font-monospace" value="<?= getAcademicYearLabel($academicYear['year_bs'], $academicYear['year_ad']) ?>" disabled>
+                <label for="academic_year_id" class="form-label">Academic Year *</label>
+                <select id="academic_year_id" name="academic_year_id" class="form-select" required><?php foreach($academicYears as $year): ?><option value="<?= (int)$year['id'] ?>" <?= $academicYearId===(int)$year['id']?'selected':'' ?>><?= sanitize(getAcademicYearLabel($year['year_bs'],$year['year_ad']).($year['is_active']?' (Active)':'')) ?></option><?php endforeach; ?></select>
             </div>
             
             <div class="mb-3">
                 <label for="name" class="form-label">Exam Name *</label>
-                <input type="text" class="form-control" id="name" name="name" placeholder="e.g. First Terminal Examination" required>
+                <input type="text" class="form-control" id="name" name="name" value="<?= sanitize($form['name']) ?>" maxlength="150" required <?= $mode==='automatic'?'readonly':'' ?>>
             </div>
             
             <div class="mb-3">
                 <label for="type" class="form-label">Exam Type</label>
                 <select class="form-select" id="type" name="type">
-                    <option value="terminal" selected>Terminal Exam (Term Exam)</option>
-                    <option value="final">Final Exam</option>
-                    <option value="unit">Unit Test / Class Test</option>
-                    <option value="practical">Practical / Assessment Only</option>
+                    <?php foreach(['terminal'=>'Terminal Exam (Term Exam)','final'=>'Final Exam','unit'=>'Unit Test / Class Test','practical'=>'Practical / Assessment Only'] as $v=>$label): ?><option value="<?= $v ?>" <?= $form['type']===$v?'selected':'' ?>><?= $label ?></option><?php endforeach; ?>
                 </select>
             </div>
 
             <div class="mb-3">
                 <label for="result_system" class="form-label">Result System (for Unit Tests or General)</label>
                 <select class="form-select" id="result_system" name="result_system">
-                    <option value="gpa" selected>Grading System (GPA / Grades)</option>
-                    <option value="percentage">Marksheet System (Marks / Percentage)</option>
+                    <option value="gpa" <?= $form['result_system']==='gpa'?'selected':'' ?>>Grading System (GPA / Grades)</option>
+                    <option value="percentage" <?= $form['result_system']==='percentage'?'selected':'' ?>>Marksheet System (Marks / Percentage)</option>
                 </select>
             </div>
             
             <div class="mb-3">
                 <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="has_internal" name="has_internal" value="1" checked>
+                    <?php if($mode==='manual'): ?><input type="hidden" name="has_internal" value="0"><?php endif; ?>
+                    <input class="form-check-input" type="checkbox" id="has_internal" name="has_internal" value="1" <?= $form['has_internal']?'checked':'' ?>>
                     <label class="form-check-label fw-bold text-primary" for="has_internal">
                         Include Internal Exam / Practical Assessment Component
                     </label>
@@ -116,13 +111,14 @@ ob_start();
             <?php include __DIR__.'/../../includes/exam_date_controls.php'; ?>
             <div class="row g-3 mb-4"><?php include __DIR__.'/../../includes/report_issue_controls.php'; ?></div>
             <button type="submit" class="btn btn-primary w-100 py-2">
-                <i class="fas fa-save"></i> Save and Configure Subjects
+                <i class="fas fa-save"></i> <?= $mode==='automatic'?'Save Exam and Continue':'Save and Configure Subjects' ?>
             </button>
         </form>
     </div>
 </div>
 
 <script>
+<?php if($mode==='automatic'): ?>['type','result_system','has_internal','display_calendar','date_format'].forEach(id=>document.getElementById(id).disabled=true);<?php endif; ?>
 document.getElementById('type').addEventListener('change',function(){
     const internal=document.getElementById('has_internal');internal.disabled=this.value==='unit';
     if(internal.disabled)internal.checked=false;

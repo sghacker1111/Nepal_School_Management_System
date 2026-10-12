@@ -17,6 +17,9 @@ $exam_id = (int)($_GET['exam'] ?? 0);
 $class_id = (int)($_GET['class'] ?? 0);
 $section_id = (int)($_GET['section'] ?? 0);
 $subject_id = (int)($_GET['subject'] ?? 0);
+$ledgerMode=$_GET['mode']??'grade';
+if(!in_array($ledgerMode,['grade','marks'],true))denySchoolRequest('Choose Grade Only or Marks Only.',422);
+$ledgerSystem=$ledgerMode==='grade'?'gpa':'percentage';
 
 $school_id = Auth::getSchoolId();
 $role=Auth::getRole();
@@ -141,10 +144,10 @@ if ($exam_id && $class_id) {
             if(($m['theory_obtained']??null)!==null||((float)$sub['practical_full']>0&&($m['practical_obtained']??null)!==null))$hasObtained=true;
             $result=erpCalculateSubjectResult($sub,$m,$exam);
             $studentMarks[]=array_merge($sub,$m);
-            $row_subs[$sub_id]=['theory'=>$result['theory_obtained'],'practical'=>$result['practical_obtained'],'total'=>$result['incomplete']?null:(float)$result['theory_obtained']+(float)$result['practical_obtained'],'gp'=>$result['grade_point'],'grade'=>$result['grade'],'remarks'=>$result['remarks']];
+            $row_subs[$sub_id]=array_merge($result,['theory'=>$result['theory_obtained'],'practical'=>$result['practical_obtained'],'total'=>$result['incomplete']?null:(float)$result['theory_obtained']+(float)$result['practical_obtained'],'gp'=>$result['grade_point']]);
         }
-        $summary=erpReportSummary($studentMarks,$exam,$exam['result_system']??'gpa');
-        $total_obtained=$hasObtained?$summary['grand_obtained']:null;
+        $summary=erpReportSummary($studentMarks,$exam,$ledgerSystem);
+        $total_obtained=$hasObtained&&$summary['remarks_summary']!=='Incomplete'?$summary['grand_obtained']:null;
         $gpa=$summary['average_gpa'];
         $status=$summary['remarks_summary']==='Incomplete'?'Incomplete':($summary['has_failed_subject']?'Fail/NG':'Pass');
         if(!$studentMarks){$status='N/A';$gpa=null;}
@@ -158,13 +161,14 @@ if ($exam_id && $class_id) {
             'subjects' => $row_subs,
             'total_marks' => $total_obtained,
             'gpa' => $gpa,
-            'status' => $status
+            'status' => $status,
+            'division' => $summary['final_grade']
         ];
     }
 }
 
 $isSubjectLedger=$subject_id>0;
-$subjectColumns=($exam['type']??'')==='unit'?2:4;
+$subjectColumns=$ledgerMode==='grade'?4:3;
 function ledgerMark($value):string {return $value===null?'—':rtrim(rtrim(number_format((float)$value,2,'.',','),'0'),'.');}
 
 $pageTitle = $isSubjectLedger?'Subject Marks Ledger':'Class Result Ledger';
@@ -237,6 +241,9 @@ ob_start();
                 </select>
             </div>
             <div class="col-md-2 d-flex align-items-end">
+                <div class="w-100"><label class="form-label" for="ledgerMode">Print mode</label><select name="mode" id="ledgerMode" class="form-select" onchange="this.form.submit()"><option value="grade" <?= $ledgerMode==='grade'?'selected':'' ?>>Grade Only</option><option value="marks" <?= $ledgerMode==='marks'?'selected':'' ?>>Marks Only</option></select></div>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
                 <button type="submit" class="btn btn-info w-100">
                     <i class="fas fa-sync"></i> Refresh Grid
                 </button>
@@ -305,26 +312,30 @@ ob_start();
                         <?php foreach ($subjects as $sub): ?>
                         <th colspan="<?= $subjectColumns ?>" class="small align-middle">
                             <?= sanitize($sub['subject_name']) ?>
-                            <?php if ($exam['type'] !== 'unit'): ?>
-                                <?php $ch = $sub['exam_credit_hours'] ?? $sub['class_credit_hours'] ?? $sub['default_credit_hours'] ?? 4; ?>
-                                <br><small class="text-muted">(<?= $ch ?> CH; FM: <?= ledgerMark((float)$sub['theory_full']+(float)$sub['practical_full']) ?>)</small>
+                            <?php $headerResult=erpCalculateSubjectResult($sub,[],$exam); ?>
+                            <?php if ($ledgerMode === 'grade'): ?>
+                                <br><small class="text-muted">CH: <?= ledgerMark($headerResult['credit_hours']) ?></small>
                             <?php else: ?>
-                                <br><small class="text-muted">(FM: <?= $sub['theory_full'] ?>)</small>
+                                <br><small class="text-muted">FM: <?= ledgerMark($headerResult['theory_full']+$headerResult['practical_full']) ?></small>
                             <?php endif; ?>
                         </th>
                         <?php endforeach; ?>
-                        <th rowspan="2" class="align-middle"><?= $isSubjectLedger?'Subject Total':'Total Obtained' ?></th>
-                        <th rowspan="2" class="align-middle"><?= ($exam['result_system'] ?? 'gpa') === 'percentage' ? ($isSubjectLedger?'Subject %':'Percentage') : ($isSubjectLedger?'Subject GP':'GPA') ?></th>
-                        <th rowspan="2" class="align-middle">Result</th>
+                        <?php if($ledgerMode==='marks'): ?><th rowspan="2" class="align-middle"><?= $isSubjectLedger?'Subject Total':'Total Obtained' ?></th><?php endif; ?>
+                        <th rowspan="2" class="align-middle"><?= $ledgerMode==='marks' ? ($isSubjectLedger?'Subject Percentage':'Percentage') : ($isSubjectLedger?'Subject GPA':'GPA') ?></th>
+                        <th rowspan="2" class="align-middle"><?= $ledgerMode==='marks'?'Division':'Result' ?></th>
                     </tr>
                     <tr>
                         <?php foreach ($subjects as $sub): ?>
-                        <th style="font-size: 0.7rem;"><?= $exam['type']==='unit'?'Marks':'TH' ?></th>
-                        <?php if($exam['type']!=='unit'): ?>
-                        <th style="font-size: 0.7rem;">IN</th>
-                        <th style="font-size: 0.7rem;">Total</th>
+                        <?php if($ledgerMode==='grade'): ?>
+                        <th style="font-size: 0.7rem;">GRADE (TH)</th>
+                        <th style="font-size: 0.7rem;">GRADE (IN)</th>
+                        <th style="font-size: 0.7rem;">FINAL GRADE</th>
+                        <th style="font-size: 0.7rem;">GRADE POINT</th>
+                        <?php else: ?>
+                        <th style="font-size: 0.7rem;">TH</th>
+                        <th style="font-size: 0.7rem;">PR</th>
+                        <th style="font-size: 0.7rem;">TOTAL</th>
                         <?php endif; ?>
-                        <th style="font-size: 0.7rem;">GD</th>
                         <?php endforeach; ?>
                     </tr>
                 </thead>
@@ -342,24 +353,25 @@ ob_start();
                             ?>
                             <td colspan="<?= $subjectColumns ?>" class="bg-secondary-subtle text-muted">N/A</td>
                             <?php elseif ($sm): ?>
-                                <?php if ($exam['type'] === 'unit'): ?>
-                                        <td><?= ledgerMark($sm['theory']) ?></td>
-                                        <td class="fw-bold <?= $sm['grade'] === 'NG' ? 'text-danger' : 'text-primary' ?>"><?= $sm['remarks']==='Incomplete'?'—':$sm['grade'] ?></td>
+                                <?php if ($ledgerMode === 'grade'): ?>
+                                    <td><?= ($sub['assessment_method']??'')==='THEMATIC_CONTINUOUS'||$sm['theory']===null?'—':sanitize($sm['external_grade']) ?></td>
+                                    <td><?= $sm['practical_full']<=0||$sm['practical']===null?'—':sanitize($sm['internal_grade']) ?></td>
+                                    <td class="fw-bold <?= $sm['grade']==='NG'?'text-danger':'text-primary' ?>"><?= $sm['incomplete']?'—':sanitize($sm['grade']) ?></td>
+                                    <td><?= $sm['incomplete']?'—':number_format($sm['gp'],2) ?></td>
                                 <?php else: ?>
-                                    <td><?= ledgerMark($sm['theory']) ?></td>
-                                    <td><?= $sub['practical_full'] > 0 ? ledgerMark($sm['practical']) : '-' ?></td>
+                                    <td><?= ($sub['assessment_method']??'')==='THEMATIC_CONTINUOUS'||$sm['theory_full']<=0?'—':ledgerMark($sm['theory']) ?></td>
+                                    <td><?= $sm['practical_full'] > 0 ? ledgerMark($sm['practical']) : '—' ?></td>
                                     <td><?= ledgerMark($sm['total']) ?></td>
-                                    <td class="fw-bold <?= $sm['grade'] === 'NG' ? 'text-danger' : 'text-primary' ?>"><?= $sm['remarks']==='Incomplete'?'—':$sm['grade'] ?></td>
                                 <?php endif; ?>
                             <?php else: ?>
                             <td colspan="<?= $subjectColumns ?>" class="text-muted small">Incomplete</td>
                             <?php endif; ?>
                         <?php endforeach; ?>
 
-                        <td><?= ledgerMark($row['total_marks']) ?></td>
+                        <?php if($ledgerMode==='marks'): ?><td><?= ledgerMark($row['total_marks']) ?></td><?php endif; ?>
                         <td class="fw-bold text-success font-monospace">
                             <?php if(in_array($row['status'],['Incomplete','N/A'],true)): ?>—
-                            <?php elseif (($exam['result_system'] ?? 'gpa') === 'percentage'): ?>
+                            <?php elseif ($ledgerMode === 'marks'): ?>
                                 <?= number_format($row['gpa'], 2) ?>%
                             <?php else: ?>
                                 <?= number_format($row['gpa'], 2) ?>
@@ -367,7 +379,7 @@ ob_start();
                         </td>
                         <td>
                             <span class="badge bg-<?= $row['status'] === 'Pass' ? 'success' : 'danger' ?>">
-                                <?= in_array($row['status'],['Incomplete','N/A'],true)?$row['status']:((($exam['result_system'] ?? 'gpa') === 'gpa') ? ($row['status'] === 'Pass' ? 'Graded' : 'Not Graded') : ($row['status'] === 'Pass' ? 'Passed' : 'Failed')) ?>
+                                <?= in_array($row['status'],['Incomplete','N/A'],true)?$row['status']:($ledgerMode==='grade'?($row['status']==='Pass'?'Graded':'Not Graded'):sanitize($row['division'])) ?>
                             </span>
                         </td>
                     </tr>

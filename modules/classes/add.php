@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/catalog_validation.php';
 
 Auth::requireRole(['super_admin', 'school_admin']);
 
@@ -38,6 +39,8 @@ if (isset($_POST['add_class'])) {
     
     if (empty($error)) {
         try {
+            $db->beginTransaction();catalogWriteLock($db,(int)$school_id);
+            validateUniqueClassName($db,(int)$school_id,$name);
             $stmt = $db->prepare("INSERT INTO classes (name, name_np, level, grading_type, class_teacher_name, school_id, is_grading_teaching) VALUES (?, ?, ?, ?, ?, ?, ?)");
             $stmt->execute([$name, $name_np, $level, $grading_type, $class_teacher_name, $school_id, $is_grading_teaching]);
             $new_id = $db->lastInsertId();
@@ -88,9 +91,11 @@ if (isset($_POST['add_class'])) {
             }
             
             Auth::logActivity(Auth::getUserId(), 'Add Class', 'classes', $new_id);
+            $db->commit();
             redirect(APP_URL . '/modules/classes/index.php', 'Class added successfully');
-        } catch (PDOException $e) {
-            $error = schoolPublicError($e);
+        } catch (PDOException|InvalidArgumentException $e) {
+            if($db->inTransaction())$db->rollBack();
+            $error = $e instanceof InvalidArgumentException?$e->getMessage():schoolPublicError($e);
         }
     }
 }

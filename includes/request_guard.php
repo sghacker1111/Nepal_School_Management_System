@@ -70,6 +70,13 @@ function guardSchoolRequest(): void {
         return;
     }
     if (!Auth::verifyCSRFToken($_POST[CSRF_TOKEN_NAME] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? null)) denySchoolRequest('Your security token has expired. Reload the page and try again.', 419);
+    // Automatic settings are immutable even if a forged request re-enables hidden controls.
+    $automaticSettingsWrite=($module==='exams'&&($file==='edit.php'||($file==='view.php'&&(isset($_POST['map_subject'])||isset($_GET['delete_mapping'])))))||($module==='subjects'&&$file==='internal.php'&&!empty($_GET['exam']));
+    if($automaticSettingsWrite){
+        $examId=(int)($_GET['id']??$_GET['exam']??0);
+        $q=getDB()->prepare('SELECT creation_mode FROM exams WHERE id=? AND school_id=?');$q->execute([$examId,(int)Auth::getSchoolId()]);
+        if($q->fetchColumn()==='automatic')denySchoolRequest('Automatic exam settings are read-only. Create a manual exam to customize defaults.');
+    }
     foreach ($_POST as $key=>$value) {
         if (str_ends_with($key, '_drive_path') && !empty($value)) denySchoolRequest('Use the file upload button. Reading a server file path is not supported.', 422);
     }

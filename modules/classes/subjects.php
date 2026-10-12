@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/catalog_validation.php';
 
 Auth::requireRole(['super_admin', 'school_admin']);
 
@@ -80,6 +81,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $error = "Subject is required.";
     } else {
         try {
+            $db->beginTransaction();catalogWriteLock($db,(int)$school_id);
+            $targetSubject=schoolRecord($db,'subjects',$subject_id,(int)$school_id);
+            validateUniqueClassSubject($db,(int)$school_id,$class_id,$targetSubject);
             // 1. Check if subject_id is already mapped to this class
             $stmt_check_id = $db->prepare("SELECT COUNT(*) FROM class_subjects WHERE class_id = ? AND subject_id = ?");
             $stmt_check_id->execute([$class_id, $subject_id]);
@@ -123,8 +127,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     $success = "Subject mapped successfully.";
                 }
             }
-        } catch (PDOException $e) {
-            if (strpos($e->getMessage(), 'UNIQUE constraint failed') !== false) {
+            if($error)$db->rollBack();else $db->commit();
+        } catch (PDOException|InvalidArgumentException $e) {
+            if($db->inTransaction())$db->rollBack();
+            if($e instanceof InvalidArgumentException)$error=$e->getMessage();
+            elseif (strpos($e->getMessage(), 'UNIQUE constraint failed') !== false) {
                 $error = "Duplicate Subject Blocked: This subject is already assigned to this class.";
             } else {
                 $error = schoolPublicError($e);
