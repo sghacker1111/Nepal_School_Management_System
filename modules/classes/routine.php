@@ -4,6 +4,7 @@ require_once __DIR__.'/../../includes/database.php';
 require_once __DIR__.'/../../includes/auth.php';
 require_once __DIR__.'/../../includes/functions.php';
 require_once __DIR__.'/../../includes/routine_service.php';
+require_once __DIR__.'/../../includes/routine_profiles.php';
 Auth::requireRole(['super_admin','school_admin','principal','teacher','exam_officer']);
 $db=getDB();$school_id=(int)Auth::getSchoolId();$actor=(int)Auth::getUserId();
 $canEdit=Auth::hasRole(['super_admin','school_admin'])&&!Auth::isReadOnly()&&$school_id>0;
@@ -16,6 +17,7 @@ if($class_id&&!$class)denySchoolRequest('Choose an active class in this school.'
 $day=(int)($_GET['day']??$_POST['day']??1);if(!in_array($day,[1,2,3,4,5],true))denySchoolRequest('School days are Monday to Friday.',422);
 $q=$db->prepare("SELECT id,full_name FROM users WHERE school_id=? AND role='teacher' AND status=1 ORDER BY full_name");$q->execute([$school_id]);$teachers=$q->fetchAll();
 $error='';$success='';
+try{$profile_id=routineIdentifier($_GET['profile_id']??0);}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),404);}
 if($_SERVER['REQUEST_METHOD']==='POST'){
     if(!$canEdit)denySchoolRequest('Only administrators may change the weekly routine.',403);
     $q=$db->prepare('SELECT password FROM users WHERE id=? AND school_id=? AND status=1');$q->execute([$actor,$school_id]);
@@ -35,7 +37,28 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
             saveRoutineRequirements($db,$school_id,$class_id,$_POST['requirements']);$success='Subject teachers and weekly period requirements saved successfully.';
         }elseif($action==='customize'){
             if(!$class||!is_array($_POST['grid']??null))throw new InvalidArgumentException('Choose a class and valid period entries.');
-            saveRoutineDay($db,$school_id,$actor,$class_id,$day,$periods,$_POST['grid']);$success='Daily routine modified successfully; the previous version is retained in history.';
+            $activeLayout=routineActiveLayout($db,$school_id,$class_id);
+            if($activeLayout){
+                $week=routineActiveGrid($db,$school_id,$class_id);$week[$day]=[];
+                foreach($_POST['grid'] as $p=>$cell)$week[$day][$p]=['subject_id'=>$cell['subject']??null,'teacher_id'=>$cell['teacher']??null];
+                routinePublishWeek($db,$school_id,$class_id,$actor,$activeLayout,$week);
+            }else saveRoutineDay($db,$school_id,$actor,$class_id,$day,$periods,$_POST['grid']);
+            $success='Daily routine modified successfully; the previous version is retained in history.';
+        }elseif($action==='save_profile'){
+            if(!$class)throw new InvalidArgumentException('Choose an active class.');
+            $input=$_POST;
+            if(!empty($_POST['save_as_new']))$input['profile_id']=0;
+            $profile_id=routineSaveProfile($db,$school_id,$class_id,$actor,$input);
+            $saved=routineProfile($db,$school_id,$class_id,$profile_id);
+            $intent=$_POST['intent']??'save';
+            if(!in_array($intent,['save','activate'],true))throw new InvalidArgumentException('Choose save or activate.');
+            if($intent==='activate')routinePublishWeek($db,$school_id,$class_id,$actor,$saved['payload']['layout'],$saved['payload']['grid'],$profile_id);
+            $success=$intent==='activate'?'Routine profile saved and activated successfully. Previous routine retained in history.':'Routine profile saved successfully. The active timetable is unchanged.';
+        }elseif($action==='activate_profile'){
+            $profile_id=routineIdentifier($_POST['profile_id']??0);$saved=routineProfile($db,$school_id,$class_id,$profile_id);
+            if(routineIdentifier($_POST['revision']??0)!==(int)$saved['revision'])throw new InvalidArgumentException('The profile changed. Reload it before activation.');
+            routinePublishWeek($db,$school_id,$class_id,$actor,$saved['payload']['layout'],$saved['payload']['grid'],$profile_id);
+            $success='Routine profile activated successfully. Previous routine retained in history.';
         }elseif($action==='generate'){
             $targets=isset($_POST['all_classes'])?$classes:($class?[$class]:[]);$ready=[];
             foreach($targets as $target){$subjects=routineSubjects($db,$school_id,(int)$target['id']);if(!$subjects)continue;
@@ -46,35 +69,52 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
             foreach($ready as [$target,$subjects])routineArchive($db,$school_id,$actor,(int)$target['id']);
             $insert=$db->prepare('INSERT INTO class_routines(class_id,day_of_week,period_number,subject_id,teacher_id,school_id) VALUES(?,?,?,?,?,?)');
             foreach($ready as [$target,$subjects]){
-                $built=buildClassRoutine($db,$school_id,$target,$subjects,[1,2,3,4,5],$periods);
+                $activeLayout=routineActiveLayout($db,$school_id,(int)$target['id']);
+                $built=buildClassRoutine($db,$school_id,$target,$subjects,[1,2,3,4,5],$activeLayout?max(array_column($activeLayout,'count')):$periods,$activeLayout);
                 if($built['unplaced'])throw new InvalidArgumentException($target['name'].': '.$built['unplaced'].' periods could not fit without teacher conflicts. Adjust assignments or use manual scheduling. No schedules were replaced.');
-                foreach($built['grid'] as $d=>$slots)foreach($slots as $p=>$slot)$insert->execute([$target['id'],$d,$p,$slot['subject_id'],$slot['teacher_id'],$school_id]);
+                if($activeLayout)routinePublishWeek($db,$school_id,(int)$target['id'],$actor,$activeLayout,$built['grid']);
+                else foreach($built['grid'] as $d=>$slots)foreach($slots as $p=>$slot)$insert->execute([$target['id'],$d,$p,$slot['subject_id'],$slot['teacher_id'],$school_id]);
             }
             $success='Weekly routine generated successfully for '.count($ready).' classes; every first period uses the class teacher.';
         }else throw new InvalidArgumentException('Choose a valid routine action.');
         Auth::logActivity($actor,'Update weekly routine','classes',$class_id?:null);$db->commit();
-        redirect(APP_URL.'/modules/classes/routine.php?'.http_build_query(['class_id'=>$class_id,'day'=>$day]),$success,'success');
+        redirect(APP_URL.'/modules/classes/routine.php?'.http_build_query(['class_id'=>$class_id,'day'=>$day,'profile_id'=>$profile_id]),$success,'success');
     }catch(Throwable $e){if($db->inTransaction())$db->rollBack();if($e instanceof InvalidArgumentException)$error=$e->getMessage();else{error_log('Routine: '.$e->getMessage());$error='The routine could not be saved. Please try again; existing schedules are unchanged.';}}
 }
-$subjects=$class?routineSubjects($db,$school_id,$class_id):[];$unique=[];foreach($subjects as $s)$unique[$s['subject_id']]=$s;
-$q=$db->prepare('SELECT * FROM class_routines WHERE school_id=? AND class_id=? AND day_of_week BETWEEN 1 AND 5 ORDER BY day_of_week,period_number');$q->execute([$school_id,$class_id]);$grid=[];foreach($q as $slot)$grid[$slot['day_of_week']][$slot['period_number']]=$slot;
-$teacherNames=array_column($teachers,'full_name','id');$days=[1=>'Monday',2=>'Tuesday',3=>'Wednesday',4=>'Thursday',5=>'Friday'];
+$subjects=$class?routineSubjects($db,$school_id,$class_id):[];$unique=[];$subjectTeachers=[];
+foreach($subjects as $s){$unique[$s['subject_id']]=$s;$ids=!empty($class['is_grading_teaching'])?[(int)$class['class_teacher_id']]:array_map('intval',explode(',',(string)$s['teacher_id']));$subjectTeachers[$s['subject_id']]=array_values(array_unique(array_merge($subjectTeachers[$s['subject_id']]??[],$ids)));}
+$q=$db->prepare('SELECT id,full_name FROM users WHERE school_id=?');$q->execute([$school_id]);$teacherNames=array_column($q->fetchAll(),'full_name','id');
+$q=$db->prepare('SELECT id,name_en FROM subjects WHERE school_id=?');$q->execute([$school_id]);$subjectNames=array_column($q->fetchAll(),'name_en','id');
+$grid=routineActiveGrid($db,$school_id,$class_id);$activeLayout=routineActiveLayout($db,$school_id,$class_id);$hasLayout=(bool)$activeLayout;
+$layout=$activeLayout??routineDefaultLayout($periods);$selectedProfile=null;
+if($error)$profile_id=(int)($_GET['profile_id']??0);
+if($profile_id){try{$selectedProfile=routineProfile($db,$school_id,$class_id,$profile_id);$layout=$selectedProfile['payload']['layout'];$grid=$selectedProfile['payload']['grid'];$hasLayout=true;}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),404);}}
+$editorName=$selectedProfile['name']??'';$editorMode=$selectedProfile['mode']??'manual';
+$editorLayout=$layout;$editorGrid=$grid;
+if($error&&($_POST['action']??'')==='save_profile'){
+    if(is_string($_POST['name']??null))$editorName=$_POST['name'];
+    if(in_array($_POST['mode']??'', ['manual','automatic'],true))$editorMode=$_POST['mode'];
+    $recovered=routineRecoverEditorInput($_POST,$layout,$grid,array_keys($unique),array_column($teachers,'id'));
+    $editorLayout=$recovered['layout'];$editorGrid=$recovered['grid'];
+}
+$q=$db->prepare('SELECT id,name,revision FROM routine_profiles WHERE school_id=? AND class_id=? ORDER BY name,id');$q->execute([$school_id,$class_id]);$profiles=$q->fetchAll();
+$usedTeachers=[];foreach($grid as $slots)foreach($slots as $cell)if(!empty($cell['teacher_id']))$usedTeachers[(int)$cell['teacher_id']]=(int)$cell['teacher_id'];
+$displayPeriods=max(array_column($layout,'count'));$days=[1=>'Monday',2=>'Tuesday',3=>'Wednesday',4=>'Thursday',5=>'Friday'];
 $pageTitle='Weekly Class Routine';$activePage='routine';ob_start();?>
 <div class="d-flex justify-content-between no-print"><h2>Weekly Class Routine</h2><button class="btn btn-primary" onclick="window.print()">Print routine</button></div>
 <p class="text-muted">Monday–Friday full school days. Saturday and Sunday are holidays. Period 1 belongs to the class teacher every day.</p>
 <div class="d-none d-print-block text-center mb-3"><h3><?= sanitize($school['name_en']??APP_NAME) ?></h3><p><?= sanitize($school['address']??'') ?></p></div>
 <?php if($error): ?><div class="alert alert-danger" role="alert"><?= sanitize($error) ?></div><?php endif; ?>
-<form method="GET" class="row g-3 mb-4 no-print"><div class="col-md-6"><label for="routineClass" class="form-label">Class</label><select id="routineClass" name="class_id" class="form-select" onchange="this.form.submit()"><?php foreach($classes as $c): ?><option value="<?= (int)$c['id'] ?>" <?= $class_id===(int)$c['id']?'selected':'' ?>><?= sanitize($c['name']) ?></option><?php endforeach; ?></select></div><div class="col-md-6"><label class="form-label" for="routineDay">Day to modify</label><select id="routineDay" name="day" class="form-select" onchange="this.form.submit()"><?php foreach($days as $d=>$name): ?><option value="<?= $d ?>" <?= $day===$d?'selected':'' ?>><?= $name ?></option><?php endforeach; ?></select></div></form>
-<?php if($class): ?>
-<div class="card mb-4"><div class="card-header"><h4><?= sanitize($class['name']) ?> — weekly timetable</h4><p class="mb-0">Class teacher: <?= sanitize($teacherNames[(int)($class['class_teacher_id']??0)]??$class['class_teacher_name']??'Not assigned') ?></p></div><div class="table-responsive"><table class="table table-bordered mb-0"><thead><tr><th>Day</th><?php for($p=1;$p<=$periods;$p++): ?><th>Period <?= $p ?></th><?php endfor; ?></tr></thead><tbody><?php foreach($days as $d=>$name): ?><tr><th><?= $name ?></th><?php for($p=1;$p<=$periods;$p++): $cell=$grid[$d][$p]??[]; ?><td><?= sanitize($unique[$cell['subject_id']??0]['name_en']??'Free') ?><br><small><?= sanitize($teacherNames[$cell['teacher_id']??0]??'') ?></small></td><?php endfor; ?></tr><?php endforeach; ?></tbody></table></div></div>
-<?php endif; ?>
+<form method="GET" class="row g-3 mb-4 no-print"><div class="col-md-4"><label for="routineClass" class="form-label">Class</label><select id="routineClass" name="class_id" class="form-select" onchange="this.form.querySelector('[name=profile_id]').value='0';this.form.submit()"><?php foreach($classes as $c): ?><option value="<?= (int)$c['id'] ?>" <?= $class_id===(int)$c['id']?'selected':'' ?>><?= sanitize($c['name']) ?></option><?php endforeach; ?></select></div>
+<div class="col-md-6"><label for="routineProfile" class="form-label">Load weekly routine profile</label><select id="routineProfile" name="profile_id" class="form-select" onchange="this.form.submit()"><option value="0">Current active timetable<?= $canEdit?' / new profile':'' ?></option><?php foreach($profiles as $profile): ?><option value="<?= (int)$profile['id'] ?>" <?= $profile_id===(int)$profile['id']?'selected':'' ?>><?= sanitize($profile['name']) ?> (v<?= (int)$profile['revision'] ?>)</option><?php endforeach; ?></select></div><div class="col-md-2 align-self-end"><button class="btn btn-outline-primary">Load</button></div></form>
+<?php if($class):include __DIR__.'/../../includes/routine_timetable.php';endif; ?>
 <?php if($canEdit&&$class): ?>
+<?php if($selectedProfile): ?><form method="POST" class="no-print d-flex gap-2 align-items-end mb-3" onsubmit="return confirm('Activate this saved profile? The previous timetable will be retained in history.')"><input type="hidden" name="action" value="activate_profile"><input type="hidden" name="class_id" value="<?= $class_id ?>"><input type="hidden" name="profile_id" value="<?= $profile_id ?>"><input type="hidden" name="revision" value="<?= (int)$selectedProfile['revision'] ?>"><label>Current administrator password<input name="password" type="password" class="form-control" autocomplete="current-password" required></label><button class="btn btn-success">Activate saved profile</button><a class="btn btn-outline-secondary" href="?class_id=<?= $class_id ?>">New profile from active routine</a></form><?php endif; ?>
+<?php include __DIR__.'/../../includes/routine_profile_editor.php'; ?>
 <details class="card card-body mb-3 no-print" open><summary class="fw-bold">Subject teachers and total periods per week</summary><p class="small text-muted mt-2">Loaded from class subject assignments. Save missing or changed values here. Blank weekly values initially use rounded credits as a suggestion; saving periods does not alter TH/IN grading credits. For section-specific mappings, the class timetable uses the largest weekly requirement per subject.</p>
 <form method="POST"><input type="hidden" name="action" value="save_requirements"><input type="hidden" name="class_id" value="<?= $class_id ?>"><div class="table-responsive"><table class="table"><thead><tr><th>Subject / section</th><th>Total periods per week</th><th>Assigned teachers (multiple selection supported)</th></tr></thead><tbody><?php foreach($subjects as $s): ?><tr><td><?= sanitize($s['name_en']) ?><?= $s['is_optional']?' (Optional)':'' ?><br><small><?= sanitize($s['section_name']??'All sections') ?></small></td><td><input class="form-control" aria-label="<?= sanitize($s['name_en']) ?> weekly periods" name="requirements[<?= $s['id'] ?>][weekly]" type="number" min="0" max="50" value="<?= routineWeeklyPeriods($s) ?>" required></td><td><select multiple class="form-select" aria-label="<?= sanitize($s['name_en']) ?> teachers" name="requirements[<?= $s['id'] ?>][teachers][]"><?php foreach($teachers as $t): ?><option value="<?= $t['id'] ?>" <?= teacherAssignmentContains($s['teacher_id'],(int)$t['id'])?'selected':'' ?>><?= sanitize($t['full_name']) ?></option><?php endforeach; ?></select></td></tr><?php endforeach; ?></tbody></table></div><label>Current administrator password<input class="form-control mb-2" type="password" name="password" autocomplete="current-password" required></label><button class="btn btn-primary">Save weekly requirements</button></form></details>
 <details class="card card-body mb-3 no-print"><summary class="fw-bold">Automatically create weekly routine</summary><form method="POST" class="mt-3" onsubmit="return confirm('Replace selected routines? Previous schedules will be retained in history. Teacher conflicts or insufficient periods cancel the whole operation.')"><input type="hidden" name="action" value="generate"><input type="hidden" name="class_id" value="<?= $class_id ?>"><label class="d-block mb-2"><input type="checkbox" name="all_classes" value="1"> Generate all active classes (otherwise only <?= sanitize($class['name']) ?>)</label><label>Current administrator password<input class="form-control mb-2" type="password" name="password" autocomplete="current-password" required></label><button class="btn btn-success">Generate Monday–Friday routine</button></form></details>
-<details class="card card-body mb-3 no-print"><summary class="fw-bold">Manually modify <?= $days[$day] ?> periods</summary><form method="POST" class="mt-3"><input type="hidden" name="action" value="customize"><input type="hidden" name="class_id" value="<?= $class_id ?>"><input type="hidden" name="day" value="<?= $day ?>"><div class="table-responsive"><table class="table"><thead><tr><th>Period</th><th>Subject</th><th>Teacher</th></tr></thead><tbody><?php for($p=1;$p<=$periods;$p++):$cell=$grid[$day][$p]??[]; ?><tr><th><?= $p ?><?= $p===1?' (Class teacher)':'' ?></th><td><select class="form-select" name="grid[<?= $p ?>][subject]"><option value="">Free period</option><?php foreach($unique as $s): ?><option value="<?= $s['subject_id'] ?>" <?= ($cell['subject_id']??0)==$s['subject_id']?'selected':'' ?>><?= sanitize($s['name_en']) ?></option><?php endforeach; ?></select></td><td><select class="form-select" name="grid[<?= $p ?>][teacher]"><option value="">No teacher</option><?php foreach($teachers as $t): ?><option value="<?= $t['id'] ?>" <?= ($cell['teacher_id']??0)==$t['id']?'selected':'' ?>><?= sanitize($t['full_name']) ?></option><?php endforeach; ?></select></td></tr><?php endfor; ?></tbody></table></div><p class="small">Only assigned subject teachers may be selected. First period requires the class teacher. Weekly totals and other-class conflicts are validated when saving.</p><label>Current administrator password<input class="form-control mb-2" type="password" name="password" required autocomplete="current-password"></label><button class="btn btn-primary">Save <?= $days[$day] ?> routine</button></form></details>
-<details class="card card-body no-print"><summary class="fw-bold">Routine settings</summary><form method="POST" class="mt-3"><input type="hidden" name="action" value="save_settings"><input type="hidden" name="class_id" value="<?= $class_id ?>"><label>Periods per day<input class="form-control mb-2" type="number" name="periods" min="1" max="10" value="<?= $periods ?>" required></label><p>Saturday and Sunday are holidays; Monday–Friday are school days.</p><label>Current administrator password<input class="form-control mb-2" type="password" name="password" required autocomplete="current-password"></label><button class="btn btn-primary">Save routine settings</button></form></details>
 <?php endif; ?>
-<style>@media print{@page{size:A4 landscape;margin:10mm}details,.no-print{display:none!important}table{font-size:9pt}tr{break-inside:avoid}}</style>
+<style>.routine-timetable td{min-width:105px}.routine-timetable abbr{text-decoration:none}@media print{@page{size:A4 landscape;margin:10mm}details,.no-print{display:none!important}table{font-size:9pt}tr{break-inside:avoid}.routine-timetable td{min-width:0}}</style>
 <div class="d-none d-print-block text-end"><?= printSignature($school['principal_name']??'','Head Teacher',$school['principal_signature']??null) ?></div>
 <?php $content=ob_get_clean();include __DIR__.'/../../includes/header.php';

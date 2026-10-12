@@ -11,6 +11,7 @@ if(!$examId&&!Auth::hasRole(['super_admin','school_admin']))denySchoolRequest('O
 if($examId){$exam=schoolRecord($db,'exams',$examId,$school);$q=$db->prepare('SELECT * FROM exam_subjects WHERE id=? AND exam_id=?');$q->execute([$mapping,$examId]);$row=$q->fetch();}
 else{$exam=['type'=>'terminal'];$row=schoolRecord($db,'class_subjects',$mapping,$school);$row['practical_full']=$row['in_full_marks'];}
 if(!$row)denySchoolRequest('Subject configuration not found.',404);
+if($examId&&($exam['creation_mode']??'manual')==='automatic')denySchoolRequest('Automatic exam IN settings are read-only. Create a manual exam to customize defaults.');
 if(($row['assessment_method']??'')==='THEMATIC_CONTINUOUS'||($examId&&(empty($exam['has_internal'])||$exam['type']==='unit')))denySchoolRequest('This assessment has no separate IN components. Enable IN in a non-unit examination first.',422);
 $subject=schoolRecord($db,'subjects',(int)$row['subject_id'],$school);
 $kinds=$examId?[in_array($exam['type'],['final','annual'],true)?'annual':'terminal']:['terminal','annual'];

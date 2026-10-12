@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/catalog_validation.php';
 
 Auth::requireRole(['super_admin', 'school_admin']);
 
@@ -74,6 +75,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             try {
                 $db->beginTransaction();
+                catalogWriteLock($db,(int)$school_id);
+                validateUniqueClassSubject($db,(int)$school_id,$class_id,['name_en'=>$name_en,'name_np'=>$name_np,'code'=>$code]);
                 
                 // 1. Insert Subject with Theory and Internal fields
                 $stmt = $db->prepare("
@@ -107,11 +110,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 Auth::logActivity(Auth::getUserId(), 'Add Subject and Class Mapping', 'subjects', $new_subject_id);
                 redirect(APP_URL . '/modules/subjects/index.php', 'Subject added and mapped successfully with Theory & Internal evaluation components.');
-            } catch (PDOException $e) {
+            } catch (PDOException|InvalidArgumentException $e) {
                 if ($db->inTransaction()) {
                     $db->rollBack();
                 }
-                if (strpos($e->getMessage(), 'UNIQUE constraint failed') !== false) {
+                if ($e instanceof InvalidArgumentException) {
+                    $error=$e->getMessage();
+                } elseif (strpos($e->getMessage(), 'UNIQUE constraint failed') !== false) {
                     $error = 'Duplicate Subject Blocked: This subject is already assigned to this class.';
                 } else {
                     $error = schoolPublicError($e);

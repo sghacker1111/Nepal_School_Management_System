@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/grading.php';
 require_once __DIR__ . '/report_issue.php';
+require_once __DIR__.'/exam_template_service.php';
 
 function examHasMarks(PDO $db, int $examId): bool {
     $q=$db->prepare('SELECT COUNT(*) FROM marks WHERE exam_id=?');
@@ -15,6 +16,7 @@ function updateExamDetails(PDO $db,int $schoolId,int $examId,array $input): bool
         $q=$db->prepare('SELECT * FROM exams WHERE id=? AND school_id=?'.(DB_TYPE==='mysql'?' FOR UPDATE':''));
         $q->execute([$examId,$schoolId]);$exam=$q->fetch();
         if(!$exam)throw new InvalidArgumentException('Exam not found in this school.');
+        assertExamConfigurationEditable($exam);
         if($exam['is_locked']||$exam['is_published'])throw new InvalidArgumentException('Reopen this exam before changing its configuration.');
         $type=$input['type']??$exam['type'];$system=$input['result_system']??$exam['result_system'];
         if(isset($input['has_internal'])&&!in_array($input['has_internal'],[0,1,'0','1'],true))throw new InvalidArgumentException('Choose a valid internal-assessment option.');

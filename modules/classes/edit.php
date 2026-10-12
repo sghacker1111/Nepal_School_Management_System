@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/catalog_validation.php';
 
 Auth::requireRole(['super_admin', 'school_admin']);
 
@@ -57,6 +58,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     if (empty($error)) {
         try {
+            $db->beginTransaction();catalogWriteLock($db,(int)$school_id);
+            validateUniqueClassName($db,(int)$school_id,$name,$class_id);
             $upload_dir = UPLOAD_DIR;
             if (!file_exists($upload_dir)) {
                 mkdir($upload_dir, 0777, true);
@@ -110,10 +113,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt = $db->prepare("UPDATE classes SET name = ?, name_np = ?, level = ?, grading_type = ?, class_teacher_name = ?, class_teacher_id = ?, class_teacher_signature = ?, is_grading_teaching = ? WHERE id = ?");
                 $stmt->execute([$name, $name_np, $level, $grading_type, $class_teacher_name, $class_teacher_id ?: null, $class_teacher_signature, $is_grading_teaching, $class_id]);
                 Auth::logActivity(Auth::getUserId(), 'Edit Class Details', 'classes', $class_id);
+                $db->commit();
                 redirect(APP_URL . '/modules/classes/index.php', 'Class updated successfully');
             }
-        } catch (PDOException $e) {
-            $error = schoolPublicError($e);
+            if($db->inTransaction())$db->rollBack();
+        } catch (PDOException|InvalidArgumentException $e) {
+            if($db->inTransaction())$db->rollBack();
+            $error = $e instanceof InvalidArgumentException?$e->getMessage():schoolPublicError($e);
         }
     }
 }

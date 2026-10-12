@@ -1,12 +1,14 @@
 <?php
 require_once __DIR__.'/grading.php';
 require_once __DIR__.'/school_validation.php';
+require_once __DIR__.'/exam_template_service.php';
 function examMappingRevision(array $mapping):string{return hash('sha256',json_encode($mapping));}
 /** Changes limits, not entered scores. Confirmation and revision guard prevent stale edits. */
 function saveExamMapping(PDO $db,int $school,int $examId,array $config,int $mappingId,int $user,array $confirmation=[]):int{
  $db->beginTransaction();
  try{
   $exam=schoolRecord($db,'exams',$examId,$school,true);
+  assertExamConfigurationEditable($exam);
   if($exam['is_locked']||$exam['is_published'])throw new InvalidArgumentException('Reopen this locked or published exam before changing subjects.');
   schoolRecord($db,'classes',(int)$config['class_id'],$school);schoolRecord($db,'subjects',(int)$config['subject_id'],$school);
   $old=null;$marks=[];

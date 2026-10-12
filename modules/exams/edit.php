@@ -24,6 +24,7 @@ $exam = $stmt->fetch();
 if (!$exam) {
     redirect(APP_URL . '/modules/exams/index.php', 'Exam not found', 'error');
 }
+if(($exam['creation_mode']??'manual')==='automatic')redirect(APP_URL.'/modules/exams/view.php?id='.$exam_id,'Automatic exam settings are read-only. Create a manual exam to customize defaults.','error');
 
 if ($exam['is_locked'] || $exam['is_published']) {
     redirect(APP_URL . '/modules/exams/index.php', 'Locked exams cannot be edited.', 'error');

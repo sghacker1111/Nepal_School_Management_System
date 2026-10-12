@@ -57,7 +57,7 @@ with tempfile.TemporaryDirectory(prefix='erp-exam-http-') as tmp:
         target=db.execute("SELECT id FROM exams WHERE name='Third Terminal BS'").fetchone()[0]
         assert db.execute('SELECT start_date,end_date,issue_date,date_calendar,date_format FROM exams WHERE id=?',(target,)).fetchone()==('2026-10-10','2026-10-11','2026-10-10','both','ymd')
         body=request('/modules/exams/view.php?id='+str(target),{'initialize_defaults':'1','init_class_id':cid});assert 'Initialized' in body
-        assert db.execute('SELECT COUNT(*) FROM exam_subjects WHERE exam_id=? AND subject_id=?',(target,optional)).fetchone()[0]==1,'Visible inactive elective must initialize'
+        assert db.execute('SELECT COUNT(*) FROM exam_subjects WHERE exam_id=? AND class_id=? AND subject_id=?',(target,cid,optional)).fetchone()[0]==1,'Visible inactive elective must initialize exactly once in the selected class'
         assert db.execute('SELECT is_active FROM class_subjects WHERE class_id=? AND subject_id=?',(cid,optional)).fetchone()[0]==0,'Mapping must not certify/activate an offering'
         symbols=f'/modules/exams/symbols.php?exam_id={target}&class_id={cid}'
         request(symbols,{'symbol_mode':'alphabetical','first_symbol':'3001'},expected=419,csrf=False)
@@ -92,7 +92,7 @@ with tempfile.TemporaryDirectory(prefix='erp-exam-http-') as tmp:
         values={'save_marks':1,'exam_id':target,'class_id':cid}
         for k,v in {'theory':60,'participation':3,'project_work':12,'previous_exam':4.2}.items():values[f'marks[{sid}][{sub}][{k}]']=v
         request(get('/modules/results/marks_entry.php',q),values)
-        mapping=db.execute('SELECT id FROM exam_subjects WHERE exam_id=? AND subject_id=?',(target,sub)).fetchone()[0]
+        mapping=db.execute('SELECT id FROM exam_subjects WHERE exam_id=? AND class_id=? AND subject_id=?',(target,cid,sub)).fetchone()[0]
         edit=f'/modules/exams/view.php?id={target}&edit_mapping_id={mapping}'
         body=request(edit);revision=re.search(r'name="mapping_revision" value="([^"]+)"',body).group(1)
         assert 'confirm_grade_change' in body and 'saved grades' in body
@@ -102,7 +102,7 @@ with tempfile.TemporaryDirectory(prefix='erp-exam-http-') as tmp:
         assert db.execute('SELECT theory_obtained,practical_obtained FROM marks WHERE exam_id=? AND student_id=? AND subject_id=?',(target,sid,sub)).fetchone()==(60,19.2)
         assert db.execute('SELECT COUNT(*) FROM exam_scheme_history WHERE exam_id=?',(target,)).fetchone()[0]==1
         body=request(edit,{**config,'confirm_grade_change':1,'mapping_revision':revision});assert 'changed since you opened' in body
-        body=request(f'/modules/results/report_card.php?student={sid}&exam={target}');assert '3020' in body and 'GLOBAL-LEGACY' not in body and '2083-06-24 BS (2026-10-10 AD)' in body
+        body=request(f'/modules/results/report_card.php?student={sid}&exam={target}');assert '3020' in body and 'GLOBAL-LEGACY' not in body and 'data-issue-date="2026-10-10">2083-06-24 BS' in body
         body=request(get('/modules/attendance/index.php',{'class':cid,'date':'2083-06-24','calendar_fields[date]':'BS'}));assert '2083-06-24 BS (2026-10-10 AD)' in body
         login('teacher');request(symbols,{'symbol_mode':'alphabetical','first_symbol':'8001'},expected=403)
         body=request(symbols);assert 'read-only' in body and '/assets/js/notifications.js' in body

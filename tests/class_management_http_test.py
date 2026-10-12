@@ -1,4 +1,4 @@
-"""Class archive visibility and recovery on a disposable schema-10 database."""
+"""Class archive visibility and recovery on a disposable current-schema database."""
 import re
 from html import unescape
 from http_support import ERPHttpFixture
@@ -11,7 +11,8 @@ def class_names(body):
 
 with ERPHttpFixture() as app:
     f = app.fixture
-    assert app.db.execute("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'").fetchone() == ('10',)
+    schema_before = app.db.execute("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'").fetchone()
+    assert schema_before == ('12',)
     valid = app.db.execute("SELECT id FROM classes WHERE school_id=1 AND name='Class 7'").fetchone()[0]
     valid_before = app.db.execute('SELECT * FROM classes WHERE id=?', (valid,)).fetchone()
     app.db.execute("UPDATE users SET username='sgsunil' WHERE id=?", (f['ids']['teacher'],))
@@ -31,7 +32,7 @@ with ERPHttpFixture() as app:
     def unchanged_records():
         assert retained == {table: app.snapshot(table) for table in retained}
         assert app.db.execute('SELECT * FROM classes WHERE id=?', (valid,)).fetchone() == valid_before
-        assert app.db.execute("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'").fetchone() == ('10',)
+        assert app.db.execute("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'").fetchone() == schema_before
 
     path = '/modules/classes/index.php'
     app.login('school_admin')
@@ -91,4 +92,4 @@ with ERPHttpFixture() as app:
     assert 'Recovered legacy class' not in class_names(body) and 'Other-school private class' in class_names(body)
     app.request(path, restore, status=422)
     unchanged_records()
-    print(f'Class Management archive visibility and recovery passed: {app.count} HTTP requests; schema 10 and linked records unchanged.')
+    print(f'Class Management archive visibility and recovery passed: {app.count} HTTP requests; schema {schema_before[0]} and linked records unchanged.')

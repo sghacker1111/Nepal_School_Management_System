@@ -53,8 +53,9 @@ function erpReportSummary(array $marks, array $exam, string $system): array {
     }
     if(!$marks){$failed=true;$incomplete=true;}
     $average=$system==='percentage'?($full>0?round($obtained/$full*100,2):0):($credits>0?round($weighted/$credits,2):0);
+    if($system==='percentage'&&$average<35)$failed=true;
     $text=$incomplete?'Incomplete':($system==='percentage'?number_format($average,2).'%':($failed?'NG':number_format($average,2)));
-    $grade=$incomplete?'Incomplete':($failed?'NG':($system==='percentage'?($average>=80?'Distinction':($average>=60?'First Division':($average>=45?'Second Division':'Third Division'))):erpFinalGrade($average)));
+    $grade=$incomplete?'Incomplete':($failed?($system==='percentage'?'Failed':'NG'):($system==='percentage'?($average>=80?'Distinction':($average>=60?'First Division':($average>=45?'Second Division':'Third Division'))):erpFinalGrade($average)));
     return ['marks_elaborated'=>$rows,'total_credit_hours'=>$credits,'weighted_gp_sum'=>$weighted,'has_failed_subject'=>$failed,'grand_full'=>$full,'grand_obtained'=>$obtained,'average_gpa'=>$average,'final_gpa_text'=>$text,'final_grade'=>$grade,'remarks_summary'=>$incomplete?'Incomplete':($failed?($system==='percentage'?'Failed':'Not Graded'):($system==='percentage'?'Passed':'Graded'))];
 }
 /** The same order is used for marks entry, ledger and every report format. */

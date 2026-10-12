@@ -110,7 +110,7 @@ ob_start();
                     <?php if (count($exams) > 0): ?>
                         <?php foreach ($exams as $exam): ?>
                         <tr>
-                            <td><strong><?= sanitize($exam['name']) ?></strong></td>
+                            <td><strong><?= sanitize($exam['name']) ?></strong><small class="d-block text-muted"><?= ($exam['creation_mode']??'manual')==='automatic'?'Automatic · locked defaults':'Manual · customizable' ?></small></td>
                             <td><span class="badge bg-info text-capitalize"><?= sanitize($exam['type']) ?></span></td>
                             <td><span class="badge bg-secondary"><?= sanitize($exam['year_bs']) ?> BS</span></td>
                             <td><?= sanitize(schoolDateLabel($exam['start_date'],$exam['date_calendar']??'both',$exam['date_format']??'long')) ?></td>
@@ -129,7 +129,7 @@ ob_start();
                                     <a href="<?= APP_URL ?>/modules/exams/view.php?id=<?= $exam['id'] ?>" class="btn btn-primary" title="Configure Subjects">
                                         <i class="fas fa-cog"></i> Config
                                     </a>
-                                    <?php if (Auth::hasRole(['super_admin', 'school_admin', 'exam_officer']) && !$exam['is_locked']): ?>
+                                    <?php if (Auth::hasRole(['super_admin', 'school_admin', 'exam_officer']) && !$exam['is_locked'] && ($exam['creation_mode']??'manual')!=='automatic'): ?>
                                     <a href="<?= APP_URL ?>/modules/exams/edit.php?id=<?= $exam['id'] ?>" class="btn btn-warning" title="Edit Exam Details">
                                         <i class="fas fa-edit"></i> Edit
                                     </a>

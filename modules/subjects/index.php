@@ -37,6 +37,7 @@ if (isset($_GET['delete'])) {
 }
 
 $show_hidden = isset($_GET['show_hidden']) && $_GET['show_hidden'] == '1';
+$filter_class=(int)($_GET['class']??0);
 
 // Fetch all subjects with class name and teacher IDs from class_subjects mapping
 $hidden_clause = $show_hidden ? "" : " AND (s.is_hidden = 0 OR s.is_hidden IS NULL)";
@@ -45,10 +46,10 @@ $stmt = $db->prepare("
     FROM subjects s
     LEFT JOIN class_subjects cs ON s.id = cs.subject_id AND (cs.school_id = ?)
     LEFT JOIN classes c ON cs.class_id = c.id
-    WHERE (s.school_id = ?) $hidden_clause AND (c.is_active = 1 OR cs.class_id IS NULL)
+    WHERE (s.school_id = ?) $hidden_clause AND (c.is_active = 1 OR cs.class_id IS NULL) ".($filter_class?' AND cs.class_id = ?':'')."
     ORDER BY c.id ASC, s.code ASC, s.name_en ASC
 ");
-$stmt->execute([$school_id, $school_id]);
+$stmt->execute([$school_id, $school_id,...($filter_class?[$filter_class]:[])]);
 $subjects = $stmt->fetchAll();
 
 // Fetch all school teachers to display their names
@@ -57,9 +58,9 @@ $stmt_teachers->execute([$school_id]);
 $all_teachers = $stmt_teachers->fetchAll(PDO::FETCH_KEY_PAIR);
 
 // Fetch all classes for filter dropdown
-$stmt_classes = $db->prepare("SELECT DISTINCT name FROM classes WHERE (school_id = ?) AND is_active = 1 ORDER BY id ASC");
+$stmt_classes = $db->prepare("SELECT id,name FROM classes WHERE (school_id = ?) AND is_active = 1 ORDER BY id ASC");
 $stmt_classes->execute([$school_id]);
-$all_classes_filter = $stmt_classes->fetchAll(PDO::FETCH_COLUMN);
+$all_classes_filter = $stmt_classes->fetchAll();
 
 $pageTitle = 'Subject Management';
 $activePage = 'subjects';
@@ -73,7 +74,7 @@ ob_start();
         <p class="text-muted small mb-0">Theory (TH) and Internal (IN) components configured per subject and class.</p>
     </div>
     <div class="d-flex gap-2">
-        <a href="?show_hidden=<?= $show_hidden ? '0' : '1' ?>" class="btn <?= $show_hidden ? 'btn-warning text-dark' : 'btn-outline-secondary' ?>">
+        <a href="?class=<?= $filter_class ?>&show_hidden=<?= $show_hidden ? '0' : '1' ?>" class="btn <?= $show_hidden ? 'btn-warning text-dark' : 'btn-outline-secondary' ?>">
             <i class="fas <?= $show_hidden ? 'fa-eye-slash' : 'fa-eye' ?>"></i> <?= $show_hidden ? 'Hide Inactive Subjects' : 'Show Hidden Subjects' ?>
         </a>
         <?php if (Auth::hasRole(['super_admin', 'school_admin'])): ?>
@@ -94,12 +95,12 @@ ob_start();
             </div>
             <div class="col-md-4">
                 <label for="filter_class" class="form-label small fw-bold">Filter By Class</label>
-                <select class="form-select form-select-sm" id="filter_class">
+                <form method="GET"><input type="hidden" name="show_hidden" value="<?= $show_hidden?1:0 ?>"><select class="form-select form-select-sm" id="filter_class" name="class" onchange="this.form.submit()">
                     <option value="">All Classes</option>
-                    <?php foreach ($all_classes_filter as $c_name): ?>
-                    <option value="<?= sanitize($c_name) ?>"><?= sanitize($c_name) ?></option>
+                    <?php foreach ($all_classes_filter as $c): ?>
+                    <option value="<?= (int)$c['id'] ?>" <?= $filter_class===(int)$c['id']?'selected':'' ?>><?= sanitize($c['name']) ?></option>
                     <?php endforeach; ?>
-                </select>
+                </select></form>
             </div>
             <div class="col-md-4">
                 <label for="filter_teacher" class="form-label small fw-bold">Filter By Teacher</label>
@@ -228,10 +229,6 @@ $(document).ready(function() {
 
     $('#filter_subject').on('keyup change', function() {
         table.search(this.value).draw();
-    });
-    
-    $('#filter_class').on('change', function() {
-        table.column(2).search(this.value).draw();
     });
     
     $('#filter_teacher').on('change', function() {

@@ -10,6 +10,7 @@ require_once __DIR__ . '/../../includes/functions.php';
 Auth::requireRole(['super_admin', 'school_admin', 'principal', 'teacher', 'exam_officer']);
 Auth::requireAccess('curriculum');
 require_once __DIR__.'/../../includes/teaching_scope.php';
+require_once __DIR__.'/../../includes/catalog_validation.php';
 
 $db = getDB();
 $school_id = Auth::getSchoolId();
@@ -190,24 +191,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
 
         if ($action === 'map_subject') {
+            if(!Auth::hasRole(['super_admin','school_admin']))denySchoolRequest('Only administrators may map class subjects.',403);
             $class_id = (int)$_POST['class_id'];
             $subject_id = (int)$_POST['subject_id'];
+            $target=schoolRecord($db,'subjects',$subject_id,(int)$school_id);
+            $db->beginTransaction();catalogWriteLock($db,(int)$school_id);
+            validateUniqueClassSubject($db,(int)$school_id,$class_id,$target);
             
             // Check mapping
             $stmt = $db->prepare("SELECT COUNT(*) FROM class_subjects WHERE class_id = ? AND subject_id = ? AND school_id = ?");
             $stmt->execute([$class_id, $subject_id, $school_id]);
             if ($stmt->fetchColumn() > 0) {
+                $db->rollBack();
                 echo json_encode(['success' => false, 'message' => 'Subject is already mapped to this class.']);
                 exit;
             }
             
             $stmt = $db->prepare("INSERT INTO class_subjects (class_id, subject_id, credit_hours, school_id) VALUES (?, ?, 4, ?)");
             $stmt->execute([$class_id, $subject_id, $school_id]);
+            $db->commit();
             echo json_encode(['success' => true]);
             exit;
         }
     } catch (Exception $e) {
-        echo json_encode(['success' => false, 'message' => schoolPublicError($e)]);
+        if($db->inTransaction())$db->rollBack();
+        echo json_encode(['success' => false, 'message' => $e instanceof InvalidArgumentException?$e->getMessage():schoolPublicError($e)]);
     }
     exit;
 }

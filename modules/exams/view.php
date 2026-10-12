@@ -26,7 +26,8 @@ if (!$exam) {
     redirect(APP_URL . '/modules/exams/index.php', 'Exam not found', 'error');
 }
 
-$configurationFrozen = $exam['is_locked'] || $exam['is_published'];
+$automaticExam=($exam['creation_mode']??'manual')==='automatic';
+$configurationFrozen = $exam['is_locked'] || $exam['is_published'] || $automaticExam;
 
 // Fetch school details for signatures
 $stmt = $db->prepare("SELECT * FROM schools WHERE id = ?");
@@ -35,7 +36,7 @@ $school = $stmt->fetch();
 
 // Handle Signature Uploads
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_signatures']) && Auth::hasRole(['super_admin', 'school_admin', 'exam_officer'])) {
-    if ($configurationFrozen) {
+    if ($exam['is_locked'] || $exam['is_published']) {
         $error = "The grading configuration is frozen because this exam is locked or published. Reopen it first.";
     } else {
         $sig_dir = UPLOAD_DIR;
@@ -139,7 +140,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['map_subject']) && Aut
 
 // Handle Bulk Initialization from Class Mappings
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['initialize_defaults']) && Auth::hasRole(['super_admin', 'school_admin', 'exam_officer'])) {
-    if ($configurationFrozen) {
+    if($automaticExam||!empty($exam['template_snapshot'])){
+        try{$inserted=initializeExamTemplateSubjects($db,(int)$school_id,$exam_id,(int)($_POST['init_class_id']??0));$success="Initialized $inserted subject configurations from saved template defaults successfully!";}
+        catch(InvalidArgumentException $e){$error=$e->getMessage();}catch(Throwable $e){error_log($e->getMessage());$error='Subject defaults could not be initialized. Existing records are unchanged.';}
+    } elseif ($configurationFrozen) {
         $error = "The grading configuration is frozen because this exam is locked or published. Reopen it first.";
     } else {
         $class_id = (int)$_POST['init_class_id'];
@@ -315,12 +319,14 @@ ob_start();
 </div>
 
 <?php if ($error): ?>
-<div class="alert alert-danger mb-4"><i class="fas fa-exclamation-circle"></i> <?= $error ?></div>
+<div class="alert alert-danger mb-4"><i class="fas fa-exclamation-circle"></i> <?= sanitize($error) ?></div>
 <?php endif; ?>
 
 <?php if ($success): ?>
 <div class="alert alert-success mb-4"><i class="fas fa-check-circle"></i> <?= $success ?></div>
 <?php endif; ?>
+<?php if($automaticExam): ?><div class="alert alert-info">Automatic exam · saved default revision <?= (int)$exam['template_revision'] ?>. Name, type, result system and subject / TH / IN settings are read-only. Marks, schedules, symbols, printing and lock/reopen remain available.</div>
+<?php if(!$exam['is_locked']&&!$exam['is_published']&&Auth::hasRole(['super_admin','school_admin','exam_officer'])): ?><form method="POST" class="card card-body mb-4"><label for="templateInitClass" class="form-label">Load saved defaults for an additional class</label><select id="templateInitClass" name="init_class_id" class="form-select mb-2" required><option value="">Choose class</option><?php foreach($classes as $c): ?><option value="<?= (int)$c['id'] ?>"><?= sanitize($c['name']) ?></option><?php endforeach; ?></select><button name="initialize_defaults" value="1" class="btn btn-outline-primary">Auto-initialize Subjects from saved template</button></form><?php endif; ?><?php endif; ?>
 
 <div class="row">
     <!-- Configuration & Utility Panel -->

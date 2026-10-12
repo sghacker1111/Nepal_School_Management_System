@@ -6,7 +6,7 @@ require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
-require_once __DIR__ . '/../../includes/report_issue.php';
+require_once __DIR__ . '/../../includes/progress_print.php';
 
 Auth::requireLogin();
 
@@ -17,17 +17,6 @@ $exam_id = isset($_GET['exam']) ? (int)$_GET['exam'] : 0;
 $school_id = Auth::getSchoolId();
 $grading_system = $_GET['system'] ?? 'gpa';
 
-if (!function_exists('getPercentageDivision')) {
-    function getPercentageDivision($pct, $has_failed) {
-        if ($has_failed || $pct < 32) {
-            return 'Failed';
-        }
-        if ($pct >= 80) return 'Distinction';
-        if ($pct >= 60) return 'First Division';
-        if ($pct >= 45) return 'Second Division';
-        return 'Third Division';
-    }
-}
 
 // Fetch student details
 $stmt = $db->prepare("
@@ -59,12 +48,8 @@ if (!$exam) {
     die("Exam not found.");
 }
 $symbolQuery=$db->prepare('SELECT symbol_no FROM exam_symbols WHERE school_id=? AND exam_id=? AND student_id=?');$symbolQuery->execute([$school_id,$exam_id,$student_id]);$student['symbol_no']=$symbolQuery->fetchColumn()?:null;
-try{$issue=reportIssueDate($exam,$_GET);}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
+try{$issue=progressPrintIssueDate($exam,$_GET);}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
 $issueQuery=http_build_query(['issue_date_mode'=>$issue['mode'],'issue_date'=>$issue['input_date'],'issue_calendar'=>$issue['calendar'],'display_calendar'=>$issue['display'],'date_format'=>$issue['format']]);
-
-if (!isset($_GET['system']) && !empty($exam['result_system'])) {
-    $grading_system = $exam['result_system'];
-}
 
 // Fetch school details
 $school_stmt = $db->prepare("SELECT * FROM schools WHERE id = ?");
@@ -294,14 +279,14 @@ extract(erpReportSummary($marks, $exam, $grading_system));
                 <p class="mb-0 small"><?= sanitize($school['address'] ?? 'Nepal') ?> | Phone: <?= sanitize($school['phone'] ?? '-') ?> | Email: <?= sanitize($school['email'] ?? '-') ?></p>
                 
                 <?php if ($classType === '1-3'): ?>
-                    <h5 class="mt-2 text-uppercase fw-bold text-dark text-decoration-underline mb-1">GRADE SHEET</h5>
+                    <h5 class="mt-2 text-uppercase fw-bold text-dark text-decoration-underline mb-1"><?= $grading_system === 'percentage' ? 'MARKS SHEET' : 'GRADE SHEET' ?></h5>
                     <h6 class="mb-0 fw-bold small"><?= sanitize($exam['name']) ?> - <?= $student['year_bs'] ?> BS (<?= $student['year_ad'] ?> AD)</h6>
                 <?php elseif ($classType === '4-8'): ?>
                     <h5 class="mt-2 text-uppercase fw-bold text-dark mb-0" style="font-size: 1rem;">BASIC LEVEL EXAMINATION</h5>
-                    <h5 class="text-uppercase fw-bold text-dark text-decoration-underline mb-1">GRADE SHEET</h5>
+                    <h5 class="text-uppercase fw-bold text-dark text-decoration-underline mb-1"><?= $grading_system === 'percentage' ? 'MARKS SHEET' : 'GRADE SHEET' ?></h5>
                     <h6 class="mb-0 fw-bold small"><?= sanitize($exam['name']) ?> - <?= $student['year_bs'] ?> BS (<?= $student['year_ad'] ?> AD)</h6>
                 <?php else: ?>
-                    <h5 class="text-uppercase fw-bold text-dark text-decoration-underline mb-1" style="margin-top: 10px;">GRADE SHEET</h5>
+                    <h5 class="text-uppercase fw-bold text-dark text-decoration-underline mb-1" style="margin-top: 10px;"><?= $grading_system === 'percentage' ? 'MARKS SHEET' : 'GRADE SHEET' ?></h5>
                     <h6 class="mb-0 fw-bold small"><?= sanitize($exam['name']) ?> - <?= $student['year_bs'] ?> BS (<?= $student['year_ad'] ?> AD)</h6>
                 <?php endif; ?>
             </div>
@@ -332,7 +317,7 @@ extract(erpReportSummary($marks, $exam, $grading_system));
                         <span class="text-muted">Symbol No:</span> <strong><?= sanitize($student['symbol_no'] ?? '-') ?></strong><br><span class="text-muted">Roll No:</span> <strong><?= sanitize($student['roll_number'] ?? '-') ?></strong>
                     </td>
                     <td style="padding: 2px 0; text-align: right;">
-                        <span class="text-muted">Date of Birth:</span> <strong><?= sanitize($student['dob_ad']?schoolDateLabel($student['dob_ad'],$issue['display'],$issue['format']):(($student['dob_bs']??'')?($student['dob_bs'].' BS'):'—')) ?></strong>
+                        <span class="text-muted">Date of Birth:</span> <strong><?= sanitize(progressPrintBirthDate($student,$issue)) ?></strong>
                     </td>
                 </tr>
             </tbody>
@@ -344,51 +329,9 @@ extract(erpReportSummary($marks, $exam, $grading_system));
         <span>Date of Issue: <strong data-issue-date="<?= sanitize($issue['date']) ?>"><?= sanitize($issue['label']) ?></strong></span>
     </div>
     <!-- Marks Table -->
-    <?php if ($exam['type'] === 'unit'): ?>
-        <?php if ($grading_system === 'percentage'): ?>
-        <!-- Unit Test Marksheet Layout -->
-        <table class="table table-report table-bordered align-middle">
-            <thead>
-                <tr>
-                    <th width="60">S.N.</th>
-                    <th>Subject</th>
-                    <th width="120">Full Marks</th>
-                    <th width="120">Pass Marks</th>
-                    <th width="140">Obtained Marks</th>
-                    <th width="120">Percentage</th>
-                    <th width="140">Remarks</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php 
-                $sn = 0;
-                foreach ($marks_elaborated as $m): 
-                    $sn++;
-                    $sub_pct = $m['theory_full'] > 0 ? ($m['theory_obtained'] / $m['theory_full']) * 100 : 0;
-                    $is_sub_fail = ($m['remarks'] === 'Fail' || $m['remarks'] === 'NG');
-                ?>
-                <tr>
-                    <td class="text-center font-monospace"><?= $sn ?></td>
-                    <td><strong><?= sanitize($m['subject_name']) ?></strong></td>
-                    <td class="text-center font-monospace"><?= $m['theory_full'] ?></td>
-                    <td class="text-center font-monospace"><?= $m['theory_pass'] ?></td>
-                    <td class="text-center font-monospace fw-bold"><?= $m['theory_obtained'] ?></td>
-                    <td class="text-center font-monospace"><?= $m['incomplete'] ? '—' : round($sub_pct, 1).'%' ?></td>
-                    <td class="text-center fw-bold <?= $is_sub_fail ? 'text-danger' : 'text-success' ?>"><?= $is_sub_fail ? 'Fail' : 'Pass' ?></td>
-                </tr>
-                <?php endforeach; ?>
-                
-                <tr class="table-light fw-bold" style="border-top: 2px solid #333;">
-                    <td colspan="2" class="text-end">Total Summary:</td>
-                    <td class="text-center font-monospace"><?= $grand_full ?></td>
-                    <td></td>
-                    <td class="text-center font-monospace text-primary"><?= $grand_obtained ?></td>
-                    <td class="text-center font-monospace"><?= number_format($average_gpa, 2) ?>%</td>
-                    <td class="text-center text-uppercase"><?= $remarks_summary ?></td>
-                </tr>
-            </tbody>
-        </table>
-        <?php else: ?>
+    <?php if ($grading_system === 'percentage'): ?>
+    <?php include __DIR__.'/../../includes/percentage_report_table.php'; ?>
+    <?php elseif ($exam['type'] === 'unit'): ?>
         <!-- Unit Test Grading Layout -->
         <table class="table table-report table-bordered align-middle">
             <thead>
@@ -426,69 +369,8 @@ extract(erpReportSummary($marks, $exam, $grading_system));
                 </tr>
             </tbody>
         </table>
-        <?php endif; ?>
-    <?php elseif ($grading_system === 'percentage'): ?>
-    <table class="table table-report table-bordered align-middle">
-        <thead>
-            <tr>
-                <th width="50">S.N.</th>
-                <th>Subject</th>
-                <th width="90">Full Marks</th>
-                <th width="90">Pass Marks</th>
-                <th width="90">Theory (TH)</th>
-                <th width="90">Internal (IN)</th>
-                <th width="100">Total Obtained</th>
-                <th width="80">Percentage</th>
-                <th width="100">Remarks</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php 
-            $sn = 0;
-
-            foreach ($marks_elaborated as $m): 
-                $sn++;
-                $th_full=$m['theory_full']; $pr_full=$m['practical_full'];
-                $th_pass=$m['theory_pass']; $pr_pass=$pr_full>0?$m['practical_pass']:0;
-                $th_obtained=$m['theory_obtained']??'—'; $pr_obtained=$m['practical_obtained']??'—';
-                $sub_full=$th_full+$pr_full;
-                $sub_obtained=$m['incomplete']?'—':(float)$m['theory_obtained']+(float)$m['practical_obtained'];
-                $sub_pct=$m['percentage'];
-                $is_sub_fail=$m['failed'];
-                $sub_remarks=$m['incomplete']?'Incomplete':($is_sub_fail?'Fail':'Pass');
-            ?>
-            <tr>
-                <td class="text-center font-monospace"><?= $sn ?></td>
-                <td>
-                    <strong><?= sanitize($m['subject_name']) ?></strong>
-                </td>
-                <td class="text-center font-monospace"><?= $sub_full ?></td>
-                <td class="text-center font-monospace"><?= $th_pass + $pr_pass ?></td>
-                <td class="text-center font-monospace"><?= $th_full > 0 ? $th_obtained : '-' ?></td>
-                <td class="text-center font-monospace"><?= $pr_full > 0 ? $pr_obtained : '-' ?></td>
-                <td class="text-center font-monospace fw-bold"><?= $sub_obtained ?></td>
-                <td class="text-center font-monospace"><?= round($sub_pct, 1) ?>%</td>
-                <td class="text-center fw-bold <?= $is_sub_fail ? 'text-danger' : 'text-success' ?>"><?= $sub_remarks ?></td>
-            </tr>
-            <?php endforeach; ?>
-            
-            <?php
-            $grand_pct = $grand_full > 0 ? ($grand_obtained / $grand_full) * 100 : 0;
-            $division = $final_grade;
-            ?>
-            <tr class="table-light fw-bold" style="border-top: 2px solid #333;">
-                <td colspan="2" class="text-end">Total Summary:</td>
-                <td class="text-center font-monospace"><?= $grand_full ?></td>
-                <td></td>
-                <td colspan="2"></td>
-                <td class="text-center font-monospace text-primary"><?= $grand_obtained ?></td>
-                <td class="text-center font-monospace"><?= round($grand_pct, 2) ?>%</td>
-                <td class="text-center text-uppercase"><?= $division ?></td>
-            </tr>
-        </tbody>
-    </table>
-    
     <?php elseif ($classType === '1-3'): ?>
+
     <table class="table table-report table-bordered align-middle">
         <thead>
             <tr>
@@ -620,6 +502,9 @@ extract(erpReportSummary($marks, $exam, $grading_system));
     </table>
     <?php endif; ?>
     
+    <?php if ($grading_system === 'percentage'): ?>
+    <?php include __DIR__.'/../../includes/percentage_report_key.php'; ?>
+    <?php else: ?>
     <!-- Grading Key & Result Box -->
     <div class="row mt-3 align-items-center">
         <div class="col-8 text-start">
@@ -689,8 +574,10 @@ extract(erpReportSummary($marks, $exam, $grading_system));
         </div>
     </div>
     
+    <?php endif; ?>
     <?= schoolPrintSignatures($db,(int)$school_id,$school,(int)$student['class_id']) ?>
 
+    <?php if ($grading_system !== 'percentage'): ?>
     <div class="mt-3 pt-2 border-top small text-muted text-start" style="font-size: 0.65rem; line-height: 1.3;">
         <p class="mb-1"><strong>NOTE:</strong> ONE CREDIT HOUR EQUALS TO 32 WORKING HOURS.</p>
         <?php if ($classType !== '1-3'): ?>
@@ -699,6 +586,7 @@ extract(erpReportSummary($marks, $exam, $grading_system));
         <p class="mb-0"><strong>ABS:</strong> ABSENT | <strong>W:</strong> WITHHELD | <strong>NG:</strong> NOT GRADED</p>
         <?php endif; ?>
     </div>
+    <?php endif; ?>
 </div>
 
 <script src="<?= APP_URL ?>/assets/js/nepali-date-converter.js"></script>
