@@ -40,7 +40,7 @@ with ERPHttpFixture() as app:
     assert 'value="55"' in mark_field('theory'),'Imported elective theory mark must remain visible'
     assert 'value="12"' in mark_field('project_work'),'Imported elective component must remain visible'
     assert app.db.execute('SELECT optional_subject_i FROM students WHERE id=?',(f['student'],)).fetchone()[0] is None,'GET must not auto-enroll'
-    data={'save_marks':1,'exam_id':f['exam'],'class_id':f['class'],'confirm_optional_enrollment':1,f'optional_enrollment[{f["student"]}][{optional}]':1}
+    data={'save_marks':1,'marks_complete':'1','exam_id':f['exam'],'class_id':f['class'],'confirm_optional_enrollment':1,f'optional_enrollment[{f["student"]}][{optional}]':1}
     for key,value in [('theory',56),('participation',3),('project_work',12),('previous_exam',5)]:data[f'marks[{f["student"]}][{optional}][{key}]']=value
     body=app.request(path,data);assert 'success' in body.lower()
     body=app.request(path);assert 'disabled' not in mark_field('theory') and 'value="56"' in mark_field('theory')

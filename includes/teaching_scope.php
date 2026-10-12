@@ -27,6 +27,12 @@ function learningSubjects(PDO $db,int $school,int $class,string $role,int $actor
 /** Validate both the saved target and submitted new scope to prevent moving another teacher's records. */
 function validateTeacherLearningRequest(PDO $db,int $school,string $module,string $file,array $data,array $query):void {
     if($module!=='learning'||!in_array($file,['curriculum.php','specification_grids.php','questions.php','paper_generator.php','question_grid.php','index.php'],true))return;
+    // Legacy pages dispatch both query-string and body actions. Never authorize one
+    // action while another handler executes, or let body fields shadow a query scope.
+    $queryActions=array_intersect_key($query,array_flip(['action','delete','action_get_chapters','action_get_topics']));
+    $bodyActions=array_intersect_key($data,array_flip(['action','action_import_excel','action_quick_add_class','action_quick_add_subject']));
+    if(count($queryActions)>1||count($bodyActions)>1||($queryActions&&$bodyActions))throw new InvalidArgumentException('Submit one learning action at a time. Reload the page and try again.');
+    if($data&&$query)validateTeacherLearningRequest($db,$school,$module,$file,[],$query);
     $role=Auth::getRole();$teacher=(int)Auth::getUserId();$values=array_replace($query,$data);$action=$data['action']??($query['action']??'');
     if($role==='teacher'&&$file==='curriculum.php'&&in_array($action,['map_subject','get_all_subjects'],true))throw new InvalidArgumentException('Only an administrator may map additional class subjects. Teachers can manage their assigned subjects only.');
     $scopes=[];

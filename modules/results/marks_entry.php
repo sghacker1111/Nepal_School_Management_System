@@ -21,14 +21,17 @@ $class_id = $_GET['class'] ?? '';
 $section_id = $_GET['section'] ?? '';
 $prev_exam_id = $_GET['prev_exam'] ?? '';
 $filter_subject_id = $_GET['subject'] ?? '';
+$student_search=trim((string)($_GET['student_search']??''));
+$marks_page=max(1,(int)($_GET['page']??1));
 
 // Save through one transactional, school-scoped validation service.
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_marks'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_once __DIR__ . '/../../includes/marks_service.php';
     try {
+        if(($_POST['marks_complete']??'')!=='1')throw new InvalidArgumentException('The marks form was incomplete or exceeded the server limit. Nothing was saved. Reload this page or select one subject and try again.');
         saveExamMarks($db, (int)Auth::getSchoolId(), (int)Auth::getUserId(), Auth::getRole(), $_POST);
         Auth::logActivity(Auth::getUserId(), 'Save exam marks', 'exams', (int)$_POST['exam_id']);
-        redirect(APP_URL.'/modules/results/marks_entry.php?'.http_build_query(['exam'=>(int)$_POST['exam_id'],'class'=>(int)$_POST['class_id'],'section'=>(int)($_POST['section_id']??0),'subject'=>$filter_subject_id]), 'Marks and attendance saved successfully.');
+        redirect(APP_URL.'/modules/results/marks_entry.php?'.http_build_query(['exam'=>(int)$_POST['exam_id'],'class'=>(int)$_POST['class_id'],'section'=>(int)($_POST['section_id']??0),'subject'=>$filter_subject_id,'page'=>$marks_page,'student_search'=>$student_search]), 'Marks and attendance saved successfully.');
     } catch (InvalidArgumentException $e) { $message=$e->getMessage();$message_type='error'; }
     catch (PDOException $e) { error_log($e->getMessage());$message='Marks could not be saved. Please try again.';$message_type='error'; }
 }
@@ -127,17 +130,23 @@ if ($exam_id && $class_id) {
     $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
     if(Auth::getRole()==='teacher'&&!$teacherIsClassTeacher)$students=array_values(array_filter($students,static function($student)use($subjects,$teacherResultScope){foreach($subjects as $subject)if(teacherResultCellAllowed($teacherResultScope,(int)$subject['subject_id'],(int)$student['section_id']))return true;return false;}));
 }
+if($student_search!=='')$students=array_values(array_filter($students,static function($s)use($student_search){
+    foreach([$s['first_name_en'].' '.$s['last_name_en'],$s['student_id'],$s['roll_number'],$s['symbol_no']??''] as $value)if(mb_stripos((string)$value,$student_search)!==false)return true;
+    return false;
+}));
+// Bound successful controls below PHP's input limit, even with custom IN components.
+$fieldsPerStudent=1;
+foreach($subjects as $subject)$fieldsPerStudent+=2+count(cdc2083InternalComponents($subject,$selected_exam));
+$inputLimit=(int)ini_get('max_input_vars');if($inputLimit<=0)$inputLimit=1000;
+$pageSize=max(1,min(10,(int)floor(max(1,$inputLimit-40)/$fieldsPerStudent)));
+$studentCount=count($students);$pageCount=max(1,(int)ceil($studentCount/$pageSize));$marks_page=min($marks_page,$pageCount);
+$students=array_slice($students,($marks_page-1)*$pageSize,$pageSize);
 
 // Fetch saved marks
 $marks_matrix = [];
 if ($exam_id && $class_id && !empty($students)) {
-    $stmt = $db->prepare("
-        SELECT * FROM marks 
-        WHERE exam_id = ? AND student_id IN (
-            SELECT id FROM students WHERE class_id = ? AND status = 'active'
-        )
-    ");
-    $stmt->execute([$exam_id, $class_id]);
+    $stmt = $db->prepare('SELECT * FROM marks WHERE exam_id=? AND student_id IN ('.implode(',',array_fill(0,count($students),'?')).')');
+    $stmt->execute([$exam_id,...array_column($students,'id')]);
     $marks_raw = $stmt->fetchAll(PDO::FETCH_ASSOC);
     foreach ($marks_raw as $m) {
         $marks_matrix[$m['student_id']][$m['subject_id']] = $m;
@@ -191,6 +200,7 @@ ob_start();
 <div class="card mb-4 no-print">
     <div class="card-body">
         <form method="GET" action="" class="row g-3">
+            <div class="col-md-3"><label class="form-label" for="studentSearch">Student name, ID, roll or symbol</label><input id="studentSearch" name="student_search" class="form-control" value="<?= sanitize($student_search) ?>" placeholder="Search this class"></div>
             <div class="col-md-2">
                 <label class="form-label fw-bold">Exam</label>
                 <select name="exam" class="form-select" required onchange="this.form.elements.subject.value='';this.form.submit()">
@@ -263,6 +273,7 @@ ob_start();
     <div class="card-body p-0">
         <form method="POST" action="">
             <fieldset <?= !$marksEditable?'disabled':'' ?> class="border-0 p-0 m-0" id="marksFields">
+            <?php if($marksEditable): ?><input type="hidden" name="save_marks" value="1"><?php endif; ?>
             <input type="hidden" name="exam_id" value="<?= sanitize($exam_id) ?>">
             <input type="hidden" name="class_id" value="<?= sanitize($class_id) ?>">
             <input type="hidden" name="section_id" value="<?= sanitize($section_id) ?>">
@@ -298,7 +309,7 @@ ob_start();
                     <tbody>
                         <?php if (count($students) > 0): ?>
                             <?php 
-                            $sn = 0; 
+                            $sn = ($marks_page-1)*$pageSize;
                             foreach ($students as $student): 
                                 $sn++;
                                 $student_att = $attendance_data[$student['id']] ?? '';
@@ -370,13 +381,20 @@ ob_start();
             <?php if (count($students) > 0 && $marksEditable): ?>
             <div class="text-end p-4 bg-light border-top no-print">
                 <label class="d-block small mb-3"><input type="checkbox" name="confirm_optional_enrollment" value="1"> I confirm newly checked optional subjects are taken by these students. Saving updates their subject selection and report cards.</label>
-                <button type="submit" name="save_marks" class="btn btn-primary btn-lg px-5 shadow-sm">
+                <button type="submit" class="btn btn-primary btn-lg px-5 shadow-sm">
                     <i class="fas fa-save me-2"></i> Save & Compute Results
                 </button>
             </div>
             <?php endif; ?>
+            <input type="hidden" name="marks_complete" value="1">
             </fieldset>
         </form>
+        <?php if($studentCount): ?><nav class="p-3 no-print" aria-label="Marks pages">
+            <span>Page <?= $marks_page ?> of <?= $pageCount ?> · <?= $studentCount ?> students. Save this page before changing pages.</span>
+            <?php foreach(['Previous'=>$marks_page-1,'Next'=>$marks_page+1] as $label=>$number): if($number<1||$number>$pageCount)continue; ?>
+                <a class="btn btn-outline-primary btn-sm ms-2" href="?<?= sanitize(http_build_query(array_replace($_GET,['page'=>$number]))) ?>"><?= $label ?></a>
+            <?php endforeach; ?>
+        </nav><?php endif; ?>
         <script>document.querySelectorAll('.elective-select').forEach(box=>box.addEventListener('change',()=>{document.querySelectorAll('input[type="number"][data-elective="'+box.dataset.elective+'"]').forEach(field=>field.disabled=!box.checked);}));</script>
     </div>
 </div>

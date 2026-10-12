@@ -11,6 +11,7 @@ Auth::requireRole(['super_admin', 'school_admin', 'principal', 'teacher', 'exam_
 Auth::requireAccess('curriculum');
 require_once __DIR__.'/../../includes/teaching_scope.php';
 require_once __DIR__.'/../../includes/catalog_validation.php';
+require_once __DIR__.'/../../includes/curriculum_catalog.php';
 
 $db = getDB();
 $school_id = Auth::getSchoolId();
@@ -51,13 +52,7 @@ if (isset($_GET['action'])) {
         $class_id = (int)($_GET['class_id'] ?? 0);
         $subject_id = (int)($_GET['subject_id'] ?? 0);
         try {
-            $stmt = $db->prepare("
-                SELECT * FROM chapters 
-                WHERE class_id = ? AND subject_id = ? AND school_id = ?
-                ORDER BY sort_order, id
-            ");
-            $stmt->execute([$class_id, $subject_id, $school_id]);
-            $chapters = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $chapters=curriculumChapters($db,(int)$school_id,$class_id,$subject_id);
             echo json_encode(['success' => true, 'chapters' => $chapters]);
         } catch (Exception $e) {
             echo json_encode(['success' => false, 'message' => schoolPublicError($e)]);
@@ -68,13 +63,7 @@ if (isset($_GET['action'])) {
     if ($action === 'get_topics') {
         $chapter_id = (int)($_GET['chapter_id'] ?? 0);
         try {
-            $stmt = $db->prepare("
-                SELECT * FROM topics 
-                WHERE chapter_id = ? AND school_id = ?
-                ORDER BY sort_order, id
-            ");
-            $stmt->execute([$chapter_id, $school_id]);
-            $topics = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $topics=curriculumTopics($db,(int)$school_id,$chapter_id);
             echo json_encode(['success' => true, 'topics' => $topics]);
         } catch (Exception $e) {
             echo json_encode(['success' => false, 'message' => schoolPublicError($e)]);
@@ -101,12 +90,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 exit;
             }
 
-            $stmt = $db->prepare("
-                INSERT INTO chapters (school_id, class_id, subject_id, name, name_np, sort_order) 
-                VALUES (?, ?, ?, ?, ?, ?)
-            ");
-            $stmt->execute([$school_id, $class_id, $subject_id, $name, $name_np, $sort_order]);
-            echo json_encode(['success' => true, 'id' => $db->lastInsertId()]);
+            $id=curriculumEnsureChapter($db,(int)$school_id,$class_id,$subject_id,$name,$name_np,$sort_order);
+            echo json_encode(['success' => true, 'id' => $id, 'message' => 'Chapter saved successfully.']);
             exit;
         }
 
@@ -121,21 +106,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 exit;
             }
 
-            $stmt = $db->prepare("
-                UPDATE chapters 
-                SET name = ?, name_np = ?, sort_order = ? 
-                WHERE id = ? AND school_id = ?
-            ");
-            $stmt->execute([$name, $name_np, $sort_order, $id, $school_id]);
-            echo json_encode(['success' => true]);
+            curriculumRenameChapter($db,(int)$school_id,$id,$name,$name_np,$sort_order);
+            echo json_encode(['success' => true, 'message' => 'Chapter updated successfully.']);
             exit;
         }
 
         if ($action === 'delete_chapter') {
             $id = (int)$_POST['id'];
-            $stmt = $db->prepare("DELETE FROM chapters WHERE id = ? AND school_id = ?");
-            $stmt->execute([$id, $school_id]);
-            echo json_encode(['success' => true]);
+            curriculumDelete($db,(int)$school_id,'chapters',$id);
+            echo json_encode(['success' => true, 'message' => 'Unused chapter deleted successfully.']);
             exit;
         }
 
@@ -152,12 +131,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 exit;
             }
 
-            $stmt = $db->prepare("
-                INSERT INTO topics (school_id, class_id, subject_id, chapter_id, name, name_np, sort_order) 
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ");
-            $stmt->execute([$school_id, $class_id, $subject_id, $chapter_id, $name, $name_np, $sort_order]);
-            echo json_encode(['success' => true, 'id' => $db->lastInsertId()]);
+            $id=curriculumEnsureTopic($db,(int)$school_id,$chapter_id,$name,$name_np,$sort_order);
+            echo json_encode(['success' => true, 'id' => $id, 'message' => 'Topic saved successfully.']);
             exit;
         }
 
@@ -172,21 +147,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 exit;
             }
 
-            $stmt = $db->prepare("
-                UPDATE topics 
-                SET name = ?, name_np = ?, sort_order = ? 
-                WHERE id = ? AND school_id = ?
-            ");
-            $stmt->execute([$name, $name_np, $sort_order, $id, $school_id]);
-            echo json_encode(['success' => true]);
+            curriculumRenameTopic($db,(int)$school_id,$id,$name,$name_np,$sort_order);
+            echo json_encode(['success' => true, 'message' => 'Topic updated successfully.']);
             exit;
         }
 
         if ($action === 'delete_topic') {
             $id = (int)$_POST['id'];
-            $stmt = $db->prepare("DELETE FROM topics WHERE id = ? AND school_id = ?");
-            $stmt->execute([$id, $school_id]);
-            echo json_encode(['success' => true]);
+            curriculumDelete($db,(int)$school_id,'topics',$id);
+            echo json_encode(['success' => true, 'message' => 'Unused topic deleted successfully.']);
             exit;
         }
 
@@ -497,33 +466,38 @@ function loadChaptersTree() {
                                 <div class="d-flex align-items-center">
                                     <i class="fas fa-folder text-warning me-2"></i>
                                     <div>
-                                        <span class="fw-bold">${ch.name}</span>
-                                        ${ch.name_np ? `<span class="text-muted ms-2">(${ch.name_np})</span>` : ''}
+                                        <span class="fw-bold chapter-name"></span>
+                                        <span class="text-muted ms-2 chapter-name-np"></span>
                                     </div>
                                 </div>
                                 <div class="ms-auto me-3 no-print d-flex gap-1" onclick="event.stopPropagation()">
-                                    <button class="btn btn-xs btn-outline-primary px-2" onclick="showEditChapterModal(${ch.id}, '${ch.name}', '${ch.name_np || ''}', ${ch.sort_order})">
+                                    <button class="btn btn-xs btn-outline-primary px-2 edit-chapter" title="Edit chapter">
                                         <i class="fas fa-edit"></i>
                                     </button>
                                     <button class="btn btn-xs btn-outline-danger px-2" onclick="deleteChapter(${ch.id})">
                                         <i class="fas fa-trash"></i>
                                     </button>
-                                    <button class="btn btn-xs btn-success px-2 ms-2 text-white" onclick="showAddTopicModal(${ch.id})">
-                                        <i class="fas fa-plus"></i> Add Topic
-                                    </button>
                                 </div>
                             </div>
                         </h2>
-                        <div id="collapseCh_${ch.id}" class="accordion-collapse collapse" data-bs-parent="#chaptersAccordion" onshow="loadTopicsList(${ch.id})">
+                        <div id="collapseCh_${ch.id}" class="accordion-collapse collapse" data-bs-parent="#chaptersAccordion">
                             <div class="accordion-body bg-white" id="topicsContainer_${ch.id}">
                                 <div class="text-center py-2"><div class="spinner-border spinner-border-sm text-secondary" role="status"></div></div>
                             </div>
                         </div>
+                        <div class="p-2 border-top bg-light no-print">
+                            <button type="button" class="btn btn-sm btn-outline-success add-chapter-topic"><i class="fas fa-plus"></i> Add Topic</button>
+                        </div>
                     `;
+                    chapterItem.querySelector('.chapter-name').textContent=ch.name;
+                    chapterItem.querySelector('.chapter-name-np').textContent=ch.name_np?'('+ch.name_np+')':'';
+                    chapterItem.querySelector('.edit-chapter').addEventListener('click',()=>showEditChapterModal(ch.id,ch.name,ch.name_np||'',ch.sort_order));
+                    chapterItem.querySelector('.add-chapter-topic').addEventListener('click',()=>showAddTopicModal(ch.id));
+                    chapterItem.querySelector('.accordion-collapse').addEventListener('show.bs.collapse',()=>loadTopicsList(ch.id));
                     accordion.appendChild(chapterItem);
                 });
             } else {
-                accordion.innerHTML = '<div class="alert alert-danger">Error: ' + res.message + '</div>';
+                accordion.textContent = 'Error: ' + res.message;
             }
         }
     });
@@ -547,28 +521,30 @@ function loadTopicsList(chapterId) {
                     return;
                 }
                 
-                let listHtml = '<ul class="list-group list-group-flush">';
+                const list=document.createElement('ul');list.className='list-group list-group-flush';
                 res.topics.forEach(t => {
-                    listHtml += `
-                        <li class="list-group-item d-flex justify-content-between align-items-center py-2 px-1">
+                    const item=document.createElement('li');item.className='list-group-item d-flex justify-content-between align-items-center py-2 px-1';
+                    item.innerHTML = `
                             <div class="d-flex align-items-center">
                                 <i class="fas fa-file-alt text-info me-2 small"></i>
-                                <span>${t.name}</span>
-                                ${t.name_np ? `<span class="text-muted ms-2">(${t.name_np})</span>` : ''}
+                                <span class="topic-name"></span>
+                                <span class="text-muted ms-2 topic-name-np"></span>
                             </div>
                             <div class="no-print d-flex gap-1">
-                                <button class="btn btn-xs btn-link text-primary p-0" onclick="showEditTopicModal(${t.id}, ${chapterId}, '${t.name}', '${t.name_np || ''}', ${t.sort_order})" title="Edit Topic">
+                                <button class="btn btn-xs btn-link text-primary p-0 edit-topic" title="Edit Topic">
                                     <i class="fas fa-edit"></i>
                                 </button>
                                 <button class="btn btn-xs btn-link text-danger p-0" onclick="deleteTopic(${t.id}, ${chapterId})" title="Delete Topic">
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </div>
-                        </li>
                     `;
+                    item.querySelector('.topic-name').textContent=t.name;
+                    item.querySelector('.topic-name-np').textContent=t.name_np?'('+t.name_np+')':'';
+                    item.querySelector('.edit-topic').addEventListener('click',()=>showEditTopicModal(t.id,chapterId,t.name,t.name_np||'',t.sort_order));
+                    list.appendChild(item);
                 });
-                listHtml += '</ul>';
-                container.innerHTML = listHtml;
+                container.replaceChildren(list);
             } else {
                 container.innerHTML = '<span class="text-danger small">Error loading topics.</span>';
             }
@@ -684,7 +660,7 @@ function chapterSubmit(e) {
 function deleteChapter(id) {
     Swal.fire({
         title: 'Delete Chapter',
-        text: 'Are you sure you want to delete this chapter and all its topics? This cannot be undone.',
+        text: 'Only unused chapters can be deleted. Chapters linked to topics or questions are protected.',
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#d33',
@@ -764,6 +740,7 @@ function topicSubmit(e) {
             if (res.success) {
                 // Reload specific topics container
                 loadTopicsList(chapterId);
+                bootstrap.Collapse.getOrCreateInstance(document.getElementById('collapseCh_'+chapterId),{toggle:false}).show();
             } else {
                 Swal.fire('Error', res.message, 'error');
             }

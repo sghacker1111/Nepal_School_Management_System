@@ -13,5 +13,7 @@ database.sqlite
 # Ignore scratch files and logs
 /scratch/
 *.log
+__pycache__/
+*.py[cod]
 .vscode/
 .idea/
