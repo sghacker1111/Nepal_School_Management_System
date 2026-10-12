@@ -14,19 +14,26 @@ function teacherOwnsSubject(PDO $db,int $school,int $teacher,int $class,int $sub
 }
 function learningClasses(PDO $db,int $school,string $role,int $actor):array {
     $q=$db->prepare('SELECT * FROM classes WHERE school_id=? AND is_active=1 ORDER BY level,name,id');$q->execute([$school]);$rows=$q->fetchAll();
+    if($role==='student'){require_once __DIR__.'/student_learning.php';$student=studentLearningRecord($db,$school,$actor);$rows=array_values(array_filter($rows,static fn($row)=>(int)$row['id']===(int)$student['class_id']));}
     if($role==='teacher'){$ids=array_column(teacherTeachingAssignments($db,$school,$actor),'class_id');$rows=array_values(array_filter($rows,static fn($row)=>in_array($row['id'],$ids)));}
     return $rows;
 }
 function learningSubjects(PDO $db,int $school,int $class,string $role,int $actor):array {
     if(!$class)return [];
-    $q=$db->prepare('SELECT DISTINCT s.* FROM subjects s JOIN class_subjects cs ON cs.subject_id=s.id AND cs.school_id=s.school_id JOIN classes c ON c.id=cs.class_id AND c.school_id=cs.school_id WHERE s.school_id=? AND cs.class_id=? AND (cs.is_active=1 OR cs.is_optional=1) AND c.is_active=1 AND COALESCE(s.is_hidden,0)=0 ORDER BY s.name_en,s.code,s.id');$q->execute([$school,$class]);$rows=$q->fetchAll();
+    $q=$db->prepare('SELECT DISTINCT s.*,cs.is_optional AS mapping_optional FROM subjects s JOIN class_subjects cs ON cs.subject_id=s.id AND cs.school_id=s.school_id JOIN classes c ON c.id=cs.class_id AND c.school_id=cs.school_id WHERE s.school_id=? AND cs.class_id=? AND (cs.is_active=1 OR cs.is_optional=1) AND c.is_active=1 AND COALESCE(s.is_hidden,0)=0 ORDER BY s.name_en,s.code,s.id');$q->execute([$school,$class]);$rows=$q->fetchAll();
+    if($role==='student'){
+        require_once __DIR__.'/student_learning.php';$student=studentLearningRecord($db,$school,$actor);
+        if((int)$student['class_id']!==$class)return [];
+        $electives=array_map('intval',array_filter([$student['optional_subject_i']??null,$student['optional_subject_ii']??null,$student['optional_subject_iii']??null]));
+        $rows=array_values(array_filter($rows,static fn($row)=>($row['type']!=='optional'&&!(int)$row['mapping_optional'])||in_array((int)$row['id'],$electives,true)));
+    }
     if($role==='teacher'){$ids=[];foreach(teacherTeachingAssignments($db,$school,$actor) as $row)if((int)$row['class_id']===$class)$ids[]=(int)$row['subject_id'];$rows=array_values(array_filter($rows,static fn($row)=>in_array((int)$row['id'],$ids,true)));}
     $unique=[];foreach($rows as $row){$key=mb_strtolower(trim($row['name_en']),'UTF-8');if(!isset($unique[$key]))$unique[$key]=$row;}
     return array_values($unique);
 }
 /** Validate both the saved target and submitted new scope to prevent moving another teacher's records. */
 function validateTeacherLearningRequest(PDO $db,int $school,string $module,string $file,array $data,array $query):void {
-    if($module!=='learning'||!in_array($file,['curriculum.php','specification_grids.php','questions.php','paper_generator.php','question_grid.php','index.php'],true))return;
+    if($module!=='learning'||!in_array($file,['curriculum.php','specification_grids.php','questions.php','paper_generator.php','question_grid.php','index.php','practice_mcqs.php'],true))return;
     // Legacy pages dispatch both query-string and body actions. Never authorize one
     // action while another handler executes, or let body fields shadow a query scope.
     $queryActions=array_intersect_key($query,array_flip(['action','delete','action_get_chapters','action_get_topics']));
@@ -37,6 +44,10 @@ function validateTeacherLearningRequest(PDO $db,int $school,string $module,strin
     if($role==='teacher'&&$file==='curriculum.php'&&in_array($action,['map_subject','get_all_subjects'],true))throw new InvalidArgumentException('Only an administrator may map additional class subjects. Teachers can manage their assigned subjects only.');
     $scopes=[];
     $class=(int)($values['class_id']??$values['class']??$values['default_class_id']??0);$subject=(int)($values['subject_id']??$values['subject']??$values['default_subject_id']??0);
+    if($role==='student'&&$class){
+        if(!in_array($class,array_map('intval',array_column(learningClasses($db,$school,$role,$teacher),'id')),true))throw new InvalidArgumentException('Choose your enrolled class.');
+        if($subject&&!in_array($subject,array_map('intval',array_column(learningSubjects($db,$school,$class,$role,$teacher),'id')),true))throw new InvalidArgumentException('Choose one of your enrolled class subjects.');
+    }
     if($class&&$role==='teacher'&&!in_array($class,array_map('intval',array_column(learningClasses($db,$school,$role,$teacher),'id')),true))throw new InvalidArgumentException('Choose one of your teaching classes.');
     if($subject&&!$class)throw new InvalidArgumentException('Choose a class before selecting its subject.');
     if($class&&$subject)$scopes[]=[$class,$subject];

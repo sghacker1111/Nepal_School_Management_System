@@ -9,7 +9,8 @@ PHP school administration application with SQLite or MySQL, Bootstrap, and Nepal
 - Daily attendance and conflict-aware weekly routines.
 - Exam configuration, marks entry, shared GPA/percentage calculations, ledgers, report cards, and admit cards.
 - Question banks, curriculum topics, learning notes, specification grids, and paper generation.
-- Staff account management, academic years, school settings, and system administration.
+- Staff and restricted student account management, academic years, school settings, and system administration.
+- Interactive Practice MCQs with question selection, instant feedback, sounds, optional full screen and answer review.
 - Searchable, role-aware navigation with mobile offcanvas and responsive forms.
 
 See [INSTALL.md](INSTALL.md) for safe setup, migration, and production precautions, and [the repair report](docs/repair-report-2026-10-09.md) for verified coverage and remaining limits.
@@ -37,6 +38,14 @@ A fresh database has a **disabled** administrator, not a shared password. Set a 
 7. Review marks, lock, then publish. Reopen explicitly withdraws publication for corrections.
 
 Archiving students or teachers preserves their records. Exams with marks cannot be deleted. Class/elective enrollment cannot change after marks exist; retain the enrollment for historical reports.
+
+## Student learning and Practice MCQs
+
+In **Administration → User accounts**, a school administrator can select **Student (learning only)** and link an existing student record. The system administrator can do the same after selecting a school. Each record has at most one login. Passwords are hashed; disabling the account, enrollment or school subscription immediately revokes access. Students can access Learning Hub and Practice MCQs only, for their enrolled class and selected electives. Staff roles keep their existing access rules.
+
+Use **Learning → Practice MCQs** to filter by class, subject, chapter, topic or question text, then select individual questions or a random set of 1–100 MCQs. Only valid four-option questions from the school's bank and matching shared catalog are offered. Answers are graded by the server and cannot be changed after submission. Red/green feedback includes the correct answer, with optional boom/chime sounds, mute, full screen and keyboard keys 1–4. A completed set shows its score and answer review. Practice is separate from official exam marks; sessions resume in the same login for up to one hour, but practice history is not stored permanently.
+
+Schema 14 adds only a nullable student-record account link and a unique index. Existing accounts and school records are not relinked, reset or removed. SQLite keeps the existing automatic pre-upgrade backup. Test MySQL upgrades separately on staging.
 
 ## CDC and assessment scope
 
@@ -72,6 +81,8 @@ php tests/teacher_results_test.php
 php tests/attendance_filters_test.php
 php tests/routine_learning_test.php
 php tests/routine_profiles_test.php
+php tests/mcq_practice_test.php
+node tests/mcq_practice_ui_test.js
 node tests/accounting_preview_test.js
 node tests/date_controls_test.js
 node tests/attendance_controls_test.js
@@ -88,6 +99,7 @@ python tests/routine_learning_http_test.py
 python tests/routine_profiles_http_test.py
 python tests/progress_print_http_test.py
 python tests/class_isolation_http_test.py
+python tests/mcq_practice_http_test.py
 python tests/exam_templates_http_test.py
 python tests/deployment_test.py
 ```

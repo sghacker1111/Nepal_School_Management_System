@@ -44,17 +44,22 @@ $groups['Learning'] = [
     ['specification_grids','Specification grids','table-cells','/modules/learning/specification_grids.php','specification_grids'],
     ['curriculum','Curriculum & topics','sitemap','/modules/learning/curriculum.php','curriculum'],
     ['learning','Learning hub','book-open-reader','/modules/learning/index.php','learning'],
+    ['practice_mcqs','Practice MCQs','circle-check','/modules/learning/practice_mcqs.php','learning'],
     ['ocr_scanner','Paper scanner','camera','/modules/learning/ocr_scanner.php','ocr_scanner'],
 ];
 if($layoutSchoolId&&Auth::hasAccess('accounting')&&in_array($layoutRole,['super_admin','school_admin','accountant','cashier','auditor'],true))$groups['Accounting & Billing']=[['accounting','Accounting overview','coins','/modules/accounting/index.php','accounting'],['accounting_fees','Fee management','tags','/modules/accounting/fees.php','accounting'],['accounting_bill','Create manual bill','file-invoice','/modules/accounting/create_bill.php','accounting'],['accounting_invoices','Invoices & dues','file-lines','/modules/accounting/invoices.php','accounting'],['accounting_generate','Generate fee bills','calendar','/modules/accounting/generate.php','accounting'],['accounting_payment','Collect payment','money-bill','/modules/accounting/payments.php','accounting'],['accounting_student','Student accounts','user-graduate','/modules/accounting/student.php','accounting'],['accounting_subscription','Subscriptions','repeat','/modules/accounting/subscriptions.php','accounting'],['accounting_expenses','Expenses','receipt','/modules/accounting/expenses.php','accounting'],['accounting_journals','Accounts & journals','book','/modules/accounting/journals.php','accounting'],['accounting_reports','Financial reports','chart-pie','/modules/accounting/reports.php','accounting'],['accounting_settings','Settings & audit','sliders','/modules/accounting/settings.php','accounting']];
 if ($layoutSchoolId && in_array($layoutRole,$adminRoles,true)) {
     $groups['Administration'] = [
-        ['users','Staff accounts','users-gear','/modules/settings/users.php','settings'],
+        ['users','User accounts','users-gear','/modules/settings/users.php','settings'],
         ['school_settings','School settings','sliders','/modules/settings/school.php','settings'],
         ['settings','Academic years','calendar','/modules/settings/years.php','settings'],
         ['cdc_grading','CDC 2083 grading','graduation-cap','/modules/settings/cdc.php','settings'],
     ];
 }
+if($layoutRole==='student')$groups=['Learning'=>[
+    ['learning','Learning hub','book-open-reader','/modules/learning/index.php','learning'],
+    ['practice_mcqs','Practice MCQs','circle-check','/modules/learning/practice_mcqs.php','learning'],
+]];
 ?>
 <!DOCTYPE html>
 <html lang="en">

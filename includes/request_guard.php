@@ -17,6 +17,7 @@ function schoolMutationQuery(array $query): bool {
     return in_array($query['action'] ?? '', ['request_permission','request_view_permission','request_hub_permission'], true);
 }
 function schoolRoleCanWrite(string $role, string $module, string $file): bool {
+    if($role==='student')return $module==='auth'||($module==='learning'&&$file==='practice_mcqs.php');
     if (in_array($role, ['super_admin','school_admin'], true)) return true;
     if ($module === 'auth') return true;
     if ($module === 'accounting') {
@@ -37,6 +38,15 @@ function guardSchoolRequest(): void {
     $module = $parts[1] ?? '';
     $file = $parts[2] ?? '';
     $role = Auth::getRole();
+    if($role==='student'){
+        $studentPage=$module==='learning'&&in_array($file,['index.php','practice_mcqs.php'],true);
+        $studentLanding=$module===''&&basename($script)==='index.php';
+        if(!$studentPage&&!$studentLanding&&$module!=='auth')denySchoolRequest('Student accounts can access Learning Hub and Practice MCQs only.');
+        if($module!=='auth'){
+            require_once __DIR__.'/student_learning.php';
+            try{studentLearningRecord(getDB(),(int)Auth::getSchoolId(),(int)Auth::getUserId());}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage());}
+        }
+    }
     if($role!=='super_admin'&&$module!=='auth'){
         require_once __DIR__.'/packages.php';$subscriptionState=schoolSubscriptionState(Auth::getSubscription());
         if($subscriptionState!=='active')denySchoolRequest('School subscription is '.str_replace('_',' ',$subscriptionState).'. Contact the system administrator to activate or renew the account.');
