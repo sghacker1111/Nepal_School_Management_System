@@ -36,6 +36,9 @@ erpEqual(count($pool),3,'Usable MCQs included');erpCheck(!str_contains($pool[0][
 $catalog=practiceCatalog($pool);erpCheck(!isset($catalog[0]['key'])&&!isset($catalog[0]['options'])&&!isset($catalog[0]['explanation']),'Catalog has no answer keys');
 $start=['class_id'=>$class,'subject_id'=>$subject,'selection_mode'=>'chosen','question_ids'=>$ids,'count'=>3,'search'=>'Practice & sets'];
 $state=practiceStart($db,1,'student',$studentUser,$start);practiceValidateSession($db,1,'student',$studentUser,$state);
+$orders=[];for($i=0;$i<12;$i++){$shuffled=practiceStart($db,1,'student',$studentUser,$start);$orders[implode(',',array_column($shuffled['questions'],'id'))]=true;}
+erpCheck(count($orders)>1,'Selected questions are shuffled on each new practice');
+erpEqual(count(array_unique(array_column($state['questions'],'id'))),3,'No duplicate questions in a practice');
 $public=practicePublicState($state);erpCheck(!isset($public['question']['key'])&&!isset($public['feedback']),'Unanswered question has no answer key');
 $answer=['token'=>$state['token'],'index'=>0,'question_id'=>$state['questions'][0]['id'],'choice'=>'D'];
 erpReject(function()use(&$state,$answer){practiceTransition($state,'next',$answer);},'Must answer before next');

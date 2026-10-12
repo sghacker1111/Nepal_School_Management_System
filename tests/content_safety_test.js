@@ -27,3 +27,14 @@ assert.match(first.children[0].style.cssText,/Kokila/);
 context.fixDevanagariInMathJax(root);
 assert.equal(created.length,1,'Already-repaired math is not rebuilt');
 console.log('MathJax content safety passed: literal markup, Nepali merging, font and idempotency.');
+const observerStart=source.indexOf('function observeMathJaxDevanagari(targetDoc)');
+const observerEnd=source.indexOf('window.observeMathJaxDevanagari',observerStart);
+let observed=null,disconnected=false;
+const iframeBody={nodeType:1};
+class IframeObserver{constructor(callback){this.callback=callback;}observe(body){assert.equal(body,iframeBody);observed=body;}disconnect(){disconnected=true;}}
+const observerContext={document:{},MutationObserver:class{observe(){throw new Error('Wrong window observer used');}},fixDevanagariInMathJax(){}};
+vm.runInNewContext(source.slice(observerStart,observerEnd),observerContext);
+const iframeObserver=observerContext.observeMathJaxDevanagari({body:iframeBody,defaultView:{MutationObserver:IframeObserver}});
+assert.equal(observed,iframeBody);iframeObserver.disconnect();assert(disconnected);
+assert.equal(observerContext.observeMathJaxDevanagari({}),null);
+console.log('MathJax iframe observation passed: native owner-window observer and missing-document guard.');

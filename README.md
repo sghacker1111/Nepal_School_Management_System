@@ -45,7 +45,15 @@ In **Administration → User accounts**, a school administrator can select **Stu
 
 Use **Learning → Practice MCQs** to filter by class, subject, chapter, topic or question text, then select individual questions or a random set of 1–100 MCQs. Only valid four-option questions from the school's bank and matching shared catalog are offered. Answers are graded by the server and cannot be changed after submission. Red/green feedback includes the correct answer, with optional boom/chime sounds, mute, full screen and keyboard keys 1–4. A completed set shows its score and answer review. Practice is separate from official exam marks; sessions resume in the same login for up to one hour, but practice history is not stored permanently.
 
+Every new practice shuffles its questions, including manually selected sets. **Back to class & subject selection** is available both above and beneath the completed answer review.
+
 Schema 14 adds only a nullable student-record account link and a unique index. Existing accounts and school records are not relinked, reset or removed. SQLite keeps the existing automatic pre-upgrade backup. Test MySQL upgrades separately on staging.
+
+## Question Bank imports
+
+In **Learning → Question Bank → Import Excel / CSV**, choose **Normal Text** or **HTML Source** before uploading. Both modes support MCQs and subjective questions, bilingual content, and plain-text class/subject/chapter/topic columns. The sample Excel/CSV downloads follow the selected mode. Class and subject must already be available to the importing user; chapter/topic links use the shared curriculum catalog.
+
+Normal mode escapes HTML tags and keeps line breaks. HTML Source preserves supported paragraphs, bold/italic, lists, tables, images, subscript/superscript and LaTeX in questions, all four options and model answers. Use `\( ... \)` / `\[ ... \]` or `$ ... $` / `$$ ... $$` for maths. Scripts, event handlers, unsafe URLs and unsupported styling are removed; imported content is editable using the editor's Source/code button. Content headers may include `HTML` or `Source`; if a file has both plain and source columns, the selected mode chooses the matching columns. MCQs require four nonempty options and a correct-option key A–D; invalid rows are reported, never assigned a guessed answer. Empty/failed batches do not leave partial questions or curriculum changes.
 
 ## CDC and assessment scope
 
@@ -82,11 +90,13 @@ php tests/attendance_filters_test.php
 php tests/routine_learning_test.php
 php tests/routine_profiles_test.php
 php tests/mcq_practice_test.php
+php tests/question_import_content_test.php
 node tests/mcq_practice_ui_test.js
 node tests/accounting_preview_test.js
 node tests/date_controls_test.js
 node tests/attendance_controls_test.js
 node tests/content_safety_test.js
+node tests/question_editor_test.js
 python tests/http_test.py
 python tests/exam_http_test.py
 python tests/assessment_http_test.py
@@ -100,6 +110,7 @@ python tests/routine_profiles_http_test.py
 python tests/progress_print_http_test.py
 python tests/class_isolation_http_test.py
 python tests/mcq_practice_http_test.py
+python tests/question_source_http_test.py
 python tests/exam_templates_http_test.py
 python tests/deployment_test.py
 ```
