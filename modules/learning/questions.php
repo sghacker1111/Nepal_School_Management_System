@@ -9,6 +9,7 @@ require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/xlsx_helper.php';
 require_once __DIR__.'/../../includes/curriculum_catalog.php';
 require_once __DIR__.'/../../includes/question_import.php';
+require_once __DIR__.'/../../includes/learning_content.php';
 
 Auth::requireRole(['super_admin', 'school_admin', 'principal', 'teacher', 'exam_officer']);
 Auth::requireAccess('questions');
@@ -19,7 +20,8 @@ $is_admin = (Auth::getRole() === 'super_admin');
 $error = '';
 $success = '';
 $learningRole=(string)Auth::getRole();$learningActor=(int)Auth::getUserId();
-$allowedClasses=learningClasses($db,(int)$school_id,$learningRole,$learningActor);
+$contentActor=learningActor($db,$learningActor,(int)$school_id,Auth::isReadOnly());
+$allowedClasses=learningReadClasses($db,$contentActor);
 
 
 // Fetch school subscription type and permissions
@@ -310,7 +312,7 @@ if (isset($_GET['action_get_chapters'])) {
     $c_id = (int)($_GET['class_id'] ?? 0);
     $s_id = (int)($_GET['subject_id'] ?? 0);
     
-    $chapters=curriculumChapters($db,(int)$school_id,$c_id,$s_id);
+    $chapters=learningCatalogChapters($db,$contentActor,$c_id,$s_id);
     
     echo json_encode($chapters);
     exit;
@@ -323,10 +325,10 @@ if (isset($_GET['action_get_topics'])) {
     $chapter_name = sanitize($_GET['chapter_name'] ?? '');
     
     $topics=[];
-    if($chapter_id>0)$topics=curriculumTopicChoices($db,(int)$school_id,$chapter_id);
+    if($chapter_id>0){$scope=learningCatalogChapterScope($db,$contentActor,$chapter_id);$topics=learningCatalogTopics($db,$contentActor,$scope['class_id'],$scope['subject_id'],$chapter_id);}
     elseif($chapter_name!==''){
-        foreach(curriculumChapters($db,(int)$school_id,(int)($_GET['class_id']??0),(int)($_GET['subject_id']??0)) as $chapter)
-            if(curriculumNameKey($chapter['name'])===curriculumNameKey($chapter_name)){$topics=curriculumTopicChoices($db,(int)$school_id,(int)$chapter['id']);break;}
+        foreach(learningCatalogChapters($db,$contentActor,(int)($_GET['class_id']??0),(int)($_GET['subject_id']??0)) as $chapter)
+            if(curriculumNameKey($chapter['name'])===curriculumNameKey($chapter_name)){$topics=learningCatalogTopics($db,$contentActor,(int)($_GET['class_id']??0),(int)($_GET['subject_id']??0),(int)$chapter['id']);break;}
     }
     
     echo json_encode($topics);
@@ -618,18 +620,18 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
 .font-english,
 #modalQuestionText, #modalAnswer, #modalOptA, #modalOptB, #modalOptC, #modalOptD {
     font-family: Arial, Helvetica, sans-serif !important;
-    font-size: 15px;
+    font-size: 18px;
 }
 
 /* Nepali Inputs Default Font: Kokila */
 .font-nepali, .nepali-text,
 #modalQuestionTextNp, #modalAnswerNp, #modalOptANp, #modalOptBNp, #modalOptCNp, #modalOptDNp {
     font-family: 'Kokila', 'Noto Sans Devanagari', 'Kalimati', sans-serif !important;
-    font-size: 1.15rem;
+    font-size: var(--erp-kokila-size, 20pt) !important;
 }
 
 #texPreview {
-    font-size: 1.35rem;
+    font-size: 20pt;
     overflow-x: auto;
     padding: 12px 0;
     color: #2c3e50;
@@ -847,11 +849,11 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                                 </span>
                             </td>
                             <td>
-                                <div class="text-truncate mathjax-render" style="max-width: 300px;" title="<?= sanitize($q['question_text']) ?>">
+                                <div class="text-truncate mathjax-render" style="max-width: 300px; font-size: 1.125rem;" title="<?= sanitize($q['question_text']) ?>">
                                     <strong>EN:</strong> <?= fixNepaliInLatex($q['question_text']) ?>
                                 </div>
                                 <?php if (!empty($q['question_text_np'])): ?>
-                                <div class="text-truncate text-muted small mathjax-render font-nepali" style="max-width: 300px; font-size: 0.95rem;" title="<?= sanitize($q['question_text_np']) ?>">
+                                <div class="text-truncate text-muted mathjax-render font-nepali" style="max-width: 300px;" title="<?= sanitize($q['question_text_np']) ?>">
                                     <strong>NP:</strong> <?= fixNepaliInLatex($q['question_text_np']) ?>
                                 </div>
                                 <?php endif; ?>
@@ -1370,15 +1372,16 @@ $(document).ready(function() {
                 }
                 body {
                     font-family: Arial, Helvetica, sans-serif;
-                    font-size: 15px;
+                    font-size: 18px;
                 }
                 body.nepali-editor {
                     font-family: 'Kokila', 'Noto Sans Devanagari', 'Kalimati', sans-serif !important;
-                    font-size: 18px !important;
+                    font-size: 20pt !important;
+                    line-height: 1.55;
                 }
                 body.english-editor {
                     font-family: Arial, Helvetica, sans-serif !important;
-                    font-size: 15px !important;
+                    font-size: 18px !important;
                 }
                 span.math-tex {
                     background: transparent !important;
@@ -1427,11 +1430,11 @@ $(document).ready(function() {
                     if (editor.id.endsWith('Np')) {
                         doc.body.classList.add('nepali-editor');
                         doc.body.style.fontFamily = "'Kokila', 'Noto Sans Devanagari', 'Kalimati', sans-serif";
-                        doc.body.style.fontSize = "18px";
+                        doc.body.style.fontSize = "20pt";
                     } else {
                         doc.body.classList.add('english-editor');
                         doc.body.style.fontFamily = "Arial, Helvetica, sans-serif";
-                        doc.body.style.fontSize = "15px";
+                        doc.body.style.fontSize = "18px";
                     }
 
                     // Repair the iframe after typesetting (below and on SetContent).

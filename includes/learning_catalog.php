@@ -23,3 +23,73 @@ function learningCatalogScope(PDO $db,int $school,int $class,int $subject):array
     if(count($matches)>1)throw new InvalidArgumentException('Shared subject identity is ambiguous. Ask the administrator to correct its mapping.');
     return ['local'=>$scope,'shared'=>$matches[0]??null];
 }
+function learningCanManageCatalog(array $actor):bool {return $actor['role']==='super_admin'&&!$actor['read_only'];}
+function learningCatalogChoices(PDO $db,array $actor,int $class,int $subject):array {
+    require_once __DIR__.'/learning_content.php';
+    $valid=false;foreach(learningReadSubjects($db,$actor,$class) as $s)if((int)$s['id']===$subject)$valid=true;
+    if(!$valid)throw new InvalidArgumentException('Choose an available class subject.');
+    $scopes=learningCatalogScope($db,$actor['school_id'],$class,$subject);$choices=[];
+    foreach(['shared','local'] as $source){$scope=$scopes[$source];if(!$scope||($source==='local'&&$scope['school_id']===0))continue;
+        $q=$db->prepare('SELECT * FROM chapters WHERE school_id=? AND class_id=? AND subject_id=? ORDER BY sort_order,id');$q->execute(array_values($scope));
+        foreach($q->fetchAll(PDO::FETCH_ASSOC) as $r){$r['name']=curriculumName((string)$r['name']);$r['name_np']=curriculumName((string)($r['name_np']??''));$r['scope']=$source;$key=curriculumNameKey($r['name']);
+            if(!isset($choices[$key])){$r['alias_ids']=[];$r['aliases']=[];$choices[$key]=$r;}
+            $choices[$key]['alias_ids'][]=(int)$r['id'];$choices[$key]['aliases'][]=['id'=>(int)$r['id'],'scope'=>$source]+$scope;
+        }
+    }
+    return array_values($choices);
+}
+function learningCatalogChapters(PDO $db,array $actor,int $class,int $subject):array {
+    require_once __DIR__.'/curriculum_catalog.php';return learningCatalogChoices($db,$actor,$class,$subject);
+}
+function learningCatalogTopics(PDO $db,array $actor,int $class,int $subject,int $chapter):array {
+    $choice=null;foreach(learningCatalogChapters($db,$actor,$class,$subject) as $r)if(in_array($chapter,$r['alias_ids'],true)){$choice=$r;break;}
+    if(!$choice)throw new InvalidArgumentException('Choose a chapter in this class subject.');
+    $topics=[];
+    foreach($choice['aliases'] as $alias){
+        $q=$db->prepare('SELECT * FROM topics WHERE school_id=? AND class_id=? AND subject_id=? AND chapter_id=? ORDER BY sort_order,id');$q->execute([$alias['school_id'],$alias['class_id'],$alias['subject_id'],$alias['id']]);
+        foreach($q->fetchAll(PDO::FETCH_ASSOC) as $r){$r['name']=curriculumName((string)$r['name']);$r['name_np']=curriculumName((string)($r['name_np']??''));$r['scope']=$alias['scope'];$key=curriculumNameKey($r['name']);
+            if(!isset($topics[$key])){$r['alias_ids']=[];$r['aliases']=[];$topics[$key]=$r;}
+            $topics[$key]['alias_ids'][]=(int)$r['id'];$topics[$key]['aliases'][]=['id'=>(int)$r['id'],'chapter_id'=>(int)$r['chapter_id'],'scope'=>$alias['scope'],'school_id'=>(int)$r['school_id']];
+        }
+    }
+    return array_values($topics);
+}
+/** Resolve old topic-only AJAX requests through the dedicated read scope. */
+function learningCatalogChapterScope(PDO $db,array $actor,int $chapter):array {
+    require_once __DIR__.'/learning_content.php';
+    $q=$db->prepare('SELECT * FROM chapters WHERE id=?');$q->execute([$chapter]);$r=$q->fetch(PDO::FETCH_ASSOC);
+    if(!$r)throw new InvalidArgumentException('Chapter not found.');$scope=learningRecordScope($db,$actor,$r);
+    if(!$scope)throw new InvalidArgumentException('Chapter not found.');return $scope;
+}
+function learningCatalogSelection(PDO $db,array $actor,int $class,int $subject,array $input,bool $allowCreate=false):array {
+    $name=$input['chapter']??'';if(!is_string($name))throw new InvalidArgumentException('Choose a valid chapter.');
+    $topicName=$input['topic']??'';if(!is_string($topicName))throw new InvalidArgumentException('Choose a valid topic.');
+    foreach(['chapter_id','topic_id','catalog_chapter_id','catalog_topic_id'] as $idField)if(!empty($input[$idField])&&(!is_scalar($input[$idField])||!preg_match('/^[1-9][0-9]*$/',(string)$input[$idField])))throw new InvalidArgumentException('Choose a valid catalog reference.');
+    $rows=learningCatalogChapters($db,$actor,$class,$subject);$chapter=null;$key=curriculumNameKey($name);
+    foreach($rows as $r)if($key===curriculumNameKey($r['name'])){$chapter=$r;break;}
+    if(!$chapter&&$allowCreate&&learningCanManageCatalog($actor)){$id=curriculumEnsureChapter($db,$actor['school_id'],$class,$subject,$name);$rows=learningCatalogChapters($db,$actor,$class,$subject);foreach($rows as $r)if(in_array($id,$r['alias_ids'],true))$chapter=$r;}
+    if(!$chapter)throw new InvalidArgumentException('Chapter "'.mb_substr($name,0,100).'" is not in this class subject catalog. Ask super admin to add it.');
+    $result=['chapter'=>$chapter['name'],'topic'=>null,'chapter_id'=>null,'topic_id'=>null,'catalog_chapter_id'=>null,'catalog_topic_id'=>null];
+    $selectedAlias=$chapter['aliases'][0];
+    foreach(['chapter_id'=>'local','catalog_chapter_id'=>'shared'] as $field=>$source)if(!empty($input[$field])){
+        $found=false;foreach($chapter['aliases'] as $alias)if($alias['id']===(int)$input[$field]&&$alias['scope']===$source){$selectedAlias=$alias;$found=true;}
+        if(!$found)throw new InvalidArgumentException('Chapter reference does not match the selected class subject.');
+    }
+    $topics=learningCatalogTopics($db,$actor,$class,$subject,(int)$chapter['id']);$selectedTopic=null;
+    foreach(['topic_id'=>'local','catalog_topic_id'=>'shared'] as $field=>$source)if(!empty($input[$field])){
+        if($selectedTopic)throw new InvalidArgumentException('Choose one topic reference.');
+        foreach($topics as $r)foreach($r['aliases'] as $alias)if($alias['id']===(int)$input[$field]&&$alias['scope']===$source)$selectedTopic=['row'=>$r,'alias'=>$alias];
+        if(!$selectedTopic)throw new InvalidArgumentException('Topic reference does not belong to this chapter.');
+    }
+    if(!$selectedTopic&&curriculumNameKey($topicName)!==''){
+        foreach($topics as $r)if(curriculumNameKey($r['name'])===curriculumNameKey($topicName)){$selectedTopic=['row'=>$r,'alias'=>$r['aliases'][0]];break;}
+        if(!$selectedTopic&&$allowCreate&&learningCanManageCatalog($actor)){
+            $id=curriculumEnsureTopic($db,$actor['school_id'],$selectedAlias['id'],$topicName);foreach(learningCatalogTopics($db,$actor,$class,$subject,(int)$chapter['id']) as $r)foreach($r['aliases'] as $alias)if($alias['id']===$id)$selectedTopic=['row'=>$r,'alias'=>$alias];
+        }
+        if(!$selectedTopic)throw new InvalidArgumentException('Topic "'.mb_substr($topicName,0,100).'" is not in this chapter catalog. Ask super admin to add it.');
+    }
+    if($selectedTopic){$alias=$selectedTopic['alias'];$result[$alias['scope']==='shared'?'catalog_topic_id':'topic_id']=$alias['id'];$result['topic']=$selectedTopic['row']['name'];
+        foreach($chapter['aliases'] as $ch)if($ch['id']===$alias['chapter_id']&&$ch['scope']===$alias['scope'])$selectedAlias=$ch;
+    }
+    $result[$selectedAlias['scope']==='shared'?'catalog_chapter_id':'chapter_id']=$selectedAlias['id'];return $result;
+}

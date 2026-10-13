@@ -72,6 +72,11 @@ function curriculumRenameChapter(PDO $db,int $school,int $id,string $name,string
         }
         $q=$db->prepare('SELECT id,chapter FROM questions WHERE school_id=? AND class_id=? AND subject_id=?');$q->execute([$school,$old['class_id'],$old['subject_id']]);
         foreach($q->fetchAll() as $question)if(curriculumNameKey($question['chapter'])===curriculumNameKey((string)$old['name']))$db->prepare('UPDATE questions SET chapter=? WHERE id=? AND school_id=?')->execute([$name,$question['id'],$school]);
+        // Cross-school shared references use their dedicated catalog IDs.
+        if(in_array('catalog_chapter_id',dbColumns($db,'questions'),true))foreach(['questions','learning_notes'] as $table){
+            $field=$school===0?'catalog_chapter_id':($table==='learning_notes'?'chapter_id':null);
+            if($field)$db->prepare("UPDATE $table SET chapter=? WHERE $field IN (".implode(',',array_fill(0,count($aliases),'?')).')')->execute([$name,...$aliases]);
+        }
         $update=$db->prepare('UPDATE chapters SET name=?,name_np=?,sort_order=? WHERE id=? AND school_id=?');
         foreach($aliases as $alias)$update->execute([$name,$nepali,$order,$alias,$school]);
     });
@@ -85,12 +90,19 @@ function curriculumRenameTopic(PDO $db,int $school,int $id,string $name,string $
             if((int)$topic['id']!==$id&&curriculumNameKey($topic['name'])===curriculumNameKey($name))throw new InvalidArgumentException('Another topic in this chapter already uses that name.');
         }
         $db->prepare('UPDATE topics SET name=?,name_np=?,sort_order=? WHERE id=? AND school_id=?')->execute([$name,$nepali,$order,$id,$school]);
+        if(in_array('catalog_topic_id',dbColumns($db,'learning_notes'),true))$db->prepare('UPDATE learning_notes SET topic=? WHERE '.($school===0?'catalog_topic_id':'topic_id').'=?')->execute([$name,$id]);
     });
 }
 function curriculumDelete(PDO $db,int $school,string $kind,int $id):void {
     curriculumWrite($db,function()use($db,$school,$kind,$id){
         if(!in_array($kind,['chapters','topics'],true))throw new InvalidArgumentException('Invalid curriculum record.');
         $row=schoolRecord($db,$kind,$id,$school);
+        if(in_array('catalog_chapter_id',dbColumns($db,'questions'),true)){
+            foreach(['questions','learning_notes'] as $table){
+                $field=$kind==='chapters'?($school===0?'catalog_chapter_id':($table==='learning_notes'?'chapter_id':null)):($school===0?'catalog_topic_id':'topic_id');
+                if($field){$q=$db->prepare("SELECT id FROM $table WHERE $field=? LIMIT 1");$q->execute([$id]);if($q->fetchColumn())throw new InvalidArgumentException('This catalog entry is linked to learning content and cannot be deleted.');}
+            }
+        }
         if($kind==='chapters'){
             if(curriculumTopics($db,$school,$id))throw new InvalidArgumentException('This chapter has topics. Keep it to preserve curriculum links.');
             $q=$db->prepare('SELECT chapter FROM questions WHERE school_id=? AND class_id=? AND subject_id=?');$q->execute([$school,$row['class_id'],$row['subject_id']]);

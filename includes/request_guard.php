@@ -80,6 +80,7 @@ function guardSchoolRequest(): void {
         return;
     }
     if (!Auth::verifyCSRFToken($_POST[CSRF_TOKEN_NAME] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? null)) denySchoolRequest('Your security token has expired. Reload the page and try again.', 419);
+    if($module==='learning'&&$file==='curriculum.php'&&$role!=='super_admin')denySchoolRequest('Only super admin may add or change chapters and topics. The school curriculum is read-only.',403);
     // Automatic settings are immutable even if a forged request re-enables hidden controls.
     $automaticSettingsWrite=($module==='exams'&&($file==='edit.php'||($file==='view.php'&&(isset($_POST['map_subject'])||isset($_GET['delete_mapping'])))))||($module==='subjects'&&$file==='internal.php'&&!empty($_GET['exam']));
     if($automaticSettingsWrite){

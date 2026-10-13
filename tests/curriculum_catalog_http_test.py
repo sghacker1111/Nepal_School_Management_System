@@ -81,8 +81,8 @@ with ERPHttpFixture() as app:
     school_bank=json.loads(app.request(f'{questions}?action_get_chapters=1&class_id={school_cls}&subject_id={school_sub}'))
     school_manager=json.loads(app.request(f'{curriculum}?action=get_chapters&class_id={school_cls}&subject_id={school_sub}'))['chapters']
     assert school_bank and school_bank==school_manager,'Existing school fallback chapters also remain available after upgrade'
-    assert all(int(c['school_id'])==1 for c in school_bank),'School catalogs retain tenant-specific ownership'
+    assert all(int(c['school_id']) in [0,1] for c in school_bank),'Catalog combines validated shared and preserved local entries'
     app.login('teacher')
     app.request(curl,status=404)
-    app.request(curriculum,{'action':'add_topic','class_id':cls,'subject_id':subject,'chapter_id':chapter['id'],'name':'Forbidden'},status=422)
+    app.request(curriculum,{'action':'add_topic','class_id':cls,'subject_id':subject,'chapter_id':chapter['id'],'name':'Forbidden'},status=403)
     print(f'Shared curriculum HTTP passed: {app.count} requests; persistent chapters, topic parity, duplicates, rename preservation and scope checks.')

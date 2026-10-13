@@ -40,6 +40,15 @@ function validateTeacherLearningRequest(PDO $db,int $school,string $module,strin
     $bodyActions=array_intersect_key($data,array_flip(['action','action_import_excel','action_quick_add_class','action_quick_add_subject']));
     if(count($queryActions)>1||count($bodyActions)>1||($queryActions&&$bodyActions))throw new InvalidArgumentException('Submit one learning action at a time. Reload the page and try again.');
     if($data&&$query)validateTeacherLearningRequest($db,$school,$module,$file,[],$query);
+    if(!$data&&($file==='curriculum.php'||($file==='questions.php'&&(isset($query['action_get_chapters'])||isset($query['action_get_topics']))))){
+        require_once __DIR__.'/learning_content.php';$actor=learningActor($db,(int)Auth::getUserId(),$school,Auth::isReadOnly());
+        $class=(int)($query['class_id']??0);$subject=(int)($query['subject_id']??0);
+        if(isset($query['chapter_id']))learningCatalogChapterScope($db,$actor,(int)$query['chapter_id']);
+        if($class&&!in_array($class,array_map('intval',array_column(learningReadClasses($db,$actor),'id')),true))throw new InvalidArgumentException('Choose an available class.');
+        if($subject&&!in_array($subject,array_map('intval',array_column(learningReadSubjects($db,$actor,$class),'id')),true))throw new InvalidArgumentException('Choose an available class subject.');
+        if(($query['action']??'')==='get_all_subjects'&&$actor['role']!=='super_admin')throw new InvalidArgumentException('School curriculum is read-only.');
+        return;
+    }
     $role=Auth::getRole();$teacher=(int)Auth::getUserId();$values=array_replace($query,$data);$action=$data['action']??($query['action']??'');
     if($role==='teacher'&&$file==='curriculum.php'&&in_array($action,['map_subject','get_all_subjects'],true))throw new InvalidArgumentException('Only an administrator may map additional class subjects. Teachers can manage their assigned subjects only.');
     $scopes=[];
