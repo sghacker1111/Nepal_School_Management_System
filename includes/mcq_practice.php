@@ -1,21 +1,25 @@
 <?php
 require_once __DIR__.'/functions.php';
 require_once __DIR__.'/curriculum_catalog.php';
+require_once __DIR__.'/learning_content.php';
 
 const MCQ_PRACTICE_LIMIT=100;
 function practiceScope(PDO $db,int $school,string $role,int $actor,int $class,int $subject):array {
-    $chosenClass=null;$chosenSubject=null;
-    foreach(learningClasses($db,$school,$role,$actor) as $row)if((int)$row['id']===$class)$chosenClass=$row;
+    $contentActor=learningActor($db,$actor,$school);$chosenClass=null;$chosenSubject=null;
+    foreach(learningReadClasses($db,$contentActor) as $row)if((int)$row['id']===$class)$chosenClass=$row;
     if(!$chosenClass)throw new InvalidArgumentException('Choose an available class.');
-    foreach(learningSubjects($db,$school,$class,$role,$actor) as $row)if((int)$row['id']===$subject)$chosenSubject=$row;
+    foreach(learningReadSubjects($db,$contentActor,$class) as $row)if((int)$row['id']===$subject)$chosenSubject=$row;
     if(!$chosenSubject)throw new InvalidArgumentException('Choose an available subject for this class.');
     return [$chosenClass,$chosenSubject];
 }
 function practicePool(PDO $db,int $school,string $role,int $actor,int $class,int $subject):array {
     [$c,$s]=practiceScope($db,$school,$role,$actor,$class,$subject);
-    $q=$db->prepare("SELECT q.*,t.name topic_name FROM questions q JOIN classes c ON c.id=q.class_id AND c.school_id=q.school_id JOIN subjects s ON s.id=q.subject_id AND s.school_id=q.school_id LEFT JOIN topics t ON t.id=q.topic_id AND t.school_id=q.school_id AND t.class_id=q.class_id AND t.subject_id=q.subject_id WHERE q.type='MCQ' AND c.is_active=1 AND COALESCE(s.is_hidden,0)=0 AND EXISTS(SELECT 1 FROM class_subjects cs WHERE cs.school_id=q.school_id AND cs.class_id=q.class_id AND cs.subject_id=q.subject_id AND (cs.is_active=1 OR cs.is_optional=1)) AND ((q.school_id=? AND q.class_id=? AND q.subject_id=?) OR (q.school_id=0 AND c.name=? AND ((s.code<>'' AND s.code=?) OR s.name_en=?))) ORDER BY q.id DESC");
-    $q->execute([$school,$class,$subject,$c['name'],$s['code']??'',$s['name_en']]);$pool=[];
-    while($row=$q->fetch()){
+    $contentActor=learningActor($db,$actor,$school);
+    $rows=learningContentList($db,$contentActor,'questions',['class_id'=>$class,'subject_id'=>$subject,'type'=>'MCQ'],'practice');$pool=[];
+    foreach($rows as $row){
+        $topicId=$row['catalog_topic_id']?:$row['topic_id'];$topicName='';
+        if($topicId){$topicQuery=$db->prepare('SELECT name FROM topics WHERE id=?');$topicQuery->execute([$topicId]);$topicName=$topicQuery->fetchColumn()?:'';}
+        $row['topic_name']=$topicName;
         try{$en=json_decode($row['options']??'',true,512,JSON_THROW_ON_ERROR);$np=json_decode($row['options_np']?:'{}',true,512,JSON_THROW_ON_ERROR);}catch(Throwable $e){continue;}
         if(!is_array($en)||!is_array($np)||!in_array($row['correct_option'],['A','B','C','D'],true))continue;
         $options=[];$valid=true;
@@ -62,6 +66,7 @@ function practiceStart(PDO $db,int $school,string $role,int $actor,array $input)
 function practiceValidateSession(PDO $db,int $school,string $role,int $actor,array $state):void {
     if(($state['school']??null)!==$school||($state['actor']??null)!==$actor||($state['expires']??0)<time())throw new InvalidArgumentException('This practice session has expired. Start a new practice.');
     practiceScope($db,$school,$role,$actor,(int)$state['class'],(int)$state['subject']);
+    learningValidateQuestionIds($db,learningActor($db,$actor,$school),array_column($state['questions'],'id'),'practice');
 }
 function practiceFeedback(array $q,array $answer):array {
     return ['correct'=>$answer['correct'],'selected'=>$answer['choice'],'correct_option'=>$q['key'],'correct_text'=>$q['options'][$q['key']]['text'],'correct_nepali'=>$q['options'][$q['key']]['nepali'],'explanation'=>$q['explanation'],'explanation_np'=>$q['explanation_np']];

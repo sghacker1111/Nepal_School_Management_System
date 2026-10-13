@@ -115,3 +115,7 @@ function learningContentRecord(PDO $db,array $actor,string $kind,int $id,string 
     if(!$r||(!learningCanView($db,$actor,$r,$purpose)&&!($includeArchived&&!empty($r['archived_at'])&&learningCanEdit($db,$actor,$r))))throw new InvalidArgumentException('Content not found.');
     $r['can_edit']=learningCanEdit($db,$actor,$r);$r['can_publish']=$r['can_edit'];$r['source_scope']=(int)$r['school_id']===0?'shared':'school';return $r;
 }
+function learningValidateQuestionIds(PDO $db,array $actor,array $ids,string $purpose):void {
+    try{foreach($ids as $id){if(!is_scalar($id)||!preg_match('/^[1-9][0-9]*$/',(string)$id))throw new InvalidArgumentException('Invalid content.');learningContentRecord($db,$actor,'questions',(int)$id,$purpose);}}
+    catch(InvalidArgumentException $e){throw new InvalidArgumentException('Some questions are no longer available. Please restart practice or reload the paper selection.');}
+}

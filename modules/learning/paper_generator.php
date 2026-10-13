@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__.'/../../includes/learning_content.php';
 
 Auth::requireRole(['super_admin', 'school_admin', 'principal', 'teacher', 'exam_officer']);
 Auth::requireAccess('paper_generator');
@@ -46,7 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_save_grid'])) 
     exit;
 }
 
-$classes=learningClasses($db,(int)$school_id,(string)Auth::getRole(),(int)Auth::getUserId());
+$contentActor=learningActor($db,(int)Auth::getUserId(),(int)$school_id,Auth::isReadOnly());$classes=learningReadClasses($db,$contentActor);
 
 // Fetch exams for current school
 if ($is_admin && !$school_id) {
@@ -73,7 +74,7 @@ if ($school_id) {
     $school = $stmt->fetch();
 }
 
-$subjects=learningSubjects($db,(int)$school_id,(int)$class_id,(string)Auth::getRole(),(int)Auth::getUserId());
+$subjects=learningReadSubjects($db,$contentActor,(int)$class_id);
 
 // Fetch saved grid layouts for this class/subject
 $saved_grids = [];
@@ -130,48 +131,9 @@ $chapter_filter = $_GET['chapter'] ?? '';
 
 $all_available_questions = [];
 if ($class_id && $subject_id) {
-    // We need target class level and subject code/name to match Universal questions
-    $stmt = $db->prepare("SELECT name FROM classes WHERE id = ?");
-    $stmt->execute([$class_id]);
-    $lvl = $stmt->fetchColumn();
-
-    $stmt = $db->prepare("SELECT code, name_en FROM subjects WHERE id = ?");
-    $stmt->execute([$subject_id]);
-    $sub = $stmt->fetch();
-    $sub_code = $sub ? $sub['code'] : '';
-    $sub_name = $sub ? $sub['name_en'] : '';
-
-    // Fetch all questions matching this class/subject level
-    if ($chapter_filter && $chapter_filter !== 'all') {
-        $stmt = $db->prepare("
-            SELECT q.*, c.name as class_name, s.name_en as subject_name 
-            FROM questions q
-            LEFT JOIN classes c ON q.class_id = c.id
-            LEFT JOIN subjects s ON q.subject_id = s.id
-            WHERE (
-                (q.school_id = ? AND q.class_id = ? AND q.subject_id = ?)
-                OR
-                (q.school_id = 0 AND c.name = ? AND ((s.code <> '' AND s.code = ?) OR s.name_en = ?))
-            ) AND q.chapter = ?
-            ORDER BY q.id DESC
-        ");
-        $stmt->execute([$school_id, $class_id, $subject_id, $lvl, $sub_code, $sub_name, $chapter_filter]);
-    } else {
-        $stmt = $db->prepare("
-            SELECT q.*, c.name as class_name, s.name_en as subject_name 
-            FROM questions q
-            LEFT JOIN classes c ON q.class_id = c.id
-            LEFT JOIN subjects s ON q.subject_id = s.id
-            WHERE (
-                (q.school_id = ? AND q.class_id = ? AND q.subject_id = ?)
-                OR
-                (q.school_id = 0 AND c.name = ? AND ((s.code <> '' AND s.code = ?) OR s.name_en = ?))
-            )
-            ORDER BY q.id DESC
-        ");
-        $stmt->execute([$school_id, $class_id, $subject_id, $lvl, $sub_code, $sub_name]);
-    }
-    $all_available_questions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $filters=['class_id'=>$class_id,'subject_id'=>$subject_id];
+    if($chapter_filter&&$chapter_filter!=='all')$filters['chapter']=$chapter_filter;
+    $all_available_questions=learningContentList($db,$contentActor,'questions',$filters,'paper');
 }
 
 // Process generation
@@ -232,6 +194,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_generate'])) {
         } else {
             // Manual selection logic
             $selected_ids = $_POST['manual_questions'] ?? [];
+            if(!is_array($selected_ids)||!array_is_list($selected_ids)||count($selected_ids)>200)denySchoolRequest('Choose valid paper questions.',422);
+            try{learningValidateQuestionIds($db,$contentActor,$selected_ids,'paper');}catch(InvalidArgumentException $e){denySchoolRequest('Some paper questions are unavailable. Reload the selection.',422);}
             $selected_questions = [];
             
             if (empty($selected_ids)) {
@@ -316,7 +280,7 @@ ob_start();
     box-shadow: 0 0 10px rgba(0,0,0,0.5);
     color: #000000;
     font-family: 'Kokila', 'Times New Roman', Times, 'Noto Sans Devanagari', serif;
-    font-size: 15px;
+    font-size: var(--erp-kokila-size, 20pt);
     line-height: 1.5;
     position: relative;
     box-sizing: border-box;

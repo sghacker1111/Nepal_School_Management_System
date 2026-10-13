@@ -16,6 +16,7 @@ def seed_practice(app):
     db.execute("INSERT INTO questions(school_id,class_id,subject_id,type,chapter,question_text,options,correct_option) VALUES(1,?,?,'MCQ','Sets','Incomplete','{}','A')",(f['class'],f['subject']))
     other_subject=db.execute('SELECT subject_id FROM class_subjects WHERE class_id=? LIMIT 1',(f['otherClass'],)).fetchone()[0]
     db.execute("INSERT INTO questions(school_id,class_id,subject_id,type,chapter,question_text,options,correct_option) VALUES(?,?,?,'MCQ','Sets','Foreign question',?,'A')",(f['otherSchool'],f['otherClass'],other_subject,json.dumps({'A':'One','B':'Two','C':'Three','D':'Four'})))
+    db.execute("UPDATE questions SET visibility='public'") # Synthetic published records; new school saves remain private.
     db.commit()
     return ids
 
@@ -97,7 +98,7 @@ def run():
         app.login('teacher'); app.request('/modules/settings/users.php',status=403); app.request(PAGE)
         app.request(PAGE+query)
         other_sub=app.db.execute('SELECT subject_id FROM class_subjects WHERE class_id=? AND subject_id<>? LIMIT 1',(f['class'],f['subject'])).fetchone()[0]
-        app.request(PAGE+f'?action=catalog&class_id={f["class"]}&subject_id={other_sub}',status=404)
+        app.request(PAGE+f'?action=catalog&class_id={f["class"]}&subject_id={other_sub}') # Staff may practice school-public subjects beyond their own assignment.
         app.login('admin')
         other_lookup=json.loads(app.request('/modules/settings/users.php?student_lookup=1&lookup_school='+str(f['otherSchool'])))['students']
         assert [int(s['id']) for s in other_lookup]==[f['otherStudent']]

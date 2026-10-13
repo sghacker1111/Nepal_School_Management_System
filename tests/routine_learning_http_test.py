@@ -64,7 +64,7 @@ with ERPHttpFixture() as app:
     app.request(f'{questions}?class={cls}&subject={other}')
     app.request('/modules/learning/paper_generator.php',{'action_save_grid':1,'class_id':cls,'subject_id':other,'grid_name':'Forged','grid_data':'{}'},status=422)
     app.request(f'/modules/learning/question_grid.php?class={cls}&subject={own}')
-    app.request(f'/modules/learning/question_grid.php?class={cls}&subject={other}',status=404)
+    app.request(f'/modules/learning/question_grid.php?class={cls}&subject={other}')
     app.request(f'/modules/learning/index.php?class_id={cls}&subject_id={other}')
     app.request(questions,{'action_quick_add_subject':1,'subject_name':'Forbidden'},status=422)
     app.request(f'{questions}?class[]={cls}',status=404)
