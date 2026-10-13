@@ -50,6 +50,7 @@ function learningRecordScope(PDO $db,array $actor,array $record):?array {
         foreach(learningReadSubjects($db,$actor,$class) as $r)if((int)$r['id']===$subject)return ['school_id'=>$school,'class_id'=>$class,'subject_id'=>$subject];
         return null;
     }
+    $q=$db->prepare('SELECT cs.id FROM classes c JOIN class_subjects cs ON cs.class_id=c.id AND cs.school_id=0 JOIN subjects s ON s.id=cs.subject_id AND s.school_id=0 WHERE c.school_id=0 AND c.id=? AND s.id=? AND c.is_active=1 AND COALESCE(s.is_hidden,0)=0 AND (cs.is_active=1 OR cs.is_optional=1)');$q->execute([$class,$subject]);if(!$q->fetchColumn())return null;
     foreach(learningReadClasses($db,$actor) as $c)foreach(learningReadSubjects($db,$actor,(int)$c['id']) as $s){
         try{$scope=learningCatalogScope($db,$actor['school_id'],(int)$c['id'],(int)$s['id']);}catch(InvalidArgumentException $e){continue;}
         if($scope['shared']&&$scope['shared']['class_id']===$class&&$scope['shared']['subject_id']===$subject)return $scope['local'];
@@ -59,6 +60,10 @@ function learningRecordScope(PDO $db,array $actor,array $record):?array {
 function learningCanView(PDO $db,array $actor,array $record,string $purpose='study'):bool {
     if(!learningPurposeAllowed($db,$actor,$purpose)||!empty($record['archived_at']))return false;
     $scope=learningRecordScope($db,$actor,$record);if(!$scope)return false;
+    return learningScopeCanView($db,$actor,$record,$scope);
+}
+/** A list resolves scopes once; public rows require no further database queries. */
+function learningScopeCanView(PDO $db,array $actor,array $record,array $scope):bool {
     if($actor['role']==='super_admin'&&$actor['school_id']===0)return true;
     if(($record['visibility']??'private')==='public')return true;
     if((int)$record['school_id']===0)return $actor['role']==='super_admin';
@@ -104,7 +109,7 @@ function learningContentList(PDO $db,array $actor,string $kind,array $filters,st
         if(!empty($filters['class_id'])&&$scope['class_id']!==(int)$filters['class_id'])continue;
         if(!empty($filters['subject_id'])&&$scope['subject_id']!==(int)$filters['subject_id'])continue;
         $canEdit=learningCanEdit($db,$actor,$r);
-        if($archived){if(!$canEdit)continue;}elseif(!learningCanView($db,$actor,$r,$purpose))continue;
+        if($archived){if(!$canEdit)continue;}elseif(!learningScopeCanView($db,$actor,$r,$scope))continue;
         $r['can_edit']=$canEdit;$r['can_publish']=$canEdit;$r['source_scope']=(int)$r['school_id']===0?'shared':'school';$rows[]=$r;
     }
     return $rows;

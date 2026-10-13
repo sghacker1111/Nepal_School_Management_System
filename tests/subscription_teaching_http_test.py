@@ -10,24 +10,20 @@ with ERPHttpFixture() as app:
     app.login('teacher')
     curriculum='/modules/learning/curriculum.php'
     subjects=json.loads(app.request(f'{curriculum}?action=get_subjects&class_id={cls}'))['subjects']
-    assert [int(s['id']) for s in subjects]==[own], 'Only own subject once, not a duplicate per section'
-    app.request(f'{curriculum}?action=get_chapters&class_id={cls}&subject_id={other}',status=404)
+    assert [int(s['id']) for s in subjects].count(own)==1 and other in [int(s['id']) for s in subjects], 'Public curriculum has distinct subject IDs once'
+    app.request(f'{curriculum}?action=get_chapters&class_id={cls}&subject_id={other}')
     app.request(f'{curriculum}?action=get_all_subjects',status=404)
     chapter_input={'action':'add_chapter','class_id':cls,'subject_id':own,'name':'Own synthetic chapter'}
-    result=json.loads(app.request(curriculum,chapter_input));assert result['success']; chapter=int(result['id'])
-    before=app.snapshot('chapters')
-    app.request(curriculum,{**chapter_input,'subject_id':other},status=422);assert app.snapshot('chapters')==before
+    before=app.snapshot('chapters');app.request(curriculum,chapter_input,status=403);assert app.snapshot('chapters')==before
+    app.db.execute('INSERT INTO chapters(school_id,class_id,subject_id,name) VALUES(1,?,?,?)',(cls,own,'Own synthetic chapter'));chapter=app.db.execute('SELECT last_insert_rowid()').fetchone()[0]
+    app.db.execute('INSERT INTO topics(school_id,class_id,subject_id,chapter_id,name) VALUES(1,?,?,?,?)',(cls,own,chapter,'Own synthetic topic'));topic=app.db.execute('SELECT last_insert_rowid()').fetchone()[0];app.db.commit()
     topic_input={'action':'add_topic','class_id':cls,'subject_id':own,'chapter_id':chapter,'name':'Own synthetic topic'}
-    result=json.loads(app.request(curriculum,topic_input));assert result['success'];topic=int(result['id'])
-    app.request(curriculum,{'action':'edit_chapter','id':chapter,'name':'Edited own chapter'})
-    app.request(curriculum,{'action':'edit_topic','id':topic,'name':'Edited own topic'})
-    app.db.execute('INSERT INTO chapters(school_id,class_id,subject_id,name) VALUES(1,?,?,?)',(cls,other,'Other subject chapter'));other_chapter=app.db.execute('SELECT last_insert_rowid()').fetchone()[0]
-    app.db.execute('INSERT INTO topics(school_id,class_id,subject_id,chapter_id,name) VALUES(1,?,?,?,?)',(cls,other,other_chapter,'Other subject topic'));other_topic=app.db.execute('SELECT last_insert_rowid()').fetchone()[0];app.db.commit()
-    for action,record in [('edit_chapter',other_chapter),('delete_chapter',other_chapter),('edit_topic',other_topic),('delete_topic',other_topic)]:
-        before=app.snapshot('chapters'),app.snapshot('topics')
-        app.request(curriculum,{'action':action,'id':record,'name':'Forged','class_id':cls,'subject_id':own},status=422)
-        assert (app.snapshot('chapters'),app.snapshot('topics'))==before
-    app.request(curriculum,{'action':'map_subject','class_id':cls,'subject_id':other},status=422)
+    before=app.snapshot('chapters'),app.snapshot('topics')
+    for action,record in [('edit_chapter',chapter),('delete_chapter',chapter),('edit_topic',topic),('delete_topic',topic)]:
+        app.request(curriculum,{'action':action,'id':record,'name':'Forbidden','class_id':cls,'subject_id':own},status=403)
+    app.request(curriculum,topic_input,status=403)
+    app.request(curriculum,{'action':'map_subject','class_id':cls,'subject_id':other},status=403)
+    assert (app.snapshot('chapters'),app.snapshot('topics'))==before
     grid_path='/modules/learning/specification_grids.php'
     grid={'action':'add','name':'Own grid','class_id':cls,'subject_id':own,'count_MCQ':5,'marks_MCQ':1}
     body=app.request(grid_path,grid);assert 'Own grid' in body

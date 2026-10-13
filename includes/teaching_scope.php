@@ -36,7 +36,7 @@ function validateTeacherLearningRequest(PDO $db,int $school,string $module,strin
     if($module!=='learning'||!in_array($file,['curriculum.php','specification_grids.php','questions.php','paper_generator.php','question_grid.php','index.php','practice_mcqs.php'],true))return;
     // Legacy pages dispatch both query-string and body actions. Never authorize one
     // action while another handler executes, or let body fields shadow a query scope.
-    $queryActions=array_intersect_key($query,array_flip(['action','delete','action_get_chapters','action_get_topics']));
+    $queryActions=array_intersect_key($query,array_flip(['action','delete','delete_note','action_get_chapters','action_get_topics']));
     $bodyActions=array_intersect_key($data,array_flip(['action','action_note','action_import_excel','action_quick_add_class','action_quick_add_subject']));
     if(count($queryActions)>1||count($bodyActions)>1||($queryActions&&$bodyActions))throw new InvalidArgumentException('Submit one learning action at a time. Reload the page and try again.');
     if($data&&$query)validateTeacherLearningRequest($db,$school,$module,$file,[],$query);
@@ -87,4 +87,10 @@ function validateTeacherLearningRequest(PDO $db,int $school,string $module,strin
             $q=$db->prepare('SELECT id FROM class_subjects WHERE school_id=? AND class_id=? AND subject_id=? AND (is_active=1 OR is_optional=1)');$q->execute([$school,$class,$subject]);if(!$q->fetchColumn())throw new InvalidArgumentException('Choose an active subject mapped to the selected class.');
         }
     }
+}
+function learningSingleAction(array $data,array $query):void {
+    $queryActions=array_intersect_key($query,array_flip(['action','delete','delete_note','make_universal','action_get_chapters','action_get_topics']));
+    $bodyActions=array_intersect_key($data,array_flip(['action','action_note','action_import_excel','action_quick_add_class','action_quick_add_subject','action_save_grid','action_generate']));
+    $bodyFields=array_diff_key($data,array_flip([defined('CSRF_TOKEN_NAME')?CSRF_TOKEN_NAME:'csrf_token']));
+    if(count($queryActions)>1||count($bodyActions)>1||($queryActions&&$bodyFields))throw new InvalidArgumentException('Submit one learning action at a time. Reload the page and try again.');
 }

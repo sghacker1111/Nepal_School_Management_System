@@ -17,6 +17,16 @@ See [INSTALL.md](INSTALL.md) for safe setup, migration, and production precautio
 
 ## Quick local start
 
+### Learning content ownership and visibility
+
+The super-admin shared catalog is read-only to school users. Only super admin adds or renames chapters/topics; school questions, imports and notes must select existing catalog entries. Nepali, English and Mathematics use canonical application names; CDC source snapshots and optional-subject identities remain unchanged.
+
+Teachers and school admins create and edit their own content only. New school content is **Private**, readable by its creator, assigned class-subject teachers and school administrators. **Public means within the creating school**, including enrolled students in permitted subjects, never other schools or anonymous visitors. Shared public content is available through validated matching school classes/subjects. My content and archive filters expose creator controls; archive/restore keeps record IDs. Legacy local content with no known creator stays read-only; no author is invented.
+
+Question Bank, Learning Hub, both paper generators and Practice MCQs enforce the same backend policy. Practice sessions are revalidated on every request and cleared if content becomes private, archived, hidden or otherwise inaccessible. Subscriptions, CSRF, student enrollment/electives and school-preview read-only rules remain in force. Schema 15 is additive and makes a pre-upgrade SQLite backup. Verify MySQL on staging before production migration.
+
+Run the `learning_*_test.php` and `learning_*_http_test.py` suites along with the regressions below. `tests/learning_browser_fixture.py` starts a disposable local QA school; it never opens the original school database.
+
 Requires PHP 8.1+ with PDO SQLite, DOM, fileinfo and mbstring. This revision was tested with PHP 8.5.1 and SQLite. MySQL needs its PDO driver and a separate staging verification.
 
 For an existing database, back it up before running. Start the local server with:
@@ -46,6 +56,8 @@ In **Administration → User accounts**, a school administrator can select **Stu
 Use **Learning → Practice MCQs** to filter by class, subject, chapter, topic or question text, then select individual questions or a random set of 1–100 MCQs. Only valid four-option questions from the school's bank and matching shared catalog are offered. Answers are graded by the server and cannot be changed after submission. Red/green feedback includes the correct answer, with optional boom/chime sounds, mute, full screen and keyboard keys 1–4. A completed set shows its score and answer review. Practice is separate from official exam marks; sessions resume in the same login for up to one hour, but practice history is not stored permanently.
 
 Every new practice shuffles its questions, including manually selected sets. **Back to class & subject selection** is available both above and beneath the completed answer review.
+
+Kokila/Nepali text and question editors default to **20 pt**. Practice uses larger questions, choices, explanations and reviews, with short question/feedback animations (disabled for reduced-motion preferences). Both answer sounds have louder, smoothly faded levels; mute still persists between visits, and audible volume also depends on the device's volume setting.
 
 Schema 14 adds only a nullable student-record account link and a unique index. Existing accounts and school records are not relinked, reset or removed. SQLite keeps the existing automatic pre-upgrade backup. Test MySQL upgrades separately on staging.
 
@@ -97,6 +109,7 @@ node tests/date_controls_test.js
 node tests/attendance_controls_test.js
 node tests/content_safety_test.js
 node tests/question_editor_test.js
+node tests/learning_readability_test.js
 python tests/http_test.py
 python tests/exam_http_test.py
 python tests/assessment_http_test.py

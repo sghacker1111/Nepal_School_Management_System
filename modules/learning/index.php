@@ -55,6 +55,8 @@ $selected_chapter=$_GET['chapter']??($chapters[0]??'');
 if(!is_string($selected_chapter)||($selected_chapter!==''&&!in_array($selected_chapter,$chapters,true)))denySchoolRequest('Choose an available chapter.',404);
 $notes=[];$questions=[];
 $filter_source=$_GET['source']??'all';$filter_archived=($_GET['archived']??'')==='1';
+$reviewLegacy=($_GET['unassigned']??'')==='1';
+if($reviewLegacy&&(!$is_admin||(int)$school_id!==0))denySchoolRequest('Content not found.',404);
 $canCreateNote=$selected_class&&$selected_subject&&learningCanCreate($db,$contentActor,$class_id,$subject_id);
 if($selected_class&&$selected_subject&&$selected_chapter){
     $filters=['class_id'=>$class_id,'subject_id'=>$subject_id,'chapter'=>$selected_chapter,'source'=>$filter_source,'archived'=>$filter_archived];
@@ -62,6 +64,7 @@ if($selected_class&&$selected_subject&&$selected_chapter){
     catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
 }
 $noteTopics=[];foreach($chapterRows as $row)if($row['name']===$selected_chapter)$noteTopics=learningCatalogTopics($db,$contentActor,$class_id,$subject_id,(int)$row['id']);
+if($reviewLegacy){$notes=array_values(array_filter(learningContentList($db,$contentActor,'learning_notes',[]),static fn($n)=>!$n['class_id']||!$n['subject_id']));$questions=[];}
 $pageTitle = 'Learning Hub';
 $activePage = 'learning';
 
@@ -121,6 +124,7 @@ window.MathJax = {
     <h2><i class="fas fa-book-open text-primary"></i> Learning Hub</h2>
     <div>
         <a href="<?= APP_URL ?>/modules/learning/practice_mcqs.php" class="btn btn-success"><i class="fas fa-circle-check"></i> Practice MCQs</a>
+        <?php if($is_admin&&(int)$school_id===0): ?><a href="?unassigned=1" class="btn btn-outline-warning">Review unassigned legacy notes</a><?php endif; ?>
         <?php if ($canCreateNote): ?>
         <button class="btn btn-primary" onclick="showAddNoteModal()">
             <i class="fas fa-plus"></i> Add Study Note
@@ -141,6 +145,7 @@ window.MathJax = {
 <div class="card learning-card mb-4">
     <div class="card-body p-4">
         <form method="GET" id="hubFilterForm" action="" class="row g-3">
+            <?php if($reviewLegacy): ?><input type="hidden" name="unassigned" value="1"><?php endif; ?>
             <div class="col-md-3">
                 <label class="form-label fw-bold">Class</label>
                 <select name="class_id" class="form-select" onchange="this.form.elements.subject_id.value='';this.form.elements.chapter.value='';this.form.submit();" required>
@@ -201,7 +206,8 @@ window.MathJax = {
     </div>
 <?php else: ?>
     <!-- Access Approved or Admin -->
-    <?php if ($class_id && $subject_id && $selected_chapter): ?>
+    <?php if (($class_id && $subject_id && $selected_chapter)||$reviewLegacy): ?>
+        <?php if($reviewLegacy): ?><div class="alert alert-warning">These retained notes have no unambiguous class/subject mapping. Select the intended class, subject and chapter above before editing to map a note; no ownership or mapping has been guessed.</div><?php endif; ?>
         <div class="row g-4">
             <!-- 1. Notes Section -->
             <div class="col-lg-6">
@@ -217,7 +223,7 @@ window.MathJax = {
                                 <div class="card-body p-3">
                                     <div class="d-flex justify-content-between align-items-start mb-2">
                                         <h6 class="fw-bold text-success mb-1"><?= sanitize($note['title']) ?></h6>
-                                        <?php if ($note['can_edit']): ?>
+                                        <?php if ($note['can_edit']&&$canCreateNote): ?>
                                         <div>
                                             <button class="btn btn-xs btn-outline-warning py-0 px-1" onclick="editNote(<?= htmlspecialchars(json_encode($note)) ?>)" title="Edit"><i class="fas fa-edit fa-xs"></i></button>
                                             <form method="post" class="d-inline"><input type="hidden" name="action_note" value="<?= $filter_archived?'restore':'archive' ?>"><input type="hidden" name="note_id" value="<?= $note['id'] ?>"><button class="btn btn-sm btn-outline-danger"><?= $filter_archived?'Restore':'Archive' ?></button></form>

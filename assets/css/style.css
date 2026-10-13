@@ -44,6 +44,8 @@
 textarea[name*="_np"],
 input[name*="_np"] {
     font-family: 'Kokila', 'Noto Sans Devanagari', 'Kalimati', 'Segoe UI', sans-serif !important;
+    font-size: var(--erp-kokila-size, 20pt) !important;
+    line-height: 1.55;
 }
 
 /* MathJax Devanagari elements styling with Kokila */
@@ -53,6 +55,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
 }
 
 :root {
+    --erp-kokila-size: 20pt;
     --primary-color: #2c3e50;
     --secondary-color: #3498db;
     --success-color: #2ecc71;

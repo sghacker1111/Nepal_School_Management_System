@@ -80,6 +80,7 @@ function guardSchoolRequest(): void {
         return;
     }
     if (!Auth::verifyCSRFToken($_POST[CSRF_TOKEN_NAME] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? null)) denySchoolRequest('Your security token has expired. Reload the page and try again.', 419);
+    if($module==='learning'){require_once __DIR__.'/teaching_scope.php';try{learningSingleAction($_POST,$_GET);}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}}
     if($module==='learning'&&$file==='questions.php'){
         require_once __DIR__.'/learning_content_service.php';$actor=learningActor(getDB(),(int)Auth::getUserId(),(int)Auth::getSchoolId(),Auth::isReadOnly());
         if(array_key_exists('school_id',$_POST)||array_key_exists('created_by_user_id',$_POST)||isset($_GET['make_universal']))denySchoolRequest('Content school and creator cannot be changed.',403);

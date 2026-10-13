@@ -15,7 +15,10 @@
   if(!sound||!audioContext||audioContext.state!=='running')return;
   try{
    const now=audioContext.currentTime;
-   const tone=(frequency,start,duration,type,end)=>{const oscillator=audioContext.createOscillator(),gain=audioContext.createGain();oscillator.type=type;oscillator.frequency.setValueAtTime(frequency,start);if(end)oscillator.frequency.exponentialRampToValueAtTime(end,start+duration);gain.gain.setValueAtTime(.001,start);gain.gain.exponentialRampToValueAtTime(correct?.055:.09,start+.015);gain.gain.exponentialRampToValueAtTime(.001,start+duration);oscillator.connect(gain);gain.connect(audioContext.destination);oscillator.start(start);oscillator.stop(start+duration+.02);oscillator.onended=()=>{oscillator.disconnect();gain.disconnect();};};
+   // Louder than the previous .055/.09 levels, with a short attack/fade and
+   // enough headroom for the two correct-answer tones to overlap cleanly.
+   const peak=correct?.22:.28;
+   const tone=(frequency,start,duration,type,end)=>{const oscillator=audioContext.createOscillator(),gain=audioContext.createGain();oscillator.type=type;oscillator.frequency.setValueAtTime(frequency,start);if(end)oscillator.frequency.exponentialRampToValueAtTime(end,start+duration);gain.gain.setValueAtTime(.001,start);gain.gain.exponentialRampToValueAtTime(peak,start+.025);gain.gain.exponentialRampToValueAtTime(.001,start+duration);oscillator.connect(gain);gain.connect(audioContext.destination);oscillator.start(start);oscillator.stop(start+duration+.02);oscillator.onended=()=>{oscillator.disconnect();gain.disconnect();};};
    if(correct){tone(660,now,.18,'sine');tone(880,now+.13,.24,'sine');}else tone(155,now,.45,'triangle',45);
   }catch{}
  }
@@ -58,6 +61,10 @@
   try{const data=await request('catalog',{class_id:el('practiceClass').value,subject_id:el('practiceSubject').value});if(version!==loadVersion)return;catalog=data.questions;options(el('practiceChapter'),catalog.map(q=>q.chapter),'All chapters');['practiceChapter','practiceTopic','practiceSearch'].forEach(id=>el(id).disabled=!catalog.length);updateTopics();}catch(e){if(version===loadVersion)error(e.message);}
  }
  function math(){if(window.MathJax?.typesetPromise)window.MathJax.typesetPromise([root]).then(()=>window.fixDevanagariInMathJax?.(document)).catch(()=>{});}
+ function animatePanel(node){
+  if(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)return;
+  node.animate?.([{opacity:0,transform:'translateY(10px)'},{opacity:1,transform:'translateY(0)'}],{duration:300,easing:'cubic-bezier(.22,.61,.36,1)'});
+ }
  function richNode(tag,html,className=''){const node=document.createElement(tag);node.className=className;node.innerHTML=html||'';return node;}
  function correctAnswer(feedback){const box=document.createElement('div');box.className='practice-correct-answer';const title=document.createElement('strong');title.textContent='Correct answer: '+feedback.correct_option;box.append(title,richNode('div',feedback.correct_text));if(feedback.correct_nepali)box.append(richNode('div',feedback.correct_nepali,'font-nepali'));return box;}
  function renderPractice(state,focus=true){
@@ -66,7 +73,7 @@
   if(!state)return;
   if(state.complete){
    el('practiceScore').textContent=state.score+' / '+state.total;el('practiceSummaryText').textContent=`${Math.round(state.score/state.total*100)}% correct · ${state.total-state.score} incorrect. These are practice results.`;
-   el('practiceReview').replaceChildren();state.review.forEach((q,index)=>{const item=document.createElement('div');item.className='practice-review-item';const label=document.createElement('strong');label.textContent=`${index+1}. ${q.correct?'Correct':'Incorrect'} · Your answer: ${q.selected}`;item.append(label,richNode('div',q.text));if(q.nepali)item.append(richNode('div',q.nepali,'font-nepali'));item.append(correctAnswer(q));el('practiceReview').append(item);});math();return;
+   el('practiceReview').replaceChildren();state.review.forEach((q,index)=>{const item=document.createElement('div');item.className='practice-review-item';const label=document.createElement('strong');label.textContent=`${index+1}. ${q.correct?'Correct':'Incorrect'} · Your answer: ${q.selected}`;item.append(label,richNode('div',q.text));if(q.nepali)item.append(richNode('div',q.nepali,'font-nepali'));item.append(correctAnswer(q));el('practiceReview').append(item);});math();if(focus)animatePanel(el('practiceSummary'));return;
   }
   el('practicePosition').textContent=`Question ${state.index+1} of ${state.total}`;el('practiceLiveScore').textContent=`${state.score} correct · ${state.answered} answered`;el('practiceProgressFill').style.width=(state.answered/state.total*100)+'%';el('practiceProgress').setAttribute('aria-valuenow',String(Math.round(state.answered/state.total*100)));el('practiceQuizTitle').textContent=state.title;
   el('practiceQuestion').innerHTML=state.question.text;el('practiceQuestionNp').innerHTML=state.question.nepali;el('practiceQuestionNp').hidden=!state.question.nepali;
@@ -79,7 +86,7 @@
    const heading=document.createElement('h3');heading.textContent=feedback.correct?'✓ Correct!':'Incorrect — keep going.';el('practiceFeedback').classList.toggle('is-wrong',!feedback.correct);el('practiceFeedback').append(heading,correctAnswer(feedback));
    if(feedback.explanation||feedback.explanation_np){const explanation=richNode('div',feedback.explanation,'practice-explanation');if(feedback.explanation_np)explanation.append(richNode('div',feedback.explanation_np,'font-nepali'));el('practiceFeedback').append(explanation);}
   }
-  math();if(focus&&!state.feedback)el('practiceQuestion').focus({preventScroll:true});
+  math();if(focus&&!state.feedback){animatePanel(el('practiceQuiz'));el('practiceQuestion').focus({preventScroll:true});}
  }
  function busyState(value){busy=value;el('practiceStart').disabled=value;el('practiceNext').disabled=value;el('practiceLeave').disabled=value;root.querySelectorAll('.practice-option').forEach(b=>b.disabled=value||!!current?.feedback);}
  async function answer(choice){
