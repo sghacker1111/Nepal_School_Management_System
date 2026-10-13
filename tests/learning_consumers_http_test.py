@@ -24,5 +24,6 @@ with ERPHttpFixture() as app:
     app.login('unrelated_teacher')
     for url in [f'/modules/learning/question_grid.php?class={cls}&subject={sub}&mcq_count=10&short_count=0&long_count=0',f'/modules/learning/paper_generator.php?class_id={cls}&subject_id={sub}&generation_mode=manual']:
         body=app.request(url);assert 'Shared paper MCQ' in body and 'Never leak private MCQ' not in body,(url,'shared' in body,'Never leak private MCQ' in body)
-    app.login('teacher');body=app.request(f'/modules/learning/question_grid.php?class={cls}&subject={sub}&mcq_count=10&short_count=0&long_count=0');assert 'Never leak private MCQ' in body
+    app.db.execute('UPDATE questions SET question_text=?,options=? WHERE id=?',('<p><strong>Rich paper question</strong> \\(x^2\\)</p>',json.dumps(dict(A='<em>Rich option</em>',B='two',C='three',D='four')),private));app.db.commit()
+    app.login('teacher');body=app.request(f'/modules/learning/question_grid.php?class={cls}&subject={sub}&mcq_count=10&short_count=0&long_count=0');assert '<strong>Rich paper question</strong>' in body and '<em>Rich option</em>' in body,'Rich HTML math and options render in both generator flows'
     print(f'Learning consumer HTTP passed: {app.count} requests')

@@ -14,10 +14,11 @@ function learningCatalogScope(PDO $db,int $school,int $class,int $subject):array
         if(classNameKey($row['name'])!==classNameKey($local['name'])||$row['type']!==$local['type'])continue;
         $nameMatch=catalogNameKey(subjectCanonicalName($row['name_en']))===catalogNameKey(subjectCanonicalName($local['name_en']));
         $codeMatch=trim((string)$local['code'])!==''&&catalogNameKey((string)$row['code'])===catalogNameKey((string)$local['code']);
-        if(!$nameMatch&&!$codeMatch)continue;
+        // Reused codes and stale source IDs are not proof of subject identity.
+        if(!$nameMatch)continue;
         $mapped=['school_id'=>0,'class_id'=>(int)$row['class_id'],'subject_id'=>(int)$row['subject_id']];
         if((int)$local['subject_source_id']===(int)$row['subject_id'])$sources[]=$mapped;
-        if($codeMatch||$nameMatch)$candidates[]=$mapped;
+        if($codeMatch||trim((string)$local['code'])===''||trim((string)$row['code'])==='')$candidates[]=$mapped;
     }
     $matches=$sources?:$candidates;
     if(count($matches)>1)throw new InvalidArgumentException('Shared subject identity is ambiguous. Ask the administrator to correct its mapping.');

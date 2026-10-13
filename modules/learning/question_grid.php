@@ -81,6 +81,8 @@ $activePage = 'learning';
 
 ob_start();
 ?>
+<script>window.MathJax={tex:{inlineMath:[['\\(','\\)'],['$','$']],displayMath:[['\\[','\\]'],['$$','$$']],processEscapes:true}};</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 
 <div class="d-flex justify-content-between align-items-center mb-4 no-print">
     <h2><i class="fas fa-file-alt text-primary"></i> Question Paper Generator</h2>
@@ -238,16 +240,14 @@ function applyPreset(mcq, short, long, title) {
         <ol class="ps-3" style="font-size: 1.05rem;">
             <?php foreach ($mcqs as $q): ?>
             <li class="mb-3">
-                <div class="mb-2"><?= sanitize($q['question_text']) ?></div>
+                <div class="mb-2 mathjax-render"><?= safeRichHtml($q['question_text']) ?></div>
+                <?php if(!empty($q['question_text_np'])): ?><div class="mb-2 font-nepali mathjax-render"><?= safeRichHtml($q['question_text_np']) ?></div><?php endif; ?>
                 <?php 
                 $opts = json_decode($q['options'] ?? '{}', true);
                 if (!empty($opts)):
                 ?>
                 <div class="row g-2 ps-3" style="font-size: 0.95rem;">
-                    <div class="col-6">a) <?= sanitize($opts['A'] ?? '') ?></div>
-                    <div class="col-6">b) <?= sanitize($opts['B'] ?? '') ?></div>
-                    <div class="col-6">c) <?= sanitize($opts['C'] ?? '') ?></div>
-                    <div class="col-6">d) <?= sanitize($opts['D'] ?? '') ?></div>
+                    <?php $optsNp=json_decode($q['options_np']??'{}',true);foreach(['A','B','C','D'] as $key): ?><div class="col-6 mathjax-render"><?= strtolower($key) ?>) <?= safeRichHtml($opts[$key]??'') ?><?php if(!empty($optsNp[$key])): ?><div class="font-nepali"><?= safeRichHtml($optsNp[$key]) ?></div><?php endif; ?></div><?php endforeach; ?>
                 </div>
                 <?php endif; ?>
             </li>
@@ -269,7 +269,7 @@ function applyPreset(mcq, short, long, title) {
             <?php foreach ($shorts as $q): ?>
             <li class="mb-3">
                 <div class="d-flex justify-content-between">
-                    <div><?= sanitize($q['question_text']) ?></div>
+                    <div class="mathjax-render"><?= safeRichHtml($q['question_text']) ?><?php if(!empty($q['question_text_np'])): ?><div class="font-nepali"><?= safeRichHtml($q['question_text_np']) ?></div><?php endif; ?></div>
                     <span class="font-monospace text-muted small">[<?= $q['marks'] ?>]</span>
                 </div>
             </li>
@@ -291,7 +291,7 @@ function applyPreset(mcq, short, long, title) {
             <?php foreach ($longs as $q): ?>
             <li class="mb-3">
                 <div class="d-flex justify-content-between">
-                    <div><?= sanitize($q['question_text']) ?></div>
+                    <div class="mathjax-render"><?= safeRichHtml($q['question_text']) ?><?php if(!empty($q['question_text_np'])): ?><div class="font-nepali"><?= safeRichHtml($q['question_text_np']) ?></div><?php endif; ?></div>
                     <span class="font-monospace text-muted small">[<?= $q['marks'] ?>]</span>
                 </div>
             </li>

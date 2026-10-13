@@ -21,4 +21,8 @@ erpEqual(learningCatalogScope($db,1,30,5)['shared']['subject_id'],3,'Optional id
 erpReject(fn()=>learningCatalogScope($db,1,21,5),'Subject of another class rejected');
 $db->exec("INSERT INTO subjects VALUES(6,'Mathematics','M1','compulsory',5,0,NULL);INSERT INTO class_subjects VALUES(6,0,1,6);UPDATE subjects SET source_id=NULL WHERE id=4");
 erpReject(fn()=>learningCatalogScope($db,1,21,4),'Ambiguous shared identity rejected');
+$db->exec("DELETE FROM class_subjects WHERE id=6;DELETE FROM subjects WHERE id=6;UPDATE subjects SET name_en='Different subject',source_id=1 WHERE id=4");
+erpEqual(learningCatalogScope($db,1,21,4)['shared'],null,'Repeated code or stale source cannot match a different subject name');
+$db->exec("UPDATE subjects SET name_en='Mathematics',code='LOCAL-OTHER',source_id=NULL WHERE id=4");
+erpEqual(learningCatalogScope($db,1,21,4)['shared'],null,'Distinct nonblank subject codes are not collapsed by label');
 echo 'Subject name checks passed: '.$GLOBALS['erp_checks'].PHP_EOL;
