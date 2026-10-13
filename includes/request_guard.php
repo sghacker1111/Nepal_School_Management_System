@@ -80,6 +80,17 @@ function guardSchoolRequest(): void {
         return;
     }
     if (!Auth::verifyCSRFToken($_POST[CSRF_TOKEN_NAME] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? null)) denySchoolRequest('Your security token has expired. Reload the page and try again.', 419);
+    if($module==='learning'&&$file==='questions.php'){
+        require_once __DIR__.'/learning_content_service.php';$actor=learningActor(getDB(),(int)Auth::getUserId(),(int)Auth::getSchoolId(),Auth::isReadOnly());
+        if(array_key_exists('school_id',$_POST)||array_key_exists('created_by_user_id',$_POST)||isset($_GET['make_universal']))denySchoolRequest('Content school and creator cannot be changed.',403);
+        $action=$_POST['action']??(isset($_GET['delete'])?'archive':'');
+        if(!is_string($action))denySchoolRequest('Choose one valid question action.',422);
+        if(in_array($action,['edit','set_visibility','archive','restore'],true)){
+            try{$r=learningContentRecord(getDB(),$actor,'questions',learningId($_POST['question_id']??$_GET['delete']??null),'bank',true);}catch(InvalidArgumentException $e){denySchoolRequest('Content not found.',404);}
+            if(!learningCanEdit(getDB(),$actor,$r))denySchoolRequest('Only the creator may change this content, while assigned to its subject.',403);
+        }
+        if($action==='add'&&!learningCanCreate(getDB(),$actor,(int)($_POST['class_id']??0),(int)($_POST['subject_id']??0)))denySchoolRequest('Create questions only for your assigned class subjects.',403);
+    }
     if($module==='learning'&&$file==='curriculum.php'&&$role!=='super_admin')denySchoolRequest('Only super admin may add or change chapters and topics. The school curriculum is read-only.',403);
     // Automatic settings are immutable even if a forged request re-enables hidden controls.
     $automaticSettingsWrite=($module==='exams'&&($file==='edit.php'||($file==='view.php'&&(isset($_POST['map_subject'])||isset($_GET['delete_mapping'])))))||($module==='subjects'&&$file==='internal.php'&&!empty($_GET['exam']));

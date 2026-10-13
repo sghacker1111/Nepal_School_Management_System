@@ -21,7 +21,7 @@ function fixture() {
     const elements = Object.fromEntries(['modalClass', 'modalSubject', 'modalChapterSelect', 'modalChapterCustom', 'modalChapter', 'modalTopicSelect'].map(id => [id, new Element()]));
     elements.modalClass.value = '9'; elements.modalSubject.value = '20';
     const requests = [];
-    const context = vm.createContext({document: {getElementById: id => elements[id], createElement: () => new Element()}, window: {location: {pathname: '/modules/learning/questions.php'}}, classSubjectsMap: [{class_id: 9, subject_id: 20, name_en: 'Mathematics'}], $: {ajax: options => requests.push(options)}});
+    const context = vm.createContext({canManageCatalog:true, document: {getElementById: id => elements[id], createElement: () => new Element()}, window: {location: {pathname: '/modules/learning/questions.php'}}, classSubjectsMap: [{class_id: 9, subject_id: 20, name_en: 'Mathematics'}], $: {ajax: options => requests.push(options)}});
     vm.runInContext(code, context);
     vm.runInContext(classChangeCode, context);
     return {context, elements, requests, run: text => vm.runInContext(text, context), labels: () => elements.modalTopicSelect.children.map(option => option.textContent)};

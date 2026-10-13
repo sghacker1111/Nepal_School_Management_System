@@ -77,8 +77,8 @@ function learningCatalogSelection(PDO $db,array $actor,int $class,int $subject,a
     }
     $topics=learningCatalogTopics($db,$actor,$class,$subject,(int)$chapter['id']);$selectedTopic=null;
     foreach(['topic_id'=>'local','catalog_topic_id'=>'shared'] as $field=>$source)if(!empty($input[$field])){
-        if($selectedTopic)throw new InvalidArgumentException('Choose one topic reference.');
-        foreach($topics as $r)foreach($r['aliases'] as $alias)if($alias['id']===(int)$input[$field]&&$alias['scope']===$source)$selectedTopic=['row'=>$r,'alias'=>$alias];
+        if($selectedTopic){if($actor['school_id']===0&&$selectedTopic['alias']['id']===(int)$input[$field])continue;throw new InvalidArgumentException('Choose one topic reference.');}
+        foreach($topics as $r)foreach($r['aliases'] as $alias)if($alias['id']===(int)$input[$field]&&($alias['scope']===$source||($field==='topic_id'&&$actor['school_id']===0)))$selectedTopic=['row'=>$r,'alias'=>$alias];
         if(!$selectedTopic)throw new InvalidArgumentException('Topic reference does not belong to this chapter.');
     }
     if(!$selectedTopic&&curriculumNameKey($topicName)!==''){
@@ -91,5 +91,6 @@ function learningCatalogSelection(PDO $db,array $actor,int $class,int $subject,a
     if($selectedTopic){$alias=$selectedTopic['alias'];$result[$alias['scope']==='shared'?'catalog_topic_id':'topic_id']=$alias['id'];$result['topic']=$selectedTopic['row']['name'];
         foreach($chapter['aliases'] as $ch)if($ch['id']===$alias['chapter_id']&&$ch['scope']===$alias['scope'])$selectedAlias=$ch;
     }
+    if($actor['school_id']===0&&$selectedTopic)$result['topic_id']=$selectedTopic['alias']['id'];
     $result[$selectedAlias['scope']==='shared'?'catalog_chapter_id':'chapter_id']=$selectedAlias['id'];return $result;
 }
