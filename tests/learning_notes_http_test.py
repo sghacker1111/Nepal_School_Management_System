@@ -8,6 +8,7 @@ with ERPHttpFixture() as app:
     chapter=app.db.execute('SELECT name FROM chapters WHERE school_id=1 AND class_id=? AND subject_id=? LIMIT 1',(f['class'],f['subject'])).fetchone()[0]
     payload={'action_note':'add','class_id':f['class'],'subject_id':f['subject'],'chapter':chapter,'title':'Owned note secret','content':'<p>Private note body \\(x^2\\)</p><script>bad()</script>'}
     app.login('teacher');result=app.request(route,payload)
+    assert result.count('<h2><i class="fas fa-book-open text-primary"></i> Learning Hub</h2>')==1,'Render one Hub, with no duplicate forms/scripts'
     note=app.db.execute('SELECT id,school_id,created_by_user_id,visibility,content FROM learning_notes WHERE title=?',(payload['title'],)).fetchone()
     if not note:
         app.log.flush();app.log.seek(0);print(app.log.read())
