@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__.'/subject_names.php';
 /** Versioned factual workbook data; spreadsheet prose is never executed. */
 function cdc2083Data(): array {
     static $data;
@@ -32,7 +33,7 @@ function importCdc2083Scope(PDO $db,int $school,bool $approve=false,?string $onl
         $ready=in_array($row['import_flag'],['YES','REVIEW_LOCAL'],true)||$approve;
         if(!$ready)$counts['review_rows']++;
         $q=$db->prepare('SELECT s.*,cs.id mapping_id FROM subjects s LEFT JOIN class_subjects cs ON cs.subject_id=s.id AND cs.class_id=? AND cs.school_id=? WHERE s.school_id=? AND (cs.curriculum_key=? OR s.code=? OR (cs.id IS NOT NULL AND LOWER(TRIM(s.name_en))=LOWER(?))) ORDER BY CASE WHEN cs.id IS NULL THEN 1 ELSE 0 END,s.id LIMIT 1');
-        $q->execute([$class,$school,$school,$key,cdc2083LegacyCode($row),$row['subject_name_en']]);$subject=$q->fetch();
+        $q->execute([$class,$school,$school,$key,cdc2083LegacyCode($row),subjectCanonicalName($row['subject_name_en'])]);$subject=$q->fetch();
         // The source code alone is not an identity (e.g. illustrative Class 12 repeats Class 11 codes).
         if(!$subject&&$school>0){
             $q=$db->prepare('SELECT s.* FROM subjects s JOIN class_subjects cs ON cs.subject_id=s.source_id JOIN classes c ON c.id=cs.class_id WHERE s.school_id=? AND cs.school_id=0 AND c.name=? AND cs.curriculum_key=? ORDER BY s.id LIMIT 1');$q->execute([$school,'Class '.$row['class_grade'],$key]);$subject=$q->fetch();
@@ -40,7 +41,7 @@ function importCdc2083Scope(PDO $db,int $school,bool $approve=false,?string $onl
         $isOptional=str_starts_with($row['subject_type'],'OPTIONAL');
         $evaluation=cdc2083Evaluation($row);
         $sourceCode=$codeOverride===null?$row['source_subject_code']:($codeOverride===''?null:$codeOverride);
-        $subjectValues=$evaluation+['code'=>$sourceCode,'name_en'=>$row['subject_name_en'],'type'=>$isOptional?'optional':'compulsory','full_marks'=>$row['achievement_percent_scale']??($row['th_marks_max']+$row['in_marks_max']),'pass_marks'=>$row['method_id']==='THEMATIC_CONTINUOUS'?35:($row['th_marks_max']*0.35+$row['in_marks_max']*0.4)];
+        $subjectValues=$evaluation+['code'=>$sourceCode,'name_en'=>subjectCanonicalName($row['subject_name_en']),'type'=>$isOptional?'optional':'compulsory','full_marks'=>$row['achievement_percent_scale']??($row['th_marks_max']+$row['in_marks_max']),'pass_marks'=>$row['method_id']==='THEMATIC_CONTINUOUS'?35:($row['th_marks_max']*0.35+$row['in_marks_max']*0.4)];
         if(!$subject){
             // Staged courses are visible in the review page, not active exam offerings.
             $subjectId=insertRecord($db,'subjects',$subjectValues+['name_np'=>'','school_id'=>$school,'is_hidden'=>0]);$counts['subjects_added']++;

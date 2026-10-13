@@ -1,0 +1,24 @@
+<?php
+require_once __DIR__.'/test_support.php';
+if(is_file(__DIR__.'/../includes/subject_names.php'))require_once __DIR__.'/../includes/subject_names.php';
+erpCheck(function_exists('subjectCanonicalName'),'Canonical names helper is available');
+foreach([' Compulsory English '=>'English','compulsory   nepali'=>'Nepali','MATHEMATICS'=>'Mathematics','Optional Mathematics'=>'Optional Mathematics','Compulsory Science'=>'Compulsory Science','English literature'=>'English literature'] as $name=>$expected)erpEqual(subjectCanonicalName($name),$expected,'Canonical '.$name);
+$db=new PDO('sqlite::memory:');$db->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE,PDO::FETCH_ASSOC);
+$db->exec("CREATE TABLE subjects(id INTEGER PRIMARY KEY,name_en TEXT,code TEXT,type TEXT,credit_hours NUMERIC);INSERT INTO subjects VALUES(1,'Compulsory Mathematics','M1','compulsory',5),(2,'Mathematics','M2','compulsory',4),(3,'Optional Mathematics','OM','optional',4)");
+$before=$db->query('SELECT id,code,type,credit_hours FROM subjects ORDER BY id')->fetchAll();migrateCanonicalSubjectNames($db);
+erpEqual($db->query('SELECT id,code,type,credit_hours FROM subjects ORDER BY id')->fetchAll(),$before,'IDs and grading identity retained');
+erpEqual($db->query('SELECT name_en FROM subjects WHERE id=1')->fetchColumn(),'Mathematics','Persist canonical label');
+erpEqual((int)$db->query('SELECT COUNT(*) FROM subjects')->fetchColumn(),3,'No duplicate deletion');
+require_once __DIR__.'/../includes/learning_catalog.php';
+$db->exec("ALTER TABLE subjects ADD COLUMN school_id INTEGER DEFAULT 0;ALTER TABLE subjects ADD COLUMN source_id INTEGER;
+CREATE TABLE classes(id INTEGER PRIMARY KEY,school_id INTEGER,name TEXT,source_id INTEGER);
+CREATE TABLE class_subjects(id INTEGER PRIMARY KEY,school_id INTEGER,class_id INTEGER,subject_id INTEGER);
+INSERT INTO classes VALUES(1,0,'Class 1',NULL),(10,0,'Class 10',NULL),(21,1,'Grade 1',1),(30,1,'Class 10',10);
+INSERT INTO subjects VALUES(4,'Compulsory Mathematics','M1','compulsory',5,1,1),(5,'Optional Mathematics','OM','optional',4,1,3);
+INSERT INTO class_subjects VALUES(1,0,1,1),(2,0,10,2),(3,0,10,3),(4,1,21,4),(5,1,30,5)");
+erpEqual(learningCatalogScope($db,1,21,4)['shared'],['school_id'=>0,'class_id'=>1,'subject_id'=>1],'Source identity matches exact class');
+erpEqual(learningCatalogScope($db,1,30,5)['shared']['subject_id'],3,'Optional identity remains distinct');
+erpReject(fn()=>learningCatalogScope($db,1,21,5),'Subject of another class rejected');
+$db->exec("INSERT INTO subjects VALUES(6,'Mathematics','M1','compulsory',5,0,NULL);INSERT INTO class_subjects VALUES(6,0,1,6);UPDATE subjects SET source_id=NULL WHERE id=4");
+erpReject(fn()=>learningCatalogScope($db,1,21,4),'Ambiguous shared identity rejected');
+echo 'Subject name checks passed: '.$GLOBALS['erp_checks'].PHP_EOL;

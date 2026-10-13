@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__.'/subject_names.php';
 require_once __DIR__.'/school_validation.php';
 function catalogNameKey(string $name):string {
     $name=html_entity_decode($name,ENT_QUOTES|ENT_HTML5,'UTF-8');
@@ -23,10 +24,10 @@ function validateUniqueClassName(PDO $db,int $school,string $name,int $except=0)
 }
 function validateUniqueClassSubject(PDO $db,int $school,int $class,array $subject,int $exceptSubject=0):void {
     schoolRecord($db,'classes',$class,$school);
-    $keys=[];foreach(['name_en','name_np','code'] as $field)$keys[$field]=catalogNameKey((string)($subject[$field]??''));
+    $keys=[];foreach(['name_en','name_np','code'] as $field)$keys[$field]=catalogNameKey($field==='name_en'?subjectCanonicalName((string)($subject[$field]??'')):(string)($subject[$field]??''));
     if($keys['name_en']==='')throw new InvalidArgumentException('Subject name in English is required.');
     $q=$db->prepare('SELECT s.id,s.name_en,s.name_np,s.code FROM class_subjects cs JOIN subjects s ON s.id=cs.subject_id AND s.school_id=cs.school_id WHERE cs.school_id=? AND cs.class_id=? AND cs.subject_id<>?');$q->execute([$school,$class,$exceptSubject]);
-    foreach($q as $r)foreach($keys as $field=>$value)if($value!==''&&$value===catalogNameKey((string)$r[$field]))throw new InvalidArgumentException('Duplicate Subject Blocked: this class already has a subject with the same name or code, including hidden or optional subjects.');
+    foreach($q as $r)foreach($keys as $field=>$value)if($value!==''&&$value===catalogNameKey($field==='name_en'?subjectCanonicalName((string)$r[$field]):(string)$r[$field]))throw new InvalidArgumentException('Duplicate Subject Blocked: this class already has a subject with the same name or code, including hidden or optional subjects.');
 }
 function archiveLegacySevenClass(PDO $db,int $school,int $id):void {
     $class=schoolRecord($db,'classes',$id,$school);

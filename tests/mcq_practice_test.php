@@ -10,7 +10,7 @@ $old->exec("UPDATE app_meta SET meta_value='13' WHERE meta_key='workflow_schema'
 $before=[];foreach(['users','students','marks','ac_invoices','ac_payments','ac_journals','ac_journal_lines'] as $table)$before[$table]=$old->query('SELECT * FROM '.$table.' ORDER BY id')->fetchAll();
 migrateSchoolExtensions($old);
 foreach($before as $table=>$rows){$cols=array_column($old->query('PRAGMA table_info('.$table.')')->fetchAll(),'name');if($table==='users')$cols=array_diff($cols,['student_record_id']);erpEqual($old->query('SELECT '.implode(',',$cols).' FROM '.$table.' ORDER BY id')->fetchAll(),$rows,'Schema13 preserves '.$table);}
-erpEqual($old->query("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'")->fetchColumn(),'14','Schema13 upgrade reaches14');
+erpEqual($old->query("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'")->fetchColumn(),'15','Schema13 upgrade reaches15');
 erpEqual((int)$old->query('SELECT COUNT(*) FROM users WHERE student_record_id IS NOT NULL')->fetchColumn(),0,'Does not invent student links');
 migrateSchoolExtensions($old);erpEqual($old->query('PRAGMA integrity_check')->fetchColumn(),'ok','Repeated migration is safe');$old=null;
 $input=['full_name'=>'Test Student','username'=>'student_practice','password'=>'TestPassword123!','role'=>'student','status'=>1,'student_record_id'=>$f['student']];
