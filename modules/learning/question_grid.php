@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__.'/../../includes/learning_content.php';
 
 Auth::requireRole(['super_admin', 'school_admin', 'teacher', 'exam_officer']);
 
@@ -21,9 +22,9 @@ $num_long = isset($_GET['long_count']) ? (int)$_GET['long_count'] : 3;
 foreach(['mcq_count','short_count','long_count'] as $key)if(isset($_GET[$key])&&(!is_scalar($_GET[$key])||!preg_match('/^\\d{1,3}$/',(string)$_GET[$key])||(int)$_GET[$key]>200))denySchoolRequest('Question counts must be between 0 and 200.',422);
 $exam_title = sanitize($_GET['exam_title'] ?? 'Terminal Examination - 2083');
 
-$classes=learningClasses($db,(int)$school_id,(string)Auth::getRole(),(int)Auth::getUserId());
+$contentActor=learningActor($db,(int)Auth::getUserId(),(int)$school_id,Auth::isReadOnly());$classes=learningReadClasses($db,$contentActor);
 
-$subjects=learningSubjects($db,(int)$school_id,(int)$class_id,(string)Auth::getRole(),(int)Auth::getUserId());
+$subjects=learningReadSubjects($db,$contentActor,(int)$class_id);
 
 $mcqs = [];
 $shorts = [];
@@ -34,33 +35,9 @@ $generated = false;
 if ($class_id && $subject_id) {
     $generated = true;
     
-    // 1. Fetch MCQs
-    $stmt = $db->prepare("
-        SELECT * FROM questions 
-        WHERE school_id = ? AND class_id = ? AND subject_id = ? AND type = 'MCQ'
-        ORDER BY ".(DB_TYPE==='mysql'?'RAND()':'RANDOM()')." LIMIT ?
-    ");
-    $stmt->execute([$school_id, $class_id, $subject_id, $num_mcq]);
-    $mcqs = $stmt->fetchAll();
-    
-    // 2. Fetch Shorts
-    $stmt = $db->prepare("
-        SELECT * FROM questions 
-        WHERE school_id = ? AND class_id = ? AND subject_id = ? AND type = 'Short'
-        ORDER BY ".(DB_TYPE==='mysql'?'RAND()':'RANDOM()')." LIMIT ?
-    ");
-    $stmt->execute([$school_id, $class_id, $subject_id, $num_short]);
-    $shorts = $stmt->fetchAll();
-    
-    // 3. Fetch Longs
-    $stmt = $db->prepare("
-        SELECT * FROM questions 
-        WHERE school_id = ? AND class_id = ? AND subject_id = ? AND type = 'Long'
-        ORDER BY ".(DB_TYPE==='mysql'?'RAND()':'RANDOM()')." LIMIT ?
-    ");
-    $stmt->execute([$school_id, $class_id, $subject_id, $num_long]);
-    $longs = $stmt->fetchAll();
-    
+    $pool=learningContentList($db,$contentActor,'questions',['class_id'=>$class_id,'subject_id'=>$subject_id],'paper');
+    $pick=static function(string $type,int $count)use($pool):array{$rows=array_values(array_filter($pool,static fn($q)=>$q['type']===$type));shuffle($rows);return array_slice($rows,0,$count);};
+    $mcqs=$pick('MCQ',$num_mcq);$shorts=$pick('Short',$num_short);$longs=$pick('Long',$num_long);
     // Check if counts met
     $missing = [];
     if (count($mcqs) < $num_mcq) {
@@ -104,6 +81,8 @@ $activePage = 'learning';
 
 ob_start();
 ?>
+<script>window.MathJax={tex:{inlineMath:[['\\(','\\)'],['$','$']],displayMath:[['\\[','\\]'],['$$','$$']],processEscapes:true}};</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 
 <div class="d-flex justify-content-between align-items-center mb-4 no-print">
     <h2><i class="fas fa-file-alt text-primary"></i> Question Paper Generator</h2>
@@ -146,7 +125,7 @@ ob_start();
                 <select name="subject" class="form-select" required onchange="this.form.submit()">
                     <option value="">Choose Subject</option>
                     <?php foreach ($subjects as $s): ?>
-                    <option value="<?= $s['id'] ?>" <?= $subject_id == $s['id'] ? 'selected' : '' ?>><?= sanitize($s['name_en']) ?></option>
+                    <option value="<?= $s['id'] ?>" <?= $subject_id == $s['id'] ? 'selected' : '' ?>><?= sanitize($s['display_name']??$s['name_en']) ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
@@ -261,16 +240,14 @@ function applyPreset(mcq, short, long, title) {
         <ol class="ps-3" style="font-size: 1.05rem;">
             <?php foreach ($mcqs as $q): ?>
             <li class="mb-3">
-                <div class="mb-2"><?= sanitize($q['question_text']) ?></div>
+                <div class="mb-2 mathjax-render"><?= safeRichHtml($q['question_text']) ?></div>
+                <?php if(!empty($q['question_text_np'])): ?><div class="mb-2 font-nepali mathjax-render"><?= safeRichHtml($q['question_text_np']) ?></div><?php endif; ?>
                 <?php 
                 $opts = json_decode($q['options'] ?? '{}', true);
                 if (!empty($opts)):
                 ?>
                 <div class="row g-2 ps-3" style="font-size: 0.95rem;">
-                    <div class="col-6">a) <?= sanitize($opts['A'] ?? '') ?></div>
-                    <div class="col-6">b) <?= sanitize($opts['B'] ?? '') ?></div>
-                    <div class="col-6">c) <?= sanitize($opts['C'] ?? '') ?></div>
-                    <div class="col-6">d) <?= sanitize($opts['D'] ?? '') ?></div>
+                    <?php $optsNp=json_decode($q['options_np']??'{}',true);foreach(['A','B','C','D'] as $key): ?><div class="col-6 mathjax-render"><?= strtolower($key) ?>) <?= safeRichHtml($opts[$key]??'') ?><?php if(!empty($optsNp[$key])): ?><div class="font-nepali"><?= safeRichHtml($optsNp[$key]) ?></div><?php endif; ?></div><?php endforeach; ?>
                 </div>
                 <?php endif; ?>
             </li>
@@ -292,7 +269,7 @@ function applyPreset(mcq, short, long, title) {
             <?php foreach ($shorts as $q): ?>
             <li class="mb-3">
                 <div class="d-flex justify-content-between">
-                    <div><?= sanitize($q['question_text']) ?></div>
+                    <div class="mathjax-render"><?= safeRichHtml($q['question_text']) ?><?php if(!empty($q['question_text_np'])): ?><div class="font-nepali"><?= safeRichHtml($q['question_text_np']) ?></div><?php endif; ?></div>
                     <span class="font-monospace text-muted small">[<?= $q['marks'] ?>]</span>
                 </div>
             </li>
@@ -314,7 +291,7 @@ function applyPreset(mcq, short, long, title) {
             <?php foreach ($longs as $q): ?>
             <li class="mb-3">
                 <div class="d-flex justify-content-between">
-                    <div><?= sanitize($q['question_text']) ?></div>
+                    <div class="mathjax-render"><?= safeRichHtml($q['question_text']) ?><?php if(!empty($q['question_text_np'])): ?><div class="font-nepali"><?= safeRichHtml($q['question_text_np']) ?></div><?php endif; ?></div>
                     <span class="font-monospace text-muted small">[<?= $q['marks'] ?>]</span>
                 </div>
             </li>

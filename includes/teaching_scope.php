@@ -36,10 +36,19 @@ function validateTeacherLearningRequest(PDO $db,int $school,string $module,strin
     if($module!=='learning'||!in_array($file,['curriculum.php','specification_grids.php','questions.php','paper_generator.php','question_grid.php','index.php','practice_mcqs.php'],true))return;
     // Legacy pages dispatch both query-string and body actions. Never authorize one
     // action while another handler executes, or let body fields shadow a query scope.
-    $queryActions=array_intersect_key($query,array_flip(['action','delete','action_get_chapters','action_get_topics']));
-    $bodyActions=array_intersect_key($data,array_flip(['action','action_import_excel','action_quick_add_class','action_quick_add_subject']));
+    $queryActions=array_intersect_key($query,array_flip(['action','delete','delete_note','action_get_chapters','action_get_topics']));
+    $bodyActions=array_intersect_key($data,array_flip(['action','action_note','action_import_excel','action_quick_add_class','action_quick_add_subject']));
     if(count($queryActions)>1||count($bodyActions)>1||($queryActions&&$bodyActions))throw new InvalidArgumentException('Submit one learning action at a time. Reload the page and try again.');
     if($data&&$query)validateTeacherLearningRequest($db,$school,$module,$file,[],$query);
+    if((!$data&&in_array($file,['curriculum.php','questions.php','index.php','practice_mcqs.php','paper_generator.php','question_grid.php'],true))||($file==='practice_mcqs.php')||($file==='paper_generator.php'&&isset($data['action_generate']))){
+        require_once __DIR__.'/learning_content.php';$actor=learningActor($db,(int)Auth::getUserId(),$school,Auth::isReadOnly());
+        $values=array_replace($query,$data);$class=(int)($values['class_id']??$values['class']??0);$subject=(int)($values['subject_id']??$values['subject']??0);
+        if(isset($query['chapter_id']))learningCatalogChapterScope($db,$actor,(int)$query['chapter_id']);
+        if($class&&!in_array($class,array_map('intval',array_column(learningReadClasses($db,$actor),'id')),true))throw new InvalidArgumentException('Choose an available class.');
+        if($subject&&!in_array($subject,array_map('intval',array_column(learningReadSubjects($db,$actor,$class),'id')),true))throw new InvalidArgumentException('Choose an available class subject.');
+        if(($query['action']??'')==='get_all_subjects'&&$actor['role']!=='super_admin')throw new InvalidArgumentException('School curriculum is read-only.');
+        return;
+    }
     $role=Auth::getRole();$teacher=(int)Auth::getUserId();$values=array_replace($query,$data);$action=$data['action']??($query['action']??'');
     if($role==='teacher'&&$file==='curriculum.php'&&in_array($action,['map_subject','get_all_subjects'],true))throw new InvalidArgumentException('Only an administrator may map additional class subjects. Teachers can manage their assigned subjects only.');
     $scopes=[];
@@ -78,4 +87,10 @@ function validateTeacherLearningRequest(PDO $db,int $school,string $module,strin
             $q=$db->prepare('SELECT id FROM class_subjects WHERE school_id=? AND class_id=? AND subject_id=? AND (is_active=1 OR is_optional=1)');$q->execute([$school,$class,$subject]);if(!$q->fetchColumn())throw new InvalidArgumentException('Choose an active subject mapped to the selected class.');
         }
     }
+}
+function learningSingleAction(array $data,array $query):void {
+    $queryActions=array_intersect_key($query,array_flip(['action','delete','delete_note','make_universal','action_get_chapters','action_get_topics']));
+    $bodyActions=array_intersect_key($data,array_flip(['action','action_note','action_import_excel','action_quick_add_class','action_quick_add_subject','action_save_grid','action_generate']));
+    $bodyFields=array_diff_key($data,array_flip([defined('CSRF_TOKEN_NAME')?CSRF_TOKEN_NAME:'csrf_token']));
+    if(count($queryActions)>1||count($bodyActions)>1||($queryActions&&$bodyFields))throw new InvalidArgumentException('Submit one learning action at a time. Reload the page and try again.');
 }

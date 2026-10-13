@@ -15,6 +15,18 @@ PHP school administration application with SQLite or MySQL, Bootstrap, and Nepal
 
 See [INSTALL.md](INSTALL.md) for safe setup, migration, and production precautions, and [the repair report](docs/repair-report-2026-10-09.md) for verified coverage and remaining limits.
 
+## Learning content ownership and visibility
+
+The super-admin shared catalog is read-only to school users. Only super admin adds or renames chapters/topics; school questions, imports and notes must select existing catalog entries. Nepali, English and Mathematics use canonical application names; CDC source snapshots and optional-subject identities remain unchanged.
+
+Teachers and school admins create and edit their own content only. New school content is **Private**, readable by its creator, assigned class-subject teachers and school administrators. **Public means within the creating school**, including enrolled students in permitted subjects, never other schools or anonymous visitors. Shared public content is available through validated matching school classes/subjects. My content and archive filters expose creator controls; archive/restore keeps record IDs. Legacy local content with no known creator stays read-only; no author is invented.
+
+Question Bank, Learning Hub, both paper generators and Practice MCQs enforce the same backend policy. Practice sessions are revalidated on every request and cleared if content becomes private, archived, hidden or otherwise inaccessible. Subscriptions, CSRF, student enrollment/electives and school-preview read-only rules remain in force. Schema 15 is additive and makes a pre-upgrade SQLite backup. Verify MySQL on staging before production migration.
+
+Run the `learning_*_test.php` and `learning_*_http_test.py` suites along with the regressions below. `tests/learning_browser_fixture.py` starts a disposable local QA school; it never opens the original school database.
+
+See [the verified learning-sharing handoff](docs/learning-sharing-handoff-2026-10-13.md) for the independent review fixes, retained-data evidence and outstanding staging/release limits.
+
 ## Quick local start
 
 Requires PHP 8.1+ with PDO SQLite, DOM, fileinfo and mbstring. This revision was tested with PHP 8.5.1 and SQLite. MySQL needs its PDO driver and a separate staging verification.
@@ -46,6 +58,8 @@ In **Administration → User accounts**, a school administrator can select **Stu
 Use **Learning → Practice MCQs** to filter by class, subject, chapter, topic or question text, then select individual questions or a random set of 1–100 MCQs. Only valid four-option questions from the school's bank and matching shared catalog are offered. Answers are graded by the server and cannot be changed after submission. Red/green feedback includes the correct answer, with optional boom/chime sounds, mute, full screen and keyboard keys 1–4. A completed set shows its score and answer review. Practice is separate from official exam marks; sessions resume in the same login for up to one hour, but practice history is not stored permanently.
 
 Every new practice shuffles its questions, including manually selected sets. **Back to class & subject selection** is available both above and beneath the completed answer review.
+
+Kokila/Nepali text and question editors default to **20 pt**. Practice uses larger questions, choices, explanations and reviews, with short question/feedback animations (disabled for reduced-motion preferences). Both answer sounds have louder, smoothly faded levels; mute still persists between visits, and audible volume also depends on the device's volume setting.
 
 Schema 14 adds only a nullable student-record account link and a unique index. Existing accounts and school records are not relinked, reset or removed. SQLite keeps the existing automatic pre-upgrade backup. Test MySQL upgrades separately on staging.
 
@@ -97,6 +111,7 @@ node tests/date_controls_test.js
 node tests/attendance_controls_test.js
 node tests/content_safety_test.js
 node tests/question_editor_test.js
+node tests/learning_readability_test.js
 python tests/http_test.py
 python tests/exam_http_test.py
 python tests/assessment_http_test.py
@@ -123,7 +138,7 @@ System administrators use **School Management → Edit** to tick multiple purcha
 
 Schema 9 adds subscription fields without assigning invented expiry dates to existing schools. Legacy schools retain their existing package and no expiry until the administrator configures a dated subscription.
 
-Teachers can manage chapters, topics and specification grids only for active subjects assigned to them in the selected class. Subject selectors remove duplicate section mappings and show the subject code. These permissions are enforced on submitted requests as well as in the interface. Locked/published exams show saved marks read-only; only school/system administrators may reopen marks. After reopening, a subject teacher can save only their assigned subjects and sections. The active teacher assigned as **Class Teacher** in Classes may review and correct all configured subjects and sections in that supervised class, including subjects they do not teach; this never grants chapter/topic ownership or extends marks-entry/ledger authority to another class.
+Teachers can manage specification grids only for active subjects assigned to them in the selected class. Chapters/topics are now a read-only catalog for school users; only super admin maintains that catalog. Subject selectors retain distinct subject identities, remove repeated section mappings and show codes when names collide. These permissions are enforced on submitted requests as well as in the interface. Locked/published exams show saved marks read-only; only school/system administrators may reopen marks. After reopening, a subject teacher can save only their assigned subjects and sections. The active teacher assigned as **Class Teacher** in Classes may review and correct all configured subjects and sections in that supervised class, including subjects they do not teach; this never grants chapter/topic ownership or extends marks-entry/ledger authority to another class.
 
 Use **Marks & results → Ledger Grid** or the **Full-class ledger / Subject ledger** links in Marks Entry to view and print. All teachers may view and print all classes, sections and subjects within their own school. Select **All Subjects** for the full-class ledger or a single subject. Broader ledger viewing never grants extra marks-entry permissions: subject teachers edit only their assigned subjects/sections; class teachers correct their supervised class; locks still apply. **Grade Only** (default) shows GRADE (TH), GRADE (IN), FINAL GRADE and GRADE POINT, with only total CH below each subject. **Marks Only** shows TH, PR and TOTAL, with only total FM below each subject, and an aggregate percentage/division. Subject summaries refer only to the selected subject, never the overall report card. Dedicated print CSS specifies **A4 landscape**, including a named ledger page; printers that override CSS must be set to Landscape in their dialog. Print layouts include the actual school name, exam/class/section, rolls and exam-specific symbols. Missing marks, nonapplicable components and untaken optional subjects remain distinct.
 
@@ -151,7 +166,7 @@ Weekly routines now support named profiles (e.g. summer/winter). Load a profile 
 
 Class names are compared by normalized grade identity (`7`, `Class 7`, `Grade 7`, `कक्षा ७`), case and whitespace. Subject creation, mapping and rename check names and codes within each class, including hidden/optional mappings. Catalog changes are serialized per school. Teachers cannot create classes or subjects. In Class Management, a school administrator can remove a legacy class named exactly `7` from active lists when that school contains teacher `sgsunil`; password and explicit confirmation are required. This archives the class and retains linked records, rather than permanently deleting educational data. Archived classes can be reviewed; rename an invalid duplicate before restoring it.
 
-Question Bank, both paper generators, Learning Hub and curriculum selectors use school-scoped class mappings. Assigned optional subjects appear when the catalogue subject is not hidden. Teachers see only their teaching classes/subjects. Duplicate section/name entries are removed. Choose a class before a subject; changing class resets subject. Question Bank supports class, subject, category, cognitive level and text/chapter search. Quick Add Class/Subject is removed, including crafted requests; administrators use management pages.
+Question Bank, both paper generators, Learning Hub and curriculum selectors use school-scoped class mappings. Assigned optional subjects appear when the catalogue subject is not hidden. Staff can browse eligible shared/school-public content across their school, but teachers create and edit only their own content for assigned teaching classes/subjects. Private reads still require the creator, assigned subject co-teacher or school-administrator permission. Repeated section mappings are removed; distinct subjects retain their IDs and code/type labels. Choose a class before a subject; changing class resets subject. Question Bank supports class, subject, category, cognitive level and text/chapter search. Quick Add Class/Subject is removed, including crafted requests; administrators use management pages.
 
 The universal CDC catalogue has a class-first filter and include-hidden/inactive option. Visibility uses POST with an explicit target state and a redirect, preventing refresh/back from toggling it again. Existing school copies retain their own settings.
 

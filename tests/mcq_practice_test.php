@@ -1,6 +1,6 @@
 <?php
 require __DIR__.'/test_support.php';['db'=>$db,'fixture'=>$f,'directory'=>$directory]=erpTestFixture();
-require __DIR__.'/../includes/user_management.php';require __DIR__.'/../includes/auth.php';require __DIR__.'/../includes/mcq_practice.php';require __DIR__.'/../includes/student_learning.php';
+require __DIR__.'/../includes/user_management.php';require __DIR__.'/../includes/auth.php';require __DIR__.'/../includes/mcq_practice.php';require_once __DIR__.'/../includes/student_learning.php';
 $admin=$f['ids']['school_admin'];$class=$f['class'];$subject=$f['subject'];
 // Recreate the previous users shape on a disposable copy, never the original.
 $db->exec('VACUUM INTO '.$db->quote($directory.'/schema13.sqlite'));
@@ -10,7 +10,7 @@ $old->exec("UPDATE app_meta SET meta_value='13' WHERE meta_key='workflow_schema'
 $before=[];foreach(['users','students','marks','ac_invoices','ac_payments','ac_journals','ac_journal_lines'] as $table)$before[$table]=$old->query('SELECT * FROM '.$table.' ORDER BY id')->fetchAll();
 migrateSchoolExtensions($old);
 foreach($before as $table=>$rows){$cols=array_column($old->query('PRAGMA table_info('.$table.')')->fetchAll(),'name');if($table==='users')$cols=array_diff($cols,['student_record_id']);erpEqual($old->query('SELECT '.implode(',',$cols).' FROM '.$table.' ORDER BY id')->fetchAll(),$rows,'Schema13 preserves '.$table);}
-erpEqual($old->query("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'")->fetchColumn(),'14','Schema13 upgrade reaches14');
+erpEqual($old->query("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'")->fetchColumn(),'15','Schema13 upgrade reaches15');
 erpEqual((int)$old->query('SELECT COUNT(*) FROM users WHERE student_record_id IS NOT NULL')->fetchColumn(),0,'Does not invent student links');
 migrateSchoolExtensions($old);erpEqual($old->query('PRAGMA integrity_check')->fetchColumn(),'ok','Repeated migration is safe');$old=null;
 $input=['full_name'=>'Test Student','username'=>'student_practice','password'=>'TestPassword123!','role'=>'student','status'=>1,'student_record_id'=>$f['student']];
@@ -31,6 +31,7 @@ erpReject(fn()=>practiceScope($db,1,'student',$studentUser,$f['otherClass'],$sub
 $q=$db->prepare("INSERT INTO questions(school_id,class_id,subject_id,type,chapter,question_text,options,options_np,correct_option,answer) VALUES(1,?,?,'MCQ','Sets',?,?,?,?,'Explanation')");
 $ids=[];foreach(['A','B','C'] as $key){$q->execute([$class,$subject,'<p>Practice &amp; sets '.$key.'</p><script>alert(1)</script>',json_encode(['A'=>'One','B'=>'Two','C'=>'Three','D'=>'Four']),'{}',$key]);$ids[]=(int)$db->lastInsertId();}
 $q->execute([$class,$subject,'Invalid options','{"A":"One"}','{}','A']);
+$db->exec("UPDATE questions SET visibility='public'"); // Synthetic pre-published practice pool.
 $pool=practicePool($db,1,'student',$studentUser,$class,$subject);$pool=array_values(array_filter($pool,fn($q)=>in_array($q['id'],$ids,true)));
 erpEqual(count($pool),3,'Usable MCQs included');erpCheck(!str_contains($pool[0]['text'],'<script'),'Question HTML sanitized');
 $catalog=practiceCatalog($pool);erpCheck(!isset($catalog[0]['key'])&&!isset($catalog[0]['options'])&&!isset($catalog[0]['explanation']),'Catalog has no answer keys');

@@ -3,3 +3,25 @@
 @media(max-width:768px){.practice-heading{align-items:flex-start;flex-direction:column;gap:14px}.practice-heading h1{font-size:1.7rem}.practice-panel{padding:20px}.practice-filters{grid-template-columns:1fr 1fr}.practice-options{grid-template-columns:1fr}.practice-option{padding:16px;min-height:65px}.practice-config{grid-template-columns:1fr}.practice-start{flex-direction:column;align-items:stretch}.mcq-practice:fullscreen{padding:20px}.practice-choice-toolbar{flex-wrap:wrap}}
 @media(max-width:400px){.practice-filters{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){.practice-option,.practice-progress span{transition:none}.practice-option:not(:disabled):hover{transform:none}}
+
+/* Comfortable reading sizes; Kokila stays at the shared 20 pt default. */
+.practice-question{font-size:clamp(1.5rem,1.15rem + .8vw,1.8rem);line-height:1.65}
+.practice-nepali,.practice-option-nepali{font-size:var(--erp-kokila-size,20pt);line-height:1.55}
+.practice-option{font-size:1.2rem;line-height:1.55;transition:background .24s ease,border-color .24s ease,transform .24s ease,box-shadow .24s ease}
+.practice-option-letter{width:36px;height:36px;font-size:1rem}
+.practice-question-choice{font-size:1.05rem;line-height:1.6}
+.practice-review-item,.practice-explanation{font-size:1.15rem;line-height:1.7}
+.practice-correct-answer{font-size:1.2rem;line-height:1.6}
+.practice-feedback h3{font-size:1.25rem}
+.practice-feedback{animation:practice-feedback-in .3s ease-out}
+.practice-option.is-correct{animation:practice-correct-pop .36s ease-out;box-shadow:0 3px 14px #21835218}
+.practice-option.is-wrong{animation:practice-wrong-nudge .32s ease-out}
+.practice-progress span{transition:width .4s cubic-bezier(.22,.61,.36,1)}
+.mcq-practice .form-label{font-size:.95rem}
+.mcq-practice .form-control,.mcq-practice .form-select{font-size:1.05rem}
+.mcq-practice img{max-width:100%;height:auto}
+.practice-option-body table,.practice-review-item table,.practice-explanation table{display:block;max-width:100%;overflow-x:auto}
+@keyframes practice-feedback-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes practice-correct-pop{0%{transform:scale(.985)}55%{transform:scale(1.01)}100%{transform:scale(1)}}
+@keyframes practice-wrong-nudge{0%,100%{transform:translateX(0)}35%{transform:translateX(-3px)}70%{transform:translateX(3px)}}
+@media(prefers-reduced-motion:reduce){.mcq-practice *{animation:none!important;transition:none!important}}

@@ -12,12 +12,15 @@ Auth::requireAccess('curriculum');
 require_once __DIR__.'/../../includes/teaching_scope.php';
 require_once __DIR__.'/../../includes/catalog_validation.php';
 require_once __DIR__.'/../../includes/curriculum_catalog.php';
+require_once __DIR__.'/../../includes/learning_content.php';
 
 $db = getDB();
 $school_id = Auth::getSchoolId();
 if (Auth::getRole() === 'super_admin' && !$school_id) {
     $school_id = 0;
 }
+$contentActor=learningActor($db,(int)Auth::getUserId(),(int)$school_id,Auth::isReadOnly());
+$canManageCatalog=learningCanManageCatalog($contentActor);
 
 // --- AJAX API Handlers ---
 if (isset($_GET['action'])) {
@@ -27,7 +30,7 @@ if (isset($_GET['action'])) {
     if ($action === 'get_subjects') {
         $class_id = (int)($_GET['class_id'] ?? 0);
         try {
-            $subjects=learningSubjects($db,(int)$school_id,$class_id,Auth::getRole(),(int)Auth::getUserId());
+            $subjects=learningReadSubjects($db,$contentActor,$class_id);
             echo json_encode(['success' => true, 'subjects' => $subjects]);
         } catch (Exception $e) {
             echo json_encode(['success' => false, 'message' => schoolPublicError($e)]);
@@ -52,7 +55,7 @@ if (isset($_GET['action'])) {
         $class_id = (int)($_GET['class_id'] ?? 0);
         $subject_id = (int)($_GET['subject_id'] ?? 0);
         try {
-            $chapters=curriculumChapters($db,(int)$school_id,$class_id,$subject_id);
+            $chapters=learningCatalogChapters($db,$contentActor,$class_id,$subject_id);
             echo json_encode(['success' => true, 'chapters' => $chapters]);
         } catch (Exception $e) {
             echo json_encode(['success' => false, 'message' => schoolPublicError($e)]);
@@ -63,7 +66,8 @@ if (isset($_GET['action'])) {
     if ($action === 'get_topics') {
         $chapter_id = (int)($_GET['chapter_id'] ?? 0);
         try {
-            $topics=curriculumTopics($db,(int)$school_id,$chapter_id);
+            $scope=learningCatalogChapterScope($db,$contentActor,$chapter_id);
+            $topics=learningCatalogTopics($db,$contentActor,$scope['class_id'],$scope['subject_id'],$chapter_id);
             echo json_encode(['success' => true, 'topics' => $topics]);
         } catch (Exception $e) {
             echo json_encode(['success' => false, 'message' => schoolPublicError($e)]);
@@ -78,6 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $action = $_POST['action'];
 
     try {
+        if(!$canManageCatalog)denySchoolRequest('Only super admin may change chapters and topics.',403);
         if ($action === 'add_chapter') {
             $class_id = (int)$_POST['class_id'];
             $subject_id = (int)$_POST['subject_id'];
@@ -190,7 +195,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 }
 
 // Fetch all classes for filter
-$classes=learningClasses($db,(int)$school_id,Auth::getRole(),(int)Auth::getUserId());
+$classes=learningReadClasses($db,$contentActor);
 
 $pageTitle = 'Curriculum & Topics Manager';
 $activePage = 'curriculum';
@@ -233,7 +238,7 @@ ob_start();
                     <div id="subjectSection" style="display: none;">
                         <div class="d-flex justify-content-between align-items-center mb-1">
                             <label class="form-label fw-bold text-muted small mb-0">Select Subject</label>
-                            <?php if(Auth::getRole()!=='teacher'): ?><button type="button" class="btn btn-link p-0 text-primary small text-decoration-none fw-bold" onclick="showMapSubjectModal()"><i class="fas fa-link"></i> Map Subject</button><?php endif; ?>
+                            <?php if($canManageCatalog): ?><button type="button" class="btn btn-link p-0 text-primary small text-decoration-none fw-bold" onclick="showMapSubjectModal()"><i class="fas fa-link"></i> Map Subject</button><?php endif; ?>
                         </div>
                         <select id="curriculumSubject" class="form-select" onchange="onSubjectChange()">
                             <option value="">-- Choose Subject --</option>
@@ -284,6 +289,7 @@ ob_start();
 </div>
 
 <!-- Map Subject Modal -->
+<?php if($canManageCatalog): ?>
 <div class="modal fade" id="mapSubjectModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <form class="modal-content border-0 shadow-lg" style="border-radius:16px;" onsubmit="mapSubjectSubmit(event)">
@@ -372,7 +378,9 @@ ob_start();
     </div>
 </div>
 
+<?php endif; ?>
 <script>
+const canManageCatalog=<?= json_encode($canManageCatalog) ?>;
 let currentClassId = 0;
 let currentSubjectId = 0;
 
@@ -434,7 +442,7 @@ function resetTreeContainer() {
 function loadChaptersTree() {
     document.getElementById('placeholderView').style.display = 'none';
     document.getElementById('treeContainer').style.display = 'block';
-    document.getElementById('btnAddChapter').classList.remove('d-none');
+    if(canManageCatalog)document.getElementById('btnAddChapter').classList.remove('d-none');
     
     const accordion = document.getElementById('chaptersAccordion');
     accordion.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div></div>';
@@ -450,7 +458,7 @@ function loadChaptersTree() {
                         <div class="text-center text-muted py-5">
                             <i class="fas fa-folder-open fa-2x mb-2"></i>
                             <p class="mb-0">No chapters added yet for this subject.</p>
-                            <button class="btn btn-sm btn-outline-success mt-2" onclick="showAddChapterModal()"><i class="fas fa-plus"></i> Add First Chapter</button>
+                            ${canManageCatalog ? '<button class="btn btn-sm btn-outline-success mt-2" onclick="showAddChapterModal()">Add First Chapter</button>' : '<p>Ask super admin to add curriculum chapters.</p>'}
                         </div>
                     `;
                     return;
@@ -493,6 +501,7 @@ function loadChaptersTree() {
                     chapterItem.querySelector('.chapter-name-np').textContent=ch.name_np?'('+ch.name_np+')':'';
                     chapterItem.querySelector('.edit-chapter').addEventListener('click',()=>showEditChapterModal(ch.id,ch.name,ch.name_np||'',ch.sort_order));
                     chapterItem.querySelector('.add-chapter-topic').addEventListener('click',()=>showAddTopicModal(ch.id));
+                    if(!canManageCatalog){chapterItem.querySelector('.no-print').remove();chapterItem.querySelector('.add-chapter-topic').parentElement.remove();}
                     chapterItem.querySelector('.accordion-collapse').addEventListener('show.bs.collapse',()=>loadTopicsList(ch.id));
                     accordion.appendChild(chapterItem);
                 });
@@ -507,7 +516,7 @@ function loadTopicsList(chapterId) {
     const container = document.getElementById('topicsContainer_' + chapterId);
     $.ajax({
         url: window.location.pathname,
-        data: { action: 'get_topics', chapter_id: chapterId },
+        data: { action: 'get_topics', chapter_id: chapterId, class_id: currentClassId, subject_id: currentSubjectId },
         dataType: 'json',
         success: function(res) {
             if (res.success) {
@@ -515,7 +524,7 @@ function loadTopicsList(chapterId) {
                     container.innerHTML = `
                         <div class="text-center text-muted py-3">
                             <p class="mb-0 small">No topics added for this chapter.</p>
-                            <button class="btn btn-xs btn-outline-success mt-2" onclick="showAddTopicModal(${chapterId})"><i class="fas fa-plus"></i> Add First Topic</button>
+                            ${canManageCatalog ? `<button class="btn btn-xs btn-outline-success mt-2" onclick="showAddTopicModal(${chapterId})">Add First Topic</button>` : ''}
                         </div>
                     `;
                     return;
@@ -542,6 +551,7 @@ function loadTopicsList(chapterId) {
                     item.querySelector('.topic-name').textContent=t.name;
                     item.querySelector('.topic-name-np').textContent=t.name_np?'('+t.name_np+')':'';
                     item.querySelector('.edit-topic').addEventListener('click',()=>showEditTopicModal(t.id,chapterId,t.name,t.name_np||'',t.sort_order));
+                    if(!canManageCatalog)item.querySelector('.no-print').remove();
                     list.appendChild(item);
                 });
                 container.replaceChildren(list);

@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__.'/curriculum_catalog.php';
 require_once __DIR__.'/functions.php';
+require_once __DIR__.'/subject_names.php';
 
 function questionImportFormat(mixed $mode):string {
     if(!is_string($mode)||!in_array($mode,['normal','html'],true))throw new InvalidArgumentException('Choose Normal Text or HTML Source as the import method.');
@@ -58,7 +59,7 @@ function questionImportLabel(string $value):string {
 
 /** Known curriculum labels only; optional and compulsory subjects remain distinct. */
 function questionImportSubjectKey(string $value):string {
-    $key=questionImportLabel($value);
+    $key=questionImportLabel(subjectCanonicalName($value));
     $groups=[
         'mathematics'=>['mathematics','math','maths','compulsory mathematics','compulsory math','compulsory maths','गणित','अनिवार्य गणित'],
         'optional mathematics'=>['optional mathematics','optional math','optional maths','ऐच्छिक गणित'],

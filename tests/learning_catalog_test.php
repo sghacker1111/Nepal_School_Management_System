@@ -1,0 +1,24 @@
+<?php
+require_once __DIR__.'/test_support.php';['db'=>$db,'fixture'=>$f]=erpTestFixture();
+require_once __DIR__.'/learning_sharing_fixture.php';$f=learningSharingFixture($db,$f);
+require_once __DIR__.'/../includes/learning_content.php';require_once __DIR__.'/../includes/curriculum_catalog.php';
+erpCheck(function_exists('learningCatalogSelection'),'Catalog selection service is available');
+$owner=learningActor($db,$f['ids']['teacher']);$admin=learningActor($db,$f['ids']['school_admin']);$super=learningActor($db,$f['ids']['super_admin']);
+$scope=learningCatalogScope($db,1,$f['class'],$f['subject'])['shared'];
+$chapter=curriculumEnsureChapter($db,0,$scope['class_id'],$scope['subject_id'],'Brand new shared chapter');$topic=curriculumEnsureTopic($db,0,$chapter,'Shared topic');
+$rows=learningCatalogChapters($db,$owner,$f['class'],$f['subject']);erpCheck(in_array($chapter,array_column($rows,'id')),'New shared chapter visible immediately');
+$db->exec('UPDATE subjects SET is_hidden=1 WHERE id='.$scope['subject_id']);
+erpEqual(in_array($chapter,array_column(learningCatalogChapters($db,$owner,$f['class'],$f['subject']),'id')),false,'Hidden shared subject catalog excluded from school');
+$db->exec('UPDATE subjects SET is_hidden=0 WHERE id='.$scope['subject_id']);
+$selected=learningCatalogSelection($db,$owner,$f['class'],$f['subject'],['chapter'=>'Brand new shared chapter','catalog_topic_id'=>$topic]);
+erpEqual($selected['catalog_topic_id'],$topic,'Global topic reference');erpEqual($selected['topic_id'],null,'Never write global into local topic');
+erpReject(fn()=>learningCatalogSelection($db,$owner,$f['class'],$f['subject'],['chapter'=>'Unknown chapter'],true),'School cannot create even with allowCreate');
+erpReject(fn()=>learningCatalogSelection($db,$owner,$f['class'],$f['subject'],['chapter'=>'Brand new shared chapter','topic_id'=>$topic]),'Global cannot masquerade as local');
+erpEqual(learningCanManageCatalog($owner),false,'Teacher catalog read-only');erpEqual(learningCanManageCatalog($admin),false,'Admin catalog read-only');erpCheck(learningCanManageCatalog($super),'Super admin catalog write');
+erpReject(fn()=>schoolRecord($db,'classes',$scope['class_id'],1),'General tenant validator still strict');
+$local=curriculumEnsureChapter($db,1,$f['class'],$f['subject'],'Brand new shared chapter');$lt=curriculumEnsureTopic($db,1,$local,'Shared topic');
+$topics=learningCatalogTopics($db,$owner,$f['class'],$f['subject'],$chapter);erpEqual(count($topics),1,'Deduplicate same topic in local/global');erpCheck(in_array($lt,$topics[0]['alias_ids']),'Retain local alias');
+$selected=learningCatalogSelection($db,$owner,$f['class'],$f['subject'],['chapter'=>'Brand new shared chapter','topic_id'=>$lt]);erpEqual($selected['topic_id'],$lt,'Retain historical local topic');
+$db->prepare('INSERT INTO questions(school_id,class_id,subject_id,chapter,catalog_chapter_id) VALUES(1,?,?,?,?)')->execute([$f['class'],$f['subject'],'Brand new shared chapter',$chapter]);$qid=(int)$db->lastInsertId();
+curriculumRenameChapter($db,0,$chapter,'Renamed catalog','','0');erpEqual($db->query('SELECT chapter FROM questions WHERE id='.$qid)->fetchColumn(),'Renamed catalog','Global rename updates school links');
+echo 'Learning catalog checks passed: '.$GLOBALS['erp_checks'].PHP_EOL;

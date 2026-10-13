@@ -6,7 +6,7 @@ require_once __DIR__.'/../../includes/mcq_practice.php';
 Auth::requireRole(['super_admin','school_admin','principal','teacher','exam_officer','student']);
 Auth::requireAccess('learning');
 $db=getDB();$school=(int)Auth::getSchoolId();$role=(string)Auth::getRole();$actor=(int)Auth::getUserId();
-$classes=learningClasses($db,$school,$role,$actor);
+$contentActor=learningActor($db,$actor,$school,Auth::isReadOnly());$classes=learningReadClasses($db,$contentActor);
 $action=$_SERVER['REQUEST_METHOD']==='POST'?($_POST['action']??''):($_GET['action']??'');
 if($action!==''){
     header('Content-Type: application/json');header('Cache-Control: no-store');
@@ -14,7 +14,7 @@ if($action!==''){
         if($_SERVER['REQUEST_METHOD']==='GET'&&$action==='subjects'){
             $class=(int)($_GET['class_id']??0);
             if(!in_array($class,array_map('intval',array_column($classes,'id')),true))throw new InvalidArgumentException('Choose an available class.');
-            $result=['subjects'=>learningSubjects($db,$school,$class,$role,$actor)];
+            $result=['subjects'=>learningReadSubjects($db,$contentActor,$class)];
         }elseif($_SERVER['REQUEST_METHOD']==='GET'&&$action==='catalog'){
             $result=['questions'=>practiceCatalog(practicePool($db,$school,$role,$actor,(int)($_GET['class_id']??0),(int)($_GET['subject_id']??0)))];
         }elseif($_SERVER['REQUEST_METHOD']==='GET'&&$action==='state'){
@@ -30,7 +30,7 @@ if($action!==''){
             unset($_SESSION['mcq_practice']);$result=['practice'=>null];
         }else throw new InvalidArgumentException('Choose a valid practice action.');
         echo json_encode(['success'=>true,...$result],JSON_THROW_ON_ERROR|JSON_INVALID_UTF8_SUBSTITUTE);
-    }catch(InvalidArgumentException $e){http_response_code(422);echo json_encode(['success'=>false,'message'=>$e->getMessage()]);}
+    }catch(InvalidArgumentException $e){if(str_contains($e->getMessage(),'restart'))unset($_SESSION['mcq_practice']);http_response_code(422);echo json_encode(['success'=>false,'message'=>$e->getMessage()]);}
     catch(Throwable $e){error_log($e->getMessage());http_response_code(500);echo json_encode(['success'=>false,'message'=>'Practice could not be loaded. Please retry.']);}
     exit;
 }

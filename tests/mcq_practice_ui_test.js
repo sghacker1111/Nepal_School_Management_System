@@ -13,7 +13,8 @@ const nodes=new Map(),el=id=>{if(!nodes.has(id))nodes.set(id,new Node());return 
 el('practiceBootstrap').textContent=JSON.stringify({current:null,limit:100});el('practiceCount').value='2';el('practiceSelection').value='random';
 el('practiceApp').querySelectorAll=()=>el('practiceOptions').children;
 const doc=new Node();doc.getElementById=el;doc.querySelector=()=>({content:'test-csrf'});doc.createElement=()=>new Node();
-const tones=[],gains=[],requests=[],stores=new Map();
+const tones=[],gains=[],requests=[],stores=new Map(),animations=[];let reducedMotion=false;
+Node.prototype.animate=function(frames,options){animations.push({frames,options});};
 class AudioContext {
  constructor(){this.state='running';this.currentTime=1;this.destination={};}
  createOscillator(){return {frequency:{setValueAtTime:(f)=>tones.push(f),exponentialRampToValueAtTime:(f)=>tones.push(f)},connect(){},start(){},stop(){},disconnect(){}};}
@@ -22,7 +23,7 @@ class AudioContext {
 const question={id:1,text:'Question',nepali:'',options:{A:{text:'One'},B:{text:'Two'},C:{text:'Three'},D:{text:'Four'}}};
 const state={token:'session',index:0,total:2,score:0,answered:0,title:'Class 9 · Mathematics',complete:false,question};
 let current={...state},apiCalls=0;
-const context={document:doc,window:{AudioContext,location:{pathname:'/practice.php',href:'http://localhost/practice.php'}},localStorage:{getItem:k=>stores.get(k),setItem:(k,v)=>stores.set(k,v)},URL,URLSearchParams,Option:class extends Node{constructor(t,v){super();this.textContent=t;this.value=v;}},fetch:async(url,options)=>{
+const context={document:doc,window:{AudioContext,matchMedia:()=>({matches:reducedMotion}),location:{pathname:'/practice.php',href:'http://localhost/practice.php'}},localStorage:{getItem:k=>stores.get(k),setItem:(k,v)=>stores.set(k,v)},URL,URLSearchParams,Option:class extends Node{constructor(t,v){super();this.textContent=t;this.value=v;}},fetch:async(url,options)=>{
  const params=options.body||new URL(url).searchParams,action=params.get('action');requests.push({action,params});apiCalls++;
  if(action==='start')current={...state};
  if(action==='answer'){const correct=params.get('choice')==='B';current={...current,score:correct?1:0,answered:1,feedback:{correct,selected:params.get('choice'),correct_option:'B',correct_text:'Two',correct_nepali:'',explanation:''}};}
@@ -44,6 +45,8 @@ async function fire(id,event='click',arg={preventDefault(){}}){await el(id).list
  await fire('practiceAgain');await fire('practiceSetupForm','submit');before=tones.length;await el('practiceOptions').children[1].listeners.click();assert.equal(tones.length,before,'Mute suppresses audio');
  await fire('practiceReviewBack');assert.equal(requests.at(-1).action,'reset');assert.equal(el('practiceSetup').hidden,false,'Review Back restores class/subject selection');assert.equal(el('practiceSummary').hidden,true);
  await fire('practiceFullscreen');assert.equal(el('practiceFullscreen').textContent,'Exit full screen');await fire('practiceFullscreen');assert.equal(el('practiceFullscreen').textContent,'Full screen');
- assert(gains.every(n=>n<=.09),'Audio levels remain modest');
- console.log('MCQ client checks passed: colours, feedback, boom/chime, mute, full screen, review Back, four choices, CSRF and duplicate-click guard.');
+ assert(gains.includes(.22)&&gains.includes(.28),'Both answer sounds use the louder peaks');assert(gains.every(n=>n<=.28),'Audio envelopes retain clipping headroom');
+ assert(animations.length>0&&animations.every(a=>a.options.duration===300),'Question panels use smooth short animations');
+ reducedMotion=true;before=animations.length;await fire('practiceSetupForm','submit');assert.equal(animations.length,before,'Reduced-motion preference skips panel animation');
+ console.log('MCQ client checks passed: larger-feedback flow, louder boom/chime, mute, smooth/reduced motion, full screen, review Back, four choices, CSRF and duplicate-click guard.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

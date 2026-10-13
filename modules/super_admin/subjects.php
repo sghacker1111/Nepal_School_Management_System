@@ -84,7 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_chapter'])) {
 // Handle Add/Edit Subject Action
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_subject'])) {
     $action = $_POST['action_subject'];
-    $name_en = trim($_POST['name_en'] ?? '');
+    $name_en = subjectCanonicalName(trim($_POST['name_en'] ?? ''));
     $name_np = trim($_POST['name_np'] ?? '');
     $code = trim($_POST['code'] ?? '');
     

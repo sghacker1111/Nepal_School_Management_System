@@ -91,7 +91,7 @@ with ERPHttpFixture() as app:
         assert app.snapshot('subjects')==subjects and app.snapshot('class_subjects')==mappings
     app.db.execute("INSERT INTO subjects(school_id,name_en,code,type) VALUES(1,'Different catalog name',?,'optional')",(own_code,));new=app.db.execute('SELECT last_insert_rowid()').fetchone()[0];app.db.commit()
     body=app.request(f'/modules/classes/subjects.php?class_id={cls}',{'action':'map_subject','subject_id':new});assert 'Duplicate Subject Blocked' in body and app.snapshot('class_subjects')==mappings
-    result=json.loads(app.request('/modules/learning/curriculum.php',{'action':'map_subject','class_id':cls,'subject_id':new}));assert not result['success'] and 'Duplicate Subject Blocked' in result['message'] and app.snapshot('class_subjects')==mappings
+    app.request('/modules/learning/curriculum.php',{'action':'map_subject','class_id':cls,'subject_id':new},status=403);assert app.snapshot('class_subjects')==mappings # Schools use Class/Subject Management; curriculum is read-only.
     # Both printing routes use the same two-row percentage layout.
     app.db.execute('INSERT INTO marks(exam_id,student_id,subject_id,theory_obtained,practical_obtained) VALUES(?,?,?,?,?)',(exam,f['student'],subject,60,20));app.db.commit()
     for path in [f'/modules/results/report_card.php?student={f["student"]}&exam={exam}&system=percentage',f'/modules/results/print_bulk.php?class={cls}&exam={exam}&system=percentage']:

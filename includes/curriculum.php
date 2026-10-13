@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__.'/subject_names.php';
 /** Starter catalog retained from this installation; schools must review subject-specific CDC schemes. */
 function seedUniversalCurriculum(PDO $db): void {
 $subjects_catalog = [
@@ -95,7 +96,7 @@ $subjects_catalog = [
             // Component values are editable templates, never retroactively applied to saved exams.
             $theory=$grade<=3?100:($grade<=8?50:75);
             $internal=100-$theory;
-            if (!$subjectId) $subjectId=insertRecord($db,'subjects',['code'=>$s['code'],'name_en'=>$s['en'],'name_np'=>$s['np'],'type'=>$s['type'],'full_marks'=>100,'pass_marks'=>35,'credit_hours'=>$s['cr'],'school_id'=>0,'th_full_marks'=>$theory,'th_pass_marks'=>$theory*0.35,'in_full_marks'=>$internal,'in_pass_marks'=>$internal*0.4,'th_credit_hours'=>$s['cr']*$theory/100,'in_credit_hours'=>$s['cr']*$internal/100]);
+            if (!$subjectId) $subjectId=insertRecord($db,'subjects',['code'=>$s['code'],'name_en'=>subjectCanonicalName($s['en']),'name_np'=>$s['np'],'type'=>$s['type'],'full_marks'=>100,'pass_marks'=>35,'credit_hours'=>$s['cr'],'school_id'=>0,'th_full_marks'=>$theory,'th_pass_marks'=>$theory*0.35,'in_full_marks'=>$internal,'in_pass_marks'=>$internal*0.4,'th_credit_hours'=>$s['cr']*$theory/100,'in_credit_hours'=>$s['cr']*$internal/100]);
             $mapQuery->execute([$classId,$subjectId]);if($mapQuery->fetchColumn())continue;
             insertRecord($db,'class_subjects',['class_id'=>$classId,'subject_id'=>$subjectId,'school_id'=>0,'credit_hours'=>$s['cr'],'th_full_marks'=>$theory,'th_pass_marks'=>$theory*0.35,'in_full_marks'=>$internal,'in_pass_marks'=>$internal*0.4,'th_credit_hours'=>$s['cr']*$theory/100,'in_credit_hours'=>$s['cr']*$internal/100,'is_optional'=>$s['type']==='optional'?1:0,'is_active'=>1]);
         }

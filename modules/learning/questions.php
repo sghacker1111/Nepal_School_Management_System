@@ -9,6 +9,7 @@ require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/xlsx_helper.php';
 require_once __DIR__.'/../../includes/curriculum_catalog.php';
 require_once __DIR__.'/../../includes/question_import.php';
+require_once __DIR__.'/../../includes/learning_content.php';
 
 Auth::requireRole(['super_admin', 'school_admin', 'principal', 'teacher', 'exam_officer']);
 Auth::requireAccess('questions');
@@ -19,7 +20,9 @@ $is_admin = (Auth::getRole() === 'super_admin');
 $error = '';
 $success = '';
 $learningRole=(string)Auth::getRole();$learningActor=(int)Auth::getUserId();
-$allowedClasses=learningClasses($db,(int)$school_id,$learningRole,$learningActor);
+$contentActor=learningActor($db,$learningActor,(int)$school_id,Auth::isReadOnly());
+$canManageCatalog=learningCanManageCatalog($contentActor);
+$allowedClasses=learningReadClasses($db,$contentActor);
 
 
 // Fetch school subscription type and permissions
@@ -54,19 +57,8 @@ if (isset($_GET['action']) && $_GET['action'] === 'request_view_permission' && $
     }
 }
 
-// Handle Make Universal Action (Super Admin only)
-if (isset($_GET['make_universal'])) {
-    Auth::requireRole('super_admin');
-    $id = (int)$_GET['make_universal'];
-    try {
-        $stmt = $db->prepare("UPDATE questions SET school_id = 0 WHERE id = ?");
-        $stmt->execute([$id]);
-        Auth::logActivity(Auth::getUserId(), 'Make Question Universal', 'questions', $id);
-        redirect(APP_URL . '/modules/learning/questions.php', 'Question is now universal for all schools.');
-    } catch (PDOException $e) {
-        $error = schoolPublicError($e);
-    }
-}
+// School content is never promoted by changing its school ID alone.
+if(isset($_GET['make_universal']))denySchoolRequest('School content cannot be transferred to the shared catalog.',403);
 
 // Handle Download Sample Excel Template
 if (isset($_GET['action']) && $_GET['action'] === 'download_template') {
@@ -176,7 +168,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_import_excel']
                     $q_school_id = $is_admin ? 0 : $school_id;
                     $db->beginTransaction();
                     $importTransactionOwned=true;
-                    $stmtIns=$db->prepare('INSERT INTO questions (class_id,subject_id,chapter,type,question_text,question_text_np,options,options_np,correct_option,marks,answer,answer_np,school_id,topic_id,cognitive_domain) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
 
                     for ($r = 1; $r < count($rows); $r++) {
                         $row = $rows[$r];
@@ -221,7 +212,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_import_excel']
                         if(!in_array((int)$resolvedClassId,array_map('intval',array_column($allClasses,'id')),true)){
                             $skippedCount++;$skippedReasons[]="Row {$rowNum}: choose an available class in your school.";continue;
                         }
-                        $allSubjects=$subjectCache[$resolvedClassId]??=learningSubjects($db,(int)$school_id,(int)$resolvedClassId,$learningRole,$learningActor);
+                        $allSubjects=$subjectCache[$resolvedClassId]??=array_values(array_filter(learningReadSubjects($db,$contentActor,(int)$resolvedClassId),static fn($s)=>learningCanCreate($db,$contentActor,(int)$resolvedClassId,(int)$s['id'])));
                         // Resolve Subject
                         $subVal = $getVal('subject');
                         $resolvedSubjectId = 0;
@@ -241,14 +232,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_import_excel']
                             $chapterVal = 'General';
                         }
 
-                        // Resolve Topic
-                        $topicVal = $getVal('topic');
-                        $resolvedTopicId = null;
-                        $chapterId=curriculumEnsureChapter($db,(int)$school_id,$resolvedClassId,$resolvedSubjectId,$chapterVal);
-                        $chapterVal=curriculumName((string)schoolRecord($db,'chapters',$chapterId,(int)$school_id)['name']);
-                        if (!empty($topicVal)) {
-                            $resolvedTopicId=curriculumEnsureTopic($db,(int)$school_id,$chapterId,$topicVal);
-                        }
+                        $topicVal=$getVal('topic');
+                        try{$catalog=learningCatalogSelection($db,$contentActor,$resolvedClassId,$resolvedSubjectId,['chapter'=>$chapterVal,'topic'=>$topicVal],$is_admin);}
+                        catch(InvalidArgumentException $e){$skippedCount++;$skippedReasons[]="Row {$rowNum}: ".$e->getMessage();continue;}
 
                         // Resolve Cognitive Level (K, U, A, HA)
                         $cdRaw = $getVal('cognitive_domain');
@@ -261,23 +247,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_import_excel']
                         $cdClean = strtolower(preg_replace('/[^a-z0-9]/i', '', $cdRaw));
                         $cognitiveDomain = $cdMap[$cdClean] ?? 'Knowledge';
 
-                        // Insert into questions
-                        $stmtIns->execute([
-                            $resolvedClassId,
-                            $resolvedSubjectId,
-                            $chapterVal,
-                            $content['type'],
-                            $content['question_text'],
-                            $content['question_text_np'],
-                            $content['options'],
-                            $content['options_np'],
-                            $content['correct_option'],
-                            $content['marks'],
-                            $content['answer'],
-                            $content['answer_np'],
-                            $q_school_id,
-                            $resolvedTopicId,
-                            $cognitiveDomain
+                        require_once __DIR__.'/../../includes/learning_content_service.php';
+                        learningSaveQuestion($db,$contentActor,$content+[
+                            'class_id'=>$resolvedClassId,'subject_id'=>$resolvedSubjectId,'chapter'=>$catalog['chapter'],
+                            'topic_id'=>$catalog['topic_id'],'catalog_chapter_id'=>$catalog['catalog_chapter_id'],'catalog_topic_id'=>$catalog['catalog_topic_id'],
+                            'cognitive_domain'=>$cognitiveDomain,'visibility'=>learningVisibility($_POST['import_visibility']??($is_admin?'public':'private'))
                         ]);
                         $importedCount++;
                     }
@@ -310,7 +284,7 @@ if (isset($_GET['action_get_chapters'])) {
     $c_id = (int)($_GET['class_id'] ?? 0);
     $s_id = (int)($_GET['subject_id'] ?? 0);
     
-    $chapters=curriculumChapters($db,(int)$school_id,$c_id,$s_id);
+    $chapters=learningCatalogChapters($db,$contentActor,$c_id,$s_id);
     
     echo json_encode($chapters);
     exit;
@@ -323,147 +297,30 @@ if (isset($_GET['action_get_topics'])) {
     $chapter_name = sanitize($_GET['chapter_name'] ?? '');
     
     $topics=[];
-    if($chapter_id>0)$topics=curriculumTopicChoices($db,(int)$school_id,$chapter_id);
+    if($chapter_id>0){$scope=learningCatalogChapterScope($db,$contentActor,$chapter_id);$topics=learningCatalogTopics($db,$contentActor,$scope['class_id'],$scope['subject_id'],$chapter_id);}
     elseif($chapter_name!==''){
-        foreach(curriculumChapters($db,(int)$school_id,(int)($_GET['class_id']??0),(int)($_GET['subject_id']??0)) as $chapter)
-            if(curriculumNameKey($chapter['name'])===curriculumNameKey($chapter_name)){$topics=curriculumTopicChoices($db,(int)$school_id,(int)$chapter['id']);break;}
+        foreach(learningCatalogChapters($db,$contentActor,(int)($_GET['class_id']??0),(int)($_GET['subject_id']??0)) as $chapter)
+            if(curriculumNameKey($chapter['name'])===curriculumNameKey($chapter_name)){$topics=learningCatalogTopics($db,$contentActor,(int)($_GET['class_id']??0),(int)($_GET['subject_id']??0),(int)$chapter['id']);break;}
     }
     
     echo json_encode($topics);
     exit;
 }
 
-// Handle Add/Edit Question
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
-    $action = $_POST['action'];
-    $class_id = (int)$_POST['class_id'];
-    $subject_id = (int)$_POST['subject_id'];
-    $chapter = sanitize($_POST['chapter'] ?? '');
-    $topic_id = isset($_POST['topic_id']) && $_POST['topic_id'] !== '' ? (int)$_POST['topic_id'] : null;
-    $type = sanitize($_POST['type'] ?? 'MCQ');
-    $question_text = fixNepaliInLatex(trim($_POST['question_text'] ?? ''));
-    $question_text_np = fixNepaliInLatex(trim($_POST['question_text_np'] ?? ''));
-    $marks = (int)($_POST['marks'] ?? 1);
-    $answer = fixNepaliInLatex(trim($_POST['answer'] ?? ''));
-    $answer_np = fixNepaliInLatex(trim($_POST['answer_np'] ?? ''));
-    
-    // Cognitive Domain (K, U, A, HA)
-    $cognitive_domain = sanitize($_POST['cognitive_domain'] ?? 'Knowledge');
-    $cd_map = [
-        'k' => 'Knowledge', 'knowledge' => 'Knowledge',
-        'u' => 'Understanding', 'understanding' => 'Understanding',
-        'a' => 'Application', 'application' => 'Application',
-        'ha' => 'Higher Ability', 'higher ability' => 'Higher Ability', 'higher_ability' => 'Higher Ability'
-    ];
-    $cognitive_domain = $cd_map[strtolower(trim($cognitive_domain))] ?? 'Knowledge';
-    
-    // MCQ Options
-    $options_json = null;
-    $options_np_json = null;
-    $correct_option = null;
-    if ($type === 'MCQ') {
-        $opts = [
-            'A' => fixNepaliInLatex(trim($_POST['option_a'] ?? '')),
-            'B' => fixNepaliInLatex(trim($_POST['option_b'] ?? '')),
-            'C' => fixNepaliInLatex(trim($_POST['option_c'] ?? '')),
-            'D' => fixNepaliInLatex(trim($_POST['option_d'] ?? ''))
-        ];
-        $options_json = json_encode($opts);
-        
-        $opts_np = [
-            'A' => fixNepaliInLatex(trim($_POST['option_a_np'] ?? '')),
-            'B' => fixNepaliInLatex(trim($_POST['option_b_np'] ?? '')),
-            'C' => fixNepaliInLatex(trim($_POST['option_c_np'] ?? '')),
-            'D' => fixNepaliInLatex(trim($_POST['option_d_np'] ?? ''))
-        ];
-        $options_np_json = json_encode($opts_np);
-        
-        $correct_option = sanitize($_POST['correct_option'] ?? 'A');
-    }
-    
-    if (empty($class_id) || empty($subject_id) || empty($chapter) || empty($question_text)) {
-        $error = "All fields except options are required.";
-    } elseif (!$is_admin && $permission_status !== 'approved') {
-        $error = "Your school does not have permission to create or edit questions.";
-    } else {
-        try {
-            // Verify class and subject ownership
-            if ($is_admin) {
-                $chk_class = $db->prepare("SELECT id FROM classes WHERE id = ?");
-                $chk_class->execute([$class_id]);
-                $chk_sub = $db->prepare("SELECT id FROM subjects WHERE id = ?");
-                $chk_sub->execute([$subject_id]);
-            } else {
-                $chk_class = $db->prepare("SELECT id FROM classes WHERE id = ? AND school_id = ?");
-                $chk_class->execute([$class_id, $school_id]);
-                $chk_sub = $db->prepare("SELECT id FROM subjects WHERE id = ? AND school_id = ?");
-                $chk_sub->execute([$subject_id, $school_id]);
-            }
-            
-            if (!$chk_class->fetch() || !$chk_sub->fetch()) {
-                $error = "Unauthorized class or subject selection.";
-            } else {
-                $q_school_id = $is_admin ? 0 : $school_id;
-                $chapter=curriculumQuestionChapter($db,(int)$q_school_id,$class_id,$subject_id,$chapter,$topic_id);
-                
-                if ($action === 'add') {
-                    $stmt = $db->prepare("
-                        INSERT INTO questions (class_id, subject_id, chapter, type, question_text, question_text_np, options, options_np, correct_option, marks, answer, answer_np, school_id, topic_id, cognitive_domain) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ");
-                    $stmt->execute([$class_id, $subject_id, $chapter, $type, $question_text, $question_text_np, $options_json, $options_np_json, $correct_option, $marks, $answer, $answer_np, $q_school_id, $topic_id, $cognitive_domain]);
-                    Auth::logActivity(Auth::getUserId(), 'Add Question to Bank', 'questions', $db->lastInsertId());
-                    $success = "Question added to bank successfully.";
-                } elseif ($action === 'edit') {
-                    $question_id = (int)$_POST['question_id'];
-                    
-                    if ($is_admin) {
-                        $stmt = $db->prepare("
-                            UPDATE questions 
-                            SET class_id = ?, subject_id = ?, chapter = ?, type = ?, question_text = ?, question_text_np = ?, options = ?, options_np = ?, correct_option = ?, marks = ?, answer = ?, answer_np = ?, topic_id = ?, cognitive_domain = ? 
-                            WHERE id = ?
-                        ");
-                        $stmt->execute([$class_id, $subject_id, $chapter, $type, $question_text, $question_text_np, $options_json, $options_np_json, $correct_option, $marks, $answer, $answer_np, $topic_id, $cognitive_domain, $question_id]);
-                    } else {
-                        $stmt = $db->prepare("
-                            UPDATE questions 
-                            SET class_id = ?, subject_id = ?, chapter = ?, type = ?, question_text = ?, question_text_np = ?, options = ?, options_np = ?, correct_option = ?, marks = ?, answer = ?, answer_np = ?, topic_id = ?, cognitive_domain = ? 
-                            WHERE id = ? AND school_id = ?
-                        ");
-                        $stmt->execute([$class_id, $subject_id, $chapter, $type, $question_text, $question_text_np, $options_json, $options_np_json, $correct_option, $marks, $answer, $answer_np, $topic_id, $cognitive_domain, $question_id, $school_id]);
-                    }
-                    Auth::logActivity(Auth::getUserId(), 'Edit Question in Bank', 'questions', $question_id);
-                    $success = "Question updated successfully.";
-                }
-            }
-        } catch (PDOException|InvalidArgumentException $e) {
-            $error = schoolPublicError($e);
-        }
-    }
-}
-
-// Handle Delete Question
-if (isset($_GET['delete'])) {
-    $id = (int)$_GET['delete'];
+// All manual/scanner saves and ownership transitions use the same service.
+if($_SERVER['REQUEST_METHOD']==='POST'&&(isset($_POST['action'])||isset($_GET['delete']))){
+    require_once __DIR__.'/../../includes/learning_content_service.php';
     try {
-        if ($is_admin) {
-            $stmt = $db->prepare("DELETE FROM questions WHERE id = ?");
-            $stmt->execute([$id]);
-            Auth::logActivity(Auth::getUserId(), 'Delete Question from Bank', 'questions', $id);
-            redirect(APP_URL . '/modules/learning/questions.php', 'Question deleted successfully.');
-        } else {
-            if ($permission_status === 'approved') {
-                $stmt = $db->prepare("DELETE FROM questions WHERE id = ? AND school_id = ?");
-                $stmt->execute([$id, $school_id]);
-                Auth::logActivity(Auth::getUserId(), 'Delete Question from Bank', 'questions', $id);
-                redirect(APP_URL . '/modules/learning/questions.php', 'Question deleted successfully.');
-            } else {
-                $error = "You do not have permission to delete questions.";
-            }
-        }
-    } catch (PDOException $e) {
-        $error = schoolPublicError($e);
-    }
+        $action=$_POST['action']??'archive';
+        if(!is_string($action)||!in_array($action,['add','edit','set_visibility','archive','restore'],true))throw new InvalidArgumentException('Choose one valid question action.');
+        $id=$action==='add'?null:learningId($_POST['question_id']??$_GET['delete']??null);
+        if(in_array($action,['add','edit'],true))learningSaveQuestion($db,$contentActor,$_POST,$id);
+        elseif($action==='set_visibility')learningSetVisibility($db,$contentActor,'questions',$id,learningVisibility($_POST['visibility']??null));
+        else learningSetArchived($db,$contentActor,'questions',$id,$action==='archive');
+        $success=match($action){'add'=>'Question saved successfully.','edit'=>'Question updated successfully.','set_visibility'=>'Question visibility saved successfully.','archive'=>'Question archived. It can be restored.',default=>'Question restored successfully.'};
+        redirect($_SERVER['REQUEST_URI'],$success,'success');
+    }catch(InvalidArgumentException $e){if(in_array($action??'',['set_visibility','archive','restore'],true))denySchoolRequest($e->getMessage(),422);$error=$e->getMessage();}
+    catch(Throwable $e){$error=schoolPublicError($e);}
 }
 
 // Fetch Filters
@@ -472,110 +329,28 @@ $filter_subject = $_GET['subject'] ?? '';
 $filter_category = sanitize($_GET['category'] ?? 'all'); // 'all', 'mcq', or 'other'
 $filter_cognitive = sanitize($_GET['cognitive_domain'] ?? '');
 
-// Build Query supporting Universal Questions and mapping
-$query = "
-    SELECT q.*, c.name as class_name, s.name_en as subject_name, t.name as topic_name 
-    FROM questions q 
-    LEFT JOIN classes c ON q.class_id = c.id 
-    LEFT JOIN subjects s ON q.subject_id = s.id 
-    LEFT JOIN topics t ON q.topic_id = t.id
-    WHERE (q.school_id = ? OR q.school_id = 0)
-";
-$params = [$school_id];
-
-if ($filter_class && $filter_subject) {
-    $stmt = $db->prepare("SELECT name FROM classes WHERE id = ?");
-    $stmt->execute([$filter_class]);
-    $lvl = $stmt->fetchColumn();
-
-    $stmt = $db->prepare("SELECT code, name_en FROM subjects WHERE id = ?");
-    $stmt->execute([$filter_subject]);
-    $sub = $stmt->fetch();
-    $sub_code = $sub ? $sub['code'] : '';
-    $sub_name = $sub ? $sub['name_en'] : '';
-
-    $query = "
-        SELECT q.*, c.name as class_name, s.name_en as subject_name, t.name as topic_name 
-        FROM questions q 
-        LEFT JOIN classes c ON q.class_id = c.id 
-        LEFT JOIN subjects s ON q.subject_id = s.id 
-        LEFT JOIN topics t ON q.topic_id = t.id
-        WHERE (
-            (q.school_id = ? AND q.class_id = ? AND q.subject_id = ?)
-            OR
-            (q.school_id = 0 AND c.name = ? AND ((s.code <> '' AND s.code = ?) OR s.name_en = ?))
-        )
-    ";
-    $params = [$school_id, $filter_class, $filter_subject, $lvl, $sub_code, $sub_name];
-} elseif ($filter_class) {
-    $stmt = $db->prepare("SELECT name FROM classes WHERE id = ?");
-    $stmt->execute([$filter_class]);
-    $lvl = $stmt->fetchColumn();
-
-    $query = "
-        SELECT q.*, c.name as class_name, s.name_en as subject_name, t.name as topic_name 
-        FROM questions q 
-        LEFT JOIN classes c ON q.class_id = c.id 
-        LEFT JOIN subjects s ON q.subject_id = s.id 
-        LEFT JOIN topics t ON q.topic_id = t.id
-        WHERE (
-            (q.school_id = ? AND q.class_id = ?)
-            OR
-            (q.school_id = 0 AND c.name = ?)
-        )
-    ";
-    $params = [$school_id, $filter_class, $lvl];
-} elseif ($filter_subject) {
-    $stmt = $db->prepare("SELECT code, name_en FROM subjects WHERE id = ?");
-    $stmt->execute([$filter_subject]);
-    $sub = $stmt->fetch();
-    $sub_code = $sub ? $sub['code'] : '';
-    $sub_name = $sub ? $sub['name_en'] : '';
-
-    $query = "
-        SELECT q.*, c.name as class_name, s.name_en as subject_name, t.name as topic_name 
-        FROM questions q 
-        LEFT JOIN classes c ON q.class_id = c.id 
-        LEFT JOIN subjects s ON q.subject_id = s.id 
-        LEFT JOIN topics t ON q.topic_id = t.id
-        WHERE (
-            (q.school_id = ? AND q.subject_id = ?)
-            OR
-            (q.school_id = 0 AND ((s.code <> '' AND s.code = ?) OR s.name_en = ?))
-        )
-    ";
-    $params = [$school_id, $filter_subject, $sub_code, $sub_name];
-}
-
-if ($filter_category === 'mcq') {
-    $query .= " AND q.type = 'MCQ'";
-} elseif ($filter_category === 'other') {
-    $query .= " AND q.type != 'MCQ'";
-}
-
-if (!empty($filter_cognitive)) {
-    $query .= " AND q.cognitive_domain = ?";
-    $params[] = $filter_cognitive;
-}
-
+// Lists, search and counts are filtered by the backend access policy.
 $questionSearch=$_GET['search']??'';
 if(!is_string($questionSearch)||mb_strlen($questionSearch)>100)denySchoolRequest('Question search must be at most 100 characters.',422);
 $questionSearch=trim($questionSearch);
-if($questionSearch!==''){$query.=" AND (q.question_text LIKE ? ESCAPE '!' OR q.question_text_np LIKE ? ESCAPE '!' OR q.chapter LIKE ? ESCAPE '!')";$needle='%'.strtr($questionSearch,['!'=>'!!','%'=>'!%','_'=>'!_']).'%';$params[]=$needle;$params[]=$needle;$params[]=$needle;}
-$query .= " ORDER BY q.id DESC";
-$stmt = $db->prepare($query);
-$stmt->execute($params);
-$questions = $stmt->fetchAll();
-
-// One school-scoped, role-scoped, de-duplicated selector for filters, add/edit and import.
-$classes=$allowedClasses;
-$subjects=$filter_class?learningSubjects($db,(int)$school_id,(int)$filter_class,$learningRole,$learningActor):[];
-$class_subjects_map=[];$allowedPairs=[];
-foreach($classes as $c)foreach(learningSubjects($db,(int)$school_id,(int)$c['id'],$learningRole,$learningActor) as $s){
-    $class_subjects_map[]=['class_id'=>$c['id'],'subject_id'=>$s['id'],'name_en'=>$s['name_en'],'name_np'=>$s['name_np'],'code'=>$s['code'],'is_optional'=>$s['type']==='optional'?1:0];
-    $allowedPairs[$c['name'].'|'.mb_strtolower(trim($s['name_en']),'UTF-8')]=true;
+$filter_source=$_GET['source']??'all';$filter_archived=($_GET['archived']??'')==='1';
+$filters=['source'=>$filter_source,'archived'=>$filter_archived,'search'=>$questionSearch];
+if($filter_class)$filters['class_id']=$filter_class;if($filter_subject)$filters['subject_id']=$filter_subject;
+if($filter_category==='mcq')$filters['type']='MCQ';
+try{$questions=learningContentList($db,$contentActor,'questions',$filters,'bank');}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
+if($filter_category==='other')$questions=array_values(array_filter($questions,static fn($q)=>$q['type']!=='MCQ'));
+if($filter_cognitive)$questions=array_values(array_filter($questions,static fn($q)=>$q['cognitive_domain']===$filter_cognitive));
+foreach($questions as &$q){
+    $classRow=$db->prepare('SELECT name FROM classes WHERE id=?');$classRow->execute([$q['class_id']]);$q['class_name']=$classRow->fetchColumn();
+    $subRow=$db->prepare('SELECT name_en FROM subjects WHERE id=?');$subRow->execute([$q['subject_id']]);$q['subject_name']=$subRow->fetchColumn();
+}unset($q);
+$classes=$allowedClasses;$subjects=$filter_class?learningReadSubjects($db,$contentActor,(int)$filter_class):[];
+$class_subjects_map=[];
+foreach($classes as $c)foreach(learningReadSubjects($db,$contentActor,(int)$c['id']) as $s){
+    if(!learningCanCreate($db,$contentActor,(int)$c['id'],(int)$s['id']))continue;
+    $class_subjects_map[]=['class_id'=>$c['id'],'subject_id'=>$s['id'],'name_en'=>$s['display_name'],'name_np'=>$s['name_np'],'code'=>$s['code'],'is_optional'=>$s['type']==='optional'?1:0];
 }
-if($learningRole==='teacher')$questions=array_values(array_filter($questions,static fn($q)=>isset($allowedPairs[$q['class_name'].'|'.mb_strtolower(trim($q['subject_name']),'UTF-8')])));
+$canCreateContent=!$contentActor['read_only']&&in_array($learningRole,['super_admin','school_admin','teacher'],true)&&$permission_status==='approved';
 $pageTitle = 'Question Bank';
 $activePage = 'questions';
 
@@ -618,18 +393,18 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
 .font-english,
 #modalQuestionText, #modalAnswer, #modalOptA, #modalOptB, #modalOptC, #modalOptD {
     font-family: Arial, Helvetica, sans-serif !important;
-    font-size: 15px;
+    font-size: 18px;
 }
 
 /* Nepali Inputs Default Font: Kokila */
 .font-nepali, .nepali-text,
 #modalQuestionTextNp, #modalAnswerNp, #modalOptANp, #modalOptBNp, #modalOptCNp, #modalOptDNp {
     font-family: 'Kokila', 'Noto Sans Devanagari', 'Kalimati', sans-serif !important;
-    font-size: 1.15rem;
+    font-size: var(--erp-kokila-size, 20pt) !important;
 }
 
 #texPreview {
-    font-size: 1.35rem;
+    font-size: 20pt;
     overflow-x: auto;
     padding: 12px 0;
     color: #2c3e50;
@@ -662,7 +437,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
         <a href="<?= APP_URL ?>/modules/learning/index.php" class="btn btn-secondary">
             <i class="fas fa-arrow-left"></i> Back to Portal
         </a>
-        <?php if ($is_admin || $permission_status === 'approved'): ?>
+        <?php if ($canCreateContent): ?>
         <button class="btn btn-primary fw-bold shadow-sm" onclick="showAddForm('MCQ')">
             <i class="fas fa-list-ol me-1"></i> Add Multiple Choice Questions
         </button>
@@ -758,7 +533,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                 <select name="subject" class="form-select" <?= !$filter_class?'disabled':'' ?> onchange="this.form.submit()">
                     <option value=""><?= $filter_class?'All class subjects':'Choose a class first' ?></option>
                     <?php foreach ($subjects as $s): ?>
-                    <option value="<?= $s['id'] ?>" <?= $filter_subject == $s['id'] ? 'selected' : '' ?>><?= sanitize($s['name_en']) ?></option>
+                    <option value="<?= $s['id'] ?>" <?= $filter_subject == $s['id'] ? 'selected' : '' ?>><?= sanitize($s['display_name']??$s['name_en']) ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
@@ -781,7 +556,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
 
 <form method="GET" class="input-group mb-3">
 <input type="hidden" name="class" value="<?= sanitize($filter_class) ?>"><input type="hidden" name="subject" value="<?= sanitize($filter_subject) ?>"><input type="hidden" name="category" value="<?= sanitize($filter_category) ?>"><input type="hidden" name="cognitive_domain" value="<?= sanitize($filter_cognitive) ?>">
-<input class="form-control" type="search" name="search" maxlength="100" value="<?= sanitize($questionSearch) ?>" aria-label="Search question text or chapter" placeholder="Search question text or chapter"><button class="btn btn-primary">Search questions</button></form>
+<select name="source" class="form-select" aria-label="Content source"><?php foreach(['all'=>'All content','shared'=>'Shared catalog','school'=>'This school','mine'=>'My content'] as $value=>$label): ?><option value="<?= $value ?>" <?= $filter_source===$value?'selected':'' ?>><?= $label ?></option><?php endforeach; ?></select><select name="archived" class="form-select" aria-label="Archive filter"><option value="">Active content</option><option value="1" <?= $filter_archived?'selected':'' ?>>My archived content</option></select><input class="form-control" type="search" name="search" maxlength="100" value="<?= sanitize($questionSearch) ?>" aria-label="Search question text or chapter" placeholder="Search question text or chapter"><button class="btn btn-primary">Search questions</button></form>
 <!-- Questions List Table -->
 <div class="card">
     <div class="card-header bg-white py-3">
@@ -809,7 +584,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                                 <strong><?= sanitize($q['class_name'] ?: 'Universal') ?></strong><br>
                                 <small class="text-muted"><?= sanitize($q['subject_name'] ?: 'Universal') ?></small>
                             </td>
-                            <td><?= sanitize($q['chapter']) ?></td>
+                            <td><?= sanitize($q['chapter']) ?><br><span class="badge bg-light text-dark"><?= $q['visibility']==='private'?'Private':'Public' ?><?= $q['source_scope']==='school'?' — this school':'' ?></span></td>
                             <td>
                                 <?php
                                 $badge = [
@@ -823,7 +598,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                                 ?>
                                 <span class="badge <?= $badge ?>"><?= $q['type'] ?></span>
                                 <?php if (($q['school_id'] ?? 0) == 0): ?>
-                                <span class="badge bg-dark ms-1" title="Universal question visible to all schools"><i class="fas fa-globe"></i> Universal</span>
+                                <span class="badge bg-dark ms-1" title="Read-only shared catalog"><i class="fas fa-globe"></i> Shared catalog</span>
                                 <?php endif; ?>
                             </td>
                             <td>
@@ -847,11 +622,11 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                                 </span>
                             </td>
                             <td>
-                                <div class="text-truncate mathjax-render" style="max-width: 300px;" title="<?= sanitize($q['question_text']) ?>">
+                                <div class="text-truncate mathjax-render" style="max-width: 300px; font-size: 1.125rem;" title="<?= sanitize($q['question_text']) ?>">
                                     <strong>EN:</strong> <?= fixNepaliInLatex($q['question_text']) ?>
                                 </div>
                                 <?php if (!empty($q['question_text_np'])): ?>
-                                <div class="text-truncate text-muted small mathjax-render font-nepali" style="max-width: 300px; font-size: 0.95rem;" title="<?= sanitize($q['question_text_np']) ?>">
+                                <div class="text-truncate text-muted mathjax-render font-nepali" style="max-width: 300px;" title="<?= sanitize($q['question_text_np']) ?>">
                                     <strong>NP:</strong> <?= fixNepaliInLatex($q['question_text_np']) ?>
                                 </div>
                                 <?php endif; ?>
@@ -859,29 +634,21 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                             <td class="font-monospace fw-bold"><?= $q['marks'] ?></td>
                             <td class="text-end">
                                 <?php 
-                                $can_modify = ($is_admin || (($q['school_id'] ?? 0) == $school_id && $permission_status === 'approved'));
+                                $can_modify = $q['can_edit'];
                                 if ($can_modify): 
                                 ?>
                                 <button onclick="editQuestion(<?= htmlspecialchars(json_encode($q)) ?>)" class="btn btn-sm btn-outline-warning" title="Edit">
                                     <i class="fas fa-edit"></i>
                                 </button>
-                                <a href="<?= APP_URL ?>/modules/learning/questions.php?delete=<?= $q['id'] ?>" 
-                                   class="btn btn-sm btn-outline-danger" title="Delete"
-                                   onclick="return confirm('Are you sure you want to delete this question?');">
-                                    <i class="fas fa-trash"></i>
-                                </a>
+                                <form method="post" class="d-inline" onsubmit="return confirm('<?= $filter_archived?'Restore this question?':'Archive this question? It can be restored.' ?>')">
+                                    <input type="hidden" name="action" value="<?= $filter_archived?'restore':'archive' ?>"><input type="hidden" name="question_id" value="<?= $q['id'] ?>"><button class="btn btn-sm btn-outline-danger"><?= $filter_archived?'Restore':'Archive' ?></button>
+                                </form>
+                                <?php if(!$filter_archived): ?><form method="post" class="d-inline" onsubmit="return confirm('<?= $q['visibility']==='private'?'Publish within this school? Shared catalog publishing is available to eligible schools.':'Make this question private?' ?>')"><input type="hidden" name="action" value="set_visibility"><input type="hidden" name="question_id" value="<?= $q['id'] ?>"><input type="hidden" name="visibility" value="<?= $q['visibility']==='private'?'public':'private' ?>"><button class="btn btn-sm btn-outline-primary"><?= $q['visibility']==='private'?'Publish':'Make private' ?></button></form><?php endif; ?>
                                 <?php else: ?>
                                 <button class="btn btn-sm btn-outline-secondary" disabled title="No edit permission"><i class="fas fa-lock"></i></button>
                                 <?php endif; ?>
                                 
-                                <?php if ($is_admin && ($q['school_id'] ?? 0) > 0): ?>
-                                <a href="<?= APP_URL ?>/modules/learning/questions.php?make_universal=<?= $q['id'] ?>" 
-                                   class="btn btn-sm btn-outline-info" title="Make Universal"
-                                   onclick="return confirm('Are you sure you want to promote this school-specific question to Universal for all schools?');">
-                                    <i class="fas fa-globe"></i> Make Universal
-                                </a>
-                                <?php endif; ?>
-                            </td>
+           </td>
                         </tr>
                         <?php endforeach; ?>
                     <?php else: ?>
@@ -906,6 +673,9 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
     <form method="POST" action="" class="needs-validation" onsubmit="tinymce.triggerSave()" novalidate>
         <input type="hidden" name="action" id="modalAction" value="add">
         <input type="hidden" name="question_id" id="modalQuestionId">
+        <input type="hidden" name="catalog_topic_id" id="modalCatalogTopicId">
+        <input type="hidden" name="topic_id" id="modalLocalTopicId">
+        <div class="mb-3"><label for="modalVisibility" class="form-label">Visibility</label><select name="visibility" id="modalVisibility" class="form-select"><option value="private" <?= !$is_admin?'selected':'' ?>>Private — creator, subject teachers and school administrators</option><option value="public" <?= $is_admin?'selected':'' ?>><?= $is_admin?'Shared catalog — eligible schools':'Public — within this school only' ?></option></select><div class="form-text">Only you can edit or publish your school content.</div></div>
         <div class="row g-3">
                         <div class="col-md-6">
                             <div class="d-flex justify-content-between align-items-center mb-1">
@@ -925,7 +695,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                             <select name="subject_id" id="modalSubject" class="form-select" required onchange="updateChaptersDropdown('')">
                                 <option value="">-- First Select a Class --</option>
                                 <?php foreach ($subjects as $s): ?>
-                                <option value="<?= $s['id'] ?>"><?= sanitize($s['name_en']) ?></option>
+                                <option value="<?= $s['id'] ?>"><?= sanitize($s['display_name']??$s['name_en']) ?></option>
                                 <?php endforeach; ?>
                             </select>
                             <small class="text-muted">Filtered to show compulsory and active optional subjects for selected class.</small>
@@ -940,7 +710,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                         </div>
                         <div class="col-md-3">
                             <label class="form-label fw-bold">Topic</label>
-                            <select name="topic_id" id="modalTopicSelect" class="form-select">
+                            <select id="modalTopicSelect" class="form-select" onchange="syncCatalogTopic()">
                                 <option value="">Choose Topic</option>
                             </select>
                         </div>
@@ -1185,7 +955,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form method="POST" action="" enctype="multipart/form-data">
-                <input type="hidden" name="action_import_excel" value="1">
+                <input type="hidden" name="action_import_excel" value="1"><label class="form-label">Imported content visibility</label><select name="import_visibility" class="form-select mb-3"><option value="private" <?= !$is_admin?'selected':'' ?>>Private</option><option value="public" <?= $is_admin?'selected':'' ?>><?= $is_admin?'Shared catalog':'Public within this school' ?></option></select>
                 <div class="modal-body p-4">
                     <fieldset class="mb-4"><legend class="fs-6 fw-bold">Import method</legend>
                         <div class="form-check"><input class="form-check-input" type="radio" name="import_content_mode" id="importNormal" value="normal" <?= ($importContentMode??'normal')==='html'?'':'checked' ?>><label class="form-check-label" for="importNormal">Normal Text</label></div>
@@ -1244,7 +1014,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                             <select name="default_subject_id" id="importSubject" class="form-select form-select-sm">
                                 <option value="">-- Auto-detect from spreadsheet --</option>
                                 <?php foreach ($subjects as $s): ?>
-                                <option value="<?= $s['id'] ?>"><?= sanitize($s['name_en']) ?></option>
+                                <option value="<?= $s['id'] ?>"><?= sanitize($s['display_name']??$s['name_en']) ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
@@ -1268,6 +1038,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
 </div>
 
 <script>
+const canManageCatalog=<?= json_encode($canManageCatalog) ?>;
 let activeEditorId = '';
 let texModalObj;
 let activeTexSpan = null;
@@ -1370,15 +1141,16 @@ $(document).ready(function() {
                 }
                 body {
                     font-family: Arial, Helvetica, sans-serif;
-                    font-size: 15px;
+                    font-size: 18px;
                 }
                 body.nepali-editor {
                     font-family: 'Kokila', 'Noto Sans Devanagari', 'Kalimati', sans-serif !important;
-                    font-size: 18px !important;
+                    font-size: 20pt !important;
+                    line-height: 1.55;
                 }
                 body.english-editor {
                     font-family: Arial, Helvetica, sans-serif !important;
-                    font-size: 15px !important;
+                    font-size: 18px !important;
                 }
                 span.math-tex {
                     background: transparent !important;
@@ -1427,11 +1199,11 @@ $(document).ready(function() {
                     if (editor.id.endsWith('Np')) {
                         doc.body.classList.add('nepali-editor');
                         doc.body.style.fontFamily = "'Kokila', 'Noto Sans Devanagari', 'Kalimati', sans-serif";
-                        doc.body.style.fontSize = "18px";
+                        doc.body.style.fontSize = "20pt";
                     } else {
                         doc.body.classList.add('english-editor');
                         doc.body.style.fontFamily = "Arial, Helvetica, sans-serif";
-                        doc.body.style.fontSize = "15px";
+                        doc.body.style.fontSize = "18px";
                     }
 
                     // Repair the iframe after typesetting (below and on SetContent).
@@ -1562,6 +1334,8 @@ function onModalClassChange(selectedSubjectId = '', selectedChapterValue = '', s
 }
 
 function showAddForm(category = 'MCQ') {
+    document.getElementById('modalVisibility').value=canManageCatalog?'public':'private';
+    document.getElementById('modalCatalogTopicId').value='';document.getElementById('modalLocalTopicId').value='';
     document.getElementById('questionsListSection').style.display = 'none';
     document.getElementById('questionsFormSection').style.display = 'block';
     
@@ -1698,6 +1472,8 @@ function setOptionVal(id, val) {
 }
 
 function editQuestion(q) {
+    document.getElementById('modalVisibility').value=q.visibility;
+    document.getElementById('modalCatalogTopicId').value=q.catalog_topic_id||'';
     document.getElementById('questionsListSection').style.display = 'none';
     document.getElementById('questionsFormSection').style.display = 'block';
     
@@ -1723,7 +1499,7 @@ function editQuestion(q) {
     }
     
     document.getElementById('modalClass').value = q.class_id;
-    onModalClassChange(q.subject_id, q.chapter, q.topic_id);
+    onModalClassChange(q.subject_id, q.chapter, q.topic_id||q.catalog_topic_id);
     document.getElementById('modalType').value = q.type;
     document.getElementById('modalMarks').value = q.marks;
     if (document.getElementById('modalCognitiveDomain')) {
@@ -1776,111 +1552,31 @@ let chapterDropdownRequestVersion = 0;
 let topicDropdownRequestVersion = 0;
 
 function updateChaptersDropdown(selectedChapterValue = '', selectedTopicId = '') {
-    const requestVersion = ++chapterDropdownRequestVersion;
+    const requestVersion=++chapterDropdownRequestVersion;
     ++topicDropdownRequestVersion;
-    document.getElementById('modalTopicSelect').innerHTML = '<option value="">Choose Topic</option>';
-    const classId = document.getElementById('modalClass').value;
-    const subjectId = document.getElementById('modalSubject').value;
-    
-    const select = document.getElementById('modalChapterSelect');
-    const customInput = document.getElementById('modalChapterCustom');
-    const hiddenInput = document.getElementById('modalChapter');
-    
-    select.innerHTML = '';
-    
-    if (!classId || !subjectId) {
-        const optCustom = document.createElement('option');
-        optCustom.value = '__custom__';
-        optCustom.textContent = 'Type Custom Chapter';
-        select.appendChild(optCustom);
-        
-        select.value = '__custom__';
-        customInput.style.display = 'block';
-        customInput.value = selectedChapterValue || '';
-        hiddenInput.value = selectedChapterValue || '';
-        updateTopicsDropdown(0, '', selectedTopicId);
-        return;
-    }
-    
-    $.ajax({
-        url: window.location.pathname,
-        data: {
-            action_get_chapters: 1,
-            class_id: classId,
-            subject_id: subjectId
-        },
-        dataType: 'json',
-        success: function(chapters) {
-            if (requestVersion !== chapterDropdownRequestVersion) return;
-            select.innerHTML = '';
-            if (chapters && chapters.length > 0) {
-                chapters.forEach(ch => {
-                    const opt = document.createElement('option');
-                    opt.value = ch.name;
-                    opt.textContent = ch.name;
-                    opt.setAttribute('data-id', ch.id);
-                    select.appendChild(opt);
-                });
-                
-                const optCustom = document.createElement('option');
-                optCustom.value = '__custom__';
-                optCustom.textContent = 'Other / Custom Chapter';
-                select.appendChild(optCustom);
-                
-                let dbChapterId = 0;
-                let chapterNames = chapters.map(c => c.name);
-                
-                if (selectedChapterValue) {
-                    if (chapterNames.includes(selectedChapterValue)) {
-                        select.value = selectedChapterValue;
-                        customInput.style.display = 'none';
-                        hiddenInput.value = selectedChapterValue;
-                        
-                        // Find matching chapter id
-                        const matched = chapters.find(c => c.name === selectedChapterValue);
-                        if (matched) dbChapterId = matched.id;
-                    } else {
-                        select.value = '__custom__';
-                        customInput.style.display = 'block';
-                        customInput.value = selectedChapterValue;
-                        hiddenInput.value = selectedChapterValue;
-                    }
-                } else {
-                    hiddenInput.value = select.value;
-                    customInput.style.display = 'none';
-                    if (chapters.length > 0) {
-                        dbChapterId = chapters[0].id;
-                    }
-                }
-                
-                updateTopicsDropdown(dbChapterId, selectedChapterValue || select.value, selectedTopicId);
-            } else {
-                const optCustom = document.createElement('option');
-                optCustom.value = '__custom__';
-                optCustom.textContent = 'Type Custom Chapter';
-                select.appendChild(optCustom);
-                
-                select.value = '__custom__';
-                customInput.style.display = 'block';
-                customInput.value = selectedChapterValue || '';
-                hiddenInput.value = selectedChapterValue || '';
-                updateTopicsDropdown(0, '', selectedTopicId);
-            }
-        },
-        error: function() {
-            if (requestVersion !== chapterDropdownRequestVersion) return;
-            const optCustom = document.createElement('option');
-            optCustom.value = '__custom__';
-            optCustom.textContent = 'Type Custom Chapter';
-            select.appendChild(optCustom);
-            
-            select.value = '__custom__';
-            customInput.style.display = 'block';
-            customInput.value = selectedChapterValue || '';
-            hiddenInput.value = selectedChapterValue || '';
-            updateTopicsDropdown(0, '', selectedTopicId);
-        }
-    });
+    document.getElementById('modalTopicSelect').innerHTML='<option value="">Choose Topic</option>';
+    const classId=document.getElementById('modalClass').value;
+    const subjectId=document.getElementById('modalSubject').value;
+    const select=document.getElementById('modalChapterSelect');
+    const customInput=document.getElementById('modalChapterCustom');
+    const hiddenInput=document.getElementById('modalChapter');
+    select.innerHTML='';customInput.style.display='none';hiddenInput.value='';
+    const addCustom=()=>{if(!canManageCatalog)return;const opt=document.createElement('option');opt.value='__custom__';opt.textContent='Other / Custom Chapter';select.appendChild(opt);};
+    if(!classId||!subjectId){updateTopicsDropdown(0,'');return;}
+    $.ajax({url:window.location.pathname,data:{action_get_chapters:1,class_id:classId,subject_id:subjectId},dataType:'json',success:function(chapters){
+        if(requestVersion!==chapterDropdownRequestVersion)return;
+        select.innerHTML='';
+        for(const ch of chapters||[]){const opt=document.createElement('option');opt.value=ch.name;opt.textContent=ch.name;opt.setAttribute('data-id',ch.id);select.appendChild(opt);}
+        addCustom();
+        const matched=(chapters||[]).find(c=>c.name===selectedChapterValue);
+        if(selectedChapterValue&&matched){select.value=matched.name;}
+        else if(selectedChapterValue&&canManageCatalog){select.value='__custom__';customInput.style.display='block';customInput.value=selectedChapterValue;}
+        else if(chapters?.length){select.value=chapters[0].name;}
+        else if(canManageCatalog){select.value='__custom__';customInput.style.display='block';customInput.value=selectedChapterValue;}
+        hiddenInput.value=select.value==='__custom__'?customInput.value:select.value;
+        const chosen=(chapters||[]).find(c=>c.name===select.value);
+        updateTopicsDropdown(chosen?.id||0,hiddenInput.value,selectedTopicId);
+    },error:function(){if(requestVersion!==chapterDropdownRequestVersion)return;select.innerHTML='';addCustom();hiddenInput.value='';}});
 }
 
 function updateTopicsDropdown(chapterId, chapterName, selectedTopicId = '') {
@@ -1919,14 +1615,26 @@ function updateTopicsDropdown(chapterId, chapterName, selectedTopicId = '') {
                     const opt = document.createElement('option');
                     opt.value = value;
                     opt.textContent = topic.name;
+                    const alias=(topic.aliases||[]).find(a=>String(a.id)===String(value));
+                    opt.setAttribute('data-scope',alias?.scope||topic.scope||'local');
                     select.appendChild(opt);
                 });
                 if (selectedTopicId) {
                     select.value = selectedTopicId;
                 }
             }
+            syncCatalogTopic();
         }
     });
+}
+
+function syncCatalogTopic(){
+    const select=document.getElementById('modalTopicSelect');
+    const global=document.getElementById('modalCatalogTopicId');
+    const local=document.getElementById('modalLocalTopicId');
+    if(!global||!local)return;
+    const scope=select.options[select.selectedIndex]?.getAttribute('data-scope');
+    global.value=scope==='shared'?select.value:'';local.value=scope==='shared'?'':select.value;
 }
 
 function onChapterSelectChange() {

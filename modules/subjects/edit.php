@@ -52,7 +52,7 @@ if ($mapping && $mapping['teacher_id']) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $class_id = (int)($_POST['class_id'] ?? 0);
     $code = sanitize($_POST['code'] ?? '');
-    $name_en = sanitize($_POST['name_en'] ?? '');
+    $name_en = subjectCanonicalName(sanitize($_POST['name_en'] ?? ''));
     $name_np = sanitize($_POST['name_np'] ?? '');
     $is_optional = !empty($_POST['is_optional']) ? 1 : 0;
     $type = $is_optional ? 'optional' : 'compulsory';

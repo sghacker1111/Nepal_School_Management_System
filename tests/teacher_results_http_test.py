@@ -58,7 +58,7 @@ with ERPHttpFixture() as app:
     for path in [f'/modules/results/marks_entry.php?exam={exam}&class={unassigned}',f'/modules/results/ledger.php?exam={exam}&class={f["otherClass"]}']:
         app.request(path,status=404)
     before=app.snapshot('marks');app.request(marks_path,{**marks_input(sid,other,75),'class_id':unassigned},status=422);assert app.snapshot('marks')==before
-    app.request(f'/modules/learning/curriculum.php?action=get_chapters&class_id={cls}&subject_id={other}',status=404)
+    app.request(f'/modules/learning/curriculum.php?action=get_chapters&class_id={cls}&subject_id={other}') # Read-only school-public curriculum is available beyond teaching assignments.
     # Section-specific teaching assignments remain confined when printing/entering marks.
     app.db.execute('UPDATE class_subjects SET section_id=? WHERE class_id=? AND subject_id=?',(f['section'],cls,own));app.db.commit()
     app.login('teacher');body=app.request(ledger_path);assert 'SecondSection Student' in ledger_table(body)
