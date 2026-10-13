@@ -37,10 +37,10 @@ function validateTeacherLearningRequest(PDO $db,int $school,string $module,strin
     // Legacy pages dispatch both query-string and body actions. Never authorize one
     // action while another handler executes, or let body fields shadow a query scope.
     $queryActions=array_intersect_key($query,array_flip(['action','delete','action_get_chapters','action_get_topics']));
-    $bodyActions=array_intersect_key($data,array_flip(['action','action_import_excel','action_quick_add_class','action_quick_add_subject']));
+    $bodyActions=array_intersect_key($data,array_flip(['action','action_note','action_import_excel','action_quick_add_class','action_quick_add_subject']));
     if(count($queryActions)>1||count($bodyActions)>1||($queryActions&&$bodyActions))throw new InvalidArgumentException('Submit one learning action at a time. Reload the page and try again.');
     if($data&&$query)validateTeacherLearningRequest($db,$school,$module,$file,[],$query);
-    if(!$data&&($file==='curriculum.php'||$file==='questions.php')){
+    if(!$data&&in_array($file,['curriculum.php','questions.php','index.php'],true)){
         require_once __DIR__.'/learning_content.php';$actor=learningActor($db,(int)Auth::getUserId(),$school,Auth::isReadOnly());
         $class=(int)($query['class_id']??$query['class']??0);$subject=(int)($query['subject_id']??$query['subject']??0);
         if(isset($query['chapter_id']))learningCatalogChapterScope($db,$actor,(int)$query['chapter_id']);

@@ -43,3 +43,21 @@ function learningSetVisibility(PDO $db,array $actor,string $kind,int $id,string 
 function learningSetArchived(PDO $db,array $actor,string $kind,int $id,bool $archived):void {
     learningWrite($db,function()use($db,$actor,$kind,$id,$archived){learningMutableRecord($db,$actor,$kind,$id);$db->prepare("UPDATE $kind SET archived_at=?,updated_at=CURRENT_TIMESTAMP WHERE id=?")->execute([$archived?date('Y-m-d H:i:s'):null,$id]);learningAudit($db,$actor,$archived?'Archive content':'Restore content',$kind,$id);});
 }
+function learningSaveNote(PDO $db,array $actor,array $input,?int $id=null):int {
+    return learningWrite($db,function()use($db,$actor,$input,$id){
+        if(array_key_exists('school_id',$input)||array_key_exists('created_by_user_id',$input))throw new InvalidArgumentException('Content school and creator are set by your account.');
+        if($id){$old=learningMutableRecord($db,$actor,'learning_notes',$id);if($old['archived_at'])throw new InvalidArgumentException('Restore archived content before editing it.');}
+        $class=learningId($input['class_id']??null);$subject=learningId($input['subject_id']??null);
+        if(!learningCanCreate($db,$actor,$class,$subject)||!learningPurposeAllowed($db,$actor,'study'))throw new InvalidArgumentException('Create notes only for your assigned class subjects.');
+        $title=$input['title']??'';$raw=$input['content']??'';
+        if(!is_string($title)||trim($title)===''||mb_strlen($title)>255||!is_string($raw))throw new InvalidArgumentException('Enter a note title and valid content.');
+        $content=questionImportContent($raw,'html');if(!questionImportHasContent($content))throw new InvalidArgumentException('Note content is empty after checking its formatting.');
+        $catalog=learningCatalogSelection($db,$actor,$class,$subject,$input,learningCanManageCatalog($actor));
+        $c=$db->prepare('SELECT name FROM classes WHERE id=?');$c->execute([$class]);$s=$db->prepare('SELECT name_en FROM subjects WHERE id=?');$s->execute([$subject]);
+        $catalog['topic']=$catalog['topic']??''; // Legacy label is NOT NULL; the relational topic remains optional.
+        $values=$catalog+['class_id'=>$class,'subject_id'=>$subject,'class_level'=>$c->fetchColumn(),'subject_name'=>subjectCanonicalName($s->fetchColumn()),'title'=>trim($title),'content'=>$content,'visibility'=>learningVisibility($input['visibility']??($old['visibility']??($actor['school_id']===0?'public':'private'))),'updated_at'=>date('Y-m-d H:i:s')];
+        if($id){$db->prepare('UPDATE learning_notes SET '.implode(',',array_map(static fn($k)=>"$k=?",array_keys($values))).' WHERE id=?')->execute([...array_values($values),$id]);}
+        else{$values+=['school_id'=>$actor['school_id'],'created_by_user_id'=>$actor['id']];$id=insertRecord($db,'learning_notes',$values);}
+        learningAudit($db,$actor,isset($old)?'Edit note':'Create note','learning_notes',$id);return $id;
+    });
+}

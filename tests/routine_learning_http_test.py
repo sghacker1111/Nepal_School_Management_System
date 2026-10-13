@@ -59,17 +59,18 @@ with ERPHttpFixture() as app:
     app.request(questions,{'action_quick_add_class':1,'class_name':'Forbidden'},status=422)
     app.login('teacher')
     before=app.snapshot('class_routines');app.request(routine,grid,status=403);assert app.snapshot('class_routines')==before
-    body=app.request(f'{questions}?class={cls}');options=select(body,'subject');assert str(own) in options and 'Synthetic Optional' not in options # no teacher assigned after weekly requirements cleared it
+    body=app.request(f'{questions}?class={cls}');options=select(body,'subject');assert str(own) in options and 'Synthetic Optional' in options # Public viewing is separate from assigned-subject creation.
     other=app.db.execute('SELECT subject_id FROM class_subjects WHERE class_id=? AND subject_id<>? AND subject_id<>? LIMIT 1',(cls,own,opt)).fetchone()[0]
-    app.request(f'{questions}?class={cls}&subject={other}',status=404)
+    app.request(f'{questions}?class={cls}&subject={other}')
     app.request('/modules/learning/paper_generator.php',{'action_save_grid':1,'class_id':cls,'subject_id':other,'grid_name':'Forged','grid_data':'{}'},status=422)
     app.request(f'/modules/learning/question_grid.php?class={cls}&subject={own}')
     app.request(f'/modules/learning/question_grid.php?class={cls}&subject={other}',status=404)
-    app.request(f'/modules/learning/index.php?class_id={cls}&subject_id={other}',status=404)
+    app.request(f'/modules/learning/index.php?class_id={cls}&subject_id={other}')
     app.request(questions,{'action_quick_add_subject':1,'subject_name':'Forbidden'},status=422)
     app.request(f'{questions}?class[]={cls}',status=404)
     own_name=app.db.execute('SELECT name_en FROM subjects WHERE id=?',(own,)).fetchone()[0]
     other_name=app.db.execute('SELECT name_en FROM subjects WHERE id=?',(other,)).fetchone()[0]
+    app.db.execute("INSERT INTO chapters(school_id,class_id,subject_id,name) VALUES(1,?,?,'General')",(cls,own));app.db.commit()
     import_csv(app,[['Class','Subject','Question','Marks'],['Class 9',own_name,'Synthetic authorized import',2],['Class 8',own_name,'Synthetic forbidden class',2],['Class 9',other_name,'Synthetic forbidden subject',2],['','','Synthetic missing defaults',2]])
     assert app.db.execute("SELECT question_text FROM questions WHERE question_text LIKE 'Synthetic %' ORDER BY id").fetchall()==[('Synthetic authorized import',)]
     import_csv(app,[['Class','Subject','Question','Marks'],['','','Synthetic explicit defaults',2]],{'default_class_id':cls,'default_subject_id':own})
