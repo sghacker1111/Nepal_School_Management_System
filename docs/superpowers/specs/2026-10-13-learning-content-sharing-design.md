@@ -1,7 +1,7 @@
 # Learning content ownership, school publishing and shared curriculum
 
 Date: 2026-10-13 (Asia/Katmandu)
-Status: conversational design approved; written-specification review pending
+Status: written specification approved by the user on 2026-10-13; implementation-plan review pending
 Project: existing PHP Nepal School Management System, with SQLite and MySQL support
 
 ## 1. Intended outcome and confirmed decisions
@@ -155,4 +155,4 @@ Run PHP syntax checks, JavaScript syntax/client tests, existing import/catalog/p
 
 No live database migration, source push, merge or FTP deployment is performed by writing this specification. Implementation and any later release preserve database files, uploads and private server configuration. Source publication remains a separate explicitly requested step.
 
-This specification is ready for the user's written-spec review. After approval, prepare a test-led implementation plan and have the user review it and select execution method. Product code changes for this permission feature begin only after that checkpoint. Existing pending font/audio work remains separate and preserved.
+The user approved this written specification on 2026-10-13. Prepare a test-led implementation plan and have the user review it and confirm the execution method. Product code changes for this permission feature begin only after that checkpoint. Existing pending font/audio work remains separate and preserved.
