@@ -445,7 +445,7 @@ window.MathJax = {
                         <select name="subject_id" class="form-select" onchange="document.getElementById('paramForm').submit();" required>
                             <option value="">Choose Subject</option>
                             <?php foreach ($subjects as $s): ?>
-                            <option value="<?= $s['id'] ?>" <?= $subject_id == $s['id'] ? 'selected' : '' ?>><?= sanitize($s['name_en']) ?></option>
+                            <option value="<?= $s['id'] ?>" <?= $subject_id == $s['id'] ? 'selected' : '' ?>><?= sanitize($s['display_name']??$s['name_en']) ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>

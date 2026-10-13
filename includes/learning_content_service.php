@@ -52,6 +52,11 @@ function learningSaveNote(PDO $db,array $actor,array $input,?int $id=null):int {
         $title=$input['title']??'';$raw=$input['content']??'';
         if(!is_string($title)||trim($title)===''||mb_strlen($title)>255||!is_string($raw))throw new InvalidArgumentException('Enter a note title and valid content.');
         $content=questionImportContent($raw,'html');if(!questionImportHasContent($content))throw new InvalidArgumentException('Note content is empty after checking its formatting.');
+        if(isset($old)&&(int)$old['class_id']===$class&&(int)$old['subject_id']===$subject&&curriculumNameKey((string)($input['chapter']??''))===curriculumNameKey((string)$old['chapter'])&&curriculumNameKey((string)($input['topic']??''))===curriculumNameKey((string)($old['topic']??''))){
+            // Old clients send labels only. A title/body edit is not an association transfer.
+            $hasReference=false;foreach(['chapter_id','topic_id','catalog_chapter_id','catalog_topic_id'] as $key)if(!empty($input[$key]))$hasReference=true;
+            if(!$hasReference)foreach(['chapter_id','topic_id','catalog_chapter_id','catalog_topic_id'] as $key)$input[$key]=$old[$key]??null;
+        }
         $catalog=learningCatalogSelection($db,$actor,$class,$subject,$input,learningCanManageCatalog($actor));
         $c=$db->prepare('SELECT name FROM classes WHERE id=?');$c->execute([$class]);$s=$db->prepare('SELECT name_en FROM subjects WHERE id=?');$s->execute([$subject]);
         $catalog['topic']=$catalog['topic']??''; // Legacy label is NOT NULL; the relational topic remains optional.

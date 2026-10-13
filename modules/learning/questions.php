@@ -212,7 +212,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_import_excel']
                         if(!in_array((int)$resolvedClassId,array_map('intval',array_column($allClasses,'id')),true)){
                             $skippedCount++;$skippedReasons[]="Row {$rowNum}: choose an available class in your school.";continue;
                         }
-                        $allSubjects=$subjectCache[$resolvedClassId]??=learningSubjects($db,(int)$school_id,(int)$resolvedClassId,$learningRole,$learningActor);
+                        $allSubjects=$subjectCache[$resolvedClassId]??=array_values(array_filter(learningReadSubjects($db,$contentActor,(int)$resolvedClassId),static fn($s)=>learningCanCreate($db,$contentActor,(int)$resolvedClassId,(int)$s['id'])));
                         // Resolve Subject
                         $subVal = $getVal('subject');
                         $resolvedSubjectId = 0;
@@ -533,7 +533,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                 <select name="subject" class="form-select" <?= !$filter_class?'disabled':'' ?> onchange="this.form.submit()">
                     <option value=""><?= $filter_class?'All class subjects':'Choose a class first' ?></option>
                     <?php foreach ($subjects as $s): ?>
-                    <option value="<?= $s['id'] ?>" <?= $filter_subject == $s['id'] ? 'selected' : '' ?>><?= sanitize($s['name_en']) ?></option>
+                    <option value="<?= $s['id'] ?>" <?= $filter_subject == $s['id'] ? 'selected' : '' ?>><?= sanitize($s['display_name']??$s['name_en']) ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
@@ -695,7 +695,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                             <select name="subject_id" id="modalSubject" class="form-select" required onchange="updateChaptersDropdown('')">
                                 <option value="">-- First Select a Class --</option>
                                 <?php foreach ($subjects as $s): ?>
-                                <option value="<?= $s['id'] ?>"><?= sanitize($s['name_en']) ?></option>
+                                <option value="<?= $s['id'] ?>"><?= sanitize($s['display_name']??$s['name_en']) ?></option>
                                 <?php endforeach; ?>
                             </select>
                             <small class="text-muted">Filtered to show compulsory and active optional subjects for selected class.</small>
@@ -1014,7 +1014,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                             <select name="default_subject_id" id="importSubject" class="form-select form-select-sm">
                                 <option value="">-- Auto-detect from spreadsheet --</option>
                                 <?php foreach ($subjects as $s): ?>
-                                <option value="<?= $s['id'] ?>"><?= sanitize($s['name_en']) ?></option>
+                                <option value="<?= $s['id'] ?>"><?= sanitize($s['display_name']??$s['name_en']) ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>

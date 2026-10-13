@@ -25,12 +25,15 @@ function learningCatalogScope(PDO $db,int $school,int $class,int $subject):array
     return ['local'=>$scope,'shared'=>$matches[0]??null];
 }
 function learningCanManageCatalog(array $actor):bool {return $actor['role']==='super_admin'&&!$actor['read_only'];}
+function learningSharedScopeEligible(PDO $db,array $scope):bool {
+    $q=$db->prepare('SELECT cs.id FROM classes c JOIN class_subjects cs ON cs.class_id=c.id AND cs.school_id=0 JOIN subjects s ON s.id=cs.subject_id AND s.school_id=0 WHERE c.school_id=0 AND c.id=? AND s.id=? AND c.is_active=1 AND COALESCE(s.is_hidden,0)=0 AND (cs.is_active=1 OR cs.is_optional=1)');$q->execute([$scope['class_id'],$scope['subject_id']]);return (bool)$q->fetchColumn();
+}
 function learningCatalogChoices(PDO $db,array $actor,int $class,int $subject):array {
     require_once __DIR__.'/learning_content.php';
     $valid=false;foreach(learningReadSubjects($db,$actor,$class) as $s)if((int)$s['id']===$subject)$valid=true;
     if(!$valid)throw new InvalidArgumentException('Choose an available class subject.');
     $scopes=learningCatalogScope($db,$actor['school_id'],$class,$subject);$choices=[];
-    foreach(['shared','local'] as $source){$scope=$scopes[$source];if(!$scope||($source==='local'&&$scope['school_id']===0))continue;
+    foreach(['shared','local'] as $source){$scope=$scopes[$source];if(!$scope||($source==='local'&&$scope['school_id']===0)||($source==='shared'&&!learningSharedScopeEligible($db,$scope)))continue;
         $q=$db->prepare('SELECT * FROM chapters WHERE school_id=? AND class_id=? AND subject_id=? ORDER BY sort_order,id');$q->execute(array_values($scope));
         foreach($q->fetchAll(PDO::FETCH_ASSOC) as $r){$r['name']=curriculumName((string)$r['name']);$r['name_np']=curriculumName((string)($r['name_np']??''));$r['scope']=$source;$key=curriculumNameKey($r['name']);
             if(!isset($choices[$key])){$r['alias_ids']=[];$r['aliases']=[];$choices[$key]=$r;}
@@ -94,4 +97,17 @@ function learningCatalogSelection(PDO $db,array $actor,int $class,int $subject,a
     }
     if($actor['school_id']===0&&$selectedTopic)$result['topic_id']=$selectedTopic['alias']['id'];
     $result[$selectedAlias['scope']==='shared'?'catalog_chapter_id':'chapter_id']=$selectedAlias['id'];return $result;
+}
+/** Unresolved legacy note labels/references stay recoverable by super-admin review. */
+function learningNoteNeedsCatalogReview(PDO $db,array $actor,array $note):bool {
+    if(empty($note['class_id'])||empty($note['subject_id']))return true;
+    try{
+        $chapter=null;foreach(learningCatalogChapters($db,$actor,(int)$note['class_id'],(int)$note['subject_id']) as $r)if(curriculumNameKey($r['name'])===curriculumNameKey((string)$note['chapter'])){$chapter=$r;break;}
+        if(!$chapter)return true;
+        foreach(['chapter_id','catalog_chapter_id'] as $key)if(!empty($note[$key])&&!in_array((int)$note[$key],$chapter['alias_ids'],true))return true;
+        $topicLabel=curriculumNameKey((string)($note['topic']??''));$topicId=(int)($note['catalog_topic_id']?:$note['topic_id']);
+        if($topicLabel===''&&!$topicId)return false;
+        foreach(learningCatalogTopics($db,$actor,(int)$note['class_id'],(int)$note['subject_id'],(int)$chapter['id']) as $r)if(($topicLabel===''||curriculumNameKey($r['name'])===$topicLabel)&&(!$topicId||in_array($topicId,$r['alias_ids'],true)))return false;
+        return true;
+    }catch(InvalidArgumentException $e){return true;}
 }

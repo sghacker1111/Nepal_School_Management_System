@@ -64,7 +64,7 @@ if($selected_class&&$selected_subject&&$selected_chapter){
     catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
 }
 $noteTopics=[];foreach($chapterRows as $row)if($row['name']===$selected_chapter)$noteTopics=learningCatalogTopics($db,$contentActor,$class_id,$subject_id,(int)$row['id']);
-if($reviewLegacy){$notes=array_values(array_filter(learningContentList($db,$contentActor,'learning_notes',[]),static fn($n)=>!$n['class_id']||!$n['subject_id']));$questions=[];}
+if($reviewLegacy){$notes=array_values(array_filter(learningContentList($db,$contentActor,'learning_notes',[]),static fn($n)=>learningNoteNeedsCatalogReview($db,$contentActor,$n)));foreach($notes as &$note)$note['needs_catalog_review']=true;unset($note);$questions=[];}
 $pageTitle = 'Learning Hub';
 $activePage = 'learning';
 
@@ -161,7 +161,7 @@ window.MathJax = {
                 <select name="subject_id" class="form-select" onchange="this.form.elements.chapter.value='';this.form.submit();" required>
                     <option value="">Choose Subject</option>
                     <?php foreach ($subjects as $s): ?>
-                    <option value="<?= $s['id'] ?>" <?= $subject_id == $s['id'] ? 'selected' : '' ?>><?= sanitize($s['name_en']) ?></option>
+                    <option value="<?= $s['id'] ?>" <?= $subject_id == $s['id'] ? 'selected' : '' ?>><?= sanitize($s['display_name']??$s['name_en']) ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
@@ -323,6 +323,7 @@ window.MathJax = {
         <form method="POST" action="" onsubmit="tinymce.triggerSave()">
             <input type="hidden" name="action_note" id="modalActionNote" value="add">
             <input type="hidden" name="note_id" id="modalNoteId">
+            <?php foreach(['chapter_id','topic_id','catalog_chapter_id','catalog_topic_id'] as $ref): ?><input type="hidden" name="<?= $ref ?>" id="noteRef_<?= $ref ?>"><?php endforeach; ?>
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="modalNoteTitle">Add Study Note</h5>
@@ -332,8 +333,8 @@ window.MathJax = {
                     <div class="row g-3">
                         <input type="hidden" name="class_id" value="<?= $class_id ?>"><input type="hidden" name="subject_id" value="<?= $subject_id ?>">
                         <div class="col-12"><p class="text-muted"><?= sanitize($selected_class['name']) ?> · <?= sanitize($selected_subject['name_en']) ?></p></div>
-                        <div class="col-md-6"><label class="form-label">Chapter</label><select name="chapter" id="modalNoteChapter" class="form-select" required><?php foreach($chapters as $ch): ?><option value="<?= sanitize($ch) ?>" <?= $selected_chapter===$ch?'selected':'' ?>><?= sanitize($ch) ?></option><?php endforeach; ?></select><div class="form-text">Select another chapter in the filter before adding notes for it.</div></div>
-                        <div class="col-md-6"><label class="form-label">Topic (optional)</label><select name="topic" id="modalNoteTopic" class="form-select"><option value="">No topic</option><?php foreach($noteTopics as $t): ?><option value="<?= sanitize($t['name']) ?>"><?= sanitize($t['name']) ?></option><?php endforeach; ?></select></div>
+                        <div class="col-md-6"><label class="form-label">Chapter</label><select name="chapter" id="modalNoteChapter" class="form-select" required onchange="clearNoteReferences();document.getElementById('modalNoteTopic').value='';"><?php foreach($chapters as $ch): ?><option value="<?= sanitize($ch) ?>" <?= $selected_chapter===$ch?'selected':'' ?>><?= sanitize($ch) ?></option><?php endforeach; ?></select><div class="form-text">Select another chapter in the filter before adding notes for it.</div></div>
+                        <div class="col-md-6"><label class="form-label">Topic (optional)</label><select name="topic" id="modalNoteTopic" class="form-select" onchange="clearNoteReferences()"><option value="">No topic</option><?php foreach($noteTopics as $t): ?><option value="<?= sanitize($t['name']) ?>"><?= sanitize($t['name']) ?></option><?php endforeach; ?></select></div>
                         <div class="col-12"><label class="form-label">Visibility</label><select name="visibility" id="modalNoteVisibility" class="form-select"><option value="private">Private</option><option value="public"><?= $is_admin?'Shared catalog':'Public within this school' ?></option></select></div>
                         <div class="col-12">
                             <label class="form-label">Note Title *</label>
@@ -383,12 +384,13 @@ $(document).ready(function() {
 });
 
 function showAddNoteModal() {
+    clearNoteReferences();
     document.getElementById('modalNoteVisibility').value=<?= json_encode($is_admin?'public':'private') ?>;
     document.getElementById('modalActionNote').value = 'add';
     document.getElementById('modalNoteId').value = '';
     document.getElementById('modalNoteTitle').innerText = 'Add Study Note';
 
-    document.getElementById('modalNoteChapter').value = '<?= sanitize($selected_chapter) ?>';
+    document.getElementById('modalNoteChapter').value = <?= json_encode($selected_chapter,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;
     document.getElementById('modalNoteTopic').value = '';
     document.getElementById('modalNoteTitleInput').value = '';
 
@@ -402,12 +404,15 @@ function showAddNoteModal() {
 }
 
 function editNote(note) {
+    clearNoteReferences();
+    if(!note.needs_catalog_review)for(const key of ['chapter_id','topic_id','catalog_chapter_id','catalog_topic_id'])document.getElementById('noteRef_'+key).value=note[key]||'';
     document.getElementById('modalNoteVisibility').value=note.visibility;
     document.getElementById('modalActionNote').value = 'edit';
     document.getElementById('modalNoteId').value = note.id;
     document.getElementById('modalNoteTitle').innerText = 'Edit Study Note';
 
     document.getElementById('modalNoteChapter').value = note.chapter;
+    if(note.needs_catalog_review)document.getElementById('modalNoteChapter').value=<?= json_encode($selected_chapter,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;
     document.getElementById('modalNoteTopic').value = note.topic;
     document.getElementById('modalNoteTitleInput').value = note.title;
 
@@ -419,6 +424,7 @@ function editNote(note) {
 
     noteModalObj.show();
 }
+function clearNoteReferences(){for(const key of ['chapter_id','topic_id','catalog_chapter_id','catalog_topic_id'])document.getElementById('noteRef_'+key).value='';}
 </script>
 <?php endif; ?>
 

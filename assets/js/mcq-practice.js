@@ -52,7 +52,7 @@
  async function loadSubjects(){
   const version=++loadVersion;catalog=[];selected.clear();error();const select=el('practiceSubject');select.replaceChildren(new Option('Choose subject',''));select.disabled=true;clearCatalog();
   if(!el('practiceClass').value)return;
-  try{const data=await request('subjects',{class_id:el('practiceClass').value});if(version!==loadVersion)return;data.subjects.forEach(s=>select.add(new Option(s.name_en+(s.name_np?' · '+s.name_np:''),s.id)));select.disabled=false;}catch(e){if(version===loadVersion)error(e.message);}
+  try{const data=await request('subjects',{class_id:el('practiceClass').value});if(version!==loadVersion)return;data.subjects.forEach(s=>select.add(new Option((s.display_name||s.name_en)+(s.name_np?' · '+s.name_np:''),s.id)));select.disabled=false;}catch(e){if(version===loadVersion)error(e.message);}
  }
  function clearCatalog(){options(el('practiceChapter'),[],'All chapters');options(el('practiceTopic'),[],'All topics');el('practiceSearch').value='';['practiceChapter','practiceTopic','practiceSearch'].forEach(id=>el(id).disabled=true);renderChoices();}
  async function loadCatalog(){

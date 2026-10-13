@@ -1,7 +1,7 @@
 # Learning content ownership, school publishing and shared curriculum
 
 Date: 2026-10-13 (Asia/Katmandu)
-Status: written specification approved by the user on 2026-10-13; implementation-plan review pending
+Status: approved and implemented locally; independent GPT-6.1 Sol review completed and review fixes regression-tested on 2026-10-13; not deployed
 Project: existing PHP Nepal School Management System, with SQLite and MySQL support
 
 ## 1. Intended outcome and confirmed decisions
@@ -20,9 +20,9 @@ The user confirmed these rules:
 
 This is an architectural change because the same records feed Question Bank, curriculum selectors, Learning Hub, MCQ practice and two paper-generation flows. Visibility must be enforced by the backend across all these readers, not merely by hiding edit buttons.
 
-The already implemented Kokila 20 pt, larger practice text, animations and louder-sound changes are separate pending work. Preserve those changes. This specification does not claim they have been committed, pushed or deployed.
+The previously pending Kokila 20 pt, larger practice text, animations and louder-sound changes were preserved, verified and committed with this implementation. They have not been pushed or deployed in this execution.
 
-## 2. Existing code and observed gaps
+## 2. Pre-implementation code and observed gaps
 
 Inspected source baseline: commit 7966643986213003c1b71dbae57bbc25d2944cfa, plus pending readability edits in the existing linked worktree.
 
@@ -155,4 +155,4 @@ Run PHP syntax checks, JavaScript syntax/client tests, existing import/catalog/p
 
 No live database migration, source push, merge or FTP deployment is performed by writing this specification. Implementation and any later release preserve database files, uploads and private server configuration. Source publication remains a separate explicitly requested step.
 
-The user approved this written specification on 2026-10-13. Prepare a test-led implementation plan and have the user review it and confirm the execution method. Product code changes for this permission feature begin only after that checkpoint. Existing pending font/audio work remains separate and preserved.
+The user approved this written specification and the Native implementation plan on 2026-10-13. Tasks 1–7 are implemented and verified. Astra could not begin the final review because of its usage limit; the user explicitly selected GPT-6.1 Sol, which completed the independent review. Its important findings were fixed in one regression-led pass and the full author verification rerun passed. See [the handoff report](../../learning-sharing-handoff-2026-10-13.md) for evidence, deferred findings and release boundaries.

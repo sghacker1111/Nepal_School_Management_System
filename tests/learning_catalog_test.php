@@ -7,6 +7,9 @@ $owner=learningActor($db,$f['ids']['teacher']);$admin=learningActor($db,$f['ids'
 $scope=learningCatalogScope($db,1,$f['class'],$f['subject'])['shared'];
 $chapter=curriculumEnsureChapter($db,0,$scope['class_id'],$scope['subject_id'],'Brand new shared chapter');$topic=curriculumEnsureTopic($db,0,$chapter,'Shared topic');
 $rows=learningCatalogChapters($db,$owner,$f['class'],$f['subject']);erpCheck(in_array($chapter,array_column($rows,'id')),'New shared chapter visible immediately');
+$db->exec('UPDATE subjects SET is_hidden=1 WHERE id='.$scope['subject_id']);
+erpEqual(in_array($chapter,array_column(learningCatalogChapters($db,$owner,$f['class'],$f['subject']),'id')),false,'Hidden shared subject catalog excluded from school');
+$db->exec('UPDATE subjects SET is_hidden=0 WHERE id='.$scope['subject_id']);
 $selected=learningCatalogSelection($db,$owner,$f['class'],$f['subject'],['chapter'=>'Brand new shared chapter','catalog_topic_id'=>$topic]);
 erpEqual($selected['catalog_topic_id'],$topic,'Global topic reference');erpEqual($selected['topic_id'],null,'Never write global into local topic');
 erpReject(fn()=>learningCatalogSelection($db,$owner,$f['class'],$f['subject'],['chapter'=>'Unknown chapter'],true),'School cannot create even with allowCreate');

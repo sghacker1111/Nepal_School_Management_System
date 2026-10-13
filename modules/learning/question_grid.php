@@ -125,7 +125,7 @@ ob_start();
                 <select name="subject" class="form-select" required onchange="this.form.submit()">
                     <option value="">Choose Subject</option>
                     <?php foreach ($subjects as $s): ?>
-                    <option value="<?= $s['id'] ?>" <?= $subject_id == $s['id'] ? 'selected' : '' ?>><?= sanitize($s['name_en']) ?></option>
+                    <option value="<?= $s['id'] ?>" <?= $subject_id == $s['id'] ? 'selected' : '' ?>><?= sanitize($s['display_name']??$s['name_en']) ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
