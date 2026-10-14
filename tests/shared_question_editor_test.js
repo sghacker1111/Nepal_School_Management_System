@@ -1,0 +1,33 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const sharedPath='assets/js/question-editor.js';
+assert(fs.existsSync(sharedPath),'Exam Questions and Question Bank need one shared full editor');
+const nodes=new Map();
+const element=id=>{if(!nodes.has(id))nodes.set(id,{value:'',listeners:{},addEventListener(e,f){this.listeners[e]=f;}});return nodes.get(id);};
+let config,shown=0,hidden=0;
+const modal={show(){shown++;},hide(){hidden++;}};
+const editorMap=new Map(),context={window:{APP_URL:'http://localhost',tinymce:{init(c){config=c;},get:id=>editorMap.get(id)}},bootstrap:{Modal:class{constructor(){return modal;}}},document:{readyState:'complete',getElementById:element,createElement:()=>({textContent:'',style:{}})}};
+vm.runInNewContext(fs.readFileSync(sharedPath,'utf8'),context);
+context.window.SchoolQuestionEditor.init('.exam-rich');
+assert.equal(config.selector,'.exam-rich');
+assert(config.height>=400,'Wrapped toolbars must leave a usable multi-line writing area');
+for(const control of ['fontfamily','fontsize','forecolor','backcolor','table','math_tex','fullscreen','code'])assert(config.toolbar.includes(control),control);
+assert.equal(config.toolbar_mode,'wrap','The same complete toolbar is usable in narrow bilingual columns');
+assert.equal(config.branding,false);
+assert.match(config.content_style,/font-size:\s*20pt\s*!important/);
+function editor(id,name,nepali){
+ const doc={body:{classList:{add(c){this.added=c;}},style:{}},head:{appendChild(){}},createElement:()=>({})};
+ const e={id,handlers:{},buttons:{},saved:0,inserted:[],on(events,f){events.split(' ').forEach(ev=>this.handlers[ev]=f);},getElement:()=>({name,classList:{contains:()=>nepali}}),getDoc:()=>doc,getWin:()=>({}),save(){this.saved++;},selection:{getContent:()=>''},insertContent(html){this.inserted.push(html);},ui:{registry:{addButton(key,c){e.buttons[key]=c;}}}};
+ editorMap.set(id,e);config.setup(e);e.handlers.init();return {e,doc};
+}
+const en=editor('exam_question_text','question_text',false),np=editor('exam_question_text_np','question_text_np',true);
+assert.equal(en.doc.body.style.fontSize,'18px');assert.equal(np.doc.body.style.fontSize,'20pt');
+assert.equal(np.doc.body.classList.added,'nepali-editor','Exam snake-case fields use the same Nepali font handling');
+np.e.buttons.math_tex.onAction();assert.equal(shown,1);
+element('texInput').value='<img src=x onerror=alert(1)> नेपाल';element('texDisplayMode').value='inline';
+element('btnInsertTex').listeners.click();
+assert.equal(np.e.saved,1);assert.equal(hidden,1);
+assert(np.e.inserted[0].includes('&lt;img'),'TeX input is escaped both as an attribute and display text');
+assert(!np.e.inserted[0].includes('<img'),'A formula must never insert raw markup');
+for(const page of ['modules/learning/questions.php','modules/learning/exam_questions.php'])assert.match(fs.readFileSync(page,'utf8'),/includes\/question_editor\.php/,'Both pages load the same editor component');
+assert(!fs.readFileSync('assets/js/exam-questions.js','utf8').includes('tinymce.init('),'No separate reduced exam editor remains');
+console.log('Shared question editor passed: full toolbar, English/Nepali parity, source/fullscreen/TeX, and safe formula insertion.');

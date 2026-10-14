@@ -1,7 +1,7 @@
 /* Client behaviour with a mock DOM; API grading is separately tested over HTTP. */
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 class Node {
- constructor(){this.value='';this.textContent='';this.innerHTML='';this.hidden=false;this.disabled=false;this.children=[];this.listeners={};this.attrs={};this.dataset={};this.style={};this.className='';this.tagName='DIV';this.classList={add:(c)=>{this.className+=' '+c;},toggle:(c,on)=>{if(on)this.className+=' '+c;}};}
+ constructor(){this.value='';this.textContent='';this.innerHTML='';this.hidden=false;this.disabled=false;this.children=[];this.listeners={};this.attrs={};this.dataset={};this.style={setProperty(k,v){this[k]=v;},removeProperty(k){delete this[k];}};this.className='';this.tagName='DIV';this.classList={add:(c)=>{this.className+=' '+c;},toggle:(c,on)=>{this.className=this.className.split(' ').filter(n=>n!==c).join(' ');if(on)this.className+=' '+c;}};}
  addEventListener(event,callback){this.listeners[event]=callback;}
  append(...nodes){this.children.push(...nodes);}
  replaceChildren(...nodes){this.children=nodes;}
@@ -33,6 +33,7 @@ const context={document:doc,window:{AudioContext,matchMedia:()=>({matches:reduce
 }};
 el('practiceApp').requestFullscreen=async()=>{doc.fullscreenElement=el('practiceApp');doc.listeners.fullscreenchange();};
 doc.exitFullscreen=async()=>{doc.fullscreenElement=null;doc.listeners.fullscreenchange();};
+el('practiceStage').getBoundingClientRect=()=>({width:1600,height:900});
 vm.runInNewContext(fs.readFileSync('assets/js/mcq-practice.js','utf8'),context);
 async function fire(id,event='click',arg={preventDefault(){}}){await el(id).listeners[event](arg);}
 (async()=>{
@@ -44,7 +45,10 @@ async function fire(id,event='click',arg={preventDefault(){}}){await el(id).list
  await fire('practiceSound');assert.equal(stores.get('school.practice.sound'),'off');assert.equal(el('practiceSound').attrs['aria-pressed'],'false');
  await fire('practiceAgain');await fire('practiceSetupForm','submit');before=tones.length;await el('practiceOptions').children[1].listeners.click();assert.equal(tones.length,before,'Mute suppresses audio');
  await fire('practiceReviewBack');assert.equal(requests.at(-1).action,'reset');assert.equal(el('practiceSetup').hidden,false,'Review Back restores class/subject selection');assert.equal(el('practiceSummary').hidden,true);
- await fire('practiceFullscreen');assert.equal(el('practiceFullscreen').textContent,'Exit full screen');await fire('practiceFullscreen');assert.equal(el('practiceFullscreen').textContent,'Full screen');
+ await fire('practiceSetupForm','submit');await fire('practiceFullscreen');assert.equal(el('practiceFullscreen').textContent,'Exit full screen');
+ assert.equal(el('practiceApp').style['--practice-stage-width'],'1600px','Fullscreen uses the full available 16:9 stage, not a 1000px box');
+ assert.equal(el('practiceApp').style['--practice-stage-height'],'900px');
+ await fire('practiceFullscreen');assert.equal(el('practiceFullscreen').textContent,'Full screen');assert.equal(el('practiceApp').style['--practice-stage-width'],undefined,'Exit fullscreen clears temporary sizing');
  assert(gains.includes(.22)&&gains.includes(.28),'Both answer sounds use the louder peaks');assert(gains.every(n=>n<=.28),'Audio envelopes retain clipping headroom');
  assert(animations.length>0&&animations.every(a=>a.options.duration===300),'Question panels use smooth short animations');
  reducedMotion=true;before=animations.length;await fire('practiceSetupForm','submit');assert.equal(animations.length,before,'Reduced-motion preference skips panel animation');

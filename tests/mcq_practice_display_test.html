@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Practice rich-text display regression</title>
+<link rel="stylesheet" href="../assets/css/style.css">
+<link rel="stylesheet" href="../assets/css/workspace.css">
+<link rel="stylesheet" href="../assets/css/mcq-practice.css?display-regression=2">
+<main class="mcq-practice">
+  <h1>Practice rich-text display regression</h1>
+  <div class="practice-question">
+    <p><span id="question-normal" style="font-size:10px;font-weight:normal">Identify the </span><strong id="question-bold">bold word</strong>.</p>
+    <p><span id="question-nepali" class="font-nepali"><span id="nested-nepali">नेपाली</span> <strong id="nepali-bold">शब्द</strong></span> / <span id="question-lang-ne" lang="ne">नेपाली भाषा</span></p>
+  </div>
+  <button class="practice-option" type="button">
+    <span class="practice-option-body"><span id="option-normal" style="font-size:9px;font-weight:normal">Normal word</span> / <b id="option-bold">bold word</b> / <span id="option-nepali" class="font-nepali">नेपाली विकल्प</span></span>
+  </button>
+  <pre id="test-result" role="status">Checking computed styles…</pre>
+</main>
+<script>
+window.addEventListener('load', () => {
+  const failures = [], results = [];
+  const style = id => getComputedStyle(document.getElementById(id));
+  const check = (ok, name) => { results.push((ok ? 'PASS: ' : 'FAIL: ') + name); if (!ok) failures.push(name); };
+  check(parseFloat(style('question-normal').fontSize) >= 24, 'Legacy inline small question size is enlarged');
+  check(parseFloat(style('option-normal').fontSize) >= 19, 'Legacy inline small option size is enlarged');
+  check(+style('question-bold').fontWeight > +style('question-normal').fontWeight, 'Question bold emphasis remains distinguishable');
+  check(+style('option-bold').fontWeight > +style('option-normal').fontWeight, 'Option bold emphasis remains distinguishable');
+  check(style('nepali-bold').textDecorationLine.includes('underline'), 'Nepali semantic emphasis remains visible with static 400/700 font faces');
+  for (const id of ['question-nepali', 'nested-nepali', 'question-lang-ne', 'option-nepali']) {
+    check(style(id).fontFamily.includes('Kokila'), id + ' retains the Nepali font');
+    check(parseFloat(style(id).fontSize) >= 34, id + ' retains the larger Nepali size');
+  }
+  const result = document.getElementById('test-result');
+  result.textContent = (failures.length ? 'FAILED' : 'PASSED') + '\n' + results.join('\n');
+  result.dataset.passed = String(failures.length === 0);
+});
+</script>
+</html>

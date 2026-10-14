@@ -39,9 +39,8 @@ if(isset($_SESSION['mcq_practice'])){
     try{practiceValidateSession($db,$school,$role,$actor,$_SESSION['mcq_practice']);$current=practicePublicState($_SESSION['mcq_practice']);}
     catch(InvalidArgumentException $e){unset($_SESSION['mcq_practice']);}
 }
-$pageTitle='Practice MCQs';$activePage='practice_mcqs';ob_start();
+$pageTitle='Practice MCQs';$activePage='practice_mcqs';$pageStyles=['/assets/css/mcq-practice.css?v='.(int)filemtime(__DIR__.'/../../assets/css/mcq-practice.css')];ob_start();
 ?>
-<link rel="stylesheet" href="<?= APP_URL ?>/assets/css/mcq-practice.css">
 <script>window.MathJax={tex:{inlineMath:[['\\(','\\)'],['$','$']],displayMath:[['\\[','\\]'],['$$','$$']],processEscapes:true}};</script>
 <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 <section id="practiceApp" class="mcq-practice" aria-label="MCQ practice">
@@ -61,6 +60,7 @@ $pageTitle='Practice MCQs';$activePage='practice_mcqs';ob_start();
    <div class="practice-start"><p id="practiceAvailable" role="status">Choose a class and subject to load MCQs.</p><button id="practiceStart" class="btn btn-primary btn-lg" type="submit" disabled>Start practice <span aria-hidden="true">→</span></button></div>
   </form>
  </div>
+ <div id="practiceStage" class="practice-stage" hidden>
  <div id="practiceQuiz" class="practice-panel practice-quiz" hidden>
   <div class="practice-progress-meta"><strong id="practicePosition"></strong><span id="practiceLiveScore"></span></div><div class="practice-progress" role="progressbar" id="practiceProgress" aria-label="Practice progress" aria-valuemin="0" aria-valuemax="100"><span id="practiceProgressFill"></span></div>
   <p id="practiceQuizTitle" class="practice-subject"></p><h2 id="practiceQuestion" class="practice-question" tabindex="-1"></h2><div id="practiceQuestionNp" class="practice-nepali font-nepali"></div>
@@ -69,8 +69,9 @@ $pageTitle='Practice MCQs';$activePage='practice_mcqs';ob_start();
   <div class="practice-next"><button id="practiceLeave" class="btn btn-outline-secondary" type="button">End practice</button><button id="practiceNext" class="btn btn-primary" type="button" hidden>Next question →</button></div>
  </div>
  <div id="practiceSummary" class="practice-panel practice-summary" hidden><span class="practice-eyebrow">PRACTICE COMPLETE</span><h2>Keep learning, one question at a time.</h2><div id="practiceScore" class="practice-score"></div><p id="practiceSummaryText"></p><button id="practiceAgain" class="btn btn-primary" type="button">Back to class &amp; subject selection</button><details class="practice-review"><summary>Review your answers</summary><div id="practiceReview"></div><button id="practiceReviewBack" class="btn btn-outline-primary mt-3" type="button">Back to class &amp; subject selection</button></details></div>
+ </div>
  <noscript><p class="alert alert-info">Enable JavaScript to use interactive MCQ practice.</p></noscript>
 </section>
 <script id="practiceBootstrap" type="application/json"><?= json_encode(['current'=>$current,'limit'=>MCQ_PRACTICE_LIMIT],JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_INVALID_UTF8_SUBSTITUTE) ?></script>
-<script defer src="<?= APP_URL ?>/assets/js/mcq-practice.js"></script>
+<script defer src="<?= APP_URL ?>/assets/js/mcq-practice.js?v=<?= (int)filemtime(__DIR__.'/../../assets/js/mcq-practice.js') ?>"></script>
 <?php $content=ob_get_clean();include __DIR__.'/../../includes/header.php';

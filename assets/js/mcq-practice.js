@@ -70,6 +70,7 @@
  function renderPractice(state,focus=true){
   window.MathJax?.typesetClear?.([root]);
   current=state;error();el('practiceSetup').hidden=!!state;el('practiceQuiz').hidden=!state||state.complete;el('practiceSummary').hidden=!state?.complete;
+  el('practiceStage').hidden=!state;queueStageFit();
   if(!state)return;
   if(state.complete){
    el('practiceScore').textContent=state.score+' / '+state.total;el('practiceSummaryText').textContent=`${Math.round(state.score/state.total*100)}% correct · ${state.total-state.score} incorrect. These are practice results.`;
@@ -104,7 +105,22 @@
  el('practiceSelectAll').addEventListener('click',()=>{selected=new Set(pool().slice(0,boot.limit).map(q=>String(q.id)));renderChoices();});el('practiceClear').addEventListener('click',()=>{selected.clear();renderChoices();});
  el('practiceSound').addEventListener('click',()=>{sound=!sound;try{localStorage.setItem('school.practice.sound',sound?'on':'off');}catch{}unlockSound();soundLabel();});
  el('practiceFullscreen').addEventListener('click',async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else if(root.requestFullscreen)await root.requestFullscreen();else error('Full screen is not available in this browser.');}catch{error('Full screen is not available in this browser. You can continue practicing here.');}});
- document.addEventListener('fullscreenchange',()=>{el('practiceFullscreen').textContent=document.fullscreenElement?'Exit full screen':'Full screen';});
+ function fitPracticeStage(){
+  const fullscreen=document.fullscreenElement===root;
+  root.classList.toggle('practice-is-fullscreen',fullscreen);el('practiceFullscreen').textContent=fullscreen?'Exit full screen':'Full screen';
+  root.style.removeProperty('--practice-stage-width');root.style.removeProperty('--practice-stage-height');
+  if(!fullscreen||el('practiceStage').hidden)return;
+  const bounds=el('practiceStage').getBoundingClientRect?.();if(!bounds?.width||!bounds.height)return;
+  // Landscape boards fit the largest 16:9 rectangle available after the toolbar.
+  // Portrait/mobile screens use fluid stacked content, never a tiny letterbox.
+  if(bounds.width<768||bounds.width<bounds.height)return;
+  const width=Math.min(bounds.width,bounds.height*16/9);
+  root.style.setProperty('--practice-stage-width',width+'px');root.style.setProperty('--practice-stage-height',width*9/16+'px');
+ }
+ function queueStageFit(){if(window.requestAnimationFrame)window.requestAnimationFrame(fitPracticeStage);else fitPracticeStage();}
+ document.addEventListener('fullscreenchange',queueStageFit);
+ window.addEventListener?.('resize',queueStageFit);
+ if(window.ResizeObserver)new window.ResizeObserver(queueStageFit).observe(el('practiceStage'));
  document.addEventListener('keydown',event=>{if(!current||current.complete||current.feedback||busy||event.altKey||event.ctrlKey||event.metaKey||/INPUT|SELECT|TEXTAREA/.test(event.target.tagName))return;const letter={'1':'A','2':'B','3':'C','4':'D'}[event.key];if(letter){event.preventDefault();answer(letter);}});
  soundLabel();if(el('practiceClass').value)loadSubjects();renderPractice(current,false);
 })();

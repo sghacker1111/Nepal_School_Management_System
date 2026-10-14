@@ -18,7 +18,7 @@
   const type=()=>{const hidden=field('examType').value!=='MCQ';field('examOptions').hidden=hidden;field('examOptions').querySelectorAll('textarea,select').forEach(e=>e.disabled=hidden);};field('examType').addEventListener('change',type);type();
   form.addEventListener('submit',event=>{if(window.tinymce)tinymce.triggerSave();if(field('examVisibility').value==='private')field('examRelease').checked=false;if(field('examRelease').checked&&!window.confirm('Release this exam question, its options and model answer to enrolled students?'))event.preventDefault();});
   subjects(data.form.subject_id||'',data.form.chapter||'',data.form.catalog_topic_id||data.form.topic_id||'');
-  if(window.tinymce)tinymce.init({selector:'.exam-rich',height:220,menubar:false,plugins:'code lists table link',toolbar:'undo redo | bold italic superscript subscript | bullist numlist table | code',content_style:'body{font-family:Arial,sans-serif;font-size:18px} p{margin:.3em 0}',setup(editor){editor.on('init',()=>{if(editor.getElement().classList.contains('font-nepali')){editor.getBody().style.fontFamily='Kokila, Noto Sans Devanagari, sans-serif';editor.getBody().style.fontSize='20pt';}});}});
+  window.SchoolQuestionEditor?.init('.exam-rich');
  };
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
 })();
