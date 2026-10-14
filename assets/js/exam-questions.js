@@ -1,5 +1,12 @@
 (function(){'use strict';
  const start=()=>{
+  const importForm=document.getElementById('examImportForm'),importMode=document.getElementById('examImportMode');
+  if(importForm&&importMode){
+   document.querySelectorAll('[data-exam-import-mode]').forEach(link=>link.addEventListener('click',()=>{importMode.value=link.dataset.examImportMode;}));
+   let busy=false;const button=importForm.querySelector('button[type="submit"]');
+   importForm.addEventListener('submit',event=>{if(busy){event.preventDefault();return;}busy=true;importForm.setAttribute('aria-busy','true');if(button){button.disabled=true;button.textContent='Importing questions…';}});
+   window.addEventListener('pageshow',()=>{busy=false;importForm.removeAttribute('aria-busy');if(button){button.disabled=false;button.textContent='Upload & Import Exam Questions';}});
+  }
   const data=window.examQuestionData,form=document.getElementById('examQuestionForm');if(!data||!form)return;
   const field=id=>document.getElementById(id);let version=0,catalog={chapters:[],topics:{}};
   function topics(selected=''){

@@ -4,20 +4,45 @@ require_once __DIR__.'/../../includes/database.php';
 require_once __DIR__.'/../../includes/auth.php';
 require_once __DIR__.'/../../includes/functions.php';
 require_once __DIR__.'/../../includes/learning_content_service.php';
+require_once __DIR__.'/../../includes/exam_question_import.php';
 Auth::requireRole(['super_admin','school_admin','teacher','student']);Auth::requireAccess('exam_questions');
 $db=getDB();$actor=learningActor($db,(int)Auth::getUserId(),(int)Auth::getSchoolId(),Auth::isReadOnly());
 $isStudent=$actor['role']==='student';$purpose=$isStudent?'exam_view':'exam_bank';
 $class=(int)($_POST['class_id']??$_GET['class_id']??0);$subject=(int)($_POST['subject_id']??$_GET['subject_id']??0);
 $classes=learningReadClasses($db,$actor);if($isStudent&&!$class)$class=(int)($classes[0]['id']??0);
 $subjects=learningReadSubjects($db,$actor,$class);$chapters=[];$topicRows=[];$error='';$edit=null;
+$writerSubjects=examImportSubjects($db,$actor,$classes);
+$canCreate=!$isStudent&&!$actor['read_only']&&Auth::canAddQuestions()&&(bool)$writerSubjects;
 if($subject){try{$chapters=learningCatalogChapters($db,$actor,$class,$subject);}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),404);}}
 if(($_GET['action']??'')==='catalog'){
     header('Content-Type: application/json');$allTopics=[];foreach($chapters as $c)$allTopics[(int)$c['id']]=learningCatalogTopics($db,$actor,$class,$subject,(int)$c['id']);
     echo json_encode(['chapters'=>$chapters,'topics'=>$allTopics]);exit;
 }
+if(($_GET['action']??'')==='download_template'){
+    if(!$canCreate)denySchoolRequest('Your account cannot download exam question import samples.',403);
+    try{
+        $mode=questionImportFormat($_GET['content_mode']??'normal');$format=$_GET['format']??'xlsx';
+        if(!is_string($format)||!in_array($format,['xlsx','csv'],true))throw new InvalidArgumentException('Choose Excel (.xlsx) or CSV.');
+        [$headers,$sampleRows]=examImportSample($db,$actor,$mode,$class,$subject);
+        $binary=$format==='xlsx'?XlsxHelper::generateXlsx($headers,$sampleRows,'Exam Questions',[8,9],true):XlsxHelper::generateCsv($headers,$sampleRows);
+        header('Content-Type: '.($format==='xlsx'?'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':'text/csv; charset=UTF-8'));
+        header('Content-Disposition: attachment; filename="exam-questions-'.$mode.'-sample.'.$format.'"');
+        header('Cache-Control: private, no-store');echo $binary;exit;
+    }catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
+    catch(Throwable $e){denySchoolRequest(schoolPublicError($e),500);}
+}
 if($_SERVER['REQUEST_METHOD']==='POST'){
     try{
-        $action=$_POST['action']??'';if(!is_string($action)||!in_array($action,['add','edit','set_visibility','archive','restore'],true))throw new InvalidArgumentException('Choose one exam question action.');
+        $action=$_POST['action']??'';if(!is_string($action)||!in_array($action,['add','edit','set_visibility','archive','restore','import'],true))throw new InvalidArgumentException('Choose one exam question action.');
+        if($action==='import'){
+            if(!$canCreate)denySchoolRequest('Your account cannot import exam questions.',403);
+            $mode=questionImportFormat($_POST['import_content_mode']??'normal');
+            $visibility=learningVisibility($_POST['import_visibility']??($actor['school_id']===0?'public':'private'));
+            $result=examImportQuestions($db,$actor,examImportReadUpload($_FILES['excel_file']??[]),$mode,$visibility);
+            $message='Successfully imported '.$result['saved'].' exam questions. Imported questions are staff-only.';
+            if($result['skipped'])$message.=' '.$result['skipped'].' row(s) skipped. '.implode(' ',$result['errors']).($result['skipped']>count($result['errors'])?' Only the first 10 errors are shown.':'');
+            redirect(APP_URL.'/modules/learning/exam_questions.php?'.http_build_query(['class_id'=>$class,'subject_id'=>$subject]),$message,$result['skipped']?'warning':'success');
+        }
         $id=$action==='add'?null:learningId($_POST['question_id']??null);
         if(in_array($action,['add','edit'],true))learningSaveQuestion($db,$actor,$_POST,$id,'exam');
         elseif($action==='set_visibility')learningSetVisibility($db,$actor,'questions',$id,learningVisibility($_POST['visibility']??null),'exam');
@@ -42,9 +67,7 @@ if($class)$filters['class_id']=$class;if($subject)$filters['subject_id']=$subjec
 try{$questions=learningContentList($db,$actor,'questions',$filters,$purpose);}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
 if($chapterFilter&&$subject){foreach($chapters as $c)if($c['name']===$chapterFilter)$topicRows=learningCatalogTopics($db,$actor,$class,$subject,(int)$c['id']);}
 if($topicFilter){$aliases=null;foreach($topicRows as $t)if((string)$t['id']===$topicFilter)$aliases=$t['alias_ids'];if(!$aliases)denySchoolRequest('Choose a topic in the selected chapter.',404);$questions=array_values(array_filter($questions,static fn($q)=>in_array((int)($q['catalog_topic_id']?:$q['topic_id']),$aliases,true)));}
-$canCreate=!$isStudent&&!$actor['read_only']&&Auth::canAddQuestions();$writerSubjects=[];
-foreach($classes as $c)foreach(learningReadSubjects($db,$actor,(int)$c['id']) as $s)if(learningCanCreate($db,$actor,(int)$c['id'],(int)$s['id']))$writerSubjects[$c['id']][]=$s;
-$form=$error&&$_POST?$_POST:($edit??[]);$form=array_filter($form,static fn($v)=>is_scalar($v)||$v===null);$formClass=(int)($form['class_id']??$class);$formSubject=(int)($form['subject_id']??$subject);
+$form=$error&&in_array($_POST['action']??'',['add','edit'],true)?$_POST:($edit??[]);$form=array_filter($form,static fn($v)=>is_scalar($v)||$v===null);$formClass=(int)($form['class_id']??$class);$formSubject=(int)($form['subject_id']??$subject);
 $form+=['class_id'=>$formClass,'subject_id'=>$formSubject,'visibility'=>$actor['school_id']===0?'public':'private'];$canCreate=$canCreate&&(bool)$writerSubjects;
 $pageTitle='Exam Questions';$activePage='exam_questions';ob_start();
 ?>
@@ -62,7 +85,18 @@ $pageTitle='Exam Questions';$activePage='exam_questions';ob_start();
 <div class="col-md-4"><label class="form-label">Search</label><input name="search" type="search" maxlength="200" value="<?= sanitize($search) ?>" class="form-control" placeholder="Question text"></div>
 <?php if(!$isStudent): ?><div class="col-md-2"><label class="form-label">Status</label><select name="archived" class="form-select"><option value="">Active</option><option value="1" <?= $filters['archived']?'selected':'' ?>>My archived</option></select></div><?php endif; ?><div class="col-md-1 align-self-end"><button class="btn btn-primary">Filter</button></div></div></form>
 <?php if($canCreate): ?>
-<details class="card card-body mb-3" <?= $form?'open':'' ?>><summary class="fw-bold text-primary"><?= $edit?'Edit exam question':'Add Exam Question' ?></summary>
+<details class="card card-body mb-3" id="examImportPanel" <?= $error&&($_POST['action']??'')==='import'?'open':'' ?>>
+<summary class="fw-bold text-primary">Import Exam Questions — Excel / CSV</summary>
+<div class="mt-3"><p>Choose <strong>Normal Text</strong> for plain questions, or <strong>HTML Source</strong> for formatted questions, answers and options (including LaTeX maths). Both methods support Excel (.xlsx) and UTF-8 CSV.</p>
+<div class="row g-3 mb-3"><?php foreach(['normal'=>'Normal Text','html'=>'HTML Source'] as $mode=>$label): ?><div class="col-md-6"><div class="border rounded p-3 h-100"><h3 class="h6"><?= $label ?> samples</h3><div class="d-flex flex-wrap gap-2"><?php foreach(['xlsx'=>'Download Excel sample','csv'=>'Download CSV sample'] as $format=>$download): ?><a class="btn btn-sm btn-outline-primary" data-exam-import-mode="<?= $mode ?>" href="?<?= sanitize(http_build_query(['action'=>'download_template','format'=>$format,'content_mode'=>$mode,'class_id'=>$class,'subject_id'=>$subject])) ?>"><?= $download ?></a><?php endforeach; ?></div></div></div><?php endforeach; ?></div>
+<p class="small text-muted">Samples use your selected writable class/subject and an existing chapter/topic, or the first eligible catalog if no filter is selected. Replace the examples with your own questions. Class, Subject, Chapter, Type, Difficulty, Cognitive Level, Marks, Required Minutes and at least one question language are required. Topic and bilingual model answers are optional. MCQs require all four options (in either language) and Correct Option A–D.</p>
+<form method="post" enctype="multipart/form-data" id="examImportForm" class="row g-3"><input type="hidden" name="action" value="import">
+<div class="col-md-3"><label for="examImportMode" class="form-label">Import method</label><select id="examImportMode" name="import_content_mode" class="form-select"><option value="normal" <?= ($_POST['import_content_mode']??'normal')==='normal'?'selected':'' ?>>Normal Text</option><option value="html" <?= ($_POST['import_content_mode']??'')==='html'?'selected':'' ?>>HTML Source</option></select></div>
+<div class="col-md-5"><label for="examImportFile" class="form-label">Excel / CSV file</label><input id="examImportFile" type="file" name="excel_file" accept=".xlsx,.csv" class="form-control" required><div class="form-text">Maximum 5 MB and 2,000 questions per upload. Use the first worksheet and retain the sample headings.</div></div>
+<div class="col-md-4"><label for="examImportVisibility" class="form-label">Staff visibility for imported questions</label><select id="examImportVisibility" name="import_visibility" class="form-select"><?php $importVisibility=$_POST['import_visibility']??($actor['school_id']===0?'public':'private'); ?><option value="private" <?= $importVisibility==='private'?'selected':'' ?>>Private — creator, assigned teachers and admins</option><option value="public" <?= $importVisibility==='public'?'selected':'' ?>><?= $actor['school_id']===0?'Shared catalog staff':'Staff within this school' ?></option></select></div>
+<div class="col-12"><div class="alert alert-info py-2 mb-3">Source is assigned by your account: <?= $actor['school_id']===0?'Shared':'School' ?>. Leave the Source column blank or use Auto / <?= $actor['school_id']===0?'Shared':'School' ?>. School users must use existing catalog chapters/topics; only super admin can add missing catalog entries. Imported questions are <strong>staff-only</strong> and never enter student practice. Release to students later only through an individual question edit.</div><button class="btn btn-success" type="submit">Upload &amp; Import Exam Questions</button><span class="small text-muted ms-2">Valid rows save; skipped rows show a reason. Zero saved rows is an error.</span></div>
+</form></div></details>
+<details class="card card-body mb-3" <?= $edit||($error&&in_array($_POST['action']??'',['add','edit'],true))?'open':'' ?>><summary class="fw-bold text-primary"><?= $edit?'Edit exam question':'Add Exam Question' ?></summary>
 <form method="post" id="examQuestionForm" class="mt-3"><input type="hidden" name="action" value="<?= $edit?'edit':'add' ?>"><?php if($edit): ?><input type="hidden" name="question_id" value="<?= $edit['id'] ?>"><?php endif; ?>
 <div class="row g-3"><div class="col-md-3"><label class="form-label">Class</label><select id="examClass" name="class_id" class="form-select" required><?php foreach($classes as $c): if(empty($writerSubjects[$c['id']]))continue; ?><option value="<?= $c['id'] ?>" <?= $formClass===(int)$c['id']?'selected':'' ?>><?= sanitize($c['name']) ?></option><?php endforeach; ?></select></div>
 <div class="col-md-3"><label class="form-label">Subject</label><select id="examSubject" name="subject_id" class="form-select" required></select></div>

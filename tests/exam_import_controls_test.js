@@ -1,0 +1,14 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const listeners={},button={disabled:false,textContent:'Upload & Import Exam Questions'};
+const form={events:{},attributes:{},addEventListener(e,f){this.events[e]=f;},querySelector:()=>button,setAttribute(k,v){this.attributes[k]=v;},removeAttribute(k){delete this.attributes[k];}};
+const mode={value:'normal'},links=['normal','html'].map(value=>({dataset:{examImportMode:value},events:{},addEventListener(e,f){this.events[e]=f;}}));
+const context={window:{addEventListener(e,f){listeners[e]=f;}},document:{readyState:'complete',getElementById:id=>({examImportForm:form,examImportMode:mode})[id]||null,querySelectorAll:()=>links}};
+vm.runInNewContext(fs.readFileSync('assets/js/exam-questions.js','utf8'),context);
+links[1].events.click();assert.equal(mode.value,'html','Source samples select the matching import method');
+links[0].events.click();assert.equal(mode.value,'normal');
+let prevented=0;const event={preventDefault(){prevented++;}};
+form.events.submit(event);assert.equal(prevented,0);assert.equal(button.disabled,true);assert.equal(form.attributes['aria-busy'],'true');
+form.events.submit(event);assert.equal(prevented,1,'A double click must not create another batch');
+listeners.pageshow();assert.equal(button.disabled,false);assert.equal(button.textContent,'Upload & Import Exam Questions');assert.equal(form.attributes['aria-busy'],undefined);
+form.events.submit(event);assert.equal(prevented,1,'Back navigation restores a usable form');
+console.log('Exam import controls passed: sample/mode matching, importing feedback, duplicate-submit prevention and back-navigation recovery.');

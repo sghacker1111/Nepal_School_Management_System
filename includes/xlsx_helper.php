@@ -14,7 +14,7 @@ class XlsxHelper {
      * @param string $filePath Absolute path to the uploaded file
      * @return array Array of rows
      */
-    public static function read($filePath) {
+    public static function read($filePath, bool $preserveRows = false) {
         if (!file_exists($filePath)) {
             throw new Exception("File not found: " . $filePath);
         }
@@ -23,7 +23,7 @@ class XlsxHelper {
         if (class_exists('ZipArchive')) {
             $zip = new ZipArchive();
             if ($zip->open($filePath) === true) {
-                $rows = self::parseXlsxZip($zip);
+                $rows = self::parseXlsxZip($zip, $preserveRows);
                 $zip->close();
                 if (!empty($rows)) {
                     return $rows;
@@ -32,13 +32,13 @@ class XlsxHelper {
         }
 
         // Fallback or explicit CSV reading
-        return self::readCsv($filePath);
+        return self::readCsv($filePath, $preserveRows);
     }
 
     /**
      * Parse open ZipArchive of an .xlsx file
      */
-    private static function parseXlsxZip(ZipArchive $zip) {
+    private static function parseXlsxZip(ZipArchive $zip, bool $preserveRows = false) {
         // 1. Read Shared Strings (if present)
         $sharedStrings = [];
         $ssIndex = $zip->locateName('xl/sharedStrings.xml');
@@ -69,6 +69,23 @@ class XlsxHelper {
 
         // 2. Locate worksheet (usually xl/worksheets/sheet1.xml)
         $sheetIndex = $zip->locateName('xl/worksheets/sheet1.xml');
+        if($preserveRows){
+            // Exam imports promise the first worksheet, which need not
+            // be sheet1.xml after sheets have been reordered in Excel.
+            $workbookXml=$zip->getFromName('xl/workbook.xml');$relationshipXml=$zip->getFromName('xl/_rels/workbook.xml.rels');
+            if($workbookXml!==false&&$relationshipXml!==false){
+                $workbook=@simplexml_load_string($workbookXml,SimpleXMLElement::class,LIBXML_NONET);
+                $relationships=@simplexml_load_string($relationshipXml,SimpleXMLElement::class,LIBXML_NONET);
+                if($workbook&&$relationships&&isset($workbook->sheets->sheet)){
+                    $attributes=$workbook->sheets->sheet[0]->attributes('http://schemas.openxmlformats.org/officeDocument/2006/relationships');$id=(string)($attributes['id']??'');
+                    foreach($relationships->Relationship as $relation)if((string)$relation['Id']===$id){
+                        $target=(string)$relation['Target'];$target=str_starts_with($target,'/')?ltrim($target,'/'):'xl/'.$target;
+                        if(preg_match('#^xl/worksheets/sheet\d+\.xml$#i',$target))$sheetIndex=$zip->locateName($target);
+                        break;
+                    }
+                }
+            }
+        }
         if ($sheetIndex === false) {
             // Find first sheet XML in worksheets/
             for ($i = 0; $i < $zip->numFiles; $i++) {
@@ -150,7 +167,10 @@ class XlsxHelper {
                 }
             }
 
-            if ($hasContent) {
+            if ($preserveRows) {
+                while (count($rows) < $rowNum - 1) $rows[] = [];
+                $rows[] = $completeRow;
+            } elseif ($hasContent) {
                 $rows[] = $completeRow;
             }
         }
@@ -188,7 +208,7 @@ class XlsxHelper {
     /**
      * Read CSV file with auto-delimiter detection and UTF-8 BOM handling
      */
-    public static function readCsv($filePath) {
+    public static function readCsv($filePath, bool $preserveRows = false) {
         $rows = [];
         $content = file_get_contents($filePath);
         if ($content === false) {
@@ -239,7 +259,7 @@ class XlsxHelper {
                     break;
                 }
             }
-            if ($hasContent) {
+            if ($hasContent || $preserveRows) {
                 $rows[] = $data;
             }
         }
@@ -256,7 +276,7 @@ class XlsxHelper {
      * @param string $sheetName Worksheet title
      * @return string Binary contents of the .xlsx file
      */
-    public static function generateXlsx(array $headers, array $rows, $sheetName = 'Questions', array $numericColumns = []) {
+    public static function generateXlsx(array $headers, array $rows, $sheetName = 'Questions', array $numericColumns = [], bool $importLayout = false) {
         $tempFile = tempnam(sys_get_temp_dir(), 'xlsx_');
         $zip = new ZipArchive();
         if ($zip->open($tempFile, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
@@ -317,23 +337,29 @@ class XlsxHelper {
                 . '<cellStyleXfs count="1">'
                 . '<xf numFmtId="0" fontId="0" fillId="0" borderId="0"/>'
                 . '</cellStyleXfs>'
-                . '<cellXfs count="2">'
+                . '<cellXfs count="'.($importLayout?3:2).'">'
                 . '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
-                . '<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/>'
+                . '<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"'.($importLayout?' applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>':'/>')
+                . ($importLayout?'<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>':'')
                 . '</cellXfs>'
                 . '</styleSheet>';
         $zip->addFromString('xl/styles.xml', $styles);
 
         // 6. xl/worksheets/sheet1.xml
         $sheetXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n"
-                  . '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-                  . '<sheetData>';
+                  . '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">';
+        if($importLayout){
+            $sheetXml.='<sheetViews><sheetView workbookViewId="0" showGridLines="0"><pane xSplit="2" ySplit="1" topLeftCell="C2" activePane="bottomRight" state="frozen"/></sheetView></sheetViews><cols>';
+            foreach($headers as $i=>$header){$width=$i>=10&&$i<=21?44:match($i){0=>16,1=>24,2,3=>28,4=>22,5,6=>18,7=>20,8=>12,9=>20,default=>18};$sheetXml.='<col min="'.($i+1).'" max="'.($i+1).'" width="'.$width.'" customWidth="1"/>';}
+            $sheetXml.='</cols>';
+        }
+        $sheetXml.='<sheetData>';
 
         $rowNum = 1;
 
         // Write Header Row
         if (!empty($headers)) {
-            $sheetXml .= '<row r="' . $rowNum . '" spans="1:' . count($headers) . '">';
+            $sheetXml .= '<row r="' . $rowNum . '" spans="1:' . count($headers) . '"'.($importLayout?' ht="44" customHeight="1"':'').'>';
             foreach ($headers as $colIdx => $h) {
                 $cellRef = self::indexToColumnLetter($colIdx) . $rowNum;
                 $val = htmlspecialchars($h, ENT_XML1, 'UTF-8');
@@ -345,12 +371,12 @@ class XlsxHelper {
 
         // Write Data Rows
         foreach ($rows as $row) {
-            $sheetXml .= '<row r="' . $rowNum . '">';
+            $sheetXml .= '<row r="' . $rowNum . '"'.($importLayout?' ht="90" customHeight="1"':'').'>';
             foreach ($row as $colIdx => $val) {
                 $cellRef = self::indexToColumnLetter($colIdx) . $rowNum;
                 $valStr = htmlspecialchars((string)$val, ENT_XML1, 'UTF-8');
-                if(in_array($colIdx,$numericColumns,true)&&preg_match('/^-?\d+(?:\.\d+)?$/',(string)$val))$sheetXml.='<c r="'.$cellRef.'"><v>'.$valStr.'</v></c>';
-                else $sheetXml .= '<c r="' . $cellRef . '" t="inlineStr"><is><t>' . $valStr . '</t></is></c>';
+                if(in_array($colIdx,$numericColumns,true)&&preg_match('/^-?\d+(?:\.\d+)?$/',(string)$val))$sheetXml.='<c r="'.$cellRef.'"'.($importLayout?' s="2"':'').'><v>'.$valStr.'</v></c>';
+                else $sheetXml .= '<c r="' . $cellRef . '" t="inlineStr"'.($importLayout?' s="2"':'').'><is><t>' . $valStr . '</t></is></c>';
             }
             $sheetXml .= '</row>';
             $rowNum++;
