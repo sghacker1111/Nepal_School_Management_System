@@ -7,6 +7,9 @@ from urllib.parse import urlencode
 from http.cookiejar import CookieJar
 
 class ERPHttpFixture:
+    def __init__(self,session_name=None):
+        if session_name is not None and not re.fullmatch(r'[A-Za-z][A-Za-z0-9_]{0,60}',session_name):raise ValueError('Invalid test session name')
+        self.session_name=session_name
     def __enter__(self):
         self.root=Path(__file__).resolve().parents[1]
         self.tmp=tempfile.TemporaryDirectory(prefix='erp-http-fixture-')
@@ -18,7 +21,8 @@ class ERPHttpFixture:
             sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
         self.base=f'http://127.0.0.1:{port}'
         self.log=open(Path(self.tmp.name)/'server.log','w+',encoding='utf-8')
-        self.server=subprocess.Popen([self.php,'-S',f'127.0.0.1:{port}','router.php'],cwd=self.root,env=self.env,stdout=self.log,stderr=self.log)
+        server_command=[self.php]+(['-d','session.name='+self.session_name] if self.session_name else [])+['-S',f'127.0.0.1:{port}','router.php']
+        self.server=subprocess.Popen(server_command,cwd=self.root,env=self.env,stdout=self.log,stderr=self.log)
         self.opener=build_opener(HTTPCookieProcessor(CookieJar()));self.token='';self.count=0
         for attempt in range(100):
             try:

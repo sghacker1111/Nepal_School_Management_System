@@ -5,18 +5,28 @@ require_once __DIR__.'/question_import.php';
 function learningWrite(PDO $db,callable $work):mixed {return curriculumWrite($db,$work);}
 function learningId(mixed $value):int {if(!is_scalar($value)||!preg_match('/^[1-9][0-9]*$/',(string)$value))throw new InvalidArgumentException('Choose a valid record.');return (int)$value;}
 function learningVisibility(mixed $value):string {if(!is_string($value)||!in_array($value,['private','public'],true))throw new InvalidArgumentException('Choose Private or Public within this school.');return $value;}
+function learningDecimalUnits(mixed $value,int $maximum,string $label,bool $zero=false):int {
+    if(!is_scalar($value)||!preg_match('/^\d{1,6}(?:\.\d{1,2})?$/',(string)$value))throw new InvalidArgumentException($label.' must be a number with at most two decimals.');
+    $parts=explode('.',(string)$value);$units=(int)$parts[0]*100+(int)str_pad($parts[1]??'',2,'0');
+    if($units<($zero?0:1)||$units>$maximum)throw new InvalidArgumentException($label.' is outside its permitted range.');return $units;
+}
+function learningDecimalString(int $units):string {return intdiv($units,100).'.'.str_pad((string)($units%100),2,'0',STR_PAD_LEFT);}
 function learningAudit(PDO $db,array $actor,string $action,string $kind,int $id):void {
     $q=$db->prepare('INSERT INTO activity_logs(user_id,action,table_name,record_id,ip_address) VALUES(?,?,?,?,?)');$q->execute([$actor['id'],$action.' (school '.$actor['school_id'].')',$kind,$id,$_SERVER['REMOTE_ADDR']??'local']);
 }
-function learningMutableRecord(PDO $db,array $actor,string $kind,int $id):array {
-    $record=learningContentRecord($db,$actor,$kind,$id,$kind==='questions'?'bank':'study',true);
+function learningMutableRecord(PDO $db,array $actor,string $kind,int $id,string $bankKind='learning'):array {
+    if(!in_array($bankKind,['learning','exam'],true))throw new InvalidArgumentException('Invalid bank.');
+    $record=learningContentRecord($db,$actor,$kind,$id,$kind==='questions'?($bankKind==='exam'?'exam_bank':'bank'):'study',true);
     if(!learningCanEdit($db,$actor,$record))throw new InvalidArgumentException('Only the creator may change this content, while assigned to its subject.');
     return $record;
 }
-function learningSaveQuestion(PDO $db,array $actor,array $input,?int $id=null):int {
-    return learningWrite($db,function()use($db,$actor,$input,$id){
+function learningSaveQuestion(PDO $db,array $actor,array $input,?int $id=null,string $bankKind='learning'):int {
+    if(!in_array($bankKind,['learning','exam'],true))throw new InvalidArgumentException('Invalid bank.');
+    return learningWrite($db,function()use($db,$actor,$input,$id,$bankKind){
+        if(array_key_exists('bank_kind',$input))throw new InvalidArgumentException('The question bank is determined by its section.');
         if(array_key_exists('school_id',$input)||array_key_exists('created_by_user_id',$input))throw new InvalidArgumentException('Content school and creator are set by your account.');
-        if($id){$old=learningMutableRecord($db,$actor,'questions',$id);if($old['archived_at'])throw new InvalidArgumentException('Restore archived content before editing it.');}
+        if($id){$old=learningMutableRecord($db,$actor,'questions',$id,$bankKind);if($old['archived_at'])throw new InvalidArgumentException('Restore archived content before editing it.');}
+        if(!learningPurposeAllowed($db,$actor,$bankKind==='exam'?'exam_bank':'bank'))throw new InvalidArgumentException('This question bank is not in your package.');
         $class=learningId($input['class_id']??null);$subject=learningId($input['subject_id']??null);
         if(!learningCanCreate($db,$actor,$class,$subject))throw new InvalidArgumentException('You may create content only for your assigned class subjects.');
         if($actor['school_id']>0){$q=$db->prepare('SELECT * FROM schools WHERE id=?');$q->execute([$actor['school_id']]);if(!schoolSubscriptionCanAddQuestions($q->fetch(PDO::FETCH_ASSOC)))throw new InvalidArgumentException('Your package does not allow question creation.');}
@@ -29,19 +39,29 @@ function learningSaveQuestion(PDO $db,array $actor,array $input,?int $id=null):i
         }
         $get=static function($key)use($input):string {$value=$input[$key]??'';if(!is_scalar($value))throw new InvalidArgumentException('Enter valid question content.');return (string)$value;};
         $content=questionImportRowContent($get,'html');
+        if($bankKind==='exam')$content['marks']=learningDecimalString(learningDecimalUnits($input['marks']??null,100000,'Question marks'));
         $catalog=learningCatalogSelection($db,$actor,$class,$subject,$input,learningCanManageCatalog($actor));
         $domain=$input['cognitive_domain']??'Knowledge';if(!is_string($domain)||!in_array($domain,['Knowledge','Understanding','Application','Higher Ability'],true))throw new InvalidArgumentException('Choose a valid cognitive level.');
         $values=$content+['class_id'=>$class,'subject_id'=>$subject,'chapter'=>$catalog['chapter'],'topic_id'=>$catalog['topic_id'],'catalog_chapter_id'=>$catalog['catalog_chapter_id'],'catalog_topic_id'=>$catalog['catalog_topic_id'],'visibility'=>$visibility,'cognitive_domain'=>$domain,'updated_at'=>date('Y-m-d H:i:s')];
+        if($bankKind==='exam'){
+            $level=$input['difficulty']??'Medium';$minutes=$input['required_minutes']??null;
+            if(!is_string($level)||!in_array($level,['Easy','Medium','Hard','Challenging'],true))throw new InvalidArgumentException('Choose Easy, Medium, Hard or Challenging.');
+            $minutes=learningDecimalString(learningDecimalUnits($minutes,60000,'Required minutes'));
+            $release=$input['student_visible']??'0';if(!is_scalar($release)||!in_array((string)$release,['0','1'],true))throw new InvalidArgumentException('Choose a valid student-view setting.');
+            $values+=['difficulty'=>$level,'required_minutes'=>(string)$minutes,'student_visible'=>$visibility==='public'?(int)$release:0];
+        }
         if($id){$q=$db->prepare('UPDATE questions SET '.implode(',',array_map(static fn($k)=>"$k=?",array_keys($values))).' WHERE id=?');$q->execute([...array_values($values),$id]);}
-        else{$values+=['school_id'=>$actor['school_id'],'created_by_user_id'=>$actor['id']];$id=insertRecord($db,'questions',$values);}
-        learningAudit($db,$actor,isset($old)?'Edit question':'Create question','questions',$id);return $id;
+        else{$values+=['school_id'=>$actor['school_id'],'created_by_user_id'=>$actor['id'],'bank_kind'=>$bankKind];$id=insertRecord($db,'questions',$values);}
+        learningAudit($db,$actor,isset($old)?'Edit question':'Create question','questions',$id);
+        if($bankKind==='exam'&&(int)($old['student_visible']??0)!==(int)$values['student_visible'])learningAudit($db,$actor,$values['student_visible']?'Release exam question to students':'Revoke exam student access','questions',$id);
+        return $id;
     });
 }
-function learningSetVisibility(PDO $db,array $actor,string $kind,int $id,string $visibility):void {
-    learningVisibility($visibility);learningWrite($db,function()use($db,$actor,$kind,$id,$visibility){$r=learningMutableRecord($db,$actor,$kind,$id);if($r['archived_at'])throw new InvalidArgumentException('Restore archived content before changing visibility.');$db->prepare("UPDATE $kind SET visibility=?,updated_at=CURRENT_TIMESTAMP WHERE id=?")->execute([$visibility,$id]);learningAudit($db,$actor,$visibility==='public'?'Publish content':'Make content private',$kind,$id);});
+function learningSetVisibility(PDO $db,array $actor,string $kind,int $id,string $visibility,string $bankKind='learning'):void {
+    learningVisibility($visibility);learningWrite($db,function()use($db,$actor,$kind,$id,$visibility,$bankKind){$r=learningMutableRecord($db,$actor,$kind,$id,$bankKind);if($r['archived_at'])throw new InvalidArgumentException('Restore archived content before changing visibility.');$release=$kind==='questions'&&$bankKind==='exam'&&$visibility==='private'?',student_visible=0':'';$db->prepare("UPDATE $kind SET visibility=?,updated_at=CURRENT_TIMESTAMP$release WHERE id=?")->execute([$visibility,$id]);learningAudit($db,$actor,$visibility==='public'?'Publish content':'Make content private',$kind,$id);});
 }
-function learningSetArchived(PDO $db,array $actor,string $kind,int $id,bool $archived):void {
-    learningWrite($db,function()use($db,$actor,$kind,$id,$archived){learningMutableRecord($db,$actor,$kind,$id);$db->prepare("UPDATE $kind SET archived_at=?,updated_at=CURRENT_TIMESTAMP WHERE id=?")->execute([$archived?date('Y-m-d H:i:s'):null,$id]);learningAudit($db,$actor,$archived?'Archive content':'Restore content',$kind,$id);});
+function learningSetArchived(PDO $db,array $actor,string $kind,int $id,bool $archived,string $bankKind='learning'):void {
+    learningWrite($db,function()use($db,$actor,$kind,$id,$archived,$bankKind){learningMutableRecord($db,$actor,$kind,$id,$bankKind);$db->prepare("UPDATE $kind SET archived_at=?,updated_at=CURRENT_TIMESTAMP WHERE id=?")->execute([$archived?date('Y-m-d H:i:s'):null,$id]);learningAudit($db,$actor,$archived?'Archive content':'Restore content',$kind,$id);});
 }
 function learningSaveNote(PDO $db,array $actor,array $input,?int $id=null):int {
     return learningWrite($db,function()use($db,$actor,$input,$id){

@@ -9,6 +9,7 @@ PHP school administration application with SQLite or MySQL, Bootstrap, and Nepal
 - Daily attendance and conflict-aware weekly routines.
 - Exam configuration, marks entry, shared GPA/percentage calculations, ledgers, report cards, and admit cards.
 - Question banks, curriculum topics, learning notes, specification grids, and paper generation.
+- Separate Exam Questions, chapter-wise Exam Paper Grids, and quota-checked exam papers with printable answer keys.
 - Staff and restricted student account management, academic years, school settings, and system administration.
 - Interactive Practice MCQs with question selection, instant feedback, sounds, optional full screen and answer review.
 - Searchable, role-aware navigation with mobile offcanvas and responsive forms.
@@ -21,11 +22,24 @@ The super-admin shared catalog is read-only to school users. Only super admin ad
 
 Teachers and school admins create and edit their own content only. New school content is **Private**, readable by its creator, assigned class-subject teachers and school administrators. **Public means within the creating school**, including enrolled students in permitted subjects, never other schools or anonymous visitors. Shared public content is available through validated matching school classes/subjects. My content and archive filters expose creator controls; archive/restore keeps record IDs. Legacy local content with no known creator stays read-only; no author is invented.
 
-Question Bank, Learning Hub, both paper generators and Practice MCQs enforce the same backend policy. Practice sessions are revalidated on every request and cleared if content becomes private, archived, hidden or otherwise inaccessible. Subscriptions, CSRF, student enrollment/electives and school-preview read-only rules remain in force. Schema 15 is additive and makes a pre-upgrade SQLite backup. Verify MySQL on staging before production migration.
+Question Bank, Learning Hub, all paper generators and Practice MCQs enforce the same ownership/tenant policy. Exam Questions additionally require explicit student release and cannot enter the normal learning/practice pool. Practice sessions are revalidated on every request and cleared if content becomes private, archived, hidden or otherwise inaccessible. Subscriptions, CSRF, student enrollment/electives and school-preview read-only rules remain in force. Schema 15 established shared-content ownership; schema 16 adds the separate exam bank and grids, with an additive pre-upgrade SQLite backup. Verify MySQL on staging before production migration.
 
 Run the `learning_*_test.php` and `learning_*_http_test.py` suites along with the regressions below. `tests/learning_browser_fixture.py` starts a disposable local QA school; it never opens the original school database.
 
 See [the verified learning-sharing handoff](docs/learning-sharing-handoff-2026-10-13.md) for the independent review fixes, retained-data evidence and outstanding staging/release limits.
+
+## Exam Questions and Exam Paper Generator
+
+System administrators enable **Exam Paper Generator System** (the existing `exam_generator` package key) or **Full ERP** in the school's purchased packages. New **Exam papers** navigation contains **Exam Questions**, **Exam Paper Grids** and **Exam Paper Generator**. The existing normal generator and normal grids remain separate and retain legacy package access. Teachers generate/print only for their assigned class subjects; school admins work within their school. Shared super-admin content/default grids are mapped to the exact corresponding class subject, never by a class-name substring.
+
+1. In **Exam Questions**, select class, subject, an existing chapter and optional topic. Enter a question type, difficulty (Easy, Medium, Hard or Challenging), K/U/A/HA cognitive classification, marks and estimated required minutes. Bilingual rich text, HTML Source editing and LaTeX are supported. This new section currently uses manual authoring; the existing Excel/CSV imports remain in the normal Question Bank and do not silently move questions into the exam bank.
+2. Leave school content **Private** for its creator, assigned subject teachers and school administrators, or share it with staff in that school. Students cannot see it by default. The author must explicitly tick **Allow enrolled students to view** with public/staff visibility; the confirmation explains that this reveals questions, options and model answers. Returning to Private revokes release. Students read only released questions for their enrollment/electives and never access grids or generation. Learning/question-view/question-add packages can read releases; generation requires exam-generator/full access.
+3. In **Exam Paper Grids**, save a named blueprint with full marks and duration. Each allocation chooses one or several chapters, question type, count and total marks; optionally constrain topics, difficulty, marks per item and K/U/A/HA counts. Separate single-chapter rows give fixed chapter allocations; pooled rows can also have exact chapter count/mark targets. Whole-paper cognitive mark targets are optional and separate from MCQ count quotas. Creator-only edit, stale-revision protection, archive/restore and read-only shared defaults are enforced by the backend.
+4. In **Exam Paper Generator**, load a saved/default grid or configure a custom one, then generate. An existing exam can optionally supply its title/date after the selected class subject is mapped to that exam. The solver randomizes eligible exam questions and requires exact counts/marks, uniqueness, all specified quotas and a fitting time budget. It does not overwrite stored marks or print partial papers. Shortages show an error. Print the paper and answer key separately; MCQs from all selected chapter pools are grouped under Question 1.
+
+The bundled reference is the visually checked **CDC Optional Mathematics Grades 9-10, 2082** grid: 75 marks, 180 minutes, with an 11-question MCQ allocation (K3/U3/A3/HA2). [Official CDC source](https://giwmscdnone.gov.np/media/pdf_upload/Specification%20Grid%20and%20Model%20Question-G9-Opt.%20Math-web_nrbp00y.pdf). Other subject defaults are super-admin saved grids. Source/edition and review warnings remain visible when loading saved reference copies. Composite questions, mixed-domain subparts, cross-content areas and accessibility alternatives need manual review; whole-question labels do not certify CDC compliance. No model-question bodies are imported from the source.
+
+Generation is bounded to 200 items, 50 allocation rows and 2,000 **matching** eligible questions, with an exact-search limit. Narrow chapter/type/topic/difficulty/mark pools if the limit is reached. Unrelated questions do not consume that matching-pool limit. Schema 16 preserves existing question IDs/content as `learning`, defaults student release off, and adds a separate `exam_paper_grids` table. See [the exam-paper handoff](docs/exam-papers-handoff-2026-10-14.md) for verification and release limits.
 
 ## Quick local start
 
@@ -53,7 +67,7 @@ Archiving students or teachers preserves their records. Exams with marks cannot 
 
 ## Student learning and Practice MCQs
 
-In **Administration → User accounts**, a school administrator can select **Student (learning only)** and link an existing student record. The system administrator can do the same after selecting a school. Each record has at most one login. Passwords are hashed; disabling the account, enrollment or school subscription immediately revokes access. Students can access Learning Hub and Practice MCQs only, for their enrolled class and selected electives. Staff roles keep their existing access rules.
+In **Administration → User accounts**, a school administrator can select **Student (learning only)** and link an existing student record. The system administrator can do the same after selecting a school. Each record has at most one login. Passwords are hashed; disabling the account, enrollment or school subscription immediately revokes access. Students can access Learning Hub, Practice MCQs and explicitly released Exam Questions, subject to their school package, enrolled class and selected electives. A question-view-only student lands on the released exam-question section instead of an unavailable Learning Hub. Staff roles keep their existing access rules.
 
 Use **Learning → Practice MCQs** to filter by class, subject, chapter, topic or question text, then select individual questions or a random set of 1–100 MCQs. Only valid four-option questions from the school's bank and matching shared catalog are offered. Answers are graded by the server and cannot be changed after submission. Red/green feedback includes the correct answer, with optional boom/chime sounds, mute, full screen and keyboard keys 1–4. A completed set shows its score and answer review. Practice is separate from official exam marks; sessions resume in the same login for up to one hour, but practice history is not stored permanently.
 
@@ -92,6 +106,8 @@ php tests/operations_test.php
 php tests/exam_enhancements_test.php
 php tests/exam_workflows_test.php
 php tests/exam_templates_test.php
+php tests/exam_bank_test.php
+php tests/exam_paper_test.php
 php tests/cdc_2083_test.php
 php tests/assessment_test.php
 php tests/packages_test.php
@@ -112,6 +128,8 @@ node tests/attendance_controls_test.js
 node tests/content_safety_test.js
 node tests/question_editor_test.js
 node tests/learning_readability_test.js
+node tests/paper_chapters_test.js
+node tests/exam_grid_editor_test.js
 python tests/http_test.py
 python tests/exam_http_test.py
 python tests/assessment_http_test.py
@@ -127,6 +145,8 @@ python tests/class_isolation_http_test.py
 python tests/mcq_practice_http_test.py
 python tests/question_source_http_test.py
 python tests/exam_templates_http_test.py
+python tests/exam_questions_http_test.py
+python tests/exam_paper_http_test.py
 python tests/deployment_test.py
 ```
 
@@ -166,7 +186,7 @@ Weekly routines now support named profiles (e.g. summer/winter). Load a profile 
 
 Class names are compared by normalized grade identity (`7`, `Class 7`, `Grade 7`, `कक्षा ७`), case and whitespace. Subject creation, mapping and rename check names and codes within each class, including hidden/optional mappings. Catalog changes are serialized per school. Teachers cannot create classes or subjects. In Class Management, a school administrator can remove a legacy class named exactly `7` from active lists when that school contains teacher `sgsunil`; password and explicit confirmation are required. This archives the class and retains linked records, rather than permanently deleting educational data. Archived classes can be reviewed; rename an invalid duplicate before restoring it.
 
-Question Bank, both paper generators, Learning Hub and curriculum selectors use school-scoped class mappings. Assigned optional subjects appear when the catalogue subject is not hidden. Staff can browse eligible shared/school-public content across their school, but teachers create and edit only their own content for assigned teaching classes/subjects. Private reads still require the creator, assigned subject co-teacher or school-administrator permission. Repeated section mappings are removed; distinct subjects retain their IDs and code/type labels. Choose a class before a subject; changing class resets subject. Question Bank supports class, subject, category, cognitive level and text/chapter search. Quick Add Class/Subject is removed, including crafted requests; administrators use management pages.
+Question Bank, all paper generators, Learning Hub and curriculum selectors use school-scoped class mappings. Assigned optional subjects appear when the catalogue subject is not hidden. Staff can browse eligible shared/school-public content across their school, but teachers create and edit only their own content for assigned teaching classes/subjects. Private reads still require the creator, assigned subject co-teacher or school-administrator permission. Repeated section mappings are removed; distinct subjects retain their IDs and code/type labels. Choose a class before a subject; changing class resets subject. Question Bank supports class, subject, category, cognitive level and text/chapter search. Quick Add Class/Subject is removed, including crafted requests; administrators use management pages.
 
 The universal CDC catalogue has a class-first filter and include-hidden/inactive option. Visibility uses POST with an explicit target state and a redirect, preventing refresh/back from toggling it again. Existing school copies retain their own settings.
 

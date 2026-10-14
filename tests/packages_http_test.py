@@ -2,7 +2,7 @@
 import re
 from http_support import ERPHttpFixture
 
-labels={'full':'Full ERP','result_system':'Result System','learning_system':'Learning System','paper_generator':'Paper Generator System','question_view':'Question View System','question_add':'Question Add System','accounting':'Accounting & Billing System','exam_generator':'Legacy Exam Generator Package'}
+labels={'full':'Full ERP','result_system':'Result System','learning_system':'Learning System','paper_generator':'Paper Generator System','question_view':'Question View System','question_add':'Question Add System','accounting':'Accounting & Billing System','exam_generator':'Exam Paper Generator System'}
 with ERPHttpFixture() as app:
     app.login('school_admin')
     app.request('/modules/accounting/invoices.php')
