@@ -10,7 +10,8 @@ assert.match(editor,/body\.nepali-editor\s*\{[^}]*font-size:\s*20pt\s*!important
 assert.match(editor,/doc\.body\.style\.fontSize\s*=\s*"20pt"/);
 assert(!editor.includes('font-size: 0.95rem;'),'Question previews no longer have a small Nepali override');
 const practice=read('assets/css/mcq-practice.css');
-assert.match(practice,/--practice-nepali-size:\s*28pt/,'Practice is larger than the editor default');
+// Real computed-size compensation and nested Nepali content are checked in
+// mcq_practice_display_test.html across desktop, fullscreen and mobile widths.
 assert.match(practice,/--practice-option-size:\s*1\.3rem/,'English choices are enlarged');
 assert.match(practice,/\.practice-nepali\{[^}]*font-weight:800[^}]*color:inherit/s,'Nepali questions match the English question weight and contrast');
 assert.match(practice,/font-size:inherit!important/,'Imported small inline sizes cannot shrink practice text');

@@ -5,15 +5,16 @@
 <title>Practice rich-text display regression</title>
 <link rel="stylesheet" href="../assets/css/style.css">
 <link rel="stylesheet" href="../assets/css/workspace.css">
-<link rel="stylesheet" href="../assets/css/mcq-practice.css?display-regression=2">
+<link rel="stylesheet" href="../assets/css/mcq-practice.css?display-regression=nepali-parity-green">
 <main class="mcq-practice">
   <h1>Practice rich-text display regression</h1>
   <div class="practice-question">
     <p><span id="question-normal" style="font-size:10px;font-weight:normal">Identify the </span><strong id="question-bold">bold word</strong>.</p>
     <p><span id="question-nepali" class="font-nepali"><span id="nested-nepali">नेपाली</span> <strong id="nepali-bold">शब्द</strong></span> / <span id="question-lang-ne" lang="ne">नेपाली भाषा</span></p>
   </div>
+  <div class="practice-nepali font-nepali"><p><span id="nepali-question-normal">कुनै सीमित समूह A का लागि यसको अर्थ के हो?</span></p><blockquote><code id="nepali-question-code">नेपालीमा सामान्य प्रश्न</code></blockquote></div>
   <button class="practice-option" type="button">
-    <span class="practice-option-body"><span id="option-normal" style="font-size:9px;font-weight:normal">Normal word</span> / <b id="option-bold">bold word</b> / <span id="option-nepali" class="font-nepali">नेपाली विकल्प</span></span>
+    <span class="practice-option-body"><span id="option-normal" style="font-size:9px;font-weight:normal">Normal word</span> / <b id="option-bold">bold word</b> / <span id="option-nepali" class="practice-option-nepali font-nepali">नेपाली विकल्प</span></span>
   </button>
   <pre id="test-result" role="status">Checking computed styles…</pre>
 </main>
@@ -22,6 +23,14 @@ window.addEventListener('load', () => {
   const failures = [], results = [];
   const style = id => getComputedStyle(document.getElementById(id));
   const check = (ok, name) => { results.push((ok ? 'PASS: ' : 'FAIL: ') + name); if (!ok) failures.push(name); };
+  const englishQuestionSize = parseFloat(style('question-normal').fontSize);
+  const englishOptionSize = parseFloat(style('option-normal').fontSize);
+  const questionRatio = parseFloat(style('nepali-question-normal').fontSize) / englishQuestionSize;
+  const optionRatio = parseFloat(style('option-nepali').fontSize) / englishOptionSize;
+  check(questionRatio >= 1.37 && questionRatio <= 1.4, 'Nepali question uses the 22:16 visual-size compensation');
+  check(optionRatio >= 1.37 && optionRatio <= 1.4, 'Nepali options use the same compensation as questions');
+  check(parseFloat(style('nepali-question-code').fontSize) >= englishQuestionSize * 1.37, 'Nested code formatting cannot shrink Nepali prose');
+  check(style('nepali-question-code').fontFamily.includes('Kokila'), 'Nested Nepali prose retains Kokila');
   check(parseFloat(style('question-normal').fontSize) >= 24, 'Legacy inline small question size is enlarged');
   check(parseFloat(style('option-normal').fontSize) >= 19, 'Legacy inline small option size is enlarged');
   check(+style('question-bold').fontWeight > +style('question-normal').fontWeight, 'Question bold emphasis remains distinguishable');
@@ -29,7 +38,7 @@ window.addEventListener('load', () => {
   check(style('nepali-bold').textDecorationLine.includes('underline'), 'Nepali semantic emphasis remains visible with static 400/700 font faces');
   for (const id of ['question-nepali', 'nested-nepali', 'question-lang-ne', 'option-nepali']) {
     check(style(id).fontFamily.includes('Kokila'), id + ' retains the Nepali font');
-    check(parseFloat(style(id).fontSize) >= 34, id + ' retains the larger Nepali size');
+    check(parseFloat(style(id).fontSize) >= (id === 'option-nepali' ? englishOptionSize : englishQuestionSize) * 1.37, id + ' retains the compensated Nepali size');
   }
   const result = document.getElementById('test-result');
   result.textContent = (failures.length ? 'FAILED' : 'PASSED') + '\n' + results.join('\n');
