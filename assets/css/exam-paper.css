@@ -1,0 +1,16 @@
+.exam-paper{max-width:1000px;margin-inline:auto;color:#111;font-size:16px;line-height:1.45;overflow-wrap:anywhere}
+.exam-print-header{display:flex;justify-content:center;align-items:center;gap:18px;text-align:center;border-bottom:2px solid #222;padding-bottom:14px;margin-bottom:12px}
+.exam-print-header h2{font-size:1.5em;margin:0}.exam-print-header h3{font-size:1.2em;margin:.3em 0}.exam-print-header p{margin:.2em 0}.exam-print-logo{width:75px;height:75px;object-fit:contain;flex-shrink:0}
+.exam-print-metadata{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;font-weight:600}.exam-instructions{margin-block:12px;font-style:italic}
+.exam-section-title{font-size:1.1em;display:flex;justify-content:space-between;gap:12px;margin:18px 0 12px;border-bottom:1px solid #bbb;padding-bottom:6px}
+.exam-question{margin-bottom:16px;break-inside:avoid}.exam-question-heading{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px;align-items:start}.exam-question p{margin:.15em 0}.exam-question img{max-width:100%;height:auto}.exam-mcq-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px;padding-left:28px;margin-top:8px}.exam-mcq-options>div{min-width:0}.exam-mcq-options p{display:inline}
+#examAnswersSheet{border-top:2px solid #555}.exam-paper .font-nepali{font-family:Kokila,"Noto Sans Devanagari",serif;font-size:20pt}
+@media(max-width:600px){.exam-mcq-options{grid-template-columns:1fr}.exam-print-logo{width:52px;height:52px}.exam-print-header{gap:10px}.exam-paper{padding:14px}}
+@media print{
+ @page{size:A4 portrait;margin:12mm}
+ .no-print,.top-navbar,.sidebar,.sidebar-backdrop,.breadcrumbs,.app-footer,.toast-container{display:none!important}
+ .exam-paper{width:100%;max-width:none;border:0!important;box-shadow:none!important;margin:0;padding:0;font-size:12pt}
+ .exam-paper .font-nepali{font-size:20pt}.exam-mcq-options{grid-template-columns:repeat(2,minmax(0,1fr))}.exam-print-header h2{font-size:18pt}
+ #examAnswersSheet{display:none!important}.print-exam-answers #examQuestionSheet{display:none!important}.print-exam-answers #examAnswersSheet{display:block!important}
+ #main-content,main{margin:0!important;padding:0!important;max-width:none!important}
+}

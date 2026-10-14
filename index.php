@@ -8,7 +8,11 @@ require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/functions.php';
 
 Auth::requireLogin();
-if(Auth::getRole()==='student'){header('Location: '.APP_URL.'/modules/learning/index.php');exit;}
+if(Auth::getRole()==='student'){
+    $studentPage=Auth::hasAccess('learning')?'/modules/learning/index.php':(Auth::hasAccess('exam_questions')?'/modules/learning/exam_questions.php':null);
+    if($studentPage===null)denySchoolRequest('No student learning section is enabled for this school. Contact your school administrator.');
+    header('Location: '.APP_URL.$studentPage);exit;
+}
 
 if (Auth::getRole() === 'super_admin' && !Auth::isReadOnly()) {
     header("Location: " . APP_URL . "/modules/super_admin/index.php");

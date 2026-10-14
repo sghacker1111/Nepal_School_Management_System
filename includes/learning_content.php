@@ -14,17 +14,18 @@ function learningActor(PDO $db,int $userId,int $school=0,bool $readOnly=false):a
     return ['id'=>(int)$user['id'],'role'=>$user['role'],'school_id'=>$school,'read_only'=>$readOnly];
 }
 function learningPurposeAllowed(PDO $db,array $actor,string $purpose):bool {
-    if(!in_array($purpose,['bank','study','practice','paper'],true))throw new InvalidArgumentException('Invalid learning purpose.');
+    if(!in_array($purpose,['bank','study','practice','paper','exam_bank','exam_view','exam_paper'],true))throw new InvalidArgumentException('Invalid learning purpose.');
     try{$current=learningActor($db,(int)$actor['id'],(int)$actor['school_id'],(bool)$actor['read_only']);}catch(InvalidArgumentException $e){return false;}
     if($current['role']!==$actor['role'])return false;
+    if(str_starts_with($purpose,'exam_')&&!in_array($actor['role'],['super_admin','school_admin','teacher','student'],true))return false;
     if($actor['role']==='super_admin'&&$actor['school_id']===0)return true;
     if(in_array($actor['role'],['accountant','cashier','auditor'],true))return false;
-    if($actor['role']==='student'&&in_array($purpose,['bank','paper'],true))return false;
+    if($actor['role']==='student'&&!in_array($purpose,['study','practice','exam_view'],true))return false;
     $q=$db->prepare('SELECT * FROM schools WHERE id=?');$q->execute([$actor['school_id']]);$school=$q->fetch(PDO::FETCH_ASSOC);if(!$school)return false;
-    return schoolSubscriptionAllows($school,match($purpose){'bank'=>'questions','paper'=>'paper_generator',default=>'learning'});
+    return schoolSubscriptionAllows($school,match($purpose){'bank'=>'questions','paper'=>'paper_generator','exam_bank','exam_view'=>'exam_questions','exam_paper'=>'exam_paper_generator',default=>'learning'});
 }
 function learningReadClasses(PDO $db,array $actor):array {
-    if(!learningPurposeAllowed($db,$actor,'study')&&!learningPurposeAllowed($db,$actor,'bank')&&!learningPurposeAllowed($db,$actor,'paper'))return [];
+    if(!learningPurposeAllowed($db,$actor,'study')&&!learningPurposeAllowed($db,$actor,'bank')&&!learningPurposeAllowed($db,$actor,'paper')&&!learningPurposeAllowed($db,$actor,'exam_view')&&!learningPurposeAllowed($db,$actor,'exam_paper'))return [];
     return learningClasses($db,$actor['school_id'],$actor['role']==='student'?'student':'school_admin',$actor['id']);
 }
 function learningReadSubjects(PDO $db,array $actor,int $class):array {
@@ -57,8 +58,10 @@ function learningRecordScope(PDO $db,array $actor,array $record):?array {
     }
     return null;
 }
+function learningBankPurposeMatches(array $record,string $purpose):bool {return ($record['bank_kind']??'learning')===(str_starts_with($purpose,'exam_')?'exam':'learning');}
 function learningCanView(PDO $db,array $actor,array $record,string $purpose='study'):bool {
-    if(!learningPurposeAllowed($db,$actor,$purpose)||!empty($record['archived_at']))return false;
+    if(!learningBankPurposeMatches($record,$purpose)||!learningPurposeAllowed($db,$actor,$purpose)||!empty($record['archived_at']))return false;
+    if($actor['role']==='student'&&$purpose==='exam_view'&&((int)($record['student_visible']??0)!==1||($record['visibility']??'private')!=='public'))return false;
     $scope=learningRecordScope($db,$actor,$record);if(!$scope)return false;
     return learningScopeCanView($db,$actor,$record,$scope);
 }
@@ -87,6 +90,10 @@ function learningContentList(PDO $db,array $actor,string $kind,array $filters,st
     if(!in_array($kind,['questions','learning_notes'],true))throw new InvalidArgumentException('Invalid learning content type.');
     if(!learningPurposeAllowed($db,$actor,$purpose))return [];
     $where=['school_id IN (0,?)'];$params=[$actor['school_id']];
+    if($kind==='questions'){$where[]='bank_kind=?';$params[]=str_starts_with($purpose,'exam_')?'exam':'learning';}
+    elseif(str_starts_with($purpose,'exam_'))return [];
+    if($actor['role']==='student'&&$purpose==='exam_view'){$where[]="student_visible=1 AND visibility='public'";}
+    if(!empty($filters['difficulty'])){if($kind!=='questions'||!in_array($filters['difficulty'],['Easy','Medium','Hard','Challenging'],true))throw new InvalidArgumentException('Choose a valid difficulty.');$where[]='difficulty=?';$params[]=$filters['difficulty'];}
     $source=$filters['source']??'all';if(!in_array($source,['all','shared','school','mine'],true))throw new InvalidArgumentException('Choose a valid content source.');
     if($source==='shared')$where[]='school_id=0';
     elseif($source==='school'){$where[]='school_id=?';$params[]=$actor['school_id'];}
@@ -117,7 +124,7 @@ function learningContentList(PDO $db,array $actor,string $kind,array $filters,st
 function learningContentRecord(PDO $db,array $actor,string $kind,int $id,string $purpose='study',bool $includeArchived=false):array {
     if(!in_array($kind,['questions','learning_notes'],true)||$id<1)throw new InvalidArgumentException('Content not found.');
     $q=$db->prepare("SELECT * FROM $kind WHERE id=?");$q->execute([$id]);$r=$q->fetch(PDO::FETCH_ASSOC);
-    if(!$r||(!learningCanView($db,$actor,$r,$purpose)&&!($includeArchived&&!empty($r['archived_at'])&&learningCanEdit($db,$actor,$r))))throw new InvalidArgumentException('Content not found.');
+    if(!$r||!learningBankPurposeMatches($r,$purpose)||(!learningCanView($db,$actor,$r,$purpose)&&!($includeArchived&&!empty($r['archived_at'])&&learningPurposeAllowed($db,$actor,$purpose)&&learningCanEdit($db,$actor,$r))))throw new InvalidArgumentException('Content not found.');
     $r['can_edit']=learningCanEdit($db,$actor,$r);$r['can_publish']=$r['can_edit'];$r['source_scope']=(int)$r['school_id']===0?'shared':'school';return $r;
 }
 function learningValidateQuestionIds(PDO $db,array $actor,array $ids,string $purpose):void {

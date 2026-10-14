@@ -1,6 +1,6 @@
 <?php
 /**
- * Exam Paper Generator & CDC Nepal Specification Grid
+ * Normal Paper Generator and school-defined allocation grids.
  */
 require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../includes/database.php';
@@ -149,7 +149,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_generate'])) {
         $generated = true;
         
         if ($generation_mode === 'auto') {
-            // Automatic generation logic using CDC Nepal Specification Grid
+            // Automatic generation using the selected normal-paper allocation.
             $selected_questions = [];
             
             // Group available questions by type
@@ -188,7 +188,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_generate'])) {
             if (!empty($insufficient)) {
                 $success_msg = "Exam paper generated, but some question types had insufficient items in the bank: " . implode(', ', $insufficient) . ". Filled with available ones.";
             } else {
-                $success_msg = "Exam paper generated successfully using CDC Nepal specification parameters.";
+                $success_msg = "Normal paper generated successfully using your question allocation parameters.";
             }
             
         } else {
@@ -242,7 +242,7 @@ if ($subject_id) {
     $selected_subject = $stmt->fetch();
 }
 
-$pageTitle = 'Exam Paper Generator';
+$pageTitle = 'Normal Paper Generator';
 $activePage = 'paper_generator';
 
 ob_start();
@@ -404,7 +404,8 @@ window.MathJax = {
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
 <div class="d-flex justify-content-between align-items-center mb-4 no-print">
-    <h2><i class="fas fa-file-invoice text-primary"></i> Exam Paper Generator</h2>
+    <h2><i class="fas fa-file-invoice text-primary"></i> Normal Paper Generator</h2>
+    <?php if(in_array(Auth::getRole(),['super_admin','school_admin','teacher'],true)&&Auth::hasAccess('exam_paper_generator')): ?><a class="btn btn-outline-primary" href="<?= APP_URL ?>/modules/learning/exam_paper_generator.php">Open separate Exam Paper Generator</a><?php endif; ?>
     <div>
         <a href="<?= APP_URL ?>/index.php" class="btn btn-secondary">
             <i class="fas fa-arrow-left"></i> Dashboard
@@ -471,7 +472,7 @@ window.MathJax = {
                         <label class="form-label fw-semibold">4. Selection Workflow</label>
                         <div class="btn-group-vertical w-100 gap-2" role="group">
                             <input type="radio" class="btn-check" name="generation_mode" id="modeAuto" value="auto" <?= $generation_mode === 'auto' ? 'checked' : '' ?> onchange="document.getElementById('paramForm').submit();">
-                            <label class="btn btn-outline-primary text-start px-3 py-2 fw-semibold" for="modeAuto"><i class="fas fa-magic me-2"></i> Automatic (CDC Grid)</label>
+                            <label class="btn btn-outline-primary text-start px-3 py-2 fw-semibold" for="modeAuto"><i class="fas fa-magic me-2"></i> Automatic (Normal Grid)</label>
 
                             <input type="radio" class="btn-check" name="generation_mode" id="modeManual" value="manual" <?= $generation_mode === 'manual' ? 'checked' : '' ?> onchange="document.getElementById('paramForm').submit();">
                             <label class="btn btn-outline-primary text-start px-3 py-2 fw-semibold" for="modeManual"><i class="fas fa-hand-pointer me-2"></i> Manual Selection</label>
@@ -499,7 +500,7 @@ window.MathJax = {
             <!-- CDC NEPAL SPECIFICATION GRID -->
             <div class="card generator-card h-100">
                 <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
-                    <h5 class="mb-0 text-primary fw-bold"><i class="fas fa-border-all"></i> CDC Nepal Specification Grid</h5>
+                    <h5 class="mb-0 text-primary fw-bold"><i class="fas fa-border-all"></i> Normal Paper Allocation Grid</h5>
                     <div class="d-flex align-items-center gap-2">
                         <div class="input-group input-group-sm" style="max-width: 230px;">
                             <label class="input-group-text bg-light text-muted small" for="loadGridSelect">Load Grid</label>
@@ -812,8 +813,9 @@ window.MathJax = {
 </div>
 <?php endif; ?>
 
+<script src="<?= APP_URL ?>/assets/js/paper-chapters.js"></script>
 <script>
-// Live Calculation of CDC Grid Marks
+// Live Calculation of custom Grid Marks
 function calculateLiveMarks() {
     let total = 0;
     const rows = document.querySelectorAll('.grid-row');
@@ -1016,7 +1018,7 @@ $(document).ready(function() {
     // Fetch chapters for chapter selector dropdown
     const classId = "<?= htmlspecialchars($class_id) ?>";
     const subjectId = "<?= htmlspecialchars($subject_id) ?>";
-    const selectedChapter = "<?= htmlspecialchars($chapter_filter) ?>";
+    const selectedChapter = <?= json_encode($chapter_filter,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;
     
     if (classId && subjectId) {
         $.ajax({
@@ -1030,16 +1032,7 @@ $(document).ready(function() {
             success: function(chapters) {
                 const select = document.getElementById('chapterFilterSelect');
                 if (select) {
-                    select.innerHTML = '<option value="">All Chapters (Full Syllabus)</option>';
-                    if (chapters && chapters.length > 0) {
-                        chapters.forEach(ch => {
-                            const opt = document.createElement('option');
-                            opt.value = ch;
-                            opt.textContent = ch;
-                            if (ch === selectedChapter) opt.selected = true;
-                            select.appendChild(opt);
-                        });
-                    }
+                    renderPaperChapters(select,chapters,selectedChapter);
                 }
             }
         });

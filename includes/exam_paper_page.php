@@ -1,0 +1,11 @@
+<?php
+require_once __DIR__.'/exam_paper_service.php';
+function examPageSelectors(PDO $db,array $actor):array {
+    $classes=[];$byClass=[];foreach(learningReadClasses($db,$actor) as $c){$subjects=learningReadSubjects($db,$actor,(int)$c['id']);if($actor['role']==='teacher')$subjects=array_values(array_filter($subjects,static fn($s)=>teacherOwnsSubject($db,$actor['school_id'],$actor['id'],(int)$c['id'],(int)$s['id'])));if(!$subjects)continue;$classes[]=$c;$byClass[$c['id']]=$subjects;}return [$classes,$byClass];
+}
+function examPageCatalog(PDO $db,array $actor,int $class,int $subject):array {
+    if(!$subject)return [[],[],[],[]];examPaperScope($db,$actor,$class,$subject);$chapters=learningCatalogChapters($db,$actor,$class,$subject);$topics=[];foreach($chapters as $c)$topics[$c['id']]=learningCatalogTopics($db,$actor,$class,$subject,(int)$c['id']);return [$chapters,$topics,examGridList($db,$actor,$class,$subject),examPaperReferences($db,$actor,$class,$subject)];
+}
+function examSelectorForm(array $classes,array $subjectsByClass,int $class,int $subject):void { ?>
+<form method="get" class="card card-body mb-3"><div class="row g-2"><div class="col-md-5"><label class="form-label">Class</label><select class="form-select" name="class_id" onchange="this.form.subject_id.value='';this.form.submit()"><option value="">Choose class</option><?php foreach($classes as $c): ?><option value="<?= $c['id'] ?>" <?= $class===(int)$c['id']?'selected':'' ?>><?= sanitize($c['name']) ?></option><?php endforeach; ?></select></div><div class="col-md-5"><label class="form-label">Subject</label><select class="form-select" name="subject_id" <?= !$class?'disabled':'' ?>><option value="">Choose subject</option><?php foreach($subjectsByClass[$class]??[] as $s): ?><option value="<?= $s['id'] ?>" <?= $subject===(int)$s['id']?'selected':'' ?>><?= sanitize($s['display_name']) ?></option><?php endforeach; ?></select></div><div class="col-md-2 align-self-end"><button class="btn btn-primary">Load class subject</button></div></div></form>
+<?php }

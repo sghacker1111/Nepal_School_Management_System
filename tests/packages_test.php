@@ -25,6 +25,11 @@ $actions=['view','catalog','fees','invoice','payment','advance','expense','subsc
 $roles=['school_admin'=>$actions,'accountant'=>['view','catalog','fees','invoice','payment','advance','expense','subscription'],'cashier'=>['view','payment','advance'],'auditor'=>['view']];
 foreach($roles as $role=>$permitted){$finance=new SchoolAccounting($db,1,$f['ids'][$role]);foreach($actions as $action)erpEqual($finance->can($action),$action!=='unrecognized_action'&&in_array($action,$permitted,true),$role.' finance '.$action);}
 erpEqual(schoolRoleCanWrite('auditor','accounting','payments.php'),false,'Auditor write denied');
+foreach(['exam_questions','exam_paper_generator','exam_specification_grids'] as $module){erpCheck(schoolPackageAllows('full',$module),'Full ERP / '.$module);erpCheck(schoolPackageAllows('exam_generator',$module),'Exam package / '.$module);}
+erpEqual(schoolPackageAllows('learning_system','exam_questions'),true,'Learning package may view explicit exam releases');
+erpEqual(schoolPackageAllows('learning_system','exam_paper_generator'),false,'Learning package cannot generate exams');
+erpEqual(schoolPackageAllows('paper_generator','exam_paper_generator'),false,'Normal and exam generation entitlements are separate');
+erpEqual(schoolRoleCanWrite('student','learning','exam_questions.php'),false,'Student exam-question writes denied');
 erpEqual(schoolRoleCanWrite('cashier','accounting','create_bill.php'),false,'Cashier invoice route denied');
 erpEqual(schoolRoleCanWrite('accountant','accounting','settings.php'),false,'Accountant settings route denied');
 $adminFinance=new SchoolAccounting($db,1,$f['ids']['school_admin']);$db->exec('UPDATE users SET status=0 WHERE id='.$f['ids']['school_admin']);
