@@ -26,6 +26,11 @@ $canManageCatalog=learningCanManageCatalog($contentActor);
 if (isset($_GET['action'])) {
     header('Content-Type: application/json');
     $action = $_GET['action'];
+    if($action==='get_deleted'){
+        if(!$canManageCatalog)denySchoolRequest('Only super admin may review deleted curriculum.',403);
+        try{echo json_encode(['success'=>true,'items'=>curriculumDeletedList($db,(int)$school_id,(int)($_GET['class_id']??0),(int)($_GET['subject_id']??0))]);}
+        catch(InvalidArgumentException $e){echo json_encode(['success'=>false,'message'=>$e->getMessage()]);}exit;
+    }
     
     if ($action === 'get_subjects') {
         $class_id = (int)($_GET['class_id'] ?? 0);
@@ -83,6 +88,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
     try {
         if(!$canManageCatalog)denySchoolRequest('Only super admin may change chapters and topics.',403);
+        if(in_array($action,['delete_chapter','delete_topic','restore_chapter','restore_topic'],true)&&(!is_scalar($_POST['id']??null)||!preg_match('/^[1-9][0-9]*$/',(string)$_POST['id'])))throw new InvalidArgumentException('Choose a valid chapter or topic record.');
+        if(in_array($action,['restore_chapter','restore_topic'],true)){
+            curriculumWrite($db,function()use($db,$school_id,$action){curriculumRestore($db,(int)$school_id,$action==='restore_chapter'?'chapters':'topics',(int)$_POST['id']);Auth::logActivity(Auth::getUserId(),'Restore curriculum',$action==='restore_chapter'?'chapters':'topics',(int)$_POST['id']);});
+            echo json_encode(['success'=>true,'message'=>'Curriculum restored successfully.']);exit;
+        }
         if ($action === 'add_chapter') {
             $class_id = (int)$_POST['class_id'];
             $subject_id = (int)$_POST['subject_id'];
@@ -118,8 +128,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
         if ($action === 'delete_chapter') {
             $id = (int)$_POST['id'];
-            curriculumDelete($db,(int)$school_id,'chapters',$id);
-            echo json_encode(['success' => true, 'message' => 'Unused chapter deleted successfully.']);
+            curriculumWrite($db,function()use($db,$school_id,$id){curriculumDelete($db,(int)$school_id,'chapters',$id);Auth::logActivity(Auth::getUserId(),'Delete unused chapter','chapters',$id);});
+            echo json_encode(['success' => true, 'message' => 'Chapter and its empty topics deleted successfully. Restore is available in Deleted curriculum.']);
             exit;
         }
 
@@ -159,8 +169,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
         if ($action === 'delete_topic') {
             $id = (int)$_POST['id'];
-            curriculumDelete($db,(int)$school_id,'topics',$id);
-            echo json_encode(['success' => true, 'message' => 'Unused topic deleted successfully.']);
+            curriculumWrite($db,function()use($db,$school_id,$id){curriculumDelete($db,(int)$school_id,'topics',$id);Auth::logActivity(Auth::getUserId(),'Delete unused topic','topics',$id);});
+            echo json_encode(['success' => true, 'message' => 'Unused topic deleted successfully. Restore is available in Deleted curriculum.']);
             exit;
         }
 
@@ -187,6 +197,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             echo json_encode(['success' => true]);
             exit;
         }
+    } catch (CurriculumDeleteBlocked $e) {
+        echo json_encode(['success'=>false,'blocked'=>true,'message'=>$e->getMessage(),'dependencies'=>$e->report]);
     } catch (Exception $e) {
         if($db->inTransaction())$db->rollBack();
         echo json_encode(['success' => false, 'message' => $e instanceof InvalidArgumentException?$e->getMessage():schoolPublicError($e)]);
@@ -225,7 +237,7 @@ ob_start();
                 <div class="card-body">
                     <!-- Class Filter -->
                     <div class="mb-3">
-                        <label class="form-label fw-bold text-muted small">Select Class</label>
+                        <label for="curriculumClass" class="form-label fw-bold text-muted small">Select Class</label>
                         <select id="curriculumClass" class="form-select" onchange="onClassChange()">
                             <option value="">-- Choose Class --</option>
                             <?php foreach ($classes as $c): ?>
@@ -237,7 +249,7 @@ ob_start();
                     <!-- Subject Filter -->
                     <div id="subjectSection" style="display: none;">
                         <div class="d-flex justify-content-between align-items-center mb-1">
-                            <label class="form-label fw-bold text-muted small mb-0">Select Subject</label>
+                            <label for="curriculumSubject" class="form-label fw-bold text-muted small mb-0">Select Subject</label>
                             <?php if($canManageCatalog): ?><button type="button" class="btn btn-link p-0 text-primary small text-decoration-none fw-bold" onclick="showMapSubjectModal()"><i class="fas fa-link"></i> Map Subject</button><?php endif; ?>
                         </div>
                         <select id="curriculumSubject" class="form-select" onchange="onSubjectChange()">
@@ -264,9 +276,9 @@ ob_start();
             <div class="card border-0 shadow-sm min-h-100" style="border-radius: 12px; background: #fff;">
                 <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
                     <h5 class="mb-0 fw-bold text-secondary" id="curriculumTreeTitle"><i class="fas fa-list-ol me-2 text-primary"></i> Syllabus Tree</h5>
-                    <button type="button" class="btn btn-success btn-sm px-3 d-none" id="btnAddChapter" onclick="showAddChapterModal()">
+                    <div class="d-flex flex-wrap gap-2"><?php if($canManageCatalog): ?><button type="button" class="btn btn-outline-secondary btn-sm" onclick="showDeletedCurriculum()">Deleted curriculum</button><?php endif; ?><button type="button" class="btn btn-success btn-sm px-3 d-none" id="btnAddChapter" onclick="showAddChapterModal()">
                         <i class="fas fa-plus me-1"></i> Add Chapter
-                    </button>
+                    </button></div>
                 </div>
                 <div class="card-body" id="curriculumTreeBody">
                     <div class="text-center text-muted py-5" id="placeholderView">
@@ -379,6 +391,7 @@ ob_start();
 </div>
 
 <?php endif; ?>
+<script src="<?= APP_URL ?>/assets/js/curriculum-delete.js?v=<?= (int)filemtime(__DIR__.'/../../assets/js/curriculum-delete.js') ?>"></script>
 <script>
 const canManageCatalog=<?= json_encode($canManageCatalog) ?>;
 let currentClassId = 0;
@@ -482,8 +495,8 @@ function loadChaptersTree() {
                                     <button class="btn btn-xs btn-outline-primary px-2 edit-chapter" title="Edit chapter">
                                         <i class="fas fa-edit"></i>
                                     </button>
-                                    <button class="btn btn-xs btn-outline-danger px-2" onclick="deleteChapter(${ch.id})">
-                                        <i class="fas fa-trash"></i>
+                                    <button class="btn btn-xs btn-outline-danger px-2" onclick="deleteChapter(${ch.id})" title="Delete chapter" aria-label="Delete chapter">
+                                        <i class="fas fa-trash"></i> Delete
                                     </button>
                                 </div>
                             </div>
@@ -670,7 +683,7 @@ function chapterSubmit(e) {
 function deleteChapter(id) {
     Swal.fire({
         title: 'Delete Chapter',
-        text: 'Only unused chapters can be deleted. Chapters linked to topics or questions are protected.',
+        text: 'Delete this chapter and its empty topics? Active questions, notes or paper grids will block deletion and show their locations. Deleted entries can be restored.',
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#d33',
@@ -685,8 +698,9 @@ function deleteChapter(id) {
                 success: function(res) {
                     if (res.success) {
                         loadChaptersTree();
+                        Swal.fire('Deleted',res.message,'success');
                     } else {
-                        Swal.fire('Error', res.message, 'error');
+                        CurriculumDeleteUI.showBlocked(res,<?= json_encode(APP_URL) ?>);
                     }
                 }
             });
@@ -761,7 +775,7 @@ function topicSubmit(e) {
 function deleteTopic(id, chapterId) {
     Swal.fire({
         title: 'Delete Topic',
-        text: 'Are you sure you want to delete this topic? This cannot be undone.',
+        text: 'Delete this unused topic? Active linked content will block deletion and show its locations. You can restore deleted topics.',
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#d33',
@@ -776,13 +790,26 @@ function deleteTopic(id, chapterId) {
                 success: function(res) {
                     if (res.success) {
                         loadTopicsList(chapterId);
+                        Swal.fire('Deleted',res.message,'success');
                     } else {
-                        Swal.fire('Error', res.message, 'error');
+                        CurriculumDeleteUI.showBlocked(res,<?= json_encode(APP_URL) ?>);
                     }
                 }
             });
         }
     });
+}
+function showDeletedCurriculum(){
+    if(!currentClassId||!currentSubjectId){Swal.fire('Choose class and subject','Select a class and subject first.','info');return;}
+    $.getJSON(window.location.pathname,{action:'get_deleted',class_id:currentClassId,subject_id:currentSubjectId},res=>{
+        if(!res.success){Swal.fire('Error',res.message,'error');return;}
+        CurriculumDeleteUI.showDeleted(res.items,(kind,id)=>{
+            $.ajax({url:window.location.pathname,type:'POST',dataType:'json',data:{action:kind==='chapters'?'restore_chapter':'restore_topic',id},success:result=>{
+                if(!result.success){Swal.fire('Cannot restore',result.message,'warning');return;}
+                loadChaptersTree();showDeletedCurriculum();
+            },error:()=>Swal.fire('Error','Could not restore this entry. Reload and try again.','error')});
+        });
+    }).fail(()=>Swal.fire('Error','Could not load deleted curriculum.','error'));
 }
 </script>
 

@@ -99,6 +99,10 @@ function learningContentList(PDO $db,array $actor,string $kind,array $filters,st
     }
     if(!learningPurposeAllowed($db,$actor,$purpose)){if($paged)$pagination['page']=1;return [];}
     $where=['school_id IN (0,?)'];$params=[$actor['school_id']];
+    if(isset($filters['record_id'])&&$filters['record_id']!==''){
+        if(!is_scalar($filters['record_id'])||!preg_match('/^[1-9][0-9]*$/',(string)$filters['record_id']))throw new InvalidArgumentException('Choose a valid content record.');
+        $where[]='id=?';$params[]=(int)$filters['record_id'];
+    }
     if($kind==='questions'){$where[]='bank_kind=?';$params[]=str_starts_with($purpose,'exam_')?'exam':'learning';}
     elseif(str_starts_with($purpose,'exam_'))return [];
     if($actor['role']==='student'&&$purpose==='exam_view'){$where[]="student_visible=1 AND visibility='public'";}

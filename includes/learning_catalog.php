@@ -34,7 +34,7 @@ function learningCatalogChoices(PDO $db,array $actor,int $class,int $subject):ar
     if(!$valid)throw new InvalidArgumentException('Choose an available class subject.');
     $scopes=learningCatalogScope($db,$actor['school_id'],$class,$subject);$choices=[];
     foreach(['shared','local'] as $source){$scope=$scopes[$source];if(!$scope||($source==='local'&&$scope['school_id']===0)||($source==='shared'&&!learningSharedScopeEligible($db,$scope)))continue;
-        $q=$db->prepare('SELECT * FROM chapters WHERE school_id=? AND class_id=? AND subject_id=? ORDER BY sort_order,id');$q->execute(array_values($scope));
+        $q=$db->prepare('SELECT * FROM chapters WHERE school_id=? AND class_id=? AND subject_id=? AND archived_at IS NULL ORDER BY sort_order,id');$q->execute(array_values($scope));
         foreach($q->fetchAll(PDO::FETCH_ASSOC) as $r){$r['name']=curriculumName((string)$r['name']);$r['name_np']=curriculumName((string)($r['name_np']??''));$r['scope']=$source;$key=curriculumNameKey($r['name']);
             if(!isset($choices[$key])){$r['alias_ids']=[];$r['aliases']=[];$choices[$key]=$r;}
             $choices[$key]['alias_ids'][]=(int)$r['id'];$choices[$key]['aliases'][]=['id'=>(int)$r['id'],'scope'=>$source]+$scope;
@@ -50,7 +50,7 @@ function learningCatalogTopics(PDO $db,array $actor,int $class,int $subject,int 
     if(!$choice)throw new InvalidArgumentException('Choose a chapter in this class subject.');
     $topics=[];
     foreach($choice['aliases'] as $alias){
-        $q=$db->prepare('SELECT * FROM topics WHERE school_id=? AND class_id=? AND subject_id=? AND chapter_id=? ORDER BY sort_order,id');$q->execute([$alias['school_id'],$alias['class_id'],$alias['subject_id'],$alias['id']]);
+        $q=$db->prepare('SELECT * FROM topics WHERE school_id=? AND class_id=? AND subject_id=? AND chapter_id=? AND archived_at IS NULL ORDER BY sort_order,id');$q->execute([$alias['school_id'],$alias['class_id'],$alias['subject_id'],$alias['id']]);
         foreach($q->fetchAll(PDO::FETCH_ASSOC) as $r){$r['name']=curriculumName((string)$r['name']);$r['name_np']=curriculumName((string)($r['name_np']??''));$r['scope']=$alias['scope'];$key=curriculumNameKey($r['name']);
             if(!isset($topics[$key])){$r['alias_ids']=[];$r['aliases']=[];$topics[$key]=$r;}
             $topics[$key]['alias_ids'][]=(int)$r['id'];$topics[$key]['aliases'][]=['id'=>(int)$r['id'],'chapter_id'=>(int)$r['chapter_id'],'scope'=>$alias['scope'],'school_id'=>(int)$r['school_id']];
@@ -62,7 +62,7 @@ function learningCatalogTopics(PDO $db,array $actor,int $class,int $subject,int 
 function learningCatalogChapterScope(PDO $db,array $actor,int $chapter):array {
     require_once __DIR__.'/learning_content.php';
     $q=$db->prepare('SELECT * FROM chapters WHERE id=?');$q->execute([$chapter]);$r=$q->fetch(PDO::FETCH_ASSOC);
-    if(!$r)throw new InvalidArgumentException('Chapter not found.');$scope=learningRecordScope($db,$actor,$r);
+    if(!$r||$r['archived_at'])throw new InvalidArgumentException('Chapter not found.');$scope=learningRecordScope($db,$actor,$r);
     if(!$scope)throw new InvalidArgumentException('Chapter not found.');return $scope;
 }
 function learningCatalogSelection(PDO $db,array $actor,int $class,int $subject,array $input,bool $allowCreate=false):array {

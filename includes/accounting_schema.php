@@ -45,6 +45,7 @@ function migrateSchoolExtensions(PDO $db):void {
     require_once __DIR__.'/student_learning.php';
     migrateStudentLearningAccounts($db);
     require_once __DIR__.'/curriculum_catalog.php';
+    migrateCurriculumDeletion($db);
     if((int)$version<13)migrateSharedCurriculum($db);
     require_once __DIR__.'/routine_schema.php';
     migrateRoutineProfiles($db);

@@ -285,6 +285,7 @@ if(!is_string($questionSearch)||mb_strlen($questionSearch)>100)denySchoolRequest
 $questionSearch=trim($questionSearch);
 $filter_source=$_GET['source']??'all';$filter_archived=($_GET['archived']??'')==='1';
 $filters=['source'=>$filter_source,'archived'=>$filter_archived,'search'=>$questionSearch];
+$filters['record_id']=$_GET['record_id']??'';
 if($filter_class)$filters['class_id']=$filter_class;if($filter_subject)$filters['subject_id']=$filter_subject;
 if($filter_category==='mcq')$filters['type']='MCQ';
 try{$questions=learningContentList($db,$contentActor,'questions',$filters,'bank');}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
@@ -528,6 +529,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                         <?php foreach ($questions as $q): ?>
                         <tr>
                             <td>
+                                <small class="text-muted">Record #<?= (int)$q['id'] ?></small><br>
                                 <strong><?= sanitize($q['class_name'] ?: 'Universal') ?></strong><br>
                                 <small class="text-muted"><?= sanitize($q['subject_name'] ?: 'Universal') ?></small>
                             </td>

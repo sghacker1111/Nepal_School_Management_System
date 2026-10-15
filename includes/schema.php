@@ -1,6 +1,6 @@
 <?php
 /** Additive upgrades: retain records, marks and uploaded files. */
-const SCHOOL_SCHEMA_VERSION = 16;
+const SCHOOL_SCHEMA_VERSION = 17;
 function dbColumns(PDO $db, string $table): array {
     $rows = $db->query(DB_TYPE === 'sqlite' ? "PRAGMA table_info(`$table`)" : "SHOW COLUMNS FROM `$table`")->fetchAll();
     return array_column($rows, DB_TYPE === 'sqlite' ? 'name' : 'Field');
@@ -32,6 +32,8 @@ function migrateSchoolSchema(PDO $db): void {
     foreach ($tables as $table => $definition) $db->exec("CREATE TABLE IF NOT EXISTS `$table` (id $pk, $definition)");
     $evaluation = ['th_credit_hours'=>'DECIMAL(6,2) DEFAULT 0', 'in_credit_hours'=>'DECIMAL(6,2) DEFAULT 0', 'th_full_marks'=>'DECIMAL(6,2) DEFAULT 75', 'th_pass_marks'=>'DECIMAL(6,2) DEFAULT 26.25', 'in_full_marks'=>'DECIMAL(6,2) DEFAULT 25', 'in_pass_marks'=>'DECIMAL(6,2) DEFAULT 10'];
     $columns = [
+        'chapters'=>['archived_at'=>'TIMESTAMP NULL'],
+        'topics'=>['archived_at'=>'TIMESTAMP NULL','deleted_with_chapter_id'=>'INTEGER NULL'],
         'schools' => ['principal_name'=>'VARCHAR(100)', 'principal_mobile'=>'VARCHAR(20)', 'technical_person'=>'VARCHAR(100)', 'class_teacher_signature'=>'VARCHAR(255)', 'routine_periods_per_day'=>'INTEGER DEFAULT 8', 'routine_include_sunday'=>'INTEGER DEFAULT 1', 'subscription_type'=>"VARCHAR(30) DEFAULT 'full'", 'question_permission_status'=>"VARCHAR(20) DEFAULT 'none'", 'question_view_permission'=>"VARCHAR(20) DEFAULT 'none'", 'learning_hub_permission_status'=>"VARCHAR(20) DEFAULT 'none'", 'workflow_version'=>'INTEGER DEFAULT 0'],
         'users' => ['school_id'=>'INTEGER DEFAULT 1', 'signature'=>'VARCHAR(255)'],
         'classes' => ['school_id'=>'INTEGER DEFAULT 1', 'source_id'=>'INTEGER', 'class_teacher_id'=>'INTEGER', 'class_teacher_name'=>'VARCHAR(100)', 'class_teacher_signature'=>'VARCHAR(255)', 'is_active'=>'INTEGER DEFAULT 1', 'is_grading_teaching'=>'INTEGER DEFAULT 0'],

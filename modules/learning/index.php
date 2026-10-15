@@ -60,11 +60,12 @@ if($reviewLegacy&&(!$is_admin||(int)$school_id!==0))denySchoolRequest('Content n
 $canCreateNote=$selected_class&&$selected_subject&&learningCanCreate($db,$contentActor,$class_id,$subject_id);
 if($selected_class&&$selected_subject&&$selected_chapter){
     $filters=['class_id'=>$class_id,'subject_id'=>$subject_id,'chapter'=>$selected_chapter,'source'=>$filter_source,'archived'=>$filter_archived];
+    $filters['record_id']=$_GET['record_id']??'';
     try{$notes=learningContentList($db,$contentActor,'learning_notes',$filters,'study');$questions=learningContentList($db,$contentActor,'questions',array_replace($filters,['archived'=>false]),'study');}
     catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
 }
 $noteTopics=[];foreach($chapterRows as $row)if($row['name']===$selected_chapter)$noteTopics=learningCatalogTopics($db,$contentActor,$class_id,$subject_id,(int)$row['id']);
-if($reviewLegacy){$notes=array_values(array_filter(learningContentList($db,$contentActor,'learning_notes',[]),static fn($n)=>learningNoteNeedsCatalogReview($db,$contentActor,$n)));foreach($notes as &$note)$note['needs_catalog_review']=true;unset($note);$questions=[];}
+if($reviewLegacy){$notes=array_values(array_filter(learningContentList($db,$contentActor,'learning_notes',['record_id'=>$_GET['record_id']??'']),static fn($n)=>learningNoteNeedsCatalogReview($db,$contentActor,$n)));foreach($notes as &$note)$note['needs_catalog_review']=true;unset($note);$questions=[];}
 $pageTitle = 'Learning Hub';
 $activePage = 'learning';
 
@@ -222,7 +223,7 @@ window.MathJax = {
                             <div class="card note-item mb-3 shadow-sm border-0">
                                 <div class="card-body p-3">
                                     <div class="d-flex justify-content-between align-items-start mb-2">
-                                        <h6 class="fw-bold text-success mb-1"><?= sanitize($note['title']) ?></h6>
+                                        <h6 class="fw-bold text-success mb-1"><?= sanitize($note['title']) ?><small class="d-block text-muted">Note #<?= (int)$note['id'] ?></small></h6>
                                         <?php if ($note['can_edit']&&$canCreateNote): ?>
                                         <div>
                                             <button class="btn btn-xs btn-outline-warning py-0 px-1" onclick="editNote(<?= htmlspecialchars(json_encode($note)) ?>)" title="Edit"><i class="fas fa-edit fa-xs"></i></button>

@@ -11,9 +11,9 @@ function curriculumWrite(PDO $db,callable $work):mixed {
         $result=$work();if($owned)$db->commit();return $result;
     }catch(Throwable $e){if($owned&&$db->inTransaction())$db->rollBack();throw $e;}
 }
-function curriculumChapters(PDO $db,int $school,int $class,int $subject):array {
+function curriculumChapters(PDO $db,int $school,int $class,int $subject,bool $includeDeleted=false):array {
     schoolRecord($db,'classes',$class,$school);schoolRecord($db,'subjects',$subject,$school);
-    $q=$db->prepare('SELECT * FROM chapters WHERE school_id=? AND class_id=? AND subject_id=? ORDER BY sort_order,id');$q->execute([$school,$class,$subject]);
+    $q=$db->prepare('SELECT * FROM chapters WHERE school_id=? AND class_id=? AND subject_id=?'.($includeDeleted?'':' AND archived_at IS NULL').' ORDER BY sort_order,id');$q->execute([$school,$class,$subject]);
     $unique=[];foreach($q->fetchAll() as $row){$row['name']=curriculumName((string)$row['name']);$row['name_np']=curriculumName((string)($row['name_np']??''));$key=curriculumNameKey($row['name']);if(!isset($unique[$key]))$unique[$key]=$row;}
     return array_values($unique);
 }
@@ -21,16 +21,17 @@ function curriculumEnsureChapter(PDO $db,int $school,int $class,int $subject,str
     $name=curriculumName($name);$nepali=curriculumName($nepali);
     if($name===''||mb_strlen($name)>255||mb_strlen($nepali)>255)throw new InvalidArgumentException('Enter a chapter name of 1 to 255 characters.');
     return curriculumWrite($db,function()use($db,$school,$class,$subject,$name,$nepali,$order){
-        foreach(curriculumChapters($db,$school,$class,$subject) as $row)if(curriculumNameKey($row['name'])===curriculumNameKey($name))return (int)$row['id'];
+        foreach(curriculumChapters($db,$school,$class,$subject,true) as $row)if(curriculumNameKey($row['name'])===curriculumNameKey($name)){if($row['archived_at'])throw new InvalidArgumentException('This chapter is deleted. Restore it from Deleted curriculum instead of creating a duplicate.');return (int)$row['id'];}
         $db->prepare('INSERT INTO chapters(school_id,class_id,subject_id,name,name_np,sort_order) VALUES(?,?,?,?,?,?)')->execute([$school,$class,$subject,$name,$nepali,$order]);return (int)$db->lastInsertId();
     });
 }
-function curriculumTopics(PDO $db,int $school,int $chapter):array {
+function curriculumTopics(PDO $db,int $school,int $chapter,bool $includeDeleted=false):array {
     $ch=schoolRecord($db,'chapters',$chapter,$school);
+    if(!$includeDeleted&&$ch['archived_at'])return [];
     // Preserve topics linked to historical duplicate chapter IDs in the unified display.
     $q=$db->prepare('SELECT id,name FROM chapters WHERE school_id=? AND class_id=? AND subject_id=?');$q->execute([$school,$ch['class_id'],$ch['subject_id']]);$ids=[];
     foreach($q->fetchAll() as $r)if(curriculumNameKey((string)$r['name'])===curriculumNameKey((string)$ch['name']))$ids[]=(int)$r['id'];
-    $q=$db->prepare('SELECT * FROM topics WHERE school_id=? AND chapter_id IN ('.implode(',',array_fill(0,count($ids),'?')).') ORDER BY sort_order,id');$q->execute([$school,...$ids]);
+    $q=$db->prepare('SELECT * FROM topics WHERE school_id=? AND chapter_id IN ('.implode(',',array_fill(0,count($ids),'?')).')'.($includeDeleted?'':' AND archived_at IS NULL').' ORDER BY sort_order,id');$q->execute([$school,...$ids]);
     $rows=$q->fetchAll();foreach($rows as &$row){$row['name']=curriculumName((string)$row['name']);$row['name_np']=curriculumName((string)($row['name_np']??''));}unset($row);return $rows;
 }
 /** Unique choices retain every historical ID so existing questions can keep their links. */
@@ -48,7 +49,8 @@ function curriculumEnsureTopic(PDO $db,int $school,int $chapter,string $name,str
     if($name===''||mb_strlen($name)>255||mb_strlen($nepali)>255)throw new InvalidArgumentException('Enter a topic name of 1 to 255 characters.');
     return curriculumWrite($db,function()use($db,$school,$chapter,$name,$nepali,$order){
         $ch=schoolRecord($db,'chapters',$chapter,$school);
-        foreach(curriculumTopics($db,$school,$chapter) as $row)if(curriculumNameKey($row['name'])===curriculumNameKey($name))return (int)$row['id'];
+        if($ch['archived_at'])throw new InvalidArgumentException('Restore the deleted chapter before adding topics.');
+        foreach(curriculumTopics($db,$school,$chapter,true) as $row)if(curriculumNameKey($row['name'])===curriculumNameKey($name)){if($row['archived_at'])throw new InvalidArgumentException('This topic is deleted. Restore it from Deleted curriculum instead of creating a duplicate.');return (int)$row['id'];}
         $db->prepare('INSERT INTO topics(school_id,class_id,subject_id,chapter_id,name,name_np,sort_order) VALUES(?,?,?,?,?,?,?)')->execute([$school,$ch['class_id'],$ch['subject_id'],$chapter,$name,$nepali,$order]);return (int)$db->lastInsertId();
     });
 }
@@ -63,6 +65,7 @@ function curriculumRenameChapter(PDO $db,int $school,int $id,string $name,string
     $name=curriculumName($name);$nepali=curriculumName($nepali);if($name===''||mb_strlen($name)>255||mb_strlen($nepali)>255)throw new InvalidArgumentException('Enter a valid chapter name.');
     curriculumWrite($db,function()use($db,$school,$id,$name,$nepali,$order){
         $old=schoolRecord($db,'chapters',$id,$school);
+        if($old['archived_at'])throw new InvalidArgumentException('Restore this chapter before editing it.');
         $oldKey=curriculumNameKey((string)$old['name']);
         $q=$db->prepare('SELECT id,name FROM chapters WHERE school_id=? AND class_id=? AND subject_id=?');$q->execute([$school,$old['class_id'],$old['subject_id']]);$aliases=[];
         foreach($q->fetchAll() as $ch){
@@ -86,7 +89,8 @@ function curriculumRenameTopic(PDO $db,int $school,int $id,string $name,string $
     if($name===''||mb_strlen($name)>255||mb_strlen($nepali)>255)throw new InvalidArgumentException('Enter a topic name of 1 to 255 characters.');
     curriculumWrite($db,function()use($db,$school,$id,$name,$nepali,$order){
         $old=schoolRecord($db,'topics',$id,$school);
-        foreach(curriculumTopics($db,$school,(int)$old['chapter_id']) as $topic){
+        if($old['archived_at'])throw new InvalidArgumentException('Restore this topic before editing it.');
+        foreach(curriculumTopics($db,$school,(int)$old['chapter_id'],true) as $topic){
             if((int)$topic['id']!==$id&&curriculumNameKey($topic['name'])===curriculumNameKey($name))throw new InvalidArgumentException('Another topic in this chapter already uses that name.');
         }
         $db->prepare('UPDATE topics SET name=?,name_np=?,sort_order=? WHERE id=? AND school_id=?')->execute([$name,$nepali,$order,$id,$school]);
@@ -94,22 +98,7 @@ function curriculumRenameTopic(PDO $db,int $school,int $id,string $name,string $
     });
 }
 function curriculumDelete(PDO $db,int $school,string $kind,int $id):void {
-    curriculumWrite($db,function()use($db,$school,$kind,$id){
-        if(!in_array($kind,['chapters','topics'],true))throw new InvalidArgumentException('Invalid curriculum record.');
-        $row=schoolRecord($db,$kind,$id,$school);
-        if(in_array('catalog_chapter_id',dbColumns($db,'questions'),true)){
-            foreach(['questions','learning_notes'] as $table){
-                $field=$kind==='chapters'?($school===0?'catalog_chapter_id':($table==='learning_notes'?'chapter_id':null)):($school===0?'catalog_topic_id':'topic_id');
-                if($field){$q=$db->prepare("SELECT id FROM $table WHERE $field=? LIMIT 1");$q->execute([$id]);if($q->fetchColumn())throw new InvalidArgumentException('This catalog entry is linked to learning content and cannot be deleted.');}
-            }
-        }
-        if($kind==='chapters'){
-            if(curriculumTopics($db,$school,$id))throw new InvalidArgumentException('This chapter has topics. Keep it to preserve curriculum links.');
-            $q=$db->prepare('SELECT chapter FROM questions WHERE school_id=? AND class_id=? AND subject_id=?');$q->execute([$school,$row['class_id'],$row['subject_id']]);
-            foreach($q->fetchAll(PDO::FETCH_COLUMN) as $name)if(curriculumNameKey($name)===curriculumNameKey((string)$row['name']))throw new InvalidArgumentException('This chapter is used by questions and cannot be deleted.');
-        }else{$q=$db->prepare('SELECT id FROM questions WHERE topic_id=? LIMIT 1');$q->execute([$id]);if($q->fetchColumn())throw new InvalidArgumentException('This topic is used by questions and cannot be deleted.');}
-        $db->prepare("DELETE FROM $kind WHERE id=? AND school_id=?")->execute([$id,$school]);
-    });
+    curriculumArchiveUnused($db,$school,$kind,$id);
 }
 /** Additive schema upgrade: persist the existing fallback catalog and legacy question chapter names. */
 function migrateSharedCurriculum(PDO $db):void {
@@ -123,3 +112,4 @@ function migrateSharedCurriculum(PDO $db):void {
         foreach($q->fetchAll() as $row)curriculumEnsureChapter($db,(int)$row['school_id'],(int)$row['class_id'],(int)$row['subject_id'],$row['chapter']);
     });
 }
+require_once __DIR__.'/curriculum_deletion.php';

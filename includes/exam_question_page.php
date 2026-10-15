@@ -41,7 +41,9 @@ if(($_GET['action']??'')==='download_template'){
 $level=$_GET['difficulty']??'';$chapterFilter=$_GET['chapter']??'';$topicFilter=$_GET['filter_topic']??'';$search=$_GET['search']??'';
 foreach([$level,$chapterFilter,$topicFilter,$search] as $v)if(!is_string($v)||mb_strlen($v)>200)denySchoolRequest('Choose valid question filters.',422);
 $filters=['source'=>$_GET['source']??'all','archived'=>!$isStudent&&($_GET['archived']??'')==='1','search'=>$search,'question_group'=>$examSection];
+$filters['record_id']=$_GET['record_id']??'';
 $returnQuery=['class_id'=>$class,'subject_id'=>$subject,'chapter'=>$chapterFilter,'filter_topic'=>$topicFilter,'difficulty'=>$level,'search'=>$search,'source'=>$filters['source'],'archived'=>$filters['archived']?'1':'','per_page'=>$pagination['per_page'],'page'=>$pagination['page']];
+if($filters['record_id']!=='')$returnQuery['record_id']=$filters['record_id'];
 $url=static fn(array $changes=[])=>APP_URL.'/modules/learning/'.$route.'?'.http_build_query(array_replace($returnQuery,$changes));
 $listUrl=$url();
 if($_SERVER['REQUEST_METHOD']==='POST'){
@@ -118,6 +120,7 @@ $pageTitle=($view==='list'?'':ucfirst($view).' ').$sectionTitle;$activePage=$exa
 <script src="<?= APP_URL ?>/assets/js/exam-questions.js?v=<?= (int)filemtime(__DIR__.'/../assets/js/exam-questions.js') ?>"></script>
 <?php else: ?>
 <?php include __DIR__.'/exam_question_filters.php'; ?>
+<?php if($filters['record_id']!==''): ?><p class="small">Viewing a linked record. <a href="<?= sanitize($url(['record_id'=>''])) ?>">Show all questions</a></p><?php endif; ?>
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3"><p class="text-muted mb-0" id="examQuestionCount"><?= $pagination['total'] ?> visible <?= $examSection==='mcq'?'MCQs':'exam questions' ?> · Showing <?= $pagination['total']?($pagination['page']-1)*$pagination['per_page']+1:0 ?>–<?= min($pagination['page']*$pagination['per_page'],$pagination['total']) ?></p><span class="small text-muted">Page <?= $pagination['page'] ?> of <?= $pagination['pages'] ?></span></div>
 <?php if(!$questions): ?><div class="card card-body text-muted"><?= $isStudent?'No questions have been released for your class in this section yet.':'No eligible questions match these filters.' ?></div><?php endif; ?>
 <section class="exam-question-list" aria-label="<?= $sectionTitle ?> list">

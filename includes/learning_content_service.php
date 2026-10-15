@@ -61,7 +61,7 @@ function learningSetVisibility(PDO $db,array $actor,string $kind,int $id,string 
     learningVisibility($visibility);learningWrite($db,function()use($db,$actor,$kind,$id,$visibility,$bankKind){$r=learningMutableRecord($db,$actor,$kind,$id,$bankKind);if($r['archived_at'])throw new InvalidArgumentException('Restore archived content before changing visibility.');$release=$kind==='questions'&&$bankKind==='exam'&&$visibility==='private'?',student_visible=0':'';$db->prepare("UPDATE $kind SET visibility=?,updated_at=CURRENT_TIMESTAMP$release WHERE id=?")->execute([$visibility,$id]);learningAudit($db,$actor,$visibility==='public'?'Publish content':'Make content private',$kind,$id);});
 }
 function learningSetArchived(PDO $db,array $actor,string $kind,int $id,bool $archived,string $bankKind='learning'):void {
-    learningWrite($db,function()use($db,$actor,$kind,$id,$archived,$bankKind){learningMutableRecord($db,$actor,$kind,$id,$bankKind);$db->prepare("UPDATE $kind SET archived_at=?,updated_at=CURRENT_TIMESTAMP WHERE id=?")->execute([$archived?date('Y-m-d H:i:s'):null,$id]);learningAudit($db,$actor,$archived?'Archive content':'Restore content',$kind,$id);});
+    learningWrite($db,function()use($db,$actor,$kind,$id,$archived,$bankKind){$record=learningMutableRecord($db,$actor,$kind,$id,$bankKind);if(!$archived)curriculumAssertContentRestorable($db,$record);$db->prepare("UPDATE $kind SET archived_at=?,updated_at=CURRENT_TIMESTAMP WHERE id=?")->execute([$archived?date('Y-m-d H:i:s'):null,$id]);learningAudit($db,$actor,$archived?'Archive content':'Restore content',$kind,$id);});
 }
 function learningSaveNote(PDO $db,array $actor,array $input,?int $id=null):int {
     return learningWrite($db,function()use($db,$actor,$input,$id){

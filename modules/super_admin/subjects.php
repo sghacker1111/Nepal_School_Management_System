@@ -57,10 +57,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_chapter'])) {
     }
     
     if ($action === 'delete') {
-        $ch_id = (int)$_POST['chapter_id'];
+        $ch_id = (int)($_POST['chapter_id']??0);
         try {
+            if(!is_scalar($_POST['chapter_id']??null)||!preg_match('/^[1-9][0-9]*$/',(string)$_POST['chapter_id']))throw new InvalidArgumentException('Choose a valid chapter record.');
             curriculumDelete($db,0,'chapters',$ch_id);
             echo json_encode(['success' => true]);
+        } catch (CurriculumDeleteBlocked $e) {
+            echo json_encode(['success'=>false,'blocked'=>true,'message'=>$e->getMessage(),'dependencies'=>$e->report]);
         } catch (PDOException|InvalidArgumentException $e) {
             echo json_encode(['success' => false, 'message' => schoolPublicError($e)]);
         }
@@ -70,10 +73,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_chapter'])) {
     if ($action === 'delete_by_name') {
         $c_id = (int)$_POST['class_id'];
         $s_id = (int)$_POST['subject_id'];
-        $name = trim($_POST['name'] ?? '');
         try {
-            foreach(curriculumChapters($db,0,$c_id,$s_id) as $chapter)if(curriculumNameKey($chapter['name'])===curriculumNameKey($name))curriculumDelete($db,0,'chapters',(int)$chapter['id']);
+            if(!is_string($_POST['name']??null))throw new InvalidArgumentException('Choose a valid chapter name.');$name=trim($_POST['name']);
+            $found=false;foreach(curriculumChapters($db,0,$c_id,$s_id) as $chapter)if(curriculumNameKey($chapter['name'])===curriculumNameKey($name)){$found=true;curriculumDelete($db,0,'chapters',(int)$chapter['id']);}
+            if(!$found)throw new InvalidArgumentException('Choose an active chapter to delete.');
             echo json_encode(['success' => true]);
+        } catch (CurriculumDeleteBlocked $e) {
+            echo json_encode(['success'=>false,'blocked'=>true,'message'=>$e->getMessage(),'dependencies'=>$e->report]);
         } catch (PDOException|InvalidArgumentException $e) {
             echo json_encode(['success' => false, 'message' => schoolPublicError($e)]);
         }
@@ -624,6 +630,7 @@ ob_start();
     </div>
 </div>
 
+<script src="<?= APP_URL ?>/assets/js/curriculum-delete.js?v=<?= (int)filemtime(__DIR__.'/../../assets/js/curriculum-delete.js') ?>"></script>
 <script>
 let subjectModal = null;
 
@@ -833,7 +840,8 @@ function deleteChapter(name) {
         },
         dataType: 'json',
         success: function(res) {
-            loadChaptersList();
+            if(res.success){loadChaptersList();Swal.fire('Deleted','Chapter and empty topics deleted. Restore them in Curriculum & Topics Manager → Deleted curriculum.','success');}
+            else CurriculumDeleteUI.showBlocked(res,<?= json_encode(APP_URL) ?>);
         },
         error: function() {
             alert("Error deleting chapter.");

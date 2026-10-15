@@ -73,13 +73,13 @@ function provisionSchool(PDO $db, int $schoolId): void {
             insertRecord($db,'class_subjects',$row);
         }
         $chapterMap=[];
-        foreach($db->query('SELECT * FROM chapters WHERE school_id=0')->fetchAll() as $chapter){
+        foreach($db->query('SELECT * FROM chapters WHERE school_id=0 AND archived_at IS NULL')->fetchAll() as $chapter){
             if(!isset($maps['classes'][$chapter['class_id']],$maps['subjects'][$chapter['subject_id']]))continue;
             $source=$chapter['id'];$chapter['class_id']=$maps['classes'][$chapter['class_id']];$chapter['subject_id']=$maps['subjects'][$chapter['subject_id']];$chapter['school_id']=$schoolId;
             $q=$db->prepare('SELECT id FROM chapters WHERE school_id=? AND class_id=? AND subject_id=? AND name=?');$q->execute([$schoolId,$chapter['class_id'],$chapter['subject_id'],$chapter['name']]);
             $chapterMap[$source]=(int)($q->fetchColumn()?:insertRecord($db,'chapters',$chapter));
         }
-        foreach($db->query('SELECT * FROM topics WHERE school_id=0')->fetchAll() as $topic){
+        foreach($db->query('SELECT * FROM topics WHERE school_id=0 AND archived_at IS NULL')->fetchAll() as $topic){
             if(!isset($chapterMap[$topic['chapter_id']],$maps['classes'][$topic['class_id']],$maps['subjects'][$topic['subject_id']]))continue;
             $topic['chapter_id']=$chapterMap[$topic['chapter_id']];$topic['class_id']=$maps['classes'][$topic['class_id']];$topic['subject_id']=$maps['subjects'][$topic['subject_id']];$topic['school_id']=$schoolId;
             $q=$db->prepare('SELECT id FROM topics WHERE school_id=? AND chapter_id=? AND name=?');$q->execute([$schoolId,$topic['chapter_id'],$topic['name']]);
