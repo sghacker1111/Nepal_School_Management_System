@@ -12,15 +12,17 @@ HEADERS = ['Class', 'Subject', 'Chapter', 'Topic', 'Type', 'Difficulty', 'Source
            'Option A (English)', 'Option A (Nepali)', 'Option B (English)',
            'Option B (Nepali)', 'Option C (English)', 'Option C (Nepali)',
            'Option D (English)', 'Option D (Nepali)', 'Correct Option']
+MCQ_HEADERS = HEADERS
+HEADERS = HEADERS[:14]
 
 def csv_bytes(rows):
     output = io.StringIO(); csv.writer(output).writerows(rows)
     return output.getvalue().encode('utf-8-sig')
 
-def upload(app, content, filename='exam.csv', mode='normal', status=200, **extra):
+def upload(app, content, filename='exam.csv', mode='normal', status=200, kind='other', **extra):
     boundary = 'ExamQuestionImportBoundary7615'
     fields = {'csrf_token': app.token, 'action': 'import',
-              'import_content_mode': mode, 'import_visibility': 'private', **extra}
+              'import_content_mode': mode, 'import_kind': kind, 'import_visibility': 'private', **extra}
     parts = [f'--{boundary}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n'.encode() for k, v in fields.items()]
     parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="excel_file"; filename="{filename}"\r\nContent-Type: application/octet-stream\r\n\r\n'.encode() + content + f'\r\n--{boundary}--\r\n'.encode())
     request = Request(app.base + PAGE, data=b''.join(parts), headers={'Content-Type': f'multipart/form-data; boundary={boundary}'})
@@ -41,7 +43,7 @@ def seed_exam_import(app):
     sub = app.db.execute('SELECT code FROM subjects WHERE id=?', (f['subject'],)).fetchone()[0]
     row = [cls, sub, 'Import unit', 'Import topic', 'Short', 'Hard', 'School',
            'A', '2.50', '3.25', 'Exam import 1 < 2 & 3', 'परीक्षा प्रश्न',
-           'Model answer', 'नमुना उत्तर', '', '', '', '', '', '', '', '', '']
+           'Model answer', 'नमुना उत्तर']
     return f, row, chapter, topic
 
 def run():
@@ -51,21 +53,41 @@ def run():
         page = app.request(PAGE)
         assert 'Import Exam Questions' in page and 'HTML Source' in page
         assert 'import_content_mode' in page and 'excel_file' in page
+        assert 'id="examImportForm-mcq"' in page and 'id="examImportForm-other"' in page
         # Every mode/format template must import as-is for the downloading teacher.
-        for mode in ('normal', 'html'):
+        for kind in ('mcq', 'other'):
+          count = 2 if kind == 'mcq' else 4
+          for mode in ('normal', 'html'):
             for fmt in ('csv', 'xlsx'):
-                headers, sample = app.request_bytes(PAGE + f'?action=download_template&format={fmt}&content_mode={mode}&class_id={f["class"]}&subject_id={f["subject"]}')
+                headers, sample = app.request_bytes(PAGE + f'?action=download_template&import_kind={kind}&format={fmt}&content_mode={mode}&class_id={f["class"]}&subject_id={f["subject"]}')
+                assert f'exam-questions-{kind}-{mode}-sample.{fmt}' in headers['Content-Disposition']
                 assert f'.{fmt}' in headers['Content-Disposition']
                 if fmt == 'csv':
                     data = list(csv.reader(io.StringIO(sample.decode('utf-8-sig'))))
-                    assert len(data) == 3 and len(data[0]) == len(HEADERS)
+                    assert len(data) == count + 1 and len(data[0]) == len(MCQ_HEADERS if kind == 'mcq' else HEADERS)
+                    if kind == 'mcq': assert all(r[4] == 'MCQ' and r[-1] in 'ABCD' and all(r[i] or r[i+1] for i in (14,16,18,20)) for r in data[1:])
+                    else: assert {r[4] for r in data[1:]} == {'Very Short','Short','Long','Difference Between'} and not any('Option' in h for h in data[0])
                 else:
                     with zipfile.ZipFile(io.BytesIO(sample)) as book:
                         sheet = book.read('xl/worksheets/sheet1.xml').decode()
                         assert '<pane' in sheet and '<cols>' in sheet
                         assert '<c r="I2" s="2"><v>1</v></c>' in sheet
-                body = upload(app, sample, 'sample.' + fmt, mode)
-                assert 'Successfully imported 2 exam questions' in body, body[-3000:]
+                body = upload(app, sample, 'sample.' + fmt, mode, kind=kind)
+                assert f'Successfully imported {count} exam questions' in body, body[-3000:]
+        # A wrong form/sample combination cannot save or silently change types.
+        wrong_before = app.snapshot('questions')
+        mcq_row = row[:14] + ['1','१','2','२','3','३','4','४','B']; mcq_row[4] = 'MCQ'
+        assert 'Other Questions imports do not use options' in upload(app, csv_bytes([MCQ_HEADERS,mcq_row]), status=422)
+        assert 'MCQ imports require Option A' in upload(app, csv_bytes([HEADERS,row]), kind='mcq', status=422)
+        mcq_as_other = row.copy(); mcq_as_other[4] = 'MCQ'
+        assert 'Use the MCQs import' in upload(app, csv_bytes([HEADERS,mcq_as_other]), status=422)
+        written_as_mcq = mcq_row.copy(); written_as_mcq[4] = 'Short'
+        assert 'accepts Type MCQ only' in upload(app, csv_bytes([MCQ_HEADERS,written_as_mcq]), kind='mcq', status=422)
+        for kind in ('', 'mixed', 'all'):
+            upload(app, csv_bytes([HEADERS,row]), kind=kind, status=422)
+            app.request(PAGE + '?action=download_template&format=csv&content_mode=normal&import_kind=' + kind, status=422)
+        app.request(PAGE + '?action=download_template&format=csv&content_mode=normal', status=422)
+        assert app.snapshot('questions') == wrong_before
         before = len(app.snapshot('questions'))
         assert 'Successfully imported 1 exam questions' in upload(app, csv_bytes([HEADERS, row]))
         q = app.db.execute("SELECT id,question_text,marks,required_minutes,cognitive_domain,bank_kind,visibility,student_visible,topic_id FROM questions WHERE question_text LIKE '%Exam import%'").fetchone()
@@ -122,7 +144,7 @@ def run():
         upload(app, csv_bytes([HEADERS] + [invalid]*2001), status=422)
         upload(app, b'\xff\xfeBAD', status=422)
         # A reordered workbook imports its first worksheet, not filename sheet1.
-        _, sample = app.request_bytes(PAGE + f'?action=download_template&format=xlsx&content_mode=normal&class_id={f["class"]}&subject_id={f["subject"]}')
+        _, sample = app.request_bytes(PAGE + f'?action=download_template&import_kind=mcq&format=xlsx&content_mode=normal&class_id={f["class"]}&subject_id={f["subject"]}')
         with zipfile.ZipFile(io.BytesIO(sample)) as original:
             entries = {name: original.read(name) for name in original.namelist()}
         worksheet = entries['xl/worksheets/sheet1.xml'].decode()
@@ -135,7 +157,7 @@ def run():
         output = io.BytesIO()
         with zipfile.ZipFile(output, 'w') as book:
             for name, content in entries.items(): book.writestr(name, content)
-        body = upload(app, output.getvalue(), 'reordered.xlsx')
+        body = upload(app, output.getvalue(), 'reordered.xlsx', kind='mcq')
         assert 'Successfully imported 1 exam questions' in body and 'Row 4:' in body
         hostile = io.BytesIO()
         with zipfile.ZipFile(hostile, 'w') as book:
@@ -145,13 +167,13 @@ def run():
         upload(app, hostile.getvalue(), 'unsafe-xml.xlsx', status=422)
         # School-admin import and sample download keep the same school scope.
         app.login('school_admin')
-        _, sample = app.request_bytes(PAGE + f'?action=download_template&format=csv&content_mode=html&class_id={f["class"]}&subject_id={f["subject"]}')
-        assert 'Successfully imported 2 exam questions' in upload(app, sample, mode='html')
+        _, sample = app.request_bytes(PAGE + f'?action=download_template&import_kind=other&format=csv&content_mode=html&class_id={f["class"]}&subject_id={f["subject"]}')
+        assert 'Successfully imported 4 exam questions' in upload(app, sample, mode='html')
         app.login('admin')
-        _, sample = app.request_bytes(PAGE + '?action=download_template&format=xlsx&content_mode=html')
-        assert 'Successfully imported 2 exam questions' in upload(app, sample, 'shared.xlsx', 'html', import_visibility='public')
+        _, sample = app.request_bytes(PAGE + '?action=download_template&import_kind=mcq&format=xlsx&content_mode=html')
+        assert 'Successfully imported 2 exam questions' in upload(app, sample, 'shared.xlsx', 'html', kind='mcq', import_visibility='public')
         assert app.db.execute("SELECT COUNT(*) FROM questions WHERE bank_kind='exam' AND school_id=0 AND student_visible=0").fetchone()[0] == 2
         for table, snapshot in preserved.items(): assert app.snapshot(table) == snapshot, table
-        print(f'Exam question import HTTP passed: {app.count} requests; four templates round-trip, exact scope, source sanitizing, decimals, rejected rows and protected records.')
+        print(f'Exam question import HTTP passed: {app.count} requests; eight separate MCQ/other templates round-trip, exact scope, source sanitizing, decimals, rejected rows and protected records.')
 
 if __name__ == '__main__': run()

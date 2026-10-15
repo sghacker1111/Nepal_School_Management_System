@@ -3,6 +3,11 @@
 require_once __DIR__.'/learning_content_service.php';
 require_once __DIR__.'/xlsx_helper.php';
 
+function examImportKind(mixed $kind):string {
+    if(!is_string($kind)||!in_array($kind,['mcq','other'],true))throw new InvalidArgumentException('Choose the MCQs or Other Questions import and its matching sample.');
+    return $kind;
+}
+
 function examImportSubjects(PDO $db,array $actor,array $classes):array {
     $result=[];
     foreach($classes as $class)foreach(learningReadSubjects($db,$actor,(int)$class['id']) as $subject){
@@ -11,8 +16,9 @@ function examImportSubjects(PDO $db,array $actor,array $classes):array {
     return $result;
 }
 
-function examImportHeaders(array $headers,string $mode):array {
+function examImportHeaders(array $headers,string $mode,?string $kind=null):array {
     questionImportFormat($mode);
+    if($kind!==null)examImportKind($kind);
     if(count($headers)>64)throw new InvalidArgumentException('Use at most 64 columns in the import file.');
     $aliases=[
         'class'=>['class','classname','grade','classlevel','standard'],
@@ -55,7 +61,14 @@ function examImportHeaders(array $headers,string $mode):array {
         if(!isset($map[$field]))throw new InvalidArgumentException('Missing required column: '.str_replace('_',' ',$field).'. Download an Exam Questions sample with the correct headings.');
     }
     if(!isset($map['question_text'])&&!isset($map['question_text_np']))throw new InvalidArgumentException('Include Question (English) or Question (Nepali).');
-    return array_map(static fn($entry)=>$entry['index'],$map);
+    $map=array_map(static fn($entry)=>$entry['index'],$map);
+    if($kind==='mcq'){
+        foreach(['a','b','c','d'] as $option)if(!isset($map['option_'.$option])&&!isset($map['option_'.$option.'_np']))throw new InvalidArgumentException('MCQ imports require Option '.strtoupper($option).' in English or Nepali. Download the MCQs sample.');
+        if(!isset($map['correct_option']))throw new InvalidArgumentException('MCQ imports require a Correct Option column (A, B, C or D).');
+    }elseif($kind==='other'){
+        foreach(array_keys($map) as $field)if(str_starts_with($field,'option_')||$field==='correct_option')throw new InvalidArgumentException('Other Questions imports do not use options or a correct-option key. Download the Other Questions sample, or use the MCQs import.');
+    }
+    return $map;
 }
 
 function examImportClassId(array $classes,string $value):int {
@@ -123,15 +136,15 @@ function examImportReadUpload(array $file):array {
     return $rows;
 }
 
-function examImportQuestions(PDO $db,array $actor,array $rows,string $mode,string $visibility):array {
-    questionImportFormat($mode);learningVisibility($visibility);
+function examImportQuestions(PDO $db,array $actor,array $rows,string $mode,string $visibility,string $kind='mcq'):array {
+    questionImportFormat($mode);learningVisibility($visibility);examImportKind($kind);
     if(!learningPurposeAllowed($db,$actor,'exam_bank')||$actor['read_only']||!in_array($actor['role'],['super_admin','school_admin','teacher'],true))throw new InvalidArgumentException('Your account cannot import exam questions.');
     $classes=learningReadClasses($db,$actor);$subjects=examImportSubjects($db,$actor,$classes);
     if(!$subjects)throw new InvalidArgumentException('No assigned class subjects are available for importing.');
-    $map=examImportHeaders($rows[0],$mode);$ids=[];$errors=[];$skipped=0;
+    $map=examImportHeaders($rows[0],$mode,$kind);$ids=[];$errors=[];$skipped=0;
     // Any unexpected storage error rolls back the whole batch. Invalid rows alone
     // are skipped, with savepoints retaining neither catalog inserts nor questions.
-    return learningWrite($db,function()use($db,$actor,$rows,$map,$mode,$visibility,$classes,$subjects,&$ids,&$errors,&$skipped){
+    return learningWrite($db,function()use($db,$actor,$rows,$map,$mode,$visibility,$kind,$classes,$subjects,&$ids,&$errors,&$skipped){
         foreach(array_slice($rows,1) as $offset=>$row){
             if(!array_filter($row,static fn($v)=>trim((string)$v)!==''))continue;
             $db->exec('SAVEPOINT exam_import_row');
@@ -142,6 +155,8 @@ function examImportQuestions(PDO $db,array $actor,array $rows,string $mode,strin
                 $types=['mcq'=>'MCQ','very short'=>'Very Short','veryshort'=>'Very Short','short'=>'Short','long'=>'Long','reasoning'=>'Reasoning','difference between'=>'Difference Between','differencebetween'=>'Difference Between'];
                 $type=$types[curriculumNameKey($get('type'))]??null;
                 if(!$type)throw new InvalidArgumentException('Type must be MCQ, Very Short, Short, Long, Reasoning or Difference Between.');
+                if($kind==='mcq'&&$type!=='MCQ')throw new InvalidArgumentException('The MCQs import accepts Type MCQ only. Use Other Questions for written-answer questions.');
+                if($kind==='other'&&$type==='MCQ')throw new InvalidArgumentException('Use the MCQs import and its four-option sample for Type MCQ.');
                 $levels=['easy'=>'Easy','medium'=>'Medium','hard'=>'Hard','challenging'=>'Challenging'];$difficulty=$levels[curriculumNameKey($get('difficulty'))]??null;
                 if(!$difficulty)throw new InvalidArgumentException('Difficulty must be Easy, Medium, Hard or Challenging.');
                 $domainKey=strtolower(preg_replace('/[^a-z]/i','',$get('cognitive_domain')));
@@ -168,8 +183,8 @@ function examImportQuestions(PDO $db,array $actor,array $rows,string $mode,strin
 }
 
 /** Examples use a real writable class subject/catalog, not an arbitrary grade. */
-function examImportSample(PDO $db,array $actor,string $mode,int $class=0,int $subject=0):array {
-    questionImportFormat($mode);$classes=learningReadClasses($db,$actor);$writer=examImportSubjects($db,$actor,$classes);$selection=null;
+function examImportSample(PDO $db,array $actor,string $mode,int $class=0,int $subject=0,string $kind='mcq'):array {
+    questionImportFormat($mode);examImportKind($kind);$classes=learningReadClasses($db,$actor);$writer=examImportSubjects($db,$actor,$classes);$selection=null;
     foreach($classes as $c){
         if($class&&(int)$c['id']!==$class)continue;
         foreach($writer[(int)$c['id']]??[] as $s){
@@ -186,15 +201,26 @@ function examImportSample(PDO $db,array $actor,string $mode,int $class=0,int $su
     if(!$selection)throw new InvalidArgumentException('Select an assigned class subject with an existing chapter before downloading a ready-to-import sample. Ask super admin to add missing chapters.');
     [$c,$subjectLabel,$chapter,$topic]=$selection;$source=$actor['school_id']===0?'Shared':'School';
     $headers=['Class','Subject','Chapter','Topic','Type','Difficulty','Source','Cognitive Level','Marks','Required Minutes','Question (English)','Question (Nepali)','Answer (English)','Answer (Nepali)','Option A (English)','Option A (Nepali)','Option B (English)','Option B (Nepali)','Option C (English)','Option C (Nepali)','Option D (English)','Option D (Nepali)','Correct Option'];
-    $rows=[
-        [$c['name'],$subjectLabel,$chapter['name'],$topic,'MCQ','Easy',$source,'K',1,2,'What is 1 + 1?','१ + १ कति हुन्छ?','The correct answer is 2.','सही उत्तर २ हो।','1','१','2','२','3','३','4','४','B'],
-        [$c['name'],$subjectLabel,$chapter['name'],$topic,'Short','Medium',$source,'U',2.5,3.25,'Explain why 1/2 + 1/2 = 1.','१/२ + १/२ = १ किन हुन्छ?','Two halves make one whole.','दुई आधा मिलेर एक पूर्ण हुन्छ।','','','','','','','','',''],
+    $base=[$c['name'],$subjectLabel,$chapter['name'],$topic];
+    if($kind==='mcq')$rows=[
+        [...$base,'MCQ','Easy',$source,'K',1,2,'What is 1 + 1?','१ + १ कति हुन्छ?','The correct answer is 2.','सही उत्तर २ हो।','1','१','2','२','3','३','4','४','B'],
+        [...$base,'MCQ','Medium',$source,'U',2.5,3.25,'What is 1/2 + 1/2?','१/२ + १/२ कति हुन्छ?','Two halves make one whole.','दुई आधा मिलेर एक पूर्ण हुन्छ।','0.5','०.५','1','१','1.5','१.५','2','२','B'],
     ];
+    else{
+        $headers=array_slice($headers,0,14);
+        $rows=[
+            [...$base,'Very Short','Easy',$source,'K',1,2,'What is 1 + 1?','१ + १ कति हुन्छ?','2','२'],
+            [...$base,'Short','Medium',$source,'U',2.5,3.25,'Explain why 1/2 + 1/2 = 1.','१/२ + १/२ = १ किन हुन्छ?','Two halves make one whole.','दुई आधा मिलेर एक पूर्ण हुन्छ।'],
+            [...$base,'Long','Hard',$source,'A',8,10,'Explain union and intersection of sets with examples.','समुच्चयको मिलन र छेदन उदाहरणसहित व्याख्या गर्नुहोस्।','Union contains elements in either set. Intersection contains elements common to both sets.','मिलनमा कुनै एक समुच्चयका तत्व पर्छन्। छेदनमा दुवै समुच्चयका साझा तत्व पर्छन्।'],
+            [...$base,'Difference Between','Challenging',$source,'HA',4,5.75,'Differentiate a finite set and an infinite set.','सीमित र असीमित समुच्चयबीच फरक लेख्नुहोस्।','A finite set has finitely many elements; an infinite set does not.','सीमित समुच्चयका तत्वको संख्या सीमित हुन्छ; असीमित समुच्चयको हुँदैन।'],
+        ];
+    }
     if($mode==='html'){
-        foreach($headers as $i=>$header)if($i>=10&&$i<=21)$headers[$i]=$header.' HTML Source';
-        foreach($rows as &$row)for($i=10;$i<=21;$i++)if($row[$i]!=='')$row[$i]='<p>'.htmlspecialchars($row[$i],ENT_QUOTES,'UTF-8').'</p>';unset($row);
+        $lastContent=$kind==='mcq'?21:13;
+        foreach($headers as $i=>$header)if($i>=10&&$i<=$lastContent)$headers[$i]=$header.' HTML Source';
+        foreach($rows as &$row)for($i=10;$i<=$lastContent;$i++)if($row[$i]!=='')$row[$i]='<p>'.htmlspecialchars($row[$i],ENT_QUOTES,'UTF-8').'</p>';unset($row);
         $rows[0][10]='<p><strong>What is</strong> \\(1+1\\)?</p>';
-        $rows[1][10]='<p>Explain why \\(\\frac{1}{2}+\\frac{1}{2}=1\\).</p>';
+        $rows[1][10]=$kind==='mcq'?'<p>What is \\(\\frac{1}{2}+\\frac{1}{2}\\)?</p>':'<p>Explain why \\(\\frac{1}{2}+\\frac{1}{2}=1\\).</p>';
         $rows[1][12]='<p>\\[\\frac{1+1}{2}=1\\]</p>';
     }
     return [$headers,$rows];

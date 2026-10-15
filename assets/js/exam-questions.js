@@ -1,12 +1,12 @@
 (function(){'use strict';
  const start=()=>{
-  const importForm=document.getElementById('examImportForm'),importMode=document.getElementById('examImportMode');
-  if(importForm&&importMode){
-   document.querySelectorAll('[data-exam-import-mode]').forEach(link=>link.addEventListener('click',()=>{importMode.value=link.dataset.examImportMode;}));
-   let busy=false;const button=importForm.querySelector('button[type="submit"]');
+  document.querySelectorAll('[data-exam-import-form]').forEach(importForm=>{
+   const kind=importForm.dataset.examImportForm,importMode=importForm.querySelector('[name="import_content_mode"]');if(!importMode)return;
+   document.querySelectorAll('[data-exam-import-mode]').forEach(link=>{if(link.dataset.examImportKind===kind)link.addEventListener('click',()=>{importMode.value=link.dataset.examImportMode;});});
+   let busy=false;const button=importForm.querySelector('button[type="submit"]'),label=button?.textContent;
    importForm.addEventListener('submit',event=>{if(busy){event.preventDefault();return;}busy=true;importForm.setAttribute('aria-busy','true');if(button){button.disabled=true;button.textContent='Importing questions…';}});
-   window.addEventListener('pageshow',()=>{busy=false;importForm.removeAttribute('aria-busy');if(button){button.disabled=false;button.textContent='Upload & Import Exam Questions';}});
-  }
+   window.addEventListener('pageshow',()=>{busy=false;importForm.removeAttribute('aria-busy');if(button){button.disabled=false;button.textContent=label;}});
+  });
   const data=window.examQuestionData,form=document.getElementById('examQuestionForm');if(!data||!form)return;
   const field=id=>document.getElementById(id);let version=0,catalog={chapters:[],topics:{}};
   function topics(selected=''){

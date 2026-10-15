@@ -44,4 +44,19 @@ examImportQuestions($db,$admin,[$headers,$shared],'html','public');
 erpEqual((int)$db->query("SELECT COUNT(*) FROM topics WHERE name='New bulk topic'")->fetchColumn(),1,'Repeated imports reuse topic identities');
 $readOnly=$teacher;$readOnly['read_only']=true;erpReject(fn()=>examImportQuestions($db,$readOnly,[$headers,$row],'normal','private'),'Read-only import blocked');
 $student=learningActor($db,$f['ids']['student_login']);erpReject(fn()=>examImportQuestions($db,$student,[$headers,$row],'normal','private'),'Student import blocked');
-echo 'Exam question import service passed: '.$GLOBALS['erp_checks'].' checks; exact classes, headers, MCQs, rollback, shared catalog and ownership.'.PHP_EOL;
+$otherHeaders=array_slice($headers,0,14);$otherRow=array_slice($row,0,14);$otherRow[4]='Short';
+erpReject(fn()=>examImportKind(null),'Missing category rejected');erpReject(fn()=>examImportKind('mixed'),'Mixed category unavailable');
+erpReject(fn()=>examImportHeaders($headers,'normal','other'),'Other Questions has no option columns');
+erpReject(fn()=>examImportHeaders($otherHeaders,'html','mcq'),'MCQs need all four option headers');
+erpReject(fn()=>examImportHeaders(array_slice($headers,0,18),'normal','mcq'),'MCQs need a correct key header');
+erpReject(fn()=>examImportQuestions($db,$teacher,[$headers,$otherRow],'normal','private','mcq'),'Wrong row type cannot enter MCQs');
+$wrongOther=$otherRow;$wrongOther[4]='MCQ';erpReject(fn()=>examImportQuestions($db,$teacher,[$otherHeaders,$wrongOther],'normal','private','other'),'MCQ rows cannot enter written importer');
+$otherResult=examImportQuestions($db,$teacher,[$otherHeaders,$otherRow],'html','private','other');$other=$db->query('SELECT * FROM questions WHERE id='.$otherResult['ids'][0])->fetch();
+erpEqual($other['type'],'Short','Written type is preserved');erpEqual($other['options'],null,'No English options on written imports');erpEqual($other['options_np'],null,'No Nepali options on written imports');erpEqual($other['correct_option'],null,'No answer key on written imports');
+foreach(['normal','html'] as $mode)foreach(['mcq','other'] as $kind){
+    [$sampleHeaders,$sampleRows]=examImportSample($db,$teacher,$mode,$f['class'],$f['subject'],$kind);
+    erpEqual(count($sampleHeaders),$kind==='mcq'?23:14,'Separate template column count '.$kind.' '.$mode);
+    erpEqual(count($sampleRows),$kind==='mcq'?2:4,'Separate template example count '.$kind.' '.$mode);
+    if($kind==='other')erpEqual(array_column($sampleRows,4),['Very Short','Short','Long','Difference Between'],'All requested written types shown');
+}
+echo 'Exam question import service passed: '.$GLOBALS['erp_checks'].' checks; separate categories, exact classes, headers, MCQs, written answers, rollback, shared catalog and ownership.'.PHP_EOL;
