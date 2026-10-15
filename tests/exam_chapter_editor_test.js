@@ -1,0 +1,20 @@
+'use strict';
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const rows = [];
+const summary = {textContent: '', classList: {toggle(name, value) { this[name] = value; }}};
+const editor = {querySelectorAll: () => rows, addEventListener(event, listener) { this.update = listener; }};
+vm.runInNewContext(fs.readFileSync('assets/js/exam-chapter-editor.js', 'utf8'), {document: {getElementById: id => id === 'examChapterEditor' ? editor : summary}});
+function row(count, marks) { const fields = {'[data-chapter-count]': {value: count}, '[data-chapter-marks]': {value: marks}}; return {fields, querySelector: key => fields[key]}; }
+rows.push(row('0', '999'), row('2', '0.30'), row('1', '0.10')); editor.update();
+assert.equal(summary.textContent, '2 selected chapters · 3 questions · 0.40 total marks');
+assert.equal(summary.classList['text-danger'], false);
+rows[1].fields['[data-chapter-count]'].value = '1.5'; editor.update();
+assert.match(summary.textContent, /valid counts/); assert.equal(summary.classList['text-danger'], true);
+rows[1].fields['[data-chapter-count]'].value = '200'; rows[1].fields['[data-chapter-marks]'].value = '1000'; editor.update();
+assert.equal(summary.classList['text-danger'], true);
+rows[1].fields['[data-chapter-count]'].value = '2'; rows[1].fields['[data-chapter-marks]'].value = '0'; editor.update();
+assert.match(summary.textContent, /positive chapter marks/);
+vm.runInNewContext(fs.readFileSync('assets/js/exam-chapter-editor.js', 'utf8'), {document: {getElementById: () => null}});
+console.log('Chapter editor checks passed: live totals, zero-count skips, exact decimals, invalid counts/marks, limits and empty catalog.');

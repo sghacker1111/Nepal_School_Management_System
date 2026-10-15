@@ -1,4 +1,5 @@
 .exam-paper{max-width:1000px;margin-inline:auto;color:#111;font-size:16px;line-height:1.45;overflow-wrap:anywhere}
+.exam-chapter-table th:first-child{width:52%;min-width:220px}.exam-chapter-table td{min-width:140px}.exam-chapter-topics{max-width:36rem}.exam-chapter-topics summary{cursor:pointer;color:var(--bs-primary,#0d6efd)}.exam-chapter-topics label{overflow-wrap:anywhere}
 .exam-print-header{display:flex;justify-content:center;align-items:center;gap:18px;text-align:center;border-bottom:2px solid #222;padding-bottom:14px;margin-bottom:12px}
 .exam-print-header h2{font-size:1.5em;margin:0}.exam-print-header h3{font-size:1.2em;margin:.3em 0}.exam-print-header p{margin:.2em 0}.exam-print-logo{width:75px;height:75px;object-fit:contain;flex-shrink:0}
 .exam-print-metadata{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;font-weight:600}.exam-instructions{margin-block:12px;font-style:italic}

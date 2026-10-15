@@ -10,7 +10,7 @@ function examPaperScope(PDO $db,array $actor,int $class,int $subject,bool $write
     if(!in_array($subject,array_map('intval',array_column(learningReadSubjects($db,$actor,$class),'id')),true))throw new InvalidArgumentException('Choose a visible subject in the selected class.');
     if(($write&&$actor['read_only'])||($actor['role']==='teacher'&&!teacherOwnsSubject($db,$actor['school_id'],$actor['id'],$class,$subject)))throw new InvalidArgumentException('Teachers may generate and manage grids only for their assigned class subjects.');
 }
-function examNormalizeGrid(PDO $db,array $actor,int $class,int $subject,array $input):array {
+function examNormalizeGrid(PDO $db,array $actor,int $class,int $subject,array $input,bool $chapterMode=false):array {
     examPaperScope($db,$actor,$class,$subject);
     $full=learningDecimalUnits($input['full_marks']??null,100000,'Full marks');$minutes=learningDecimalUnits($input['duration_minutes']??null,60000,'Exam duration');
     $catalog=learningCatalogChapters($db,$actor,$class,$subject);$names=[];foreach($catalog as $c)foreach($c['alias_ids'] as $id)$names[(int)$id]=$c;
@@ -20,7 +20,7 @@ function examNormalizeGrid(PDO $db,array $actor,int $class,int $subject,array $i
     foreach($input['rows'] as $i=>$row){
         if(!is_array($row))throw new InvalidArgumentException('Invalid question allocation row.');
         $name=$row['name']??('Section '.($i+1));if(!is_string($name)||trim($name)===''||mb_strlen($name)>100)throw new InvalidArgumentException('Enter a section name of at most 100 characters.');
-        $type=$row['type']??'';if(!is_string($type)||!in_array($type,EXAM_TYPES,true))throw new InvalidArgumentException('Choose a valid question type.');
+        $type=$row['type']??'';if(!is_string($type)||(!in_array($type,EXAM_TYPES,true)&&!($chapterMode&&$type==='Written')))throw new InvalidArgumentException('Choose a valid question type.');
         $chapters=$resolve($row['chapter_ids']??[],trim($name));$quantity=examCount($row['count']??null,'Question count');$marks=learningDecimalUnits($row['total_marks']??null,100000,'Section marks');
         $each=($row['marks_each']??'')!==''&&$row['marks_each']!==null?learningDecimalUnits($row['marks_each'],100000,'Marks per question'):null;
         if($each!==null&&$each*$quantity!==$marks)throw new InvalidArgumentException('Count × marks per question must equal section marks in '.$name.'.');
@@ -48,6 +48,34 @@ function examGridInputJson(mixed $value):array {
     if(!is_string($value)||strlen($value)>50000)throw new InvalidArgumentException('Grid configuration must be valid JSON of at most 50 KB.');
     try{$data=json_decode($value,true,32,JSON_THROW_ON_ERROR);}catch(JsonException $e){throw new InvalidArgumentException('The grid configuration is invalid. Reload the editor.');}
     if(!is_array($data))throw new InvalidArgumentException('Invalid grid configuration.');return $data;
+}
+/** Build a server-owned grid from the simple chapter table; never change bank marks. */
+function examChapterGridInput(PDO $db,array $actor,int $class,int $subject,array $input):array {
+    examPaperScope($db,$actor,$class,$subject);
+    $kind=$input['generation_kind']??'';
+    if(!is_string($kind)||!in_array($kind,['written','mcq'],true))throw new InvalidArgumentException('Choose Written Questions or MCQs.');
+    $allocations=$input['chapters']??[];
+    if(!is_array($allocations)||!count($allocations)||count($allocations)>100)throw new InvalidArgumentException('Choose chapter allocations in this class subject.');
+    $catalog=[];foreach(learningCatalogChapters($db,$actor,$class,$subject) as $chapter)foreach($chapter['alias_ids'] as $id)$catalog[(int)$id]=$chapter;
+    $rows=[];$seen=[];$total=0;
+    foreach($allocations as $id=>$allocation){
+        $id=learningId($id);$chapter=$catalog[$id]??null;
+        if(!$chapter||!is_array($allocation))throw new InvalidArgumentException('Choose only chapters from the selected class subject.');
+        $canonical=(int)$chapter['id'];if(isset($seen[$canonical]))throw new InvalidArgumentException('Use one allocation per chapter.');$seen[$canonical]=true;
+        $quantity=examCount($allocation['count']??0,'Chapter question count',true);
+        $topics=$allocation['topic_ids']??[];
+        if(!is_array($topics)||!array_is_list($topics)||count($topics)>100)throw new InvalidArgumentException('Choose valid chapter topics.');
+        $allowed=[];if($topics)foreach(learningCatalogTopics($db,$actor,$class,$subject,$canonical) as $topic)foreach($topic['alias_ids'] as $alias)$allowed[(int)$alias]=true;
+        foreach($topics as $topic)if(!isset($allowed[learningId($topic)]))throw new InvalidArgumentException('Choose topics within their own chapter.');
+        if(!$quantity)continue;
+        $marks=learningDecimalUnits($allocation['marks']??null,100000,'Chapter marks');$total+=$marks;
+        $rows[]=['name'=>mb_substr($chapter['name'],0,100),'type'=>$kind==='mcq'?'MCQ':'Written','chapter_ids'=>[$canonical],'topic_ids'=>$topics,'count'=>$quantity,'total_marks'=>learningDecimalString($marks)];
+    }
+    if(!$rows)throw new InvalidArgumentException('Enter a question count greater than 0 for at least one chapter.');
+    return ['full_marks'=>learningDecimalString($total),'duration_minutes'=>$input['duration_minutes']??null,'rows'=>$rows];
+}
+function examGenerateChapterPaper(PDO $db,array $actor,int $class,int $subject,array $input):array {
+    return examGeneratePaper($db,$actor,$class,$subject,examChapterGridInput($db,$actor,$class,$subject,$input),true);
 }
 /** Only a visually verified CDC reference is bundled; other subjects use administrator grids. */
 function examPaperReferences(PDO $db,array $actor,int $class,int $subject):array {
@@ -89,8 +117,8 @@ function examSaveGrid(PDO $db,array $actor,int $class,int $subject,string $name,
 }
 function examArchiveGrid(PDO $db,array $actor,int $id,bool $archive):void {learningWrite($db,function()use($db,$actor,$id,$archive){$r=examGridRecord($db,$actor,$id,true);if(!examGridCanEdit($db,$actor,$r))throw new InvalidArgumentException('Only the grid creator may archive or restore it.');$db->prepare('UPDATE exam_paper_grids SET archived_at=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=?')->execute([$archive?date('Y-m-d H:i:s'):null,$id]);learningAudit($db,$actor,$archive?'Archive exam grid':'Restore exam grid','exam_paper_grids',$id);});}
 /** Bounded exact allocation, including overlapping chapter pools, variable marks and time. */
-function examGeneratePaper(PDO $db,array $actor,int $class,int $subject,array $input):array {
-    $grid=examNormalizeGrid($db,$actor,$class,$subject,$input);$pool=learningContentList($db,$actor,'questions',['class_id'=>$class,'subject_id'=>$subject],'exam_paper');
+function examGeneratePaper(PDO $db,array $actor,int $class,int $subject,array $input,bool $chapterMode=false):array {
+    $grid=examNormalizeGrid($db,$actor,$class,$subject,$input,$chapterMode);$pool=learningContentList($db,$actor,'questions',['class_id'=>$class,'subject_id'=>$subject],'exam_paper');
     $questions=[];
     foreach($pool as $q){try{$q['marks_units']=learningDecimalUnits((string)$q['marks'],100000,'Question marks');$q['minutes_units']=learningDecimalUnits((string)$q['required_minutes'],60000,'Question minutes');}catch(InvalidArgumentException $e){continue;}
         if(!in_array($q['cognitive_domain'],EXAM_DOMAINS,true))continue;
@@ -99,7 +127,7 @@ function examGeneratePaper(PDO $db,array $actor,int $class,int $subject,array $i
     }
     $slots=[];$eligibleRows=[];$rowTotals=[];$rowCounts=[];$groupSerial=0;$eligibleIds=[];
     foreach($grid['rows'] as $i=>$row){
-        $candidates=[];foreach($questions as $id=>$q)if($q['type']===$row['type']&&in_array($q['chapter'],$row['chapter_names'],true)&&(!$row['difficulty']||$q['difficulty']===$row['difficulty'])&&($row['each_units']===null||$q['marks_units']===$row['each_units'])&&(!$row['topic_ids']||in_array((int)($q['catalog_topic_id']?:$q['topic_id']),$row['topic_ids'],true)))$candidates[]=$id;
+        $candidates=[];foreach($questions as $id=>$q)if(($q['type']===$row['type']||($row['type']==='Written'&&in_array($q['type'],array_diff(EXAM_TYPES,['MCQ']),true)))&&in_array($q['chapter'],$row['chapter_names'],true)&&(!$row['difficulty']||$q['difficulty']===$row['difficulty'])&&($row['each_units']===null||$q['marks_units']===$row['each_units'])&&(!$row['topic_ids']||in_array((int)($q['catalog_topic_id']?:$q['topic_id']),$row['topic_ids'],true)))$candidates[]=$id;
         shuffle($candidates);if(count($candidates)<$row['count'])throw new InvalidArgumentException($row['name'].': needs '.$row['count'].' matching '.$row['type'].' questions; only '.count($candidates).' are available.');
         $eligibleRows[$i]=$candidates;$rowTotals[$i]=$row['total_units'];$rowCounts[$i]=$row['count'];$groups=array_sum($row['domains'])?$row['domains']:['*'=>$row['count']];
         foreach($groups as $domain=>$n){if(!$n)continue;$ids=$domain==='*'?$candidates:array_values(array_filter($candidates,static fn($id)=>$questions[$id]['cognitive_domain']===EXAM_DOMAINS[$domain]));

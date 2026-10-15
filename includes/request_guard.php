@@ -86,7 +86,7 @@ function guardSchoolRequest(): void {
         if(array_key_exists('school_id',$_POST)||array_key_exists('created_by_user_id',$_POST)||array_key_exists('bank_kind',$_POST)||isset($_GET['make_universal']))denySchoolRequest('Content school, bank and creator cannot be changed.',403);
         $action=$_POST['action']??(isset($_GET['delete'])?'archive':'');
         if(!is_string($action))denySchoolRequest('Choose one valid question action.',422);
-        if(in_array($action,['edit','set_visibility','archive','restore'],true)){
+        if(in_array($action,['edit','set_visibility','archive','delete','restore'],true)){
             try{$r=learningContentRecord(getDB(),$actor,'questions',learningId($_POST['question_id']??$_GET['delete']??null),$file!=='questions.php'?'exam_bank':'bank',true);}catch(InvalidArgumentException $e){denySchoolRequest('Content not found.',404);}
             if(!learningCanEdit(getDB(),$actor,$r))denySchoolRequest('Only the creator may change this content, while assigned to its subject.',403);
         }
