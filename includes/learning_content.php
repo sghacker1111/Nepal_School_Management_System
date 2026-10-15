@@ -86,9 +86,18 @@ function learningCanEdit(PDO $db,array $actor,array $record):bool {
     return (int)($record['school_id']??-1)===$actor['school_id']&&($record['created_by_user_id']??null)!==null&&(int)$record['created_by_user_id']===$actor['id']&&learningCanCreate($db,$actor,(int)$record['class_id'],(int)$record['subject_id']);
 }
 function learningCanPublish(PDO $db,array $actor,array $record):bool {return learningCanEdit($db,$actor,$record);}
-function learningContentList(PDO $db,array $actor,string $kind,array $filters,string $purpose='study'):array {
+function learningQuestionPagination(mixed $number=1,mixed $size=10):array {
+    if(!is_scalar($size)||!in_array((string)$size,['10','20','30','50','100'],true)||!is_scalar($number)||!preg_match('/^[1-9][0-9]{0,6}$/',(string)$number))throw new InvalidArgumentException('Choose a valid page and 10, 20, 30, 50 or 100 items per page.');
+    return ['page'=>(int)$number,'per_page'=>(int)$size,'total'=>0,'pages'=>1];
+}
+function learningContentList(PDO $db,array $actor,string $kind,array $filters,string $purpose='study',?array &$pagination=null):array {
     if(!in_array($kind,['questions','learning_notes'],true))throw new InvalidArgumentException('Invalid learning content type.');
-    if(!learningPurposeAllowed($db,$actor,$purpose))return [];
+    $paged=$pagination!==null;
+    if($paged){
+        if($kind!=='questions')throw new InvalidArgumentException('Pagination is available for questions only.');
+        $pagination=learningQuestionPagination($pagination['page']??1,$pagination['per_page']??10);$offset=($pagination['page']-1)*$pagination['per_page'];
+    }
+    if(!learningPurposeAllowed($db,$actor,$purpose)){if($paged)$pagination['page']=1;return [];}
     $where=['school_id IN (0,?)'];$params=[$actor['school_id']];
     if($kind==='questions'){$where[]='bank_kind=?';$params[]=str_starts_with($purpose,'exam_')?'exam':'learning';}
     elseif(str_starts_with($purpose,'exam_'))return [];
@@ -105,19 +114,43 @@ function learningContentList(PDO $db,array $actor,string $kind,array $filters,st
         $where[]="$field=?";$params[]=(int)$filters[$field];
     }
     foreach(['chapter','type'] as $field)if(!empty($filters[$field])){if(!is_string($filters[$field]))throw new InvalidArgumentException('Invalid content filter.');$where[]="$field=?";$params[]=$filters[$field];}
+    if(isset($filters['question_group'])){
+        if($kind!=='questions'||!in_array($filters['question_group'],['mcq','written'],true))throw new InvalidArgumentException('Choose a valid question section.');
+        $where[]=$filters['question_group']==='mcq'?"type='MCQ'":"type<>'MCQ'";
+    }
+    if(isset($filters['topic_alias_ids'])){
+        $aliases=$filters['topic_alias_ids'];if(!is_array($aliases)||!$aliases||count($aliases)>100)throw new InvalidArgumentException('Choose a valid topic.');
+        foreach($aliases as $alias)if(!is_scalar($alias)||!preg_match('/^[1-9][0-9]*$/',(string)$alias))throw new InvalidArgumentException('Choose a valid topic.');
+        $slots=implode(',',array_fill(0,count($aliases),'?'));$where[]="(topic_id IN ($slots) OR catalog_topic_id IN ($slots))";array_push($params,...$aliases,...$aliases);
+    }
     if($kind==='learning_notes'&&isset($filters['type']))throw new InvalidArgumentException('Notes have no question type.');
     $archived=$filters['archived']??false;if(!is_bool($archived))throw new InvalidArgumentException('Invalid archive filter.');$where[]=$archived?'archived_at IS NOT NULL':'archived_at IS NULL';
     if(!empty($filters['search'])){if(!is_string($filters['search']))throw new InvalidArgumentException('Invalid search.');$where[]=$kind==='questions'?'(question_text LIKE ? OR question_text_np LIKE ?)':'(title LIKE ? OR content LIKE ?)';$params[]='%'.$filters['search'].'%';$params[]='%'.$filters['search'].'%';}
-    $q=$db->prepare("SELECT * FROM $kind WHERE ".implode(' AND ',$where).' ORDER BY id DESC');$q->execute($params);$rows=[];$scopeCache=[];
-    foreach($q->fetchAll(PDO::FETCH_ASSOC) as $r){
+    // Count authorized metadata first; load rich bodies only for the chosen page.
+    $columns=$paged?'id,school_id,class_id,subject_id,created_by_user_id,visibility,archived_at,bank_kind,student_visible,topic_id,catalog_topic_id':'*';
+    $q=$db->prepare("SELECT $columns FROM $kind WHERE ".implode(' AND ',$where).' ORDER BY id DESC');$q->execute($params);$rows=[];$scopeCache=[];$editCache=[];$viewCache=[];$total=0;$lastPage=[];
+    while($r=$q->fetch(PDO::FETCH_ASSOC)){
         $key=$r['school_id'].':'.$r['class_id'].':'.$r['subject_id'];
         if(!array_key_exists($key,$scopeCache))$scopeCache[$key]=learningRecordScope($db,$actor,$r);
         $scope=$scopeCache[$key];if(!$scope)continue;
         if(!empty($filters['class_id'])&&$scope['class_id']!==(int)$filters['class_id'])continue;
         if(!empty($filters['subject_id'])&&$scope['subject_id']!==(int)$filters['subject_id'])continue;
-        $canEdit=learningCanEdit($db,$actor,$r);
-        if($archived){if(!$canEdit)continue;}elseif(!learningScopeCanView($db,$actor,$r,$scope))continue;
-        $r['can_edit']=$canEdit;$r['can_publish']=$canEdit;$r['source_scope']=(int)$r['school_id']===0?'shared':'school';$rows[]=$r;
+        $editKey=$key.':'.($r['created_by_user_id']??0);$viewKey=$editKey.':'.($r['visibility']??'private');
+        $canEdit=$editCache[$editKey]??=learningCanEdit($db,$actor,$r);
+        if($archived){if(!$canEdit)continue;}elseif(!($viewCache[$viewKey]??=learningScopeCanView($db,$actor,$r,$scope)))continue;
+        $r['can_edit']=$canEdit;$r['can_publish']=$canEdit;$r['source_scope']=(int)$r['school_id']===0?'shared':'school';
+        if(!$paged){$rows[]=$r;continue;}
+        if($total%$pagination['per_page']===0)$lastPage=[];$lastPage[]=$r;
+        if($total>=$offset&&$total<$offset+$pagination['per_page'])$rows[]=$r;$total++;
+    }
+    if($paged){
+        $pagination['total']=$total;$pagination['pages']=max(1,(int)ceil($total/$pagination['per_page']));
+        if($pagination['page']>$pagination['pages']){$pagination['page']=$pagination['pages'];$rows=$lastPage;}
+        if($rows){
+            $metadata=array_column($rows,null,'id');$ids=array_keys($metadata);
+            $q=$db->prepare('SELECT * FROM questions WHERE id IN ('.implode(',',array_fill(0,count($ids),'?')).') ORDER BY id DESC');$q->execute($ids);$rows=[];
+            foreach($q->fetchAll(PDO::FETCH_ASSOC) as $r){$m=$metadata[$r['id']];$r['can_edit']=$m['can_edit'];$r['can_publish']=$m['can_publish'];$r['source_scope']=$m['source_scope'];$rows[]=$r;}
+        }
     }
     return $rows;
 }

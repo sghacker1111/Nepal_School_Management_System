@@ -1,20 +1,20 @@
 <?php if(!isset($actor,$canCreate)||!$canCreate)return; ?>
-<details class="card card-body mb-3" id="examImportPanel" <?= $error&&($_POST['action']??'')==='import'?'open':'' ?>>
-<summary class="fw-bold text-primary">Import Exam Questions — Excel / CSV</summary>
+<details class="card card-body mb-3" id="examImportPanel" open>
+<summary class="fw-bold text-primary">Import <?= ($examSection??'written')==='mcq'?'MCQs':'Exam Questions' ?> — Excel / CSV</summary>
 <div class="mt-3">
 <p>Choose the matching import below. Both support <strong>Normal Text</strong> and <strong>HTML Source</strong>, including LaTeX maths, in Excel (.xlsx) or UTF-8 CSV.</p>
 <div class="row g-3 mb-3">
-<?php foreach(['mcq'=>'MCQs','other'=>'Other Questions'] as $importKind=>$importLabel):
+<?php foreach($examImportKinds??['mcq'=>'MCQs','other'=>'Other Questions'] as $importKind=>$importLabel):
     $isImportPost=($_POST['action']??'')==='import'&&($_POST['import_kind']??'')===$importKind;
     $importMode=$isImportPost?($_POST['import_content_mode']??'normal'):'normal';
     $importVisibility=$isImportPost?($_POST['import_visibility']??'private'):($actor['school_id']===0?'public':'private');
 ?>
-<div class="col-xl-6"><section class="border rounded p-3 h-100 <?= $isImportPost&&$error?'border-danger':'' ?>" data-exam-import-panel="<?= $importKind ?>" aria-labelledby="examImportTitle-<?= $importKind ?>">
+<div class="col-12"><section class="border rounded p-3 h-100 <?= $isImportPost&&$error?'border-danger':'' ?>" data-exam-import-panel="<?= $importKind ?>" aria-labelledby="examImportTitle-<?= $importKind ?>">
 <h3 class="h5" id="examImportTitle-<?= $importKind ?>">Import <?= $importLabel ?></h3>
 <p class="small text-muted"><?= $importKind==='mcq'?'Only MCQs. Each question needs all four options A–D in English or Nepali, and Correct Option A, B, C or D.':'Very Short, Short, Long, Difference Between and Reasoning. Questions and model answers only — no options or correct-option column.' ?></p>
 <form method="post" enctype="multipart/form-data" id="examImportForm-<?= $importKind ?>" data-exam-import-form="<?= $importKind ?>" class="row g-3">
 <input type="hidden" name="action" value="import"><input type="hidden" name="import_kind" value="<?= $importKind ?>">
-<?php $importContextKey=$importKind;$importContextActor=$actor;$importContextClasses=$classes;$importContextSubjects=$writerSubjects;$importContextValues=$isImportPost?$_POST:['import_class_id'=>$class,'import_subject_id'=>$subject];include __DIR__.'/question_import_context_form.php'; ?>
+<?php $importContextKey=$importKind;$importContextActor=$actor;$importContextClasses=$classes;$importContextSubjects=$writerSubjects;$importContextPage=$route??'exam_questions.php';$importContextValues=$isImportPost?$_POST:['import_class_id'=>$class,'import_subject_id'=>$subject];include __DIR__.'/question_import_context_form.php'; ?>
 <?php foreach(['normal'=>'Normal Text','html'=>'HTML Source'] as $sampleMode=>$sampleLabel): ?>
 <div class="mb-3"><h4 class="h6"><?= $sampleLabel ?> samples</h4><div class="d-flex flex-wrap gap-2">
 <?php foreach(['xlsx'=>'Excel sample','csv'=>'CSV sample'] as $format=>$download): ?>

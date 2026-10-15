@@ -7,6 +7,8 @@ from learning_sharing_support import extend_learning
 from question_import_context_support import catalog_context, context_query
 
 PAGE = '/modules/learning/exam_questions.php'
+MCQ_PAGE = '/modules/learning/exam_mcqs.php'
+def page_for(kind):return MCQ_PAGE if kind=='mcq' else PAGE
 HEADERS = ['Class', 'Subject', 'Chapter', 'Topic', 'Type', 'Difficulty', 'Source',
            'Cognitive Level', 'Marks', 'Required Minutes', 'Question (English)',
            'Question (Nepali)', 'Answer (English)', 'Answer (Nepali)',
@@ -26,7 +28,7 @@ def upload(app, content, filename='exam.csv', mode='normal', status=200, kind='o
               'import_content_mode': mode, 'import_kind': kind, 'import_visibility': 'private', **getattr(app,'import_context',{}), **extra}
     parts = [f'--{boundary}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n'.encode() for k, v in fields.items()]
     parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="excel_file"; filename="{filename}"\r\nContent-Type: application/octet-stream\r\n\r\n'.encode() + content + f'\r\n--{boundary}--\r\n'.encode())
-    request = Request(app.base + PAGE, data=b''.join(parts), headers={'Content-Type': f'multipart/form-data; boundary={boundary}'})
+    request = Request(app.base + page_for(kind), data=b''.join(parts), headers={'Content-Type': f'multipart/form-data; boundary={boundary}'})
     try: response = app.opener.open(request, timeout=30)
     except HTTPError as error: response = error
     with response:
@@ -52,11 +54,12 @@ def run():
     with ERPHttpFixture() as app:
         f, row, chapter, topic = seed_exam_import(app)
         preserved = {t: app.snapshot(t) for t in ('students', 'marks', 'exams', 'ac_invoices', 'ac_payments', 'ac_journals')}
-        page = app.request(PAGE)
+        page = app.request(PAGE+'?view=import')
         assert 'Import Exam Questions' in page and 'HTML Source' in page
         assert 'import_content_mode' in page and 'excel_file' in page
-        assert 'id="examImportForm-mcq"' in page and 'id="examImportForm-other"' in page
-        assert page.count('name="import_chapter_id"')==2 and page.count('name="import_topic_id"')==2
+        assert 'id="examImportForm-mcq"' not in page and 'id="examImportForm-other"' in page
+        assert page.count('name="import_chapter_id"')==1 and page.count('name="import_topic_id"')==1
+        mcq_page=app.request(MCQ_PAGE+'?view=import');assert 'id="examImportForm-mcq"' in mcq_page and 'id="examImportForm-other"' not in mcq_page
         catalog=json.loads(app.request(PAGE+f'?action=import_catalog&class_id={f["class"]}&subject_id={f["subject"]}'))
         assert any(c['id']==chapter for c in catalog['chapters']) and any(t['id']==topic for t in catalog['topics'][str(chapter)])
         scope_before={t:app.snapshot(t) for t in ('questions','chapters','topics','activity_logs')}
@@ -80,7 +83,7 @@ def run():
           count = 2 if kind == 'mcq' else 4
           for mode in ('normal', 'html'):
             for fmt in ('csv', 'xlsx'):
-                headers, sample = app.request_bytes(PAGE + f'?action=download_template&import_kind={kind}&format={fmt}&content_mode={mode}' + context_query(app))
+                headers, sample = app.request_bytes(page_for(kind) + f'?action=download_template&import_kind={kind}&format={fmt}&content_mode={mode}' + context_query(app))
                 assert f'exam-questions-{kind}-{mode}-sample.{fmt}' in headers['Content-Disposition']
                 assert f'.{fmt}' in headers['Content-Disposition']
                 if fmt == 'csv':
@@ -165,7 +168,7 @@ def run():
         upload(app, csv_bytes([HEADERS] + [invalid]*2001), status=422)
         upload(app, b'\xff\xfeBAD', status=422)
         # A reordered workbook imports its first worksheet, not filename sheet1.
-        _, sample = app.request_bytes(PAGE + '?action=download_template&import_kind=mcq&format=xlsx&content_mode=normal' + context_query(app))
+        _, sample = app.request_bytes(MCQ_PAGE + '?action=download_template&import_kind=mcq&format=xlsx&content_mode=normal' + context_query(app))
         with zipfile.ZipFile(io.BytesIO(sample)) as original:
             entries = {name: original.read(name) for name in original.namelist()}
         worksheet = entries['xl/worksheets/sheet1.xml'].decode()
@@ -196,7 +199,7 @@ def run():
         shared_before={t:app.snapshot(t) for t in ('questions','chapters','topics')}
         upload(app,csv_bytes([HEADERS,shared_row]),status=422)
         for t,r in shared_before.items():assert app.snapshot(t)==r,t
-        _, sample = app.request_bytes(PAGE + '?action=download_template&import_kind=mcq&format=xlsx&content_mode=html' + context_query(app))
+        _, sample = app.request_bytes(MCQ_PAGE + '?action=download_template&import_kind=mcq&format=xlsx&content_mode=html' + context_query(app))
         assert 'Successfully imported 2 exam questions' in upload(app, sample, 'shared.xlsx', 'html', kind='mcq', import_visibility='public')
         assert app.db.execute("SELECT COUNT(*) FROM questions WHERE bank_kind='exam' AND school_id=0 AND student_visible=0").fetchone()[0] == 2
         for table, snapshot in preserved.items(): assert app.snapshot(table) == snapshot, table

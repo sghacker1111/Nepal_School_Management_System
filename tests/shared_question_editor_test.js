@@ -28,6 +28,7 @@ element('btnInsertTex').listeners.click();
 assert.equal(np.e.saved,1);assert.equal(hidden,1);
 assert(np.e.inserted[0].includes('&lt;img'),'TeX input is escaped both as an attribute and display text');
 assert(!np.e.inserted[0].includes('<img'),'A formula must never insert raw markup');
-for(const page of ['modules/learning/questions.php','modules/learning/exam_questions.php'])assert.match(fs.readFileSync(page,'utf8'),/includes\/question_editor\.php/,'Both pages load the same editor component');
+assert.match(fs.readFileSync('modules/learning/questions.php','utf8'),/includes\/question_editor\.php/,'Normal bank loads the shared editor');
+assert.match(fs.readFileSync('includes/exam_question_editor_form.php','utf8'),/question_editor\.php/,'Both separate exam pages load the same complete editor component');
 assert(!fs.readFileSync('assets/js/exam-questions.js','utf8').includes('tinymce.init('),'No separate reduced exam editor remains');
 console.log('Shared question editor passed: full toolbar, English/Nepali parity, source/fullscreen/TeX, and safe formula insertion.');

@@ -3,7 +3,7 @@ import json,re
 from http_support import ERPHttpFixture
 from learning_sharing_support import extend_learning
 with ERPHttpFixture() as app:
-    f=extend_learning(app);cls,sub=f['class'],f['subject'];questions='/modules/learning/exam_questions.php';grids='/modules/learning/exam_specification_grids.php';generator='/modules/learning/exam_paper_generator.php'
+    f=extend_learning(app);cls,sub=f['class'],f['subject'];questions='/modules/learning/exam_mcqs.php';grids='/modules/learning/exam_specification_grids.php';generator='/modules/learning/exam_paper_generator.php'
     chapter=app.db.execute("INSERT INTO chapters(school_id,class_id,subject_id,name) VALUES(1,?,?,'Printed exam unit')",(cls,sub)).lastrowid;app.db.commit()
     app.login('teacher');payload={'action':'add','class_id':cls,'subject_id':sub,'chapter':'Printed exam unit','type':'MCQ','question_text':'<b>New exam MCQ</b> \\(1+1\\)','option_a':'1','option_b':'<b>2</b>','option_c':'3','option_d':'4','correct_option':'B','marks':'1','difficulty':'Easy','required_minutes':'2','cognitive_domain':'Knowledge'}
     app.request(questions,payload);qid=app.db.execute("SELECT id FROM questions WHERE bank_kind='exam'").fetchone()[0]

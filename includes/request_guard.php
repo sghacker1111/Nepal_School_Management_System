@@ -39,7 +39,7 @@ function guardSchoolRequest(): void {
     $file = $parts[2] ?? '';
     $role = Auth::getRole();
     if($role==='student'){
-        $studentPage=$module==='learning'&&in_array($file,['index.php','practice_mcqs.php','exam_questions.php'],true);
+        $studentPage=$module==='learning'&&in_array($file,['index.php','practice_mcqs.php','exam_questions.php','exam_mcqs.php'],true);
         $studentLanding=$module===''&&basename($script)==='index.php';
         if(!$studentPage&&!$studentLanding&&$module!=='auth')denySchoolRequest('Student accounts can access Learning Hub, Practice MCQs and released Exam Questions only.');
         if($module!=='auth'){
@@ -55,9 +55,9 @@ function guardSchoolRequest(): void {
     $write = ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST';
     $mutation = schoolMutationQuery($_GET);
     if ($module === 'super_admin' && $role !== 'super_admin') denySchoolRequest('System administrator access is required.');
-    $accessModule=$module==='learning'?(['questions.php'=>'questions','exam_questions.php'=>'exam_questions','exam_paper_generator.php'=>'exam_paper_generator','exam_specification_grids.php'=>'exam_specification_grids','paper_generator.php'=>'paper_generator','question_grid.php'=>'paper_generator','specification_grids.php'=>'specification_grids','curriculum.php'=>'curriculum','ocr_scanner.php'=>'ocr_scanner'][$file]??'learning'):$module;
+    $accessModule=$module==='learning'?(['questions.php'=>'questions','exam_questions.php'=>'exam_questions','exam_mcqs.php'=>'exam_questions','exam_paper_generator.php'=>'exam_paper_generator','exam_specification_grids.php'=>'exam_specification_grids','paper_generator.php'=>'paper_generator','question_grid.php'=>'paper_generator','specification_grids.php'=>'specification_grids','curriculum.php'=>'curriculum','ocr_scanner.php'=>'ocr_scanner'][$file]??'learning'):$module;
     if ($module && !in_array($module, ['auth','super_admin'], true) && !Auth::hasAccess($accessModule)) denySchoolRequest('This module is not included in your school package.');
-    if($module==='learning'&&in_array($file,['questions.php','exam_questions.php'],true)&&($write||$mutation)&&!Auth::canAddQuestions())denySchoolRequest('Your package allows question viewing, not adding or editing questions.');
+    if($module==='learning'&&in_array($file,['questions.php','exam_questions.php','exam_mcqs.php'],true)&&($write||$mutation)&&!Auth::canAddQuestions())denySchoolRequest('Your package allows question viewing, not adding or editing questions.');
     if($module==='exams'&&isset($_GET['reopen'])&& !in_array($role,['super_admin','school_admin'],true))denySchoolRequest('Only a school administrator may reopen marks.');
     if ($role !== 'super_admin' && !(int)Auth::getSchoolId()) denySchoolRequest('Your account has no school assignment. Contact an administrator.');
     if (($write || $mutation) && !schoolRoleCanWrite($role, $module, $file)) denySchoolRequest('Your role does not allow changes in this section.');
@@ -81,13 +81,13 @@ function guardSchoolRequest(): void {
     }
     if (!Auth::verifyCSRFToken($_POST[CSRF_TOKEN_NAME] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? null)) denySchoolRequest('Your security token has expired. Reload the page and try again.', 419);
     if($module==='learning'){require_once __DIR__.'/teaching_scope.php';try{learningSingleAction($_POST,$_GET);}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}}
-    if($module==='learning'&&in_array($file,['questions.php','exam_questions.php'],true)){
+    if($module==='learning'&&in_array($file,['questions.php','exam_questions.php','exam_mcqs.php'],true)){
         require_once __DIR__.'/learning_content_service.php';$actor=learningActor(getDB(),(int)Auth::getUserId(),(int)Auth::getSchoolId(),Auth::isReadOnly());
         if(array_key_exists('school_id',$_POST)||array_key_exists('created_by_user_id',$_POST)||array_key_exists('bank_kind',$_POST)||isset($_GET['make_universal']))denySchoolRequest('Content school, bank and creator cannot be changed.',403);
         $action=$_POST['action']??(isset($_GET['delete'])?'archive':'');
         if(!is_string($action))denySchoolRequest('Choose one valid question action.',422);
         if(in_array($action,['edit','set_visibility','archive','restore'],true)){
-            try{$r=learningContentRecord(getDB(),$actor,'questions',learningId($_POST['question_id']??$_GET['delete']??null),$file==='exam_questions.php'?'exam_bank':'bank',true);}catch(InvalidArgumentException $e){denySchoolRequest('Content not found.',404);}
+            try{$r=learningContentRecord(getDB(),$actor,'questions',learningId($_POST['question_id']??$_GET['delete']??null),$file!=='questions.php'?'exam_bank':'bank',true);}catch(InvalidArgumentException $e){denySchoolRequest('Content not found.',404);}
             if(!learningCanEdit(getDB(),$actor,$r))denySchoolRequest('Only the creator may change this content, while assigned to its subject.',403);
         }
         if($action==='add'&&!learningCanCreate(getDB(),$actor,(int)($_POST['class_id']??0),(int)($_POST['subject_id']??0)))denySchoolRequest('Create questions only for your assigned class subjects.',403);

@@ -10,7 +10,7 @@ try{
     if($importSelected['chapter'])$importTopicChoices=learningCatalogTopics($db,$importContextActor,(int)$importSelected['class'],(int)$importSelected['subject'],(int)$importSelected['chapter']);
 }catch(InvalidArgumentException $ignore){}
 ?>
-<fieldset class="col-12 mb-2" data-question-import-context data-catalog-url="<?= sanitize(APP_URL.'/modules/learning/'.($importContextKey==='bank'?'questions.php':'exam_questions.php').'?action=import_catalog') ?>">
+<fieldset class="col-12 mb-2" data-question-import-context data-catalog-url="<?= sanitize(APP_URL.'/modules/learning/'.($importContextPage??($importContextKey==='bank'?'questions.php':'exam_questions.php')).'?action=import_catalog') ?>">
 <legend class="fs-6 fw-bold">Select existing catalog entries</legend>
 <p class="small text-muted">Every row must contain matching Class, Subject, Chapter and Topic values. A mismatch rejects the whole file. Imports never create catalog entries.</p>
 <script type="application/json" data-import-subjects><?= json_encode($importContextSubjects,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?></script>

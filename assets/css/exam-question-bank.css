@@ -1,0 +1,14 @@
+/* Reading sizes compensate Kokila at 22 pt for each 16 pt of English. */
+.exam-question-list{--exam-reading-size:1.333333rem;--exam-nepali-scale:1.375;--erp-kokila-size:calc(var(--exam-reading-size) * var(--exam-nepali-scale));color:#183044}
+.exam-question-card{border-color:#dce5ee;border-radius:14px;padding:clamp(18px,2vw,30px);box-shadow:0 4px 18px #18304408}
+.exam-question-meta{font-size:.95rem;line-height:1.8;color:#455c70}
+.exam-bank-rich{font-size:var(--exam-reading-size)!important;line-height:1.65;overflow-wrap:anywhere;min-width:0;max-width:100%;overflow-x:auto}
+.exam-bank-rich.exam-bank-nepali,.exam-bank-rich :is(.font-nepali,.nepali-text,[lang=ne],.kokila-font){font-size:var(--erp-kokila-size)!important;font-family:Kokila,'Nirmala UI',sans-serif!important;line-height:1.5;font-weight:700}
+.exam-bank-question{font-weight:650;color:#142d42;margin-bottom:12px}
+.exam-bank-rich :is(p,span,div,strong,b,em,i,u,s,a,li,td,th,h1,h2,h3,h4,h5,h6,blockquote,pre,code,font,small){font-size:inherit!important;font-family:inherit!important}
+.exam-bank-rich :is(p,span,div,font,small){font-weight:inherit}.exam-bank-question :is(p,span,div,font,small){font-weight:inherit!important}
+.exam-bank-rich p:last-child{margin-bottom:0}.exam-bank-rich img{max-width:100%;height:auto!important}.exam-bank-rich table{max-width:100%}
+.exam-bank-option{display:grid;grid-template-columns:1.5em minmax(0,1fr);gap:4px 8px;background:#f8fbfe;height:100%;font-size:var(--exam-reading-size)}
+.exam-bank-option>.exam-bank-nepali{grid-column:2}.exam-bank-answer{padding-top:10px;border-top:1px solid #e0e7ee}.exam-bank-answer>summary{font-weight:650;font-size:1.05rem;cursor:pointer;margin-bottom:12px}
+.exam-question-editor .form-label{font-weight:600}.exam-question-editor{padding:clamp(16px,2vw,28px)}
+@media(max-width:600px){.exam-question-list{--exam-reading-size:1.25rem}.exam-question-meta{font-size:.9rem}.exam-question-card{padding:16px}}

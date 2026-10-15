@@ -49,6 +49,7 @@ $groups['Learning'] = [
 ];
 if(in_array($layoutRole,['super_admin','school_admin','teacher'],true))$groups['Exam papers']=[
     ['exam_questions','Exam Questions','file-circle-question','/modules/learning/exam_questions.php','exam_questions'],
+    ['exam_mcqs','Multiple Choice Questions','list-check','/modules/learning/exam_mcqs.php','exam_questions'],
     ['exam_paper_generator','Exam Paper Generator','file-pen','/modules/learning/exam_paper_generator.php','exam_paper_generator'],
     ['exam_specification_grids','Exam Paper Grids','table-cells','/modules/learning/exam_specification_grids.php','exam_specification_grids'],
 ];
@@ -65,6 +66,7 @@ if($layoutRole==='student')$groups=['Learning'=>[
     ['learning','Learning hub','book-open-reader','/modules/learning/index.php','learning'],
     ['practice_mcqs','Practice MCQs','circle-check','/modules/learning/practice_mcqs.php','learning'],
     ['exam_questions','Released Exam Questions','file-circle-question','/modules/learning/exam_questions.php','exam_questions'],
+    ['exam_mcqs','Released Multiple Choice Questions','list-check','/modules/learning/exam_mcqs.php','exam_questions'],
 ]];
 ?>
 <!DOCTYPE html>

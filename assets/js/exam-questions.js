@@ -22,7 +22,7 @@
   }
   function subjects(selected='',chapter='',topic=''){field('examSubject').replaceChildren(new Option('Choose subject',''));(data.subjects[field('examClass').value]||[]).forEach(s=>field('examSubject').add(new Option(s.display_name||s.name_en,s.id)));field('examSubject').value=String(selected);loadCatalog(chapter,topic);}
   field('examClass').addEventListener('change',()=>subjects());field('examSubject').addEventListener('change',()=>loadCatalog());field('examChapter').addEventListener('change',()=>topics());field('examTopic').addEventListener('change',syncTopic);
-  const type=()=>{const hidden=field('examType').value!=='MCQ';field('examOptions').hidden=hidden;field('examOptions').querySelectorAll('textarea,select').forEach(e=>e.disabled=hidden);};field('examType').addEventListener('change',type);type();
+  const type=()=>{const options=field('examOptions');if(!options)return;const hidden=field('examType').value!=='MCQ';options.hidden=hidden;options.querySelectorAll('textarea,select').forEach(e=>e.disabled=hidden);};field('examType').addEventListener('change',type);type();
   form.addEventListener('submit',event=>{if(window.tinymce)tinymce.triggerSave();if(field('examVisibility').value==='private')field('examRelease').checked=false;if(field('examRelease').checked&&!window.confirm('Release this exam question, its options and model answer to enrolled students?'))event.preventDefault();});
   subjects(data.form.subject_id||'',data.form.chapter||'',data.form.catalog_topic_id||data.form.topic_id||'');
   window.SchoolQuestionEditor?.init('.exam-rich');
