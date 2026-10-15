@@ -4,7 +4,7 @@
    const kind=importForm.dataset.examImportForm,importMode=importForm.querySelector('[name="import_content_mode"]');if(!importMode)return;
    document.querySelectorAll('[data-exam-import-mode]').forEach(link=>{if(link.dataset.examImportKind===kind)link.addEventListener('click',()=>{importMode.value=link.dataset.examImportMode;});});
    let busy=false;const button=importForm.querySelector('button[type="submit"]'),label=button?.textContent;
-   importForm.addEventListener('submit',event=>{if(busy){event.preventDefault();return;}busy=true;importForm.setAttribute('aria-busy','true');if(button){button.disabled=true;button.textContent='Importing questions…';}});
+   importForm.addEventListener('submit',event=>{if(event.defaultPrevented)return;if(busy){event.preventDefault();return;}busy=true;importForm.setAttribute('aria-busy','true');if(button){button.disabled=true;button.textContent='Importing questions…';}});
    window.addEventListener('pageshow',()=>{busy=false;importForm.removeAttribute('aria-busy');if(button){button.disabled=false;button.textContent=label;}});
   });
   const data=window.examQuestionData,form=document.getElementById('examQuestionForm');if(!data||!form)return;

@@ -20,9 +20,9 @@ function learningMutableRecord(PDO $db,array $actor,string $kind,int $id,string 
     if(!learningCanEdit($db,$actor,$record))throw new InvalidArgumentException('Only the creator may change this content, while assigned to its subject.');
     return $record;
 }
-function learningSaveQuestion(PDO $db,array $actor,array $input,?int $id=null,string $bankKind='learning'):int {
+function learningSaveQuestion(PDO $db,array $actor,array $input,?int $id=null,string $bankKind='learning',bool $allowCatalogCreate=true):int {
     if(!in_array($bankKind,['learning','exam'],true))throw new InvalidArgumentException('Invalid bank.');
-    return learningWrite($db,function()use($db,$actor,$input,$id,$bankKind){
+    return learningWrite($db,function()use($db,$actor,$input,$id,$bankKind,$allowCatalogCreate){
         if(array_key_exists('bank_kind',$input))throw new InvalidArgumentException('The question bank is determined by its section.');
         if(array_key_exists('school_id',$input)||array_key_exists('created_by_user_id',$input))throw new InvalidArgumentException('Content school and creator are set by your account.');
         if($id){$old=learningMutableRecord($db,$actor,'questions',$id,$bankKind);if($old['archived_at'])throw new InvalidArgumentException('Restore archived content before editing it.');}
@@ -40,7 +40,7 @@ function learningSaveQuestion(PDO $db,array $actor,array $input,?int $id=null,st
         $get=static function($key)use($input):string {$value=$input[$key]??'';if(!is_scalar($value))throw new InvalidArgumentException('Enter valid question content.');return (string)$value;};
         $content=questionImportRowContent($get,'html');
         if($bankKind==='exam')$content['marks']=learningDecimalString(learningDecimalUnits($input['marks']??null,100000,'Question marks'));
-        $catalog=learningCatalogSelection($db,$actor,$class,$subject,$input,learningCanManageCatalog($actor));
+        $catalog=learningCatalogSelection($db,$actor,$class,$subject,$input,$allowCatalogCreate&&learningCanManageCatalog($actor));
         $domain=$input['cognitive_domain']??'Knowledge';if(!is_string($domain)||!in_array($domain,['Knowledge','Understanding','Application','Higher Ability'],true))throw new InvalidArgumentException('Choose a valid cognitive level.');
         $values=$content+['class_id'=>$class,'subject_id'=>$subject,'chapter'=>$catalog['chapter'],'topic_id'=>$catalog['topic_id'],'catalog_chapter_id'=>$catalog['catalog_chapter_id'],'catalog_topic_id'=>$catalog['catalog_topic_id'],'visibility'=>$visibility,'cognitive_domain'=>$domain,'updated_at'=>date('Y-m-d H:i:s')];
         if($bankKind==='exam'){

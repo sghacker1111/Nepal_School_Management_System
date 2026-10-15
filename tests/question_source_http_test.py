@@ -6,13 +6,14 @@ import csv, io, json, re
 from urllib.request import Request
 from urllib.error import HTTPError
 from http_support import ERPHttpFixture
+from question_import_context_support import catalog_context, context_query
 
 PAGE='/modules/learning/questions.php'
 PRACTICE='/modules/learning/practice_mcqs.php'
 
 def upload(app, content, filename='source.csv', mode='html'):
     boundary='QuestionSourceBoundary9815'
-    fields={'csrf_token':app.token,'action_import_excel':'1','import_content_mode':mode}
+    fields={'csrf_token':app.token,'action_import_excel':'1','import_content_mode':mode,**app.import_context}
     parts=[f'--{boundary}\r\nContent-Disposition: form-data; name="{key}"\r\n\r\n{value}\r\n'.encode() for key,value in fields.items()]
     parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="excel_file"; filename="{filename}"\r\nContent-Type: application/octet-stream\r\n\r\n'.encode()+content+f'\r\n--{boundary}--\r\n'.encode())
     request=Request(app.base+PAGE,data=b''.join(parts),headers={'Content-Type':f'multipart/form-data; boundary={boundary}'})
@@ -30,8 +31,9 @@ def csv_bytes(rows):
 def seed_source(app):
     """Shared fixture for the HTTP and browser verification."""
     app.login('admin')
+    app.import_context=catalog_context(app)
     for kind in ('mcq','other'):
-        _,template=app.request_bytes(PAGE+f'?action=download_template&type={kind}&format=xlsx&content_mode=html')
+        _,template=app.request_bytes(PAGE+f'?action=download_template&type={kind}&format=xlsx&content_mode=html'+context_query(app))
         before=app.db.execute('SELECT COUNT(*) FROM questions').fetchone()[0]
         body=upload(app,template,'html-template.xlsx')
         assert 'Successfully imported 2 questions' in body
@@ -58,7 +60,7 @@ def run():
         assert 'practiceReviewBack' in app.request(PRACTICE)
         # Both CSV template types preserve rich questions/options/model answers.
         for kind in ('mcq','other'):
-            _,template=app.request_bytes(PAGE+f'?action=download_template&type={kind}&format=csv&content_mode=html')
+            _,template=app.request_bytes(PAGE+f'?action=download_template&type={kind}&format=csv&content_mode=html'+context_query(app))
             assert 'Successfully imported 2 questions' in upload(app,template)
         very_short=app.db.execute("SELECT type,answer FROM questions WHERE question_text LIKE '%as a decimal%' LIMIT 1").fetchone()
         assert very_short==('Very Short','<p><strong>0.5</strong></p>')
@@ -69,12 +71,12 @@ def run():
             body=upload(app,csv_bytes([headers,['Class 10','Mathematics','Do not create','Do not create','MCQ','Bad MCQ','1','2','3',option,key]]))
             assert 'No questions were imported' in body and 'alert-danger' in body
             assert all(app.snapshot(t)==rows for t,rows in before.items())
-        assert 'Correct Option must be A' in upload(app,csv_bytes([headers,['Class 10','Mathematics','','','MCQ','Bad key','1','2','3','4','True']]))
+        assert 'Correct Option must be A' in upload(app,csv_bytes([headers,['Class 10','Mathematics','Source Chapter','Source Topic','MCQ','Bad key','1','2','3','4','True']]))
         assert 'Choose Normal Text or HTML Source' in upload(app,csv_bytes([headers]),mode='forged')
         assert all(app.snapshot(t)==rows for t,rows in before.items())
         # Dual content columns choose the selected mode, regardless of order.
-        dual=['Class','Subject','Question HTML','Question','Answer HTML','Answer']
-        values=['Class 10','Mathematics','<p><strong>Dual rich</strong> \\(x^2\\)</p>','Dual plain x < 2 & y > 1\n<strong>literal</strong>','<ol><li>Rich answer</li></ol>','Normal answer']
+        dual=['Class','Subject','Chapter','Topic','Question HTML','Question','Answer HTML','Answer']
+        values=['Class 10','Mathematics','Source Chapter','Source Topic','<p><strong>Dual rich</strong> \\(x^2\\)</p>','Dual plain x < 2 & y > 1\n<strong>literal</strong>','<ol><li>Rich answer</li></ol>','Normal answer']
         upload(app,csv_bytes([dual,values]),mode='normal');upload(app,csv_bytes([dual,values]))
         plain=app.db.execute("SELECT question_text,answer FROM questions WHERE question_text LIKE 'Dual plain%'").fetchone()
         assert '&lt;strong&gt;literal&lt;/strong&gt;' in plain[0] and '<br' in plain[0] and plain[1]=='Normal answer'

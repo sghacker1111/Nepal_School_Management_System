@@ -14,6 +14,11 @@ $subjects=learningReadSubjects($db,$actor,$class);$chapters=[];$topicRows=[];$er
 $writerSubjects=examImportSubjects($db,$actor,$classes);
 $canCreate=!$isStudent&&!$actor['read_only']&&Auth::canAddQuestions()&&(bool)$writerSubjects;
 if($subject){try{$chapters=learningCatalogChapters($db,$actor,$class,$subject);}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),404);}}
+if(($_GET['action']??'')==='import_catalog'){
+    if(!$canCreate)denySchoolRequest('Your account cannot import exam questions.',403);
+    try{$catalog=questionImportCatalog($db,$actor,$class,$subject);header('Content-Type: application/json');echo json_encode($catalog);exit;}
+    catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
+}
 if(($_GET['action']??'')==='catalog'){
     header('Content-Type: application/json');$allTopics=[];foreach($chapters as $c)$allTopics[(int)$c['id']]=learningCatalogTopics($db,$actor,$class,$subject,(int)$c['id']);
     echo json_encode(['chapters'=>$chapters,'topics'=>$allTopics]);exit;
@@ -23,7 +28,7 @@ if(($_GET['action']??'')==='download_template'){
     try{
         $mode=questionImportFormat($_GET['content_mode']??'normal');$kind=examImportKind($_GET['import_kind']??null);$format=$_GET['format']??'xlsx';
         if(!is_string($format)||!in_array($format,['xlsx','csv'],true))throw new InvalidArgumentException('Choose Excel (.xlsx) or CSV.');
-        [$headers,$sampleRows]=examImportSample($db,$actor,$mode,$class,$subject,$kind);
+        [$headers,$sampleRows]=examImportSample($db,$actor,$mode,$class,$subject,$kind,$_GET);
         $binary=$format==='xlsx'?XlsxHelper::generateXlsx($headers,$sampleRows,'Exam Questions',[8,9],true):XlsxHelper::generateCsv($headers,$sampleRows);
         header('Content-Type: '.($format==='xlsx'?'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':'text/csv; charset=UTF-8'));
         header('Content-Disposition: attachment; filename="exam-questions-'.$kind.'-'.$mode.'-sample.'.$format.'"');
@@ -39,10 +44,10 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
             $mode=questionImportFormat($_POST['import_content_mode']??'normal');
             $kind=examImportKind($_POST['import_kind']??null);
             $visibility=learningVisibility($_POST['import_visibility']??($actor['school_id']===0?'public':'private'));
-            $result=examImportQuestions($db,$actor,examImportReadUpload($_FILES['excel_file']??[]),$mode,$visibility,$kind);
+            $result=examImportQuestions($db,$actor,examImportReadUpload($_FILES['excel_file']??[]),$mode,$visibility,$kind,$_POST);
             $message='Successfully imported '.$result['saved'].' exam questions ('.($kind==='mcq'?'MCQs':'Other Questions').'). Imported questions are staff-only.';
             if($result['skipped'])$message.=' '.$result['skipped'].' row(s) skipped. '.implode(' ',$result['errors']).($result['skipped']>count($result['errors'])?' Only the first 10 errors are shown.':'');
-            redirect(APP_URL.'/modules/learning/exam_questions.php?'.http_build_query(['class_id'=>$class,'subject_id'=>$subject]),$message,$result['skipped']?'warning':'success');
+            redirect(APP_URL.'/modules/learning/exam_questions.php?'.http_build_query(['class_id'=>(int)$_POST['import_class_id'],'subject_id'=>(int)$_POST['import_subject_id']]),$message,$result['skipped']?'warning':'success');
         }
         $id=$action==='add'?null:learningId($_POST['question_id']??null);
         if(in_array($action,['add','edit'],true))learningSaveQuestion($db,$actor,$_POST,$id,'exam');

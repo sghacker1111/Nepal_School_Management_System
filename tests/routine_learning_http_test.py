@@ -3,13 +3,14 @@ import csv,io,json,re
 from urllib.request import Request
 from urllib.parse import urlencode
 from http_support import ERPHttpFixture
+from question_import_context_support import catalog_context
 
 def select(body,name):
     return re.search(r'<select[^>]+name="'+name+r'"[^>]*>(.*?)</select>',body,re.S).group(0)
 
 def import_csv(app,rows,defaults=None):
     stream=io.StringIO();csv.writer(stream).writerows(rows);boundary='RoutineLearningCsvBoundary'
-    fields={'csrf_token':app.token,'action_import_excel':'1',**(defaults or {})}
+    fields={'csrf_token':app.token,'action_import_excel':'1',**getattr(app,'import_context',{}),**(defaults or {})}
     payload=''.join(f'--{boundary}\r\nContent-Disposition: form-data; name="{key}"\r\n\r\n{value}\r\n' for key,value in fields.items())
     payload+=f'--{boundary}\r\nContent-Disposition: form-data; name="excel_file"; filename="questions.csv"\r\nContent-Type: text/csv\r\n\r\n{stream.getvalue()}\r\n--{boundary}--\r\n'
     request=Request(app.base+'/modules/learning/questions.php',data=payload.encode(),headers={'Content-Type':f'multipart/form-data; boundary={boundary}'})
@@ -71,10 +72,12 @@ with ERPHttpFixture() as app:
     own_name=app.db.execute('SELECT name_en FROM subjects WHERE id=?',(own,)).fetchone()[0]
     other_name=app.db.execute('SELECT name_en FROM subjects WHERE id=?',(other,)).fetchone()[0]
     app.db.execute("INSERT INTO chapters(school_id,class_id,subject_id,name) VALUES(1,?,?,'General')",(cls,own));app.db.commit()
-    import_csv(app,[['Class','Subject','Question','Marks'],['Class 9',own_name,'Synthetic authorized import',2],['Class 8',own_name,'Synthetic forbidden class',2],['Class 9',other_name,'Synthetic forbidden subject',2],['','','Synthetic missing defaults',2]])
+    app.import_context=catalog_context(app,1,cls,own,'General','Routine topic')
+    import_csv(app,[['Class','Subject','Chapter','Topic','Question','Marks'],['Class 9',own_name,'General','Routine topic','Synthetic authorized import',2]])
+    import_csv(app,[['Class','Subject','Chapter','Topic','Question','Marks'],['Class 9',own_name,'General','Routine topic','Synthetic blocked batch',2],['Class 8',own_name,'General','Routine topic','Synthetic forbidden class',2]])
     assert app.db.execute("SELECT question_text FROM questions WHERE question_text LIKE 'Synthetic %' ORDER BY id").fetchall()==[('Synthetic authorized import',)]
     import_csv(app,[['Class','Subject','Question','Marks'],['','','Synthetic explicit defaults',2]],{'default_class_id':cls,'default_subject_id':own})
-    assert app.db.execute("SELECT class_id,subject_id FROM questions WHERE question_text='Synthetic explicit defaults'").fetchone()==(cls,own)
+    assert app.db.execute("SELECT class_id,subject_id FROM questions WHERE question_text='Synthetic explicit defaults'").fetchone() is None, 'Legacy fallbacks cannot bypass required matching metadata'
     app.login('admin')
     catalog='/modules/super_admin/subjects.php'
     uc,us,um=app.db.execute("SELECT cs.class_id,cs.subject_id,cs.id FROM class_subjects cs JOIN subjects s ON s.id=cs.subject_id WHERE cs.school_id=0 AND cs.is_active=1 AND COALESCE(s.is_hidden,0)=0 LIMIT 1").fetchone()

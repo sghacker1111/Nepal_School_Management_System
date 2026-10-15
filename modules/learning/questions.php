@@ -10,6 +10,7 @@ require_once __DIR__ . '/../../includes/xlsx_helper.php';
 require_once __DIR__.'/../../includes/curriculum_catalog.php';
 require_once __DIR__.'/../../includes/question_import.php';
 require_once __DIR__.'/../../includes/learning_content.php';
+require_once __DIR__.'/../../includes/question_import_context.php';
 
 Auth::requireRole(['super_admin', 'school_admin', 'principal', 'teacher', 'exam_officer']);
 Auth::requireAccess('questions');
@@ -23,6 +24,7 @@ $learningRole=(string)Auth::getRole();$learningActor=(int)Auth::getUserId();
 $contentActor=learningActor($db,$learningActor,(int)$school_id,Auth::isReadOnly());
 $canManageCatalog=learningCanManageCatalog($contentActor);
 $allowedClasses=learningReadClasses($db,$contentActor);
+$importWriterSubjects=questionImportWriterSubjects($db,$contentActor,$allowedClasses);
 
 
 // Fetch school subscription type and permissions
@@ -61,6 +63,10 @@ if (isset($_GET['action']) && $_GET['action'] === 'request_view_permission' && $
 if(isset($_GET['make_universal']))denySchoolRequest('School content cannot be transferred to the shared catalog.',403);
 
 // Handle Download Sample Excel Template
+if(($_GET['action']??'')==='import_catalog'){
+    try{$catalog=questionImportCatalog($db,$contentActor,(int)($_GET['class_id']??0),(int)($_GET['subject_id']??0));header('Content-Type: application/json');echo json_encode($catalog);exit;}
+    catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
+}
 if (isset($_GET['action']) && $_GET['action'] === 'download_template') {
     $type = strtolower($_GET['type'] ?? 'mcq');
     $format = strtolower($_GET['format'] ?? 'xlsx');
@@ -74,6 +80,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'download_template') {
         $filename = 'sample_other_questions_template';
     }
     if($contentMode==='html'){$sample=XlsxHelper::getHtmlSample($type);$filename.='_html_source';}
+    try{$sample=questionImportSampleContext($sample,questionImportContext($db,$contentActor,$_GET));}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
     
     if ($format === 'csv') {
         $content = XlsxHelper::generateCsv($sample['headers'], $sample['rows']);
@@ -147,6 +154,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_import_excel']
                         if($sourceHeader)$clean=str_replace(['html','source'],'',$clean);
                         foreach ($aliasMap as $targetKey => $aliases) {
                             if (in_array($clean, $aliases)) {
+                                if(in_array($targetKey,['class','subject','chapter','topic'],true)&&isset($colMap[$targetKey]))throw new InvalidArgumentException('Use one '.$targetKey.' column only.');
                                 $priority=$sourceHeader?($importContentMode==='html'?2:0):1;
                                 if(!isset($colPriority[$targetKey])||$priority>$colPriority[$targetKey]){$colMap[$targetKey]=$idx;$colPriority[$targetKey]=$priority;}
                                 break;
@@ -154,20 +162,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_import_excel']
                         }
                     }
 
-                    // Fallback Class and Subject
-                    $defaultClassId = (int)($_POST['default_class_id'] ?? 0);
-                    $defaultSubjectId = (int)($_POST['default_subject_id'] ?? 0);
-
-                    // Fetch existing classes and subjects for fast resolution
-                    $allClasses = $allowedClasses;
-                    $subjectCache = []; // Resolve once per permitted class, not once per question.
-
                     $importedCount = 0;
                     $skippedCount = 0;
                     $skippedReasons = [];
                     $q_school_id = $is_admin ? 0 : $school_id;
                     $db->beginTransaction();
                     $importTransactionOwned=true;
+                    $importContext=questionImportContext($db,$contentActor,$_POST);
+                    questionImportMatchContext($rows,$colMap,$importContext);
+                    $resolvedClassId=$importContext['class_id'];$resolvedSubjectId=$importContext['subject_id'];$catalog=$importContext['catalog'];
 
                     for ($r = 1; $r < count($rows); $r++) {
                         $row = $rows[$r];
@@ -182,59 +185,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_import_excel']
                         };
 
                         try{$content=questionImportRowContent($getVal,$importContentMode);}catch(InvalidArgumentException $e){$skippedCount++;$skippedReasons[]="Row {$rowNum}: ".$e->getMessage();continue;}
-
-                        // Resolve Class
-                        $classVal = $getVal('class');
-                        $resolvedClassId = 0;
-                        if (!empty($classVal)) {
-                            $classValClean = strtolower(trim($classVal));
-                            $classNum = preg_replace('/[^0-9]/', '', $classValClean);
-                            foreach ($allClasses as $c) {
-                                if (strtolower($c['name']) === $classValClean || strtolower($c['name_np']) === $classValClean) {
-                                    $resolvedClassId = $c['id'];
-                                    break;
-                                }
-                                if ($classNum !== '' && preg_replace('/[^0-9]/', '', $c['name']) === $classNum) {
-                                    $resolvedClassId = $c['id'];
-                                    break;
-                                }
-                            }
-                        }
-                        if (!$resolvedClassId && $classVal === '') {
-                            $resolvedClassId = $defaultClassId;
-                        }
-                        if (!$resolvedClassId) {
-                            $skippedCount++;
-                            $skippedReasons[] = "Row {$rowNum}: class could not be matched. Supply a valid class or choose a default for blank rows.";
-                            continue;
-                        }
-
-                        if(!in_array((int)$resolvedClassId,array_map('intval',array_column($allClasses,'id')),true)){
-                            $skippedCount++;$skippedReasons[]="Row {$rowNum}: choose an available class in your school.";continue;
-                        }
-                        $allSubjects=$subjectCache[$resolvedClassId]??=array_values(array_filter(learningReadSubjects($db,$contentActor,(int)$resolvedClassId),static fn($s)=>learningCanCreate($db,$contentActor,(int)$resolvedClassId,(int)$s['id'])));
-                        // Resolve Subject
-                        $subVal = $getVal('subject');
-                        $resolvedSubjectId = 0;
-                        if ($subVal !== '') {
-                            try{$resolvedSubjectId=questionImportSubjectId($allSubjects,$subVal);}
-                            catch(InvalidArgumentException $e){$skippedCount++;$skippedReasons[]="Row {$rowNum}: ".$e->getMessage();continue;}
-                        }
-                        if (!$resolvedSubjectId && $subVal === '') {
-                            $resolvedSubjectId = $defaultSubjectId;
-                        }
-
-                        if(!$resolvedClassId||!$resolvedSubjectId){$skippedCount++;$skippedReasons[]="Row {$rowNum}: choose an assigned class subject.";continue;}
-                        try{validateTeacherLearningRequest($db,(int)$school_id,'learning','questions.php',['class_id'=>$resolvedClassId,'subject_id'=>$resolvedSubjectId],[]);}catch(InvalidArgumentException $e){$skippedCount++;$skippedReasons[]="Row {$rowNum}: ".$e->getMessage();continue;}
-                        // Resolve Chapter
-                        $chapterVal = $getVal('chapter');
-                        if (empty($chapterVal)) {
-                            $chapterVal = 'General';
-                        }
-
-                        $topicVal=$getVal('topic');
-                        try{$catalog=learningCatalogSelection($db,$contentActor,$resolvedClassId,$resolvedSubjectId,['chapter'=>$chapterVal,'topic'=>$topicVal],$is_admin);}
-                        catch(InvalidArgumentException $e){$skippedCount++;$skippedReasons[]="Row {$rowNum}: ".$e->getMessage();continue;}
 
                         // Resolve Cognitive Level (K, U, A, HA)
                         $cdRaw = $getVal('cognitive_domain');
@@ -252,7 +202,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_import_excel']
                             'class_id'=>$resolvedClassId,'subject_id'=>$resolvedSubjectId,'chapter'=>$catalog['chapter'],
                             'topic_id'=>$catalog['topic_id'],'catalog_chapter_id'=>$catalog['catalog_chapter_id'],'catalog_topic_id'=>$catalog['catalog_topic_id'],
                             'cognitive_domain'=>$cognitiveDomain,'visibility'=>learningVisibility($_POST['import_visibility']??($is_admin?'public':'private'))
-                        ]);
+                        ],null,'learning',false);
                         $importedCount++;
                     }
 
@@ -918,6 +868,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
             <form method="POST" action="" enctype="multipart/form-data">
                 <input type="hidden" name="action_import_excel" value="1"><label class="form-label">Imported content visibility</label><select name="import_visibility" class="form-select mb-3"><option value="private" <?= !$is_admin?'selected':'' ?>>Private</option><option value="public" <?= $is_admin?'selected':'' ?>><?= $is_admin?'Shared catalog':'Public within this school' ?></option></select>
                 <div class="modal-body p-4">
+                    <?php $importContextKey='bank';$importContextActor=$contentActor;$importContextClasses=$allowedClasses;$importContextSubjects=$importWriterSubjects;$importContextValues=isset($_POST['action_import_excel'])?$_POST:[];include __DIR__.'/../../includes/question_import_context_form.php'; ?>
                     <fieldset class="mb-4"><legend class="fs-6 fw-bold">Import method</legend>
                         <div class="form-check"><input class="form-check-input" type="radio" name="import_content_mode" id="importNormal" value="normal" <?= ($importContentMode??'normal')==='html'?'':'checked' ?>><label class="form-check-label" for="importNormal">Normal Text</label></div>
                         <div class="form-check"><input class="form-check-input" type="radio" name="import_content_mode" id="importHtml" value="html" <?= ($importContentMode??'normal')==='html'?'checked':'' ?>><label class="form-check-label" for="importHtml">HTML Source (formatted questions and answers)</label></div>
@@ -955,32 +906,6 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                         <div class="form-text">Upload your .xlsx or .csv spreadsheet. First row is scanned as headers. Supports multiple questions import at once.</div>
                     </div>
 
-                    <!-- Fallback Defaults -->
-                    <div class="row g-3 p-3 bg-light rounded border mb-3">
-                        <div class="col-12">
-                            <h6 class="fw-bold text-secondary mb-1"><i class="fas fa-sliders-h me-1"></i> Optional Fallback Defaults</h6>
-                            <small class="text-muted">Used automatically if any row in your Excel file leaves Class or Subject empty.</small>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label small fw-bold">Default Class</label>
-                            <select name="default_class_id" id="importClass" class="form-select form-select-sm" onchange="updateImportSubjects()">
-                                <option value="">-- Auto-detect from spreadsheet --</option>
-                                <?php foreach ($classes as $c): ?>
-                                <option value="<?= $c['id'] ?>"><?= sanitize($c['name']) ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label small fw-bold">Default Subject</label>
-                            <select name="default_subject_id" id="importSubject" class="form-select form-select-sm">
-                                <option value="">-- Auto-detect from spreadsheet --</option>
-                                <?php foreach ($subjects as $s): ?>
-                                <option value="<?= $s['id'] ?>"><?= sanitize($s['display_name']??$s['name_en']) ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                    </div>
-
                     <!-- Guidelines Box -->
                     <div class="alert alert-info py-2 px-3 mb-0 small">
                         <i class="fas fa-info-circle me-1"></i>
@@ -998,6 +923,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
     </div>
 </div>
 
+<script src="<?= APP_URL ?>/assets/js/question-import-context.js?v=1" defer></script>
 <script>
 const canManageCatalog=<?= json_encode($canManageCatalog) ?>;
 const classesMap = <?= json_encode(array_column($classes, 'name', 'id'),JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;
@@ -1007,13 +933,6 @@ const cdcCurriculum = <?= json_encode(require __DIR__ . '/../../config/cdc_curri
 
 window.SchoolQuestionEditor.init('#modalQuestionText, #modalQuestionTextNp, #modalAnswer, #modalAnswerNp, #modalOptA, #modalOptB, #modalOptC, #modalOptD, #modalOptANp, #modalOptBNp, #modalOptCNp, #modalOptDNp');
 
-function updateImportSubjects(){
- if(!document.getElementById('importClass')||!document.getElementById('importSubject'))return;
- const classId=document.getElementById('importClass').value,select=document.getElementById('importSubject');
- select.replaceChildren(new Option(classId?'Choose mapped subject':'Choose class first',''));
- classSubjectsMap.filter(s=>String(s.class_id)===classId).forEach(s=>select.add(new Option(s.name_en,s.subject_id)));
-}
-document.addEventListener('DOMContentLoaded',updateImportSubjects);
 function updateImportContentMode(){
  const mode=document.querySelector('input[name="import_content_mode"]:checked')?.value||'normal';
  document.querySelectorAll('[data-import-template]').forEach(link=>{

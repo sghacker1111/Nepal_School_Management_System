@@ -2,8 +2,8 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const source=fs.readFileSync('modules/learning/questions.php','utf8');
 let parsed=0;
-for(const match of source.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)){
-    const code=match[1].replace(/<\?[\s\S]*?\?>/g,'null');
+for(const match of source.replace(/<\?[\s\S]*?\?>/g,'null').matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)){
+    const code=match[1];
     if(code.trim()){new vm.Script(code);parsed++;}
 }
 function definition(name){const start=source.indexOf('function '+name+'('),end=source.indexOf('\n}',start);assert(start>=0&&end>start,name);return source.slice(start,end+2);}

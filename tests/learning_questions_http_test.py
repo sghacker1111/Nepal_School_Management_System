@@ -32,6 +32,8 @@ with ERPHttpFixture() as app:
     assert app.snapshot('chapters')==before
     assert not app.db.execute("SELECT id FROM questions WHERE chapter='Missing school chapter'").fetchone()
     from question_source_http_test import upload,csv_bytes
+    from question_import_context_support import catalog_context
+    app.import_context=catalog_context(app,1,f['class'],f['subject'],chapter,'Ownership import topic')
     before={table:app.snapshot(table) for table in ('questions','chapters','topics')}
     result=upload(app,csv_bytes([['Class','Subject','Chapter','Topic','Question HTML'],['Class 9','Nepali','Missing imported chapter','Missing imported topic','<p>Do not import</p>']]))
     assert 'No questions were imported' in result and all(app.snapshot(t)==rows for t,rows in before.items())
