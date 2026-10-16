@@ -1,5 +1,7 @@
 // Installed before page-specific scripts so AJAX and dynamically created forms are protected.
 (() => {
+    if (window.erpRequestSecurityInstalled) return;
+    window.erpRequestSecurityInstalled = true;
     const nativeFetch = window.fetch.bind(window);
     window.fetch = (input, init = {}) => {
         const url = new URL(typeof input === 'string' ? input : input.url, location.href);

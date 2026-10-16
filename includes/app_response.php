@@ -13,6 +13,20 @@ function schoolAppLocation(string $url): string {
     return $canonical;
 }
 
+/** Server page styles become finite client asset IDs, never executable URLs. */
+function schoolPageAssetIds(array $styles): array {
+    $allowed=['attendance.css'=>'attendance-css','result-ledger.css'=>'ledger-css','exam-paper.css'=>'exam-paper-css',
+        'exam-question-language.css'=>'question-language-css','mcq-practice.css'=>'practice-css','accounting.css'=>'accounting-css'];
+    $ids=[];
+    foreach($styles as $style){
+        if(!is_string($style)||!preg_match('~^/assets/css/[a-z-]+\.css(?:\?v=[0-9]+)?$~D',$style))throw new InvalidArgumentException('Unknown page stylesheet.');
+        $path=parse_url($style,PHP_URL_PATH);
+        if(!is_string($path)||!str_starts_with($path,'/assets/css/')||!isset($allowed[basename($path)]))throw new InvalidArgumentException('Unknown page stylesheet.');
+        $ids[]=$allowed[basename($path)];
+    }
+    return array_values(array_unique($ids));
+}
+
 function schoolPageConfig(string $pageId,array $config=[]): string {
     if(!preg_match('/^[a-z][a-z0-9-]{0,100}$/D',$pageId))throw new InvalidArgumentException('Invalid page identity.');
     $route=schoolRouteForController(schoolControllerPath());

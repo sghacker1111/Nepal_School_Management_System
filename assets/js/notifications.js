@@ -1,5 +1,7 @@
 // Accessible, non-blocking feedback shared by every signed-in role.
 (() => {
+ if(window.erpNotificationsInstalled)return;
+ window.erpNotificationsInstalled=true;
  const recent=new Map();
  window.schoolNotify=(message,type='success')=>{
   message=String(message||'').replace(/\s+/g,' ').trim();

@@ -92,7 +92,7 @@ foreach($groups as $group=>$items){
 $currentRoute=schoolRouteForController(schoolControllerPath());
 $pageMetadata=schoolPageConfig($pageId??($currentRoute['pageId']??'error'),array_replace($pageConfig??[],[
     'title'=>($pageTitle??'Dashboard').' · '.APP_NAME,'activePage'=>$activePage??'',
-    'assets'=>array_map(static fn($style)=>APP_URL.$style,$pageStyles??[]),
+    'assets'=>array_values(array_unique([...schoolPageAssetIds($pageStyles??[]),...($pageAssets??[])])),
     'navigation'=>$navigation,'shell'=>['school'=>$layoutSchool?:'System administration','year'=>$layoutYear?:null,'role'=>$layoutRole,'fullName'=>$_SESSION['full_name']??'Account','readOnly'=>Auth::isReadOnly()],
 ]));
 $pageBody=$pageMetadata.(Auth::isReadOnly()?'<div class="alert alert-warning no-print">School preview is read-only. Records cannot be changed from this session.</div>':'').displayFlashMessage().$content;

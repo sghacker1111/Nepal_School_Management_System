@@ -20,4 +20,6 @@ foreach(['https://evil.example/students','//evil.example/students',"/students\r\
     try{schoolAppLocation($bad);throw new RuntimeException('Unsafe redirect accepted');}catch(InvalidArgumentException $expected){}
 }
 expectApp(schoolAppLocation('/erp/modules/students/index.php')==='https://school.example/erp/students','Location resolves registered same-origin controller');
+expectApp(schoolPageAssetIds(['/assets/css/attendance.css?v=3'])===['attendance-css'],'Styles use a finite public asset ID');
+try{schoolPageAssetIds(['https://evil.test/assets/css/attendance.css']);throw new RuntimeException('External style accepted');}catch(InvalidArgumentException $expected){}
 echo "App response unit passed: inert metadata, exact target, canonical redirects and context isolation.\n";
