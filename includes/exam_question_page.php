@@ -8,6 +8,7 @@ require_once __DIR__.'/functions.php';
 require_once __DIR__.'/learning_content_service.php';
 require_once __DIR__.'/exam_question_import.php';
 require_once __DIR__.'/exam_question_language.php';
+require_once __DIR__.'/frontend.php';
 Auth::requireRole($isExamBank?['super_admin','school_admin','teacher','student']:['super_admin','school_admin','principal','teacher','exam_officer']);Auth::requireAccess($isExamBank?'exam_questions':'questions');
 $db=getDB();$actor=learningActor($db,(int)Auth::getUserId(),(int)Auth::getSchoolId(),Auth::isReadOnly());
 $isStudent=$actor['role']==='student';$purpose=$isExamBank?($isStudent?'exam_view':'exam_bank'):'bank';
@@ -121,6 +122,7 @@ $pageTitle=($view==='list'?'':ucfirst($view).' ').$sectionTitle;$activePage=$isE
 <link rel="stylesheet" href="<?= APP_URL ?>/assets/css/exam-question-language.css?v=<?= (int)filemtime(__DIR__.'/../assets/css/exam-question-language.css') ?>">
 <script>window.MathJax={tex:{inlineMath:[['\\(','\\)'],['$','$']],displayMath:[['\\[','\\]'],['$$','$$']],processEscapes:true}};</script>
 <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<?php if($view==='list')ob_start(); ?>
 <div class="d-flex flex-wrap justify-content-between gap-2 mb-3 exam-bank-toolbar"><div><h1 class="h2"><?= $sectionTitle ?></h1><p class="text-muted mb-0"><?= $isExamBank?($isStudent?'Only questions explicitly released for your class and subjects.':'Chapter-wide exam bank: staff-only by default. Normal Question Bank and student practice remain separate.'):'Topic-wise questions and MCQs for learning, practice and unit-test papers. School content keeps its existing private/public access rules.' ?></p></div>
 <div class="d-flex flex-wrap align-items-start gap-2">
 <?php if($view!=='list'): ?><a class="btn btn-outline-secondary" href="<?= sanitize($listUrl) ?>">Back to <?= $sectionTitle ?></a>
@@ -147,10 +149,19 @@ $pageTitle=($view==='list'?'':ucfirst($view).' ').$sectionTitle;$activePage=$isE
 <?php if($q['type']==='MCQ'): $options=json_decode($q['options']??'{}',true)?:[];$np=json_decode($q['options_np']??'{}',true)?:[]; ?><div class="row g-3 mt-1"><?php foreach(['A','B','C','D'] as $o): ?><div class="col-lg-6"><div class="exam-bank-option border rounded p-3"><strong><?= $o ?>.</strong><div class="exam-bank-rich"><?= examQuestionRich($options[$o]??'',$np[$o]??'',$questionLanguage) ?></div></div></div><?php endforeach; ?></div><?php endif; ?>
 <details class="exam-bank-answer mt-3"><summary>Model answer<?= $q['type']==='MCQ'?' / correct option':'' ?></summary><?php if($q['type']==='MCQ'): ?><p class="fw-bold mt-2">Correct: <?= sanitize($q['correct_option']) ?></p><?php endif; ?><div class="exam-bank-rich"><?= examQuestionRich($q['answer']??'',$q['answer_np']??'',$questionLanguage) ?></div></details></article><?php endforeach; ?>
 </section>
-<script src="<?= APP_URL ?>/assets/js/exam-question-language.js?v=<?= (int)filemtime(__DIR__.'/../assets/js/exam-question-language.js') ?>"></script>
-<?php if($pagination['pages']>1): ?><nav aria-label="Question pages"><ul class="pagination flex-wrap gap-1">
+<?php if($pagination['pages']>1): ?><nav aria-label="Question pages" hx-boost="true" hx-target="#questionBankPanel" hx-swap="outerHTML" hx-indicator="#erpProgress" hx-sync="#questionBankPanel:replace"><ul class="pagination flex-wrap gap-1">
 <?php if($pagination['page']>1): ?><li class="page-item"><a class="page-link" href="<?= sanitize($url(['page'=>1])) ?>">First</a></li><li class="page-item"><a class="page-link" rel="prev" href="<?= sanitize($url(['page'=>$pagination['page']-1])) ?>">Previous</a></li><?php endif; ?>
 <?php for($p=max(1,$pagination['page']-2);$p<=min($pagination['pages'],$pagination['page']+2);$p++): ?><li class="page-item <?= $p===$pagination['page']?'active':'' ?>"><?php if($p===$pagination['page']): ?><span class="page-link" aria-current="page"><?= $p ?></span><?php else: ?><a class="page-link" aria-label="Page <?= $p ?>" href="<?= sanitize($url(['page'=>$p])) ?>"><?= $p ?></a><?php endif; ?></li><?php endfor; ?>
 <?php if($pagination['page']<$pagination['pages']): ?><li class="page-item"><a class="page-link" rel="next" href="<?= sanitize($url(['page'=>$pagination['page']+1])) ?>">Next</a></li><li class="page-item"><a class="page-link" href="<?= sanitize($url(['page'=>$pagination['pages']])) ?>">Last</a></li><?php endif; ?></ul></nav><?php endif; ?>
+<?php
+$panel='<section id="questionBankPanel" aria-label="Filtered questions">'.schoolProtectForms(ob_get_clean(),Auth::generateCSRFToken()).'</section>';
+if(($_SERVER['REQUEST_METHOD']??'GET')==='GET'&&($_SERVER['HTTP_HX_REQUEST']??'')==='true'&&($_SERVER['HTTP_HX_TARGET']??'')==='questionBankPanel'){
+    ob_end_clean();
+    header('Content-Type: text/html; charset=UTF-8');header('X-ERP-Fragment: question-list');header('Vary: HX-Request, HX-Target');
+    header('Cache-Control: no-store, private');echo $panel;exit;
+}
+echo $panel;
+?>
+<script src="<?= APP_URL ?>/assets/js/exam-question-language.js?v=<?= (int)filemtime(__DIR__.'/../assets/js/exam-question-language.js') ?>"></script>
 <?php endif; ?>
 <?php $content=ob_get_clean();include __DIR__.'/header.php'; ?>

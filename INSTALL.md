@@ -86,3 +86,10 @@ Use HTTPS, production-safe error logging, limited database credentials and restr
 Run the commands in README. Do not point test fixtures at a real database. Browser checks should use a temporary fixture database.
 
 Before pushing main, remember that the configured GitHub workflow deploys via FTP. Review the deployment file list, keep secrets/databases/uploads out of source, back up production, and validate CDC configurations with the school. No production deployment was performed by this repair.
+
+## Frontend build
+
+The PHP/MySQL application now uses locally built Tailwind CSS, Alpine.js and HTMX.
+See [frontend modernization](docs/frontend-modernization.md) for build commands,
+compatibility boundaries and the data-preserving staging/release checklist.
+Node.js is needed only on the developer machine or CI, not on shared PHP hosting.

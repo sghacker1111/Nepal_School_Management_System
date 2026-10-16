@@ -323,7 +323,7 @@ window.MathJax = {
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="modalNoteTitle">Add Study Note</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close" data-ui-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body p-4">
                     <div class="row g-3">
@@ -343,7 +343,7 @@ window.MathJax = {
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-secondary" data-ui-dismiss="modal">Close</button>
                     <button type="submit" class="btn btn-primary">Save Note</button>
                 </div>
             </div>
@@ -354,7 +354,7 @@ window.MathJax = {
 <script>
 let noteModalObj;
 $(document).ready(function() {
-    noteModalObj = new bootstrap.Modal(document.getElementById('noteModal'));
+    noteModalObj = new ErpUI.Modal(document.getElementById('noteModal'));
 
     // Initialize TinyMCE on note content
     tinymce.init({

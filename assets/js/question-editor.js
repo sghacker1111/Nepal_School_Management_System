@@ -75,10 +75,10 @@ function init(selector){
  const start=()=>{
 
     // Initialize TeX Modal
-    texModalObj = new bootstrap.Modal(document.getElementById('texModal'));
+    texModalObj = new ErpUI.Modal(document.getElementById('texModal'));
 
     // Clear activeTexSpan when modal hidden
-    document.getElementById('texModal').addEventListener('hidden.bs.modal', function () {
+    document.getElementById('texModal').addEventListener('hidden.erp.modal', function () {
         activeTexSpan = null;
     });
 

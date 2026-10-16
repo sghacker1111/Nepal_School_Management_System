@@ -5,7 +5,7 @@ const nodes=new Map();
 const element=id=>{if(!nodes.has(id))nodes.set(id,{value:'',listeners:{},addEventListener(e,f){this.listeners[e]=f;}});return nodes.get(id);};
 let config,shown=0,hidden=0;
 const modal={show(){shown++;},hide(){hidden++;}};
-const editorMap=new Map(),context={window:{APP_URL:'http://localhost',tinymce:{init(c){config=c;},get:id=>editorMap.get(id)}},bootstrap:{Modal:class{constructor(){return modal;}}},document:{readyState:'complete',getElementById:element,createElement:()=>({textContent:'',style:{}})}};
+const editorMap=new Map(),context={window:{APP_URL:'http://localhost',tinymce:{init(c){config=c;},get:id=>editorMap.get(id)}},ErpUI:{Modal:class{constructor(){return modal;}}},document:{readyState:'complete',getElementById:element,createElement:()=>({textContent:'',style:{}})}};
 vm.runInNewContext(fs.readFileSync(sharedPath,'utf8'),context);
 context.window.SchoolQuestionEditor.init('.exam-rich');
 assert.equal(config.selector,'.exam-rich');

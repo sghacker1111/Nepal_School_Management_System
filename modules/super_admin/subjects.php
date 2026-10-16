@@ -531,7 +531,7 @@ ob_start();
             
             <div class="modal-header bg-primary text-white border-0 py-3">
                 <h5 class="modal-title fw-bold" id="subjectModalTitle"><i class="fas fa-book"></i> Add Subject</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close btn-close-white" data-ui-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body p-4">
                 <div class="row g-3">
@@ -623,7 +623,7 @@ ob_start();
                 </div>
             </div>
             <div class="modal-footer border-0 p-3 bg-light">
-                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-outline-secondary" data-ui-dismiss="modal">Close</button>
                 <button type="submit" class="btn btn-primary px-4"><i class="fas fa-save"></i> Save Subject</button>
             </div>
         </form>
@@ -635,7 +635,7 @@ ob_start();
 let subjectModal = null;
 
 document.addEventListener('DOMContentLoaded', function() {
-    subjectModal = new bootstrap.Modal(document.getElementById('subjectModal'));
+    subjectModal = new ErpUI.Modal(document.getElementById('subjectModal'));
 });
 
 function calculateModalTotals() {

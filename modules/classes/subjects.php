@@ -278,14 +278,14 @@ ob_start();
 <?php if ($error): ?>
 <div class="alert alert-danger alert-dismissible fade show shadow-sm">
     <i class="fas fa-exclamation-circle me-2"></i> <?= sanitize($error) ?>
-    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    <button type="button" class="btn-close" data-ui-dismiss="alert"></button>
 </div>
 <?php endif; ?>
 
 <?php if ($success): ?>
 <div class="alert alert-success alert-dismissible fade show shadow-sm">
     <i class="fas fa-check-circle me-2"></i> <?= sanitize($success) ?>
-    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    <button type="button" class="btn-close" data-ui-dismiss="alert"></button>
 </div>
 <?php endif; ?>
 
@@ -665,7 +665,7 @@ ob_start();
             <div class="modal-content shadow">
                 <div class="modal-header bg-light">
                     <h5 class="modal-title"><i class="fas fa-edit me-2 text-warning"></i>Edit Subject Mapping & Evaluation</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close" data-ui-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body p-4">
                     <div class="mb-3">
@@ -748,7 +748,7 @@ ob_start();
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-secondary" data-ui-dismiss="modal">Close</button>
                     <button type="submit" class="btn btn-primary fw-bold">Save Changes</button>
                 </div>
             </div>
@@ -763,7 +763,7 @@ ob_start();
             <div class="toast-body" id="toastMessage">
                 Subject status updated.
             </div>
-            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-ui-dismiss="toast" aria-label="Close"></button>
         </div>
     </div>
 </div>
@@ -856,14 +856,14 @@ function editMapping(item) {
         });
     }
     
-    var editModal = new bootstrap.Modal(document.getElementById('editMappingModal'));
+    var editModal = new ErpUI.Modal(document.getElementById('editMappingModal'));
     editModal.show();
 }
 
 // Live Toggle for Subject Status (Compulsory or Optional)
 document.addEventListener('DOMContentLoaded', function() {
     const toastElem = document.getElementById('liveToast');
-    const toast = new bootstrap.Toast(toastElem, { delay: 3000 });
+    const toast = new ErpUI.Toast(toastElem, { delay: 3000 });
     const toastMsg = document.getElementById('toastMessage');
 
     document.querySelectorAll('.subject-status-toggle').forEach(function(toggle) {

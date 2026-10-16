@@ -111,12 +111,12 @@ ob_start();
             <div class="card-header bg-white py-3">
                 <ul class="nav nav-tabs card-header-tabs" id="profileTab" role="tablist">
                     <li class="nav-item">
-                        <button class="nav-link active" id="personal-tab" data-bs-toggle="tab" data-bs-target="#personal" type="button" role="tab">
+                        <button class="nav-link active" id="personal-tab" data-ui-toggle="tab" data-ui-target="#personal" type="button" role="tab">
                             Personal & Demographics
                         </button>
                     </li>
                     <li class="nav-item">
-                        <button class="nav-link" id="address-tab" data-bs-toggle="tab" data-bs-target="#address" type="button" role="tab">
+                        <button class="nav-link" id="address-tab" data-ui-toggle="tab" data-ui-target="#address" type="button" role="tab">
                             Address & Guardian
                         </button>
                     </li>

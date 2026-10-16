@@ -11,7 +11,7 @@ $schoolQuestionEditorLoaded=true;
         <div class="modal-content shadow-lg border-0">
             <div class="modal-header bg-light">
                 <h5 class="modal-title fw-bold text-dark"><i class="fas fa-square-root-alt text-primary"></i> Mathematics in TeX</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close" data-ui-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body p-4">
                 <div class="mb-3">
@@ -36,7 +36,7 @@ $schoolQuestionEditorLoaded=true;
                 </div>
             </div>
             <div class="modal-footer bg-light border-top-0 d-flex justify-content-end gap-2">
-                <button type="button" class="btn btn-secondary px-3" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-secondary px-3" data-ui-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-success px-4 fw-bold" id="btnInsertTex">OK</button>
             </div>
         </div>

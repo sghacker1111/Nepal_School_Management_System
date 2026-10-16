@@ -282,7 +282,7 @@ ob_start();
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="modalTitle">Register New School</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close" data-ui-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body p-4" style="max-height: 70vh; overflow-y: auto;">
                     <?php if($error): ?><div class="alert alert-danger" role="alert"><?= sanitize($error) ?> Your form is retained; re-enter a new administrator password only if needed.</div><?php endif; ?>
@@ -381,7 +381,7 @@ ob_start();
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-secondary" data-ui-dismiss="modal">Close</button>
                     <button type="submit" class="btn btn-primary">Save School</button>
                 </div>
             </div>
@@ -410,7 +410,7 @@ function renewSubscription(){
 }
 
 $(document).ready(function() {
-    schoolModalObj = new bootstrap.Modal(document.getElementById('schoolModal'), {
+    schoolModalObj = new ErpUI.Modal(document.getElementById('schoolModal'), {
         focus: false
     });
     const recovery=<?= json_encode($formRecovery,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;

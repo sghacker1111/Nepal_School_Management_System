@@ -1,0 +1,25 @@
+{
+  "name": "nepal-school-management-ui",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Build-time assets only. Production runs PHP and MySQL, not Node.js.",
+  "scripts": {
+    "build": "node tools/build-assets.mjs",
+    "test:ui": "node --test tests/ui_components_test.mjs tests/dynamic_workspace_test.mjs"
+  },
+  "dependencies": {
+    "@alpinejs/csp": "3.17.4",
+    "@fortawesome/fontawesome-free": "6.4.0",
+    "datatables.net": "1.13.11",
+    "datatables.net-bs5": "1.13.11",
+    "htmx.org": "2.0.11",
+    "jquery": "3.7.1",
+    "sweetalert2": "11.26.24"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "4.3.0",
+    "esbuild": "0.28.2",
+    "jsdom": "29.0.1",
+    "tailwindcss": "4.3.0"
+  }
+}

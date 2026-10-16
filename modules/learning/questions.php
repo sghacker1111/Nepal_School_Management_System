@@ -401,7 +401,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
         <button class="btn btn-success fw-bold shadow-sm" onclick="showAddForm('other')">
             <i class="fas fa-pen-nib me-1"></i> Add Questions
         </button>
-        <button class="btn btn-info text-white fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#importExcelModal">
+        <button class="btn btn-info text-white fw-bold shadow-sm" data-ui-toggle="modal" data-ui-target="#importExcelModal">
             <i class="fas fa-file-excel me-1"></i> Import Excel / CSV
         </button>
         <?php endif; ?>
@@ -874,7 +874,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                 <h5 class="modal-title fw-bold" id="importExcelModalLabel">
                     <i class="fas fa-file-excel me-2"></i> Import Questions from Excel / CSV
                 </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close btn-close-white" data-ui-dismiss="modal" aria-label="Close"></button>
             </div>
             <form method="POST" action="" enctype="multipart/form-data">
                 <input type="hidden" name="action_import_excel" value="1"><label class="form-label">Imported content visibility</label><select name="import_visibility" class="form-select mb-3"><option value="private" <?= !$is_admin?'selected':'' ?>>Private</option><option value="public" <?= $is_admin?'selected':'' ?>><?= $is_admin?'Shared catalog':'Public within this school' ?></option></select>
@@ -924,7 +924,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                     </div>
                 </div>
                 <div class="modal-footer bg-light">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-secondary" data-ui-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-primary fw-bold px-4 shadow-sm">
                         <i class="fas fa-upload me-1"></i> Upload & Import Questions
                     </button>

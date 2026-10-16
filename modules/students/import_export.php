@@ -361,14 +361,14 @@ ob_start();
 <?php if ($success): ?>
 <div class="alert alert-success alert-dismissible fade show mb-4">
     <i class="fas fa-check-circle me-2"></i> <?= $success ?>
-    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    <button type="button" class="btn-close" data-ui-dismiss="alert"></button>
 </div>
 <?php endif; ?>
 
 <?php if ($error): ?>
 <div class="alert alert-danger alert-dismissible fade show mb-4">
     <i class="fas fa-exclamation-circle me-2"></i> <?= $error ?>
-    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    <button type="button" class="btn-close" data-ui-dismiss="alert"></button>
 </div>
 <?php endif; ?>
 

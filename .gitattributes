@@ -1,0 +1,6 @@
+# Keep generated-asset content and its cache manifest consistent across build OSes.
+/assets/dist/*.css text eol=lf
+/assets/dist/*.js text eol=lf
+/assets/dist/*.json text eol=lf
+/assets/dist/*.txt text eol=lf
+/assets/webfonts/* binary

@@ -3,5 +3,6 @@ Options -Indexes
     Require all denied
 </FilesMatch>
 RewriteEngine On
-RewriteRule (^|/)(\.[^/]+|config|includes|scratch|tests|docs|backups)(/|$) - [F,L]
+RewriteRule (^|/)(\.[^/]+|config|includes|scratch|tests|docs|backups|frontend|tools|node_modules)(/|$) - [F,L]
+RewriteRule ^package(-lock)?\.json$ - [F,L,NC]
 RewriteRule ^uploads/.*\.(php[0-9]*|phtml|phar)$ - [F,L,NC]

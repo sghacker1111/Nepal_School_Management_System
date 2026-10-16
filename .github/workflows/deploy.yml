@@ -22,6 +22,17 @@ jobs:
       uses: actions/checkout@v4
       with:
         fetch-depth: 0 # Fetch all history so git diff works for FTP deploy
+
+    - name: Set up build-time Node (not required by the PHP host)
+      uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+        cache: npm
+    - name: Build local frontend assets
+      run: |
+        npm ci --no-fund
+        npm run build
+        npm run test:ui
     
     - name: Sync files to FTP
       uses: SamKirkland/FTP-Deploy-Action@v4.3.4
@@ -59,4 +70,8 @@ jobs:
           scratch/**
           tests/**
           docs/**
+          frontend/**
+          tools/**
+          package.json
+          package-lock.json
           **/*.log

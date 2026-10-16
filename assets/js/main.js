@@ -22,18 +22,18 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('input[name$="_drive_path"]').forEach(input=>{input.disabled=true;input.placeholder='Use the file upload button above';});
     
     // Initialize tooltips
-    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-ui-toggle="tooltip"]'));
     tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
+        return new ErpUI.Tooltip(tooltipTriggerEl);
     });
     
     // Initialize popovers
-    const popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
+    const popoverTriggerList = [].slice.call(document.querySelectorAll('[data-ui-toggle="popover"]'));
     popoverTriggerList.map(function (popoverTriggerEl) {
-        return new bootstrap.Popover(popoverTriggerEl);
+        return new ErpUI.Popover(popoverTriggerEl);
     });
 
-    // Auto-enable bootstrap validation on forms with 'needs-validation'
+    // Native constraint validation with the shared Tailwind component styles.
     const forms = document.querySelectorAll('.needs-validation');
     Array.from(forms).forEach(form => {
         form.addEventListener('submit', event => {
@@ -114,20 +114,23 @@ function printElement(elementId) {
     const printWindow = window.open('', '', 'height=600,width=800');
     
     printWindow.document.write('<html><head><title>Print</title>');
-    printWindow.document.write('<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">');
+    const stylesheet = document.createElement('link');
+    stylesheet.rel = 'stylesheet';
+    stylesheet.href = (window.APP_URL || '') + '/assets/dist/app.css';
+    printWindow.document.head.appendChild(stylesheet);
     printWindow.document.write('</head><body>');
     printWindow.document.write(element.innerHTML);
     printWindow.document.write('</body></html>');
     
     printWindow.document.close();
-    printWindow.print();
+    stylesheet.addEventListener('load', () => printWindow.print(), {once: true});
 }
 
 // Auto-dismiss alerts after 5 seconds
 setTimeout(function() {
     const alerts = document.querySelectorAll('.alert-dismissible');
     alerts.forEach(function(alert) {
-        const bsAlert = new bootstrap.Alert(alert);
+        const bsAlert = new ErpUI.Alert(alert);
         bsAlert.close();
     });
 }, 5000);

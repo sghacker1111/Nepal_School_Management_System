@@ -68,7 +68,7 @@ function displayFlashMessage() {
         
         return "<div class='alert {$alertClass} alert-dismissible fade show' role='alert'>
                     {$message}
-                    <button type='button' class='btn-close' data-bs-dismiss='alert'></button>
+                    <button type='button' class='btn-close' data-ui-dismiss='alert'></button>
                 </div>";
     }
     return '';

@@ -307,7 +307,7 @@ ob_start();
         <form class="modal-content border-0 shadow-lg" style="border-radius:16px;" onsubmit="mapSubjectSubmit(event)">
             <div class="modal-header bg-primary text-white border-0 py-3">
                 <h5 class="modal-title fw-bold"><i class="fas fa-link"></i> Map Subject to Class</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close btn-close-white" data-ui-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body p-4">
                 <div class="mb-3">
@@ -318,7 +318,7 @@ ob_start();
                 </div>
             </div>
             <div class="modal-footer border-0">
-                <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-outline-secondary px-4" data-ui-dismiss="modal">Cancel</button>
                 <button type="submit" class="btn btn-primary px-4">Map Subject</button>
             </div>
         </form>
@@ -333,7 +333,7 @@ ob_start();
             <input type="hidden" id="chapterModalId">
             <div class="modal-header bg-success text-white border-0 py-3">
                 <h5 class="modal-title fw-bold" id="chapterModalTitle"><i class="fas fa-plus"></i> Add Chapter</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close btn-close-white" data-ui-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body p-4">
                 <div class="mb-3">
@@ -350,7 +350,7 @@ ob_start();
                 </div>
             </div>
             <div class="modal-footer border-0">
-                <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-outline-secondary px-4" data-ui-dismiss="modal">Cancel</button>
                 <button type="submit" class="btn btn-success px-4" id="chapterModalBtn">Save Chapter</button>
             </div>
         </form>
@@ -366,7 +366,7 @@ ob_start();
             <input type="hidden" id="topicModalChapterId">
             <div class="modal-header bg-info text-white border-0 py-3">
                 <h5 class="modal-title fw-bold" id="topicModalTitle"><i class="fas fa-plus"></i> Add Topic</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close btn-close-white" data-ui-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body p-4">
                 <div class="mb-3">
@@ -383,7 +383,7 @@ ob_start();
                 </div>
             </div>
             <div class="modal-footer border-0">
-                <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-outline-secondary px-4" data-ui-dismiss="modal">Cancel</button>
                 <button type="submit" class="btn btn-info text-white px-4" id="topicModalBtn">Save Topic</button>
             </div>
         </form>
@@ -483,7 +483,7 @@ function loadChaptersTree() {
                     chapterItem.className = 'accordion-item border mb-3 rounded-3 overflow-hidden shadow-sm';
                     chapterItem.innerHTML = `
                         <h2 class="accordion-header" id="headingCh_${ch.id}">
-                            <div class="accordion-button collapsed bg-light d-flex justify-content-between align-items-center" type="button" data-bs-toggle="collapse" data-bs-target="#collapseCh_${ch.id}">
+                            <div class="accordion-button collapsed bg-light d-flex justify-content-between align-items-center" type="button" data-ui-toggle="collapse" data-ui-target="#collapseCh_${ch.id}">
                                 <div class="d-flex align-items-center">
                                     <i class="fas fa-folder text-warning me-2"></i>
                                     <div>
@@ -501,7 +501,7 @@ function loadChaptersTree() {
                                 </div>
                             </div>
                         </h2>
-                        <div id="collapseCh_${ch.id}" class="accordion-collapse collapse" data-bs-parent="#chaptersAccordion">
+                        <div id="collapseCh_${ch.id}" class="accordion-collapse collapse" data-ui-parent="#chaptersAccordion">
                             <div class="accordion-body bg-white" id="topicsContainer_${ch.id}">
                                 <div class="text-center py-2"><div class="spinner-border spinner-border-sm text-secondary" role="status"></div></div>
                             </div>
@@ -515,7 +515,7 @@ function loadChaptersTree() {
                     chapterItem.querySelector('.edit-chapter').addEventListener('click',()=>showEditChapterModal(ch.id,ch.name,ch.name_np||'',ch.sort_order));
                     chapterItem.querySelector('.add-chapter-topic').addEventListener('click',()=>showAddTopicModal(ch.id));
                     if(!canManageCatalog){chapterItem.querySelector('.no-print').remove();chapterItem.querySelector('.add-chapter-topic').parentElement.remove();}
-                    chapterItem.querySelector('.accordion-collapse').addEventListener('show.bs.collapse',()=>loadTopicsList(ch.id));
+                    chapterItem.querySelector('.accordion-collapse').addEventListener('show.erp.collapse',()=>loadTopicsList(ch.id));
                     accordion.appendChild(chapterItem);
                 });
             } else {
@@ -591,7 +591,7 @@ function showMapSubjectModal() {
                     opt.textContent = sub.name_en + ' (' + sub.code + ')';
                     select.appendChild(opt);
                 });
-                const modal = new bootstrap.Modal(document.getElementById('mapSubjectModal'));
+                const modal = new ErpUI.Modal(document.getElementById('mapSubjectModal'));
                 modal.show();
             }
         }
@@ -611,7 +611,7 @@ function mapSubjectSubmit(e) {
         },
         dataType: 'json',
         success: function(res) {
-            bootstrap.Modal.getInstance(document.getElementById('mapSubjectModal')).hide();
+            ErpUI.Modal.getInstance(document.getElementById('mapSubjectModal')).hide();
             if (res.success) {
                 Swal.fire('Success', 'Subject mapped successfully to class.', 'success');
                 onClassChange();
@@ -630,7 +630,7 @@ function showAddChapterModal() {
     document.getElementById('modalChapterNameNp').value = '';
     document.getElementById('modalChapterSort').value = '0';
     
-    const modal = new bootstrap.Modal(document.getElementById('chapterModal'));
+    const modal = new ErpUI.Modal(document.getElementById('chapterModal'));
     modal.show();
 }
 
@@ -642,7 +642,7 @@ function showEditChapterModal(id, name, nameNp, sortOrder) {
     document.getElementById('modalChapterNameNp').value = nameNp;
     document.getElementById('modalChapterSort').value = sortOrder;
     
-    const modal = new bootstrap.Modal(document.getElementById('chapterModal'));
+    const modal = new ErpUI.Modal(document.getElementById('chapterModal'));
     modal.show();
 }
 
@@ -670,7 +670,7 @@ function chapterSubmit(e) {
         data: postData,
         dataType: 'json',
         success: function(res) {
-            bootstrap.Modal.getInstance(document.getElementById('chapterModal')).hide();
+            ErpUI.Modal.getInstance(document.getElementById('chapterModal')).hide();
             if (res.success) {
                 loadChaptersTree();
             } else {
@@ -717,7 +717,7 @@ function showAddTopicModal(chapterId) {
     document.getElementById('modalTopicNameNp').value = '';
     document.getElementById('modalTopicSort').value = '0';
     
-    const modal = new bootstrap.Modal(document.getElementById('topicModal'));
+    const modal = new ErpUI.Modal(document.getElementById('topicModal'));
     modal.show();
 }
 
@@ -730,7 +730,7 @@ function showEditTopicModal(id, chapterId, name, nameNp, sortOrder) {
     document.getElementById('modalTopicNameNp').value = nameNp;
     document.getElementById('modalTopicSort').value = sortOrder;
     
-    const modal = new bootstrap.Modal(document.getElementById('topicModal'));
+    const modal = new ErpUI.Modal(document.getElementById('topicModal'));
     modal.show();
 }
 
@@ -760,11 +760,11 @@ function topicSubmit(e) {
         data: postData,
         dataType: 'json',
         success: function(res) {
-            bootstrap.Modal.getInstance(document.getElementById('topicModal')).hide();
+            ErpUI.Modal.getInstance(document.getElementById('topicModal')).hide();
             if (res.success) {
                 // Reload specific topics container
                 loadTopicsList(chapterId);
-                bootstrap.Collapse.getOrCreateInstance(document.getElementById('collapseCh_'+chapterId),{toggle:false}).show();
+                ErpUI.Collapse.getOrCreateInstance(document.getElementById('collapseCh_'+chapterId),{toggle:false}).show();
             } else {
                 Swal.fire('Error', res.message, 'error');
             }
