@@ -23,11 +23,15 @@
     };
     document.addEventListener('submit', event => addToken(event.target), true);
     const submit = HTMLFormElement.prototype.submit;
-    HTMLFormElement.prototype.submit = function () { addToken(this); return submit.call(this); };
+    HTMLFormElement.prototype.submit = function () {
+        addToken(this);
+        if(window.erpForms?.canHandleForm(this)){void window.erpForms.submitForm(this);return;}
+        return submit.call(this);
+    };
     window.postAction = url => {
         const target = new URL(url, location.href);
         if (target.origin !== location.origin) return;
         const form = document.createElement('form'); form.method = 'post'; form.action = target.href;
-        document.body.append(form); form.submit();
+        (document.getElementById('main-content')||document.body).append(form); form.submit();
     };
 })();

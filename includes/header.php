@@ -90,11 +90,14 @@ foreach($groups as $group=>$items){
     }
 }
 $currentRoute=schoolRouteForController(schoolControllerPath());
+$mutation=schoolPageMutation(!empty($error)?$error:(($message_type??'')==='error'?($message??''):''),!empty($success)?$success:(($message_type??'')==='success'?($message??''):''),$pageMutationOutcome??null);
+if(schoolIsAppRequest()&&$mutation['outcome']==='invalid'&&http_response_code()<400)http_response_code(422);
 $pageMetadata=schoolPageConfig($pageId??($currentRoute['pageId']??'error'),array_replace($pageConfig??[],[
     'title'=>($pageTitle??'Dashboard').' · '.APP_NAME,'activePage'=>$activePage??'',
     'assets'=>array_values(array_unique([...schoolPageAssetIds($pageStyles??[]),...($pageAssets??[])])),
     'navigation'=>$navigation,'shell'=>['school'=>$layoutSchool?:'System administration','year'=>$layoutYear?:null,'role'=>$layoutRole,'fullName'=>$_SESSION['full_name']??'Account','readOnly'=>Auth::isReadOnly()],
     'routes'=>array_map(static fn($route)=>['url'=>schoolRouteUrl($route['controller']),'legacyUrl'=>APP_URL.'/'.$route['controller'],'enhanced'=>$route['enhanced'],'kind'=>$route['kind']],schoolRoutes()),
+    'mutation'=>$mutation,
 ]));
 $pageBody=$pageMetadata.(Auth::isReadOnly()?'<div class="alert alert-warning no-print">School preview is read-only. Records cannot be changed from this session.</div>':'').displayFlashMessage().$content;
 if(schoolIsAppRequest()){

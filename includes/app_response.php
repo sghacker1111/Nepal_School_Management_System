@@ -27,6 +27,13 @@ function schoolPageAssetIds(array $styles): array {
     return array_values(array_unique($ids));
 }
 
+function schoolPageMutation($error='', $success='', ?string $explicit=null): array {
+    if(($_SERVER['REQUEST_METHOD']??'GET')!=='POST')return ['outcome'=>'none'];
+    $outcome=$error?'invalid':($success?'saved':($explicit??'unknown'));
+    if(!in_array($outcome,['invalid','saved','preview','unknown'],true))throw new InvalidArgumentException('Invalid save outcome.');
+    return ['outcome'=>$outcome];
+}
+
 function schoolPageConfig(string $pageId,array $config=[]): string {
     if(!preg_match('/^[a-z][a-z0-9-]{0,100}$/D',$pageId))throw new InvalidArgumentException('Invalid page identity.');
     $route=schoolRouteForController(schoolControllerPath());
@@ -70,7 +77,7 @@ function schoolAppUnauthenticated(): never {
 
 function schoolAppError(string $message,int $status): never {
     schoolAppHeaders();http_response_code($status);
-    echo schoolPageConfig('error',['title'=>'Request could not be completed','status'=>$status]);
+    echo schoolPageConfig('error',['title'=>'Request could not be completed','status'=>$status,'mutation'=>['outcome'=>$status<500?'invalid':'unknown']]);
     echo '<section class="alert alert-danger" role="alert"><h1>Request could not be completed</h1><p>'.htmlspecialchars($message,ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8').'</p><a href="'.htmlspecialchars(schoolRouteUrl('index.php'),ENT_QUOTES,'UTF-8').'">Return to dashboard</a></section>';
     exit;
 }

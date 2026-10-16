@@ -36,6 +36,10 @@ export function recoverNavigation(message, url) {
     const link = doc.createElement('a'); link.href = sameOrigin(url, win)?.href || win.location.href; link.textContent = 'Open the full page'; banner.append(link); doc.body.append(banner);
 }
 
+export function cancelNavigation() {
+    if(!app)return;app.sequence++;app.abort?.abort();app.root.removeAttribute('aria-busy');app.doc.getElementById('erpProgress')?.classList.remove('htmx-request');
+}
+
 function updateShell(metadata, state) {
     const {doc, win, root} = state;
     doc.title = metadata.title || 'School ERP'; win.CSRF_TOKEN = metadata.csrfToken || '';

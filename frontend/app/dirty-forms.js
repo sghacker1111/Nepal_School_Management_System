@@ -59,6 +59,7 @@ export async function confirmNavigation() {
 }
 
 export function setMutationPending(form, pending) {
+    if(!formStates.has(form))for(const scope of scopes)if(scope.root.contains(form)){register(form,scope);break;}
     const state = formStates.get(form); if (!state) throw new Error('Mutation form is not tracked.');
     if (pending && ['pending', 'uncertain'].includes(state.state)) throw new Error('A mutation is already ' + state.state + '.');
     if (pending) state.state = 'pending';
