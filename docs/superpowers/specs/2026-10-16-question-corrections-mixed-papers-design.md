@@ -2,9 +2,9 @@
 
 Date: 2026-10-16 (Asia/Katmandu)
 
-Status: written specification approved by the user on 2026-10-16; implementation plan awaiting review.
+Status: specification and Native implementation plan approved on 2026-10-16; implementation, 311-command verification, browser acceptance and independent review complete. User separately authorized push and deployment after verification.
 
-Baseline: release `c7ca3d6e85828838062cdf38b307c145e33fe2b8`. This specification does not implement or deploy application changes.
+Baseline: release `c7ca3d6e85828838062cdf38b307c145e33fe2b8`. Verification/release evidence is recorded in `docs/question-corrections-mixed-papers-handoff-2026-10-16.md`.
 
 ## Purpose and agreed scope
 
