@@ -1,7 +1,7 @@
 # Single-page navigation and clean URLs
 
 Date: 2026-10-16
-Status: Design for owner review; implementation not started.
+Status: Approved by owner in chat; implementation plan awaiting review.
 Base: `dbcfa45` on `codex/tailwind-alpine-htmx-migration`.
 
 ## 1. Agreed outcome
@@ -13,9 +13,9 @@ clean URLs without `.php`, and preserve direct links, bookmarks and browser hist
 Continue using PHP, the existing MySQL database, Tailwind CSS, Alpine.js and HTMX
 on InfinityFree free hosting. The owner confirmed production already uses MySQL.
 
-The owner approved this approach in chat. This document expands that approval
-into a reviewable design; approval of this document is the next checkpoint before
-writing the implementation plan. No production publishing is authorized here.
+The owner approved this approach and subsequently approved this written spec in
+chat. The next checkpoint is implementation-plan review and execution-method
+selection. No production publishing is authorized here.
 
 ## 2. Scope and boundaries
 
