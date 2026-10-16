@@ -27,13 +27,13 @@ if (isset($_GET['toggle_hide']) && Auth::hasRole(['super_admin', 'school_admin']
         $stmt_up->execute([$new_state, $id, $school_id]);
         
         $msg = $new_state ? ("Subject '" . htmlspecialchars($curr['name_en']) . "' is now hidden from lists and student forms.") : ("Subject '" . htmlspecialchars($curr['name_en']) . "' is now visible and active.");
-        redirect(APP_URL . '/modules/subjects/index.php', $msg);
+        redirect(schoolRouteUrl('modules/subjects/index.php'), $msg);
     }
 }
 
 // Disallow hard delete to protect exams and marks data integrity
 if (isset($_GET['delete'])) {
-    redirect(APP_URL . '/modules/subjects/index.php', 'Permanent deletion is disabled to protect existing marks, exams, and student result history. Please use the Hide option instead.', 'error');
+    redirect(schoolRouteUrl('modules/subjects/index.php'), 'Permanent deletion is disabled to protect existing marks, exams, and student result history. Please use the Hide option instead.', 'error');
 }
 
 $show_hidden = isset($_GET['show_hidden']) && $_GET['show_hidden'] == '1';
@@ -78,7 +78,7 @@ ob_start();
             <i class="fas <?= $show_hidden ? 'fa-eye-slash' : 'fa-eye' ?>"></i> <?= $show_hidden ? 'Hide Inactive Subjects' : 'Show Hidden Subjects' ?>
         </a>
         <?php if (Auth::hasRole(['super_admin', 'school_admin'])): ?>
-        <a href="<?= APP_URL ?>/modules/subjects/add.php" class="btn btn-primary">
+        <a href="<?= schoolRouteUrl('modules/subjects/add.php') ?>" class="btn btn-primary">
             <i class="fas fa-plus"></i> Add New Subject
         </a>
         <?php endif; ?>
@@ -193,7 +193,7 @@ ob_start();
                             </td>
                             <?php if (Auth::hasRole(['super_admin', 'school_admin'])): ?>
                             <td class="text-end text-nowrap">
-                                <a href="<?= APP_URL ?>/modules/subjects/edit.php?id=<?= $subject['id'] ?>" class="btn btn-sm btn-outline-warning me-1" title="Edit Subject Details">
+                                <a href="<?= schoolRouteUrl('modules/subjects/edit.php') ?>?id=<?= $subject['id'] ?>" class="btn btn-sm btn-outline-warning me-1" title="Edit Subject Details">
                                     <i class="fas fa-edit"></i> Edit
                                 </a>
                                 <?php if (!empty($subject['is_hidden'])): ?>

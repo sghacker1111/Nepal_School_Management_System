@@ -18,7 +18,7 @@ $kinds=$examId?[in_array($exam['type'],['final','annual'],true)?'annual':'termin
 $profiles=[];foreach($kinds as $kind)$profiles[$kind]=cdc2083InternalComponents($row,['type'=>$kind==='annual'?'final':'terminal']);
 if(($_SERVER['REQUEST_METHOD']??'GET')==='POST')try{
     saveInternalAssessment($db,$school,(int)Auth::getUserId(),Auth::getRole(),$mapping,$examId?:null,$_POST);
-    redirect(APP_URL.'/modules/subjects/internal.php?'.http_build_query(['mapping'=>$mapping,'exam'=>$examId]),'Internal assessment saved successfully. '.($examId?'Existing entered scores were preserved.':'Only future exam mappings use these defaults.'));
+    redirect(schoolRouteUrl('modules/subjects/internal.php') . '?'.http_build_query(['mapping'=>$mapping,'exam'=>$examId]),'Internal assessment saved successfully. '.($examId?'Existing entered scores were preserved.':'Only future exam mappings use these defaults.'));
 }catch(InvalidArgumentException $e){$error=$e->getMessage();}catch(PDOException $e){error_log($e->getMessage());$error='Internal assessment could not be saved. Try again.';}
 $pageTitle='Internal assessment';$activePage=$examId?'exams':'subjects';ob_start();
 ?>

@@ -54,7 +54,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'request_permission' && $schoo
         $stmt = $db->prepare("UPDATE schools SET question_permission_status = 'requested' WHERE id = ?");
         $stmt->execute([$school_id]);
         Auth::logActivity(Auth::getUserId(), 'Request Question Creation Permission', 'schools', $school_id);
-        redirect(APP_URL . '/modules/learning/questions.php', 'Question creation permission requested successfully.', 'success');
+        redirect(schoolRouteUrl('modules/learning/questions.php'), 'Question creation permission requested successfully.', 'success');
     }
 }
 
@@ -64,7 +64,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'request_view_permission' && $
         $stmt = $db->prepare("UPDATE schools SET question_view_permission = 'requested' WHERE id = ?");
         $stmt->execute([$school_id]);
         Auth::logActivity(Auth::getUserId(), 'Request Question View Permission', 'schools', $school_id);
-        redirect(APP_URL . '/modules/learning/questions.php', 'Question view permission requested successfully.', 'success');
+        redirect(schoolRouteUrl('modules/learning/questions.php'), 'Question view permission requested successfully.', 'success');
     }
 }
 
@@ -224,7 +224,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_import_excel']
                         $db->commit();$importTransactionOwned=false;
                         // One import outcome, and GET after POST prevents refresh from importing again.
                         unset($_SESSION['action_notice']);
-                        redirect(APP_URL.'/modules/learning/questions.php?category=all','Successfully imported '.$importedCount.' questions into the Question Bank.'.$skipDetails,$skippedCount>0?'warning':'success');
+                        redirect(schoolRouteUrl('modules/learning/questions.php') . '?category=all','Successfully imported '.$importedCount.' questions into the Question Bank.'.$skipDetails,$skippedCount>0?'warning':'success');
                     }
                 }
             } catch (Throwable $e) {
@@ -391,7 +391,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
         <span class="text-muted small">Manage Multiple Choice and Subjective questions aligned with CDC Nepal curriculum</span>
     </div>
     <div class="d-flex gap-2 flex-wrap">
-        <a href="<?= APP_URL ?>/modules/learning/index.php" class="btn btn-secondary">
+        <a href="<?= schoolRouteUrl('modules/learning/index.php') ?>" class="btn btn-secondary">
             <i class="fas fa-arrow-left"></i> Back to Portal
         </a>
         <?php if ($canCreateContent): ?>
@@ -455,17 +455,17 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
 <!-- Category Tabs (All / MCQ / Other) -->
 <ul class="nav nav-pills mb-3 bg-white p-2 rounded shadow-sm border">
     <li class="nav-item">
-        <a class="nav-link fw-bold <?= $filter_category === 'all' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/questions.php?category=all<?= $filter_class ? '&class='.$filter_class : '' ?><?= $filter_subject ? '&subject='.$filter_subject : '' ?><?= $filter_cognitive ? '&cognitive_domain='.$filter_cognitive : '' ?>">
+        <a class="nav-link fw-bold <?= $filter_category === 'all' ? 'active' : '' ?>" href="<?= schoolRouteUrl('modules/learning/questions.php') ?>?category=all<?= $filter_class ? '&class='.$filter_class : '' ?><?= $filter_subject ? '&subject='.$filter_subject : '' ?><?= $filter_cognitive ? '&cognitive_domain='.$filter_cognitive : '' ?>">
             <i class="fas fa-layer-group me-1"></i> All Questions
         </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link fw-bold <?= $filter_category === 'mcq' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/questions.php?category=mcq<?= $filter_class ? '&class='.$filter_class : '' ?><?= $filter_subject ? '&subject='.$filter_subject : '' ?><?= $filter_cognitive ? '&cognitive_domain='.$filter_cognitive : '' ?>">
+        <a class="nav-link fw-bold <?= $filter_category === 'mcq' ? 'active' : '' ?>" href="<?= schoolRouteUrl('modules/learning/questions.php') ?>?category=mcq<?= $filter_class ? '&class='.$filter_class : '' ?><?= $filter_subject ? '&subject='.$filter_subject : '' ?><?= $filter_cognitive ? '&cognitive_domain='.$filter_cognitive : '' ?>">
             <i class="fas fa-list-ol me-1"></i> Multiple Choice Questions (MCQ)
         </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link fw-bold <?= $filter_category === 'other' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/questions.php?category=other<?= $filter_class ? '&class='.$filter_class : '' ?><?= $filter_subject ? '&subject='.$filter_subject : '' ?><?= $filter_cognitive ? '&cognitive_domain='.$filter_cognitive : '' ?>">
+        <a class="nav-link fw-bold <?= $filter_category === 'other' ? 'active' : '' ?>" href="<?= schoolRouteUrl('modules/learning/questions.php') ?>?category=other<?= $filter_class ? '&class='.$filter_class : '' ?><?= $filter_subject ? '&subject='.$filter_subject : '' ?><?= $filter_cognitive ? '&cognitive_domain='.$filter_cognitive : '' ?>">
             <i class="fas fa-pen-alt me-1"></i> Other Questions (Subjective)
         </a>
     </li>
@@ -505,7 +505,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                 </select>
             </div>
             <div class="col-md-2 d-flex align-items-end">
-                <a href="<?= APP_URL ?>/modules/learning/questions.php" class="btn btn-secondary w-100">Reset</a>
+                <a href="<?= schoolRouteUrl('modules/learning/questions.php') ?>" class="btn btn-secondary w-100">Reset</a>
             </div>
         </form>
     </div>

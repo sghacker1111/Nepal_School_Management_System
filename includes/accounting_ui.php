@@ -8,7 +8,7 @@ Auth::requireRole(['super_admin','school_admin','accountant','cashier','auditor'
 Auth::requireAccess('accounting');
 try{$ac=new SchoolAccounting(getDB(),(int)Auth::getSchoolId(),(int)Auth::getUserId(),Auth::isReadOnly());}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),403);}
 $db=$ac->db;$school=$ac->school;$error='';$activePage='accounting';
-function acUrl(string $page,array $args=[]):string{return APP_URL.'/modules/accounting/'.$page.'.php'.($args?'?'.http_build_query($args):'');}
+function acUrl(string $page,array $args=[]):string{return schoolRouteUrl('modules/accounting/'.$page.'.php',$args);}
 function acInput(string $name,string $label,$value='',string $type='text',bool $required=true):void {
     $id='ac_'.preg_replace('/[^A-Za-z0-9]/','_',$name);echo '<label class="form-label d-block" for="'.$id.'">'.sanitize($label).'<input id="'.$id.'" class="form-control" name="'.sanitize($name).'" type="'.$type.'" value="'.sanitize((string)$value).'" '.($required?'required':'').' '.($type==='number'?'step="0.01" min="0"':'').'></label>';
 }

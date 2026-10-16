@@ -116,10 +116,10 @@ ob_start();
             </div>
             <div class="card-body">
                 <div class="d-grid gap-3">
-                    <a href="<?= APP_URL ?>/modules/super_admin/schools.php" class="btn btn-outline-primary py-3 fs-5">
+                    <a href="<?= schoolRouteUrl('modules/super_admin/schools.php') ?>" class="btn btn-outline-primary py-3 fs-5">
                         <i class="fas fa-university"></i> Manage Schools
                     </a>
-                    <a href="<?= APP_URL ?>/modules/super_admin/users.php" class="btn btn-outline-success py-3 fs-5">
+                    <a href="<?= schoolRouteUrl('modules/super_admin/users.php') ?>" class="btn btn-outline-success py-3 fs-5">
                         <i class="fas fa-users-cog"></i> School Administrators
                     </a>
                 </div>
@@ -132,7 +132,7 @@ ob_start();
         <div class="card h-100">
             <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
                 <h5 class="mb-0"><i class="fas fa-school text-primary"></i> Registered Schools Overview</h5>
-                <a href="<?= APP_URL ?>/modules/super_admin/schools.php" class="btn btn-sm btn-primary">View All</a>
+                <a href="<?= schoolRouteUrl('modules/super_admin/schools.php') ?>" class="btn btn-sm btn-primary">View All</a>
             </div>
             <div class="card-body">
                 <?php if (count($recent_schools) > 0): ?>

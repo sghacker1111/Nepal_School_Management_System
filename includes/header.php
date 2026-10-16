@@ -105,11 +105,11 @@ if($layoutRole==='student')$groups=['Learning'=>[
         <?php if ($layoutYear): ?><span class="year-chip d-none d-sm-inline" title="Current academic year"><?= sanitize($layoutYear['year_bs']) ?> BS · <?= sanitize($layoutYear['year_ad']) ?> AD</span><?php endif; ?>
         <?php if ($layoutRole==='super_admin'): ?>
         <div class="dropdown" @click.outside="closeSchools"><button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" @click="toggleSchools" :aria-expanded="schoolsOpen" aria-controls="schoolPreviewMenu">School preview</button><ul id="schoolPreviewMenu" class="dropdown-menu dropdown-menu-end" :class="{ 'show': schoolsOpen }" x-cloak>
-        <li><a class="dropdown-item" href="<?= APP_URL ?>/modules/super_admin/switch_school.php?school_id=0">System administration</a></li>
-        <?php foreach (getDB()->query('SELECT id,name_en FROM schools ORDER BY name_en') as $s): ?><li><a class="dropdown-item" href="<?= APP_URL ?>/modules/super_admin/switch_school.php?school_id=<?= (int)$s['id'] ?>"><?= sanitize($s['name_en']) ?></a></li><?php endforeach; ?>
+        <li><a class="dropdown-item" href="<?= schoolRouteUrl('modules/super_admin/switch_school.php') ?>?school_id=0">System administration</a></li>
+        <?php foreach (getDB()->query('SELECT id,name_en FROM schools ORDER BY name_en') as $s): ?><li><a class="dropdown-item" href="<?= schoolRouteUrl('modules/super_admin/switch_school.php') ?>?school_id=<?= (int)$s['id'] ?>"><?= sanitize($s['name_en']) ?></a></li><?php endforeach; ?>
         </ul></div><?php endif; ?>
         <div class="dropdown" @click.outside="closeAccount"><button type="button" class="btn btn-light dropdown-toggle" @click="toggleAccount" :aria-expanded="accountOpen" aria-controls="accountMenu" aria-label="Account menu"><i class="fa-regular fa-circle-user"></i> <span class="d-none d-lg-inline"><?= sanitize($_SESSION['full_name'] ?? 'Account') ?></span></button>
-        <ul id="accountMenu" class="dropdown-menu dropdown-menu-end" :class="{ 'show': accountOpen }" x-cloak><li class="dropdown-header"><?= sanitize(ucwords(str_replace('_',' ',$layoutRole))) ?></li><li><a class="dropdown-item" href="<?= APP_URL ?>/modules/auth/profile.php">My profile</a></li><li><a class="dropdown-item" href="<?= APP_URL ?>/modules/auth/change_password.php">Change password</a></li><li><hr class="dropdown-divider"></li><li><a class="dropdown-item" href="<?= APP_URL ?>/modules/auth/logout.php">Sign out</a></li></ul></div>
+        <ul id="accountMenu" class="dropdown-menu dropdown-menu-end" :class="{ 'show': accountOpen }" x-cloak><li class="dropdown-header"><?= sanitize(ucwords(str_replace('_',' ',$layoutRole))) ?></li><li><a class="dropdown-item" href="<?= schoolRouteUrl('modules/auth/profile.php') ?>">My profile</a></li><li><a class="dropdown-item" href="<?= schoolRouteUrl('modules/auth/change_password.php') ?>">Change password</a></li><li><hr class="dropdown-divider"></li><li><a class="dropdown-item" href="<?= schoolRouteUrl('modules/auth/logout.php') ?>">Sign out</a></li></ul></div>
     </div>
 </header>
 <div class="erp-navigation-overlay d-md-none" x-show="navigationOpen" x-cloak @click="closeNavigation" aria-hidden="true"></div>
@@ -125,7 +125,7 @@ if($layoutRole==='student')$groups=['Learning'=>[
         if (in_array($layoutRole,['accountant','cashier','auditor'],true) && $key!=='dashboard' && $module!=='accounting') continue;
         if(in_array($layoutRole,['cashier','auditor'],true)&&in_array($key,['accounting_bill','accounting_generate','accounting_subscription'],true))continue;
         if($layoutRole==='auditor'&&$key==='accounting_payment')continue;
-    ?><li class="nav-item"><a class="nav-link <?= ($activePage??'')===$key?'active':'' ?>" <?= ($activePage??'')===$key?'aria-current="page"':'' ?> href="<?= APP_URL.$path ?>"><i class="fa-solid fa-<?= $icon ?>" aria-hidden="true"></i><span><?= $label ?></span></a></li><?php endforeach; ?>
+    ?><li class="nav-item"><a class="nav-link <?= ($activePage??'')===$key?'active':'' ?>" <?= ($activePage??'')===$key?'aria-current="page"':'' ?> href="<?= sanitize(schoolCanonicalUrl(APP_URL.$path)??APP_URL.$path) ?>"><i class="fa-solid fa-<?= $icon ?>" aria-hidden="true"></i><span><?= $label ?></span></a></li><?php endforeach; ?>
     </ul></section><?php endforeach; ?>
 </nav>
 <main class="content-wrapper tw:transition-colors" id="main-content">

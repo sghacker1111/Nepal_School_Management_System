@@ -11,7 +11,7 @@ Auth::startSession();
 
 // If already logged in, redirect to dashboard
 if (Auth::isLoggedIn()) {
-    header("Location: " . APP_URL . "/index.php");
+    header("Location: " . schoolRouteUrl('index.php'));
     exit;
 }
 
@@ -27,7 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Please enter both username and password';
     } else {
         if (Auth::login($username, $password)) {
-            header("Location: " . APP_URL . "/index.php");
+            header("Location: " . schoolRouteUrl('index.php'));
             exit;
         } else {
             $error = 'Invalid username or password';

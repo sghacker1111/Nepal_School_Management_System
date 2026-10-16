@@ -57,7 +57,7 @@ $returnQuery=['class_id'=>$class,'subject_id'=>$subject,'chapter'=>$chapterFilte
 $returnQuery['language']=$questionLanguage;
 if(!$isExamBank)$returnQuery+=['category'=>$examSection==='mcq'?'mcq':($examSection==='written'?'other':'all'),'bank_ui'=>'1','cognitive_domain'=>$_GET['cognitive_domain']??''];
 if($filters['record_id']!=='')$returnQuery['record_id']=$filters['record_id'];
-$url=static fn(array $changes=[])=>APP_URL.'/modules/learning/'.$route.'?'.http_build_query(array_replace($returnQuery,$changes));
+$url=static fn(array $changes=[])=>schoolRouteUrl('modules/learning/'.$route,array_replace($returnQuery,$changes));
 $listUrl=$url();
 if($_SERVER['REQUEST_METHOD']==='POST'){
     try{
@@ -98,7 +98,7 @@ if($view==='edit'){
         $edit=learningContentRecord($db,$actor,'questions',learningId($editId),$isExamBank?'exam_bank':'bank',true);
         if(!$edit['can_edit']||$edit['archived_at'])throw new InvalidArgumentException('Restore your archived question before editing, or choose your own question.');
         if($examSection!=='all'&&($edit['type']==='MCQ')!==($examSection==='mcq')){
-            if(isset($_GET['edit_question_id'])&&$_SERVER['REQUEST_METHOD']==='GET')redirect(APP_URL.'/modules/learning/'.($edit['type']==='MCQ'?'exam_mcqs.php':'exam_questions.php').'?view=edit&question_id='.$edit['id']);
+            if(isset($_GET['edit_question_id'])&&$_SERVER['REQUEST_METHOD']==='GET')redirect(schoolRouteUrl('modules/learning/'.($edit['type']==='MCQ'?'exam_mcqs.php':'exam_questions.php'),['view'=>'edit','question_id'=>$edit['id']]));
             throw new InvalidArgumentException('This question belongs to the other question section.');
         }
     }catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),404);}
@@ -127,7 +127,7 @@ $pageTitle=($view==='list'?'':ucfirst($view).' ').$sectionTitle;$activePage=$isE
 <div class="d-flex flex-wrap align-items-start gap-2">
 <?php if($view!=='list'): ?><a class="btn btn-outline-secondary" href="<?= sanitize($listUrl) ?>">Back to <?= $sectionTitle ?></a>
 <?php elseif($canCreate): ?><a class="btn btn-primary" href="<?= sanitize($url(['view'=>'add'])) ?>">Add <?= $itemTitle ?></a><a class="btn btn-outline-primary" href="<?= sanitize($url(['view'=>'import'])) ?>">Import <?= $examSection==='mcq'?'MCQs':'Questions' ?></a><?php endif; ?>
-<?php if(!$isStudent&&$view==='list'): ?><a class="btn btn-outline-secondary" href="<?= APP_URL ?>/modules/learning/<?= $isExamBank?'exam_paper_generator.php':'paper_generator.php' ?>"><?= $isExamBank?'Exam Paper Generator':'Test Paper Generator' ?></a><?php endif; ?></div></div>
+<?php if(!$isStudent&&$view==='list'): ?><a class="btn btn-outline-secondary" href="<?= schoolRouteUrl('modules/learning/'.($isExamBank?'exam_paper_generator.php':'paper_generator.php')) ?>"><?= $isExamBank?'Exam Paper Generator':'Test Paper Generator' ?></a><?php endif; ?></div></div>
 <?php if(!$isExamBank): ?><nav class="nav nav-pills gap-2 mb-3 no-print" aria-label="Question bank categories"><?php foreach(['all'=>'All questions','mcq'=>'Multiple Choice Questions','other'=>'Written questions'] as $categoryKey=>$categoryTitle): ?><a class="nav-link <?= ($returnQuery['category']??'all')===$categoryKey?'active':'' ?>" href="<?= sanitize($url(['category'=>$categoryKey,'view'=>'list','page'=>1])) ?>"><?= $categoryTitle ?></a><?php endforeach; ?></nav><?php endif; ?>
 <?php if($error): ?><div class="alert alert-danger" role="alert"><?= sanitize($error) ?></div><?php endif; ?>
 <?php if(in_array($view,['add','edit'],true)): ?>

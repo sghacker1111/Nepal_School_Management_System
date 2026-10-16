@@ -29,7 +29,7 @@ if (isset($_GET['toggle_status']) && Auth::hasRole(['super_admin', 'school_admin
         
         $status_label = $new_status == 1 ? 'activated' : 'deactivated';
         Auth::logActivity(Auth::getUserId(), "Toggle Teacher Status ($status_label)", 'users', $id);
-        redirect(APP_URL . '/modules/teachers/index.php', "Teacher $status_label successfully");
+        redirect(schoolRouteUrl('modules/teachers/index.php'), "Teacher $status_label successfully");
     }
 }
 
@@ -51,15 +51,15 @@ if (isset($_GET['delete']) && Auth::hasRole(['super_admin', 'school_admin'])) {
             
             $db->commit();
             Auth::logActivity(Auth::getUserId(), 'Archive Teacher', 'users', $id);
-            redirect(APP_URL . '/modules/teachers/index.php', 'Teacher archived; assignments and history retained.');
+            redirect(schoolRouteUrl('modules/teachers/index.php'), 'Teacher archived; assignments and history retained.');
         } catch (PDOException $e) {
             if ($db->inTransaction()) {
                 $db->rollBack();
             }
-            redirect(APP_URL . '/modules/teachers/index.php', 'Error archiving teacher: ' . $e->getMessage(), 'error');
+            redirect(schoolRouteUrl('modules/teachers/index.php'), 'Error archiving teacher: ' . $e->getMessage(), 'error');
         }
     } else {
-        redirect(APP_URL . '/modules/teachers/index.php', 'Teacher not found or unauthorized', 'error');
+        redirect(schoolRouteUrl('modules/teachers/index.php'), 'Teacher not found or unauthorized', 'error');
     }
 }
 
@@ -78,10 +78,10 @@ ob_start();
     <h2><i class="fas fa-chalkboard-teacher"></i> Teacher Management</h2>
     <?php if (Auth::hasRole(['super_admin', 'school_admin'])): ?>
     <div>
-        <a href="<?= APP_URL ?>/modules/teachers/import_export.php" class="btn btn-outline-primary me-2">
+        <a href="<?= schoolRouteUrl('modules/teachers/import_export.php') ?>" class="btn btn-outline-primary me-2">
             <i class="fas fa-file-import"></i> EMIS Import/Export
         </a>
-        <a href="<?= APP_URL ?>/modules/teachers/add.php" class="btn btn-primary">
+        <a href="<?= schoolRouteUrl('modules/teachers/add.php') ?>" class="btn btn-primary">
             <i class="fas fa-plus"></i> Add New Teacher
         </a>
     </div>
@@ -135,10 +135,10 @@ ob_start();
                             <td><?= formatDate($teacher['created_at']) ?></td>
                             <?php if (Auth::hasRole(['super_admin', 'school_admin'])): ?>
                             <td class="text-end">
-                                <a href="<?= APP_URL ?>/modules/teachers/edit.php?id=<?= $teacher['id'] ?>" class="btn btn-sm btn-outline-warning" title="Edit">
+                                <a href="<?= schoolRouteUrl('modules/teachers/edit.php') ?>?id=<?= $teacher['id'] ?>" class="btn btn-sm btn-outline-warning" title="Edit">
                                     <i class="fas fa-edit"></i>
                                 </a>
-                                <a href="<?= APP_URL ?>/modules/teachers/index.php?toggle_status=<?= $teacher['id'] ?>" 
+                                <a href="<?= schoolRouteUrl('modules/teachers/index.php') ?>?toggle_status=<?= $teacher['id'] ?>"
                                    class="btn btn-sm <?= $teacher['status'] == 1 ? 'btn-outline-secondary' : 'btn-outline-success' ?>" 
                                    title="<?= $teacher['status'] == 1 ? 'Deactivate' : 'Activate' ?>">
                                     <i class="fas <?= $teacher['status'] == 1 ? 'fa-ban' : 'fa-check' ?>"></i>
@@ -170,7 +170,7 @@ $(document).ready(function() {
 
 function confirmDeleteTeacher(id) {
     verifyPasswordAndProceed(function() {
-        window.location.href = '<?= APP_URL ?>/modules/teachers/index.php?delete=' + id;
+        window.location.href = '<?= schoolRouteUrl('modules/teachers/index.php') ?>?delete=' + id;
     }, 'Confirm Deletion', 'Please enter your administrator password to permanently archive this teacher:');
 }
 </script>

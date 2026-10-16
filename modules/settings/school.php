@@ -372,7 +372,7 @@ ob_start();
                     <!-- Class Teacher Signature -->
                     <div class="mb-4">
                         <label class="form-label fw-bold small text-uppercase">Class Teacher Signature (Default)</label>
-                        <small class="text-muted d-block mb-2">Note: You can configure individual class teachers and signature images for each class separately in the <a href="../classes/index.php" class="fw-bold">Classes</a> settings.</small>
+                        <small class="text-muted d-block mb-2">Note: You can configure individual class teachers and signature images for each class separately in the <a href="<?= schoolRouteUrl('modules/classes/index.php') ?>" class="fw-bold">Classes</a> settings.</small>
                         <?php if (!empty($school['class_teacher_signature'])): ?>
                         <div class="mb-2 text-center bg-light p-2 border rounded">
                             <img src="<?= APP_URL ?>/uploads/<?= $school['class_teacher_signature'] ?>" alt="Class Teacher Signature" class="img-fluid" style="max-height: 50px; object-fit: contain;">

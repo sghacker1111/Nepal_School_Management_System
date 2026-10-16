@@ -222,7 +222,7 @@ ob_start();
             <h2 class="fw-bold text-primary mb-1"><i class="fas fa-sitemap me-2"></i> Curriculum & Topics Manager</h2>
             <p class="text-muted mb-0">Connect Classes and Subjects, then manage Chapters and Topics for school syllabus structure and Question Bank mapping.</p>
         </div>
-        <a href="<?= APP_URL ?>/index.php" class="btn btn-outline-secondary">
+        <a href="<?= schoolRouteUrl('index.php') ?>" class="btn btn-outline-secondary">
             <i class="fas fa-arrow-left"></i> Dashboard
         </a>
     </div>

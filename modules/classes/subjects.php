@@ -25,7 +25,7 @@ $stmt->execute([$class_id, $school_id]);
 $class = $stmt->fetch();
 
 if (!$class) {
-    redirect(APP_URL . '/modules/classes/index.php', 'Class not found', 'error');
+    redirect(schoolRouteUrl('modules/classes/index.php'), 'Class not found', 'error');
 }
 
 // Handle Toggle Subject Active/Hidden State (Compulsory or Optional)
@@ -45,7 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
             echo json_encode(['success' => true, 'is_active' => $is_active, 'message' => $is_active ? 'Subject is now active and in use.' : 'Subject is now hidden from class routines and exams.']);
             exit;
         }
-        redirect(APP_URL . '/modules/classes/subjects.php?class_id=' . $class_id, 'Subject status updated successfully.');
+        redirect(schoolRouteUrl('modules/classes/subjects.php') . '?class_id=' . $class_id, 'Subject status updated successfully.');
     } catch (PDOException $e) {
         if ($is_ajax) {
             header('Content-Type: application/json');
@@ -256,7 +256,7 @@ ob_start();
     <div>
         <nav aria-label="breadcrumb">
             <ol class="breadcrumb mb-1">
-                <li class="breadcrumb-item"><a href="<?= APP_URL ?>/modules/classes/index.php">Classes</a></li>
+                <li class="breadcrumb-item"><a href="<?= schoolRouteUrl('modules/classes/index.php') ?>">Classes</a></li>
                 <li class="breadcrumb-item active"><?= sanitize($class['name']) ?></li>
             </ol>
         </nav>
@@ -270,7 +270,7 @@ ob_start();
             </span>
         </h2>
     </div>
-    <a href="<?= APP_URL ?>/modules/classes/index.php" class="btn btn-outline-secondary">
+    <a href="<?= schoolRouteUrl('modules/classes/index.php') ?>" class="btn btn-outline-secondary">
         <i class="fas fa-arrow-left me-1"></i> Back to Classes
     </a>
 </div>
@@ -327,7 +327,7 @@ ob_start();
                                     <td>
                                         <div class="fw-bold text-dark"><?= sanitize($cs['subject_name_en']) ?></div>
                                         <small class="text-muted"><?= sanitize($cs['subject_name_np'] ?? '') ?></small>
-                                        <?php if((float)($cs['in_full_marks']??0)>0): ?><a class="d-block small" href="<?= APP_URL ?>/modules/subjects/internal.php?mapping=<?= (int)$cs['id'] ?>">Edit IN components</a><?php endif; ?>
+                                        <?php if((float)($cs['in_full_marks']??0)>0): ?><a class="d-block small" href="<?= schoolRouteUrl('modules/subjects/internal.php') ?>?mapping=<?= (int)$cs['id'] ?>">Edit IN components</a><?php endif; ?>
                                     </td>
                                     <td>
                                         <span class="badge bg-primary bg-opacity-10 text-primary border border-primary font-monospace">
@@ -440,7 +440,7 @@ ob_start();
                                     <td>
                                         <div class="fw-bold text-dark"><?= sanitize($os['subject_name_en']) ?></div>
                                         <small class="text-muted"><?= sanitize($os['subject_name_np'] ?? '') ?></small>
-                                        <?php if((float)($os['in_full_marks']??0)>0): ?><a class="d-block small" href="<?= APP_URL ?>/modules/subjects/internal.php?mapping=<?= (int)$os['id'] ?>">Edit IN components</a><?php endif; ?>
+                                        <?php if((float)($os['in_full_marks']??0)>0): ?><a class="d-block small" href="<?= schoolRouteUrl('modules/subjects/internal.php') ?>?mapping=<?= (int)$os['id'] ?>">Edit IN components</a><?php endif; ?>
                                     </td>
                                     <td>
                                         <span class="badge bg-primary bg-opacity-10 text-primary border border-primary font-monospace">

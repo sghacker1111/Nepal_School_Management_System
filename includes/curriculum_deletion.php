@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__.'/routes.php';
 /** Recoverable curriculum removal, with active-use checks under the catalog write lock. */
 class CurriculumDeleteBlocked extends InvalidArgumentException {
     public function __construct(public readonly array $report){parent::__construct('Cannot delete: '.$report['total'].' active linked content item(s). Remove or reassign the content listed below, then try again.');}
@@ -26,6 +27,7 @@ function curriculumDependencyReport(PDO $db,int $school,string $kind,int $id):ar
     $classRow=schoolRecord($db,'classes',(int)$chapter['class_id'],$school);$subjectRow=schoolRecord($db,'subjects',(int)$chapter['subject_id'],$school);
     $report=['kind'=>$kind,'id'=>$id,'name'=>curriculumName((string)$row['name']),'total'=>0,'groups'=>[]];
     $add=function(array $record,string $group,string $section,?string $url)use(&$report,$db,$school):void {
+        if($url!==null){$route=schoolRouteForController(parse_url($url,PHP_URL_PATH)??'');if($route)$url=$route['path'].(($query=parse_url($url,PHP_URL_QUERY))!==null?'?'.$query:'');}
         if(!isset($report['groups'][$group]))$report['groups'][$group]=['section'=>$section,'count'=>0,'items'=>[]];
         $report['total']++;$report['groups'][$group]['count']++;
         if(count($report['groups'][$group]['items'])>=20)return;

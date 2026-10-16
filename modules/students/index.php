@@ -26,12 +26,12 @@ if (isset($_GET['delete']) && Auth::hasRole(['super_admin', 'school_admin'])) {
         
         $db->commit();
         Auth::logActivity(Auth::getUserId(), 'Archive Student', 'students', $id);
-        redirect(APP_URL . '/modules/students/index.php', 'Student archived; marks and attendance retained.');
+        redirect(schoolRouteUrl('modules/students/index.php'), 'Student archived; marks and attendance retained.');
     } catch (PDOException $e) {
         if ($db->inTransaction()) {
             $db->rollBack();
         }
-        redirect(APP_URL . '/modules/students/index.php', 'Error archiving student: ' . $e->getMessage(), 'error');
+        redirect(schoolRouteUrl('modules/students/index.php'), 'Error archiving student: ' . $e->getMessage(), 'error');
     }
 }
 
@@ -74,10 +74,10 @@ ob_start();
     <h2><i class="fas fa-user-graduate"></i> Student Management</h2>
     <?php if (Auth::hasRole(['super_admin', 'school_admin'])): ?>
     <div>
-        <a href="<?= APP_URL ?>/modules/students/import_export.php" class="btn btn-outline-primary me-2">
+        <a href="<?= schoolRouteUrl('modules/students/import_export.php') ?>" class="btn btn-outline-primary me-2">
             <i class="fas fa-file-import"></i> EMIS Import/Export
         </a>
-        <a href="<?= APP_URL ?>/modules/students/add.php" class="btn btn-primary">
+        <a href="<?= schoolRouteUrl('modules/students/add.php') ?>" class="btn btn-primary">
             <i class="fas fa-plus"></i> Add New Student
         </a>
     </div>
@@ -118,7 +118,7 @@ ob_start();
                 <div class="input-group input-group-sm">
                     <input type="search" name="search" id="filter_search" class="form-control" maxlength="100" value="<?= sanitize($search) ?>" placeholder="Name, roll, student ID or EMIS">
                     <button type="submit" class="btn btn-primary">Search</button>
-                    <a id="btn_reset" href="<?= APP_URL ?>/modules/students/index.php" class="btn btn-secondary">Reset</a>
+                    <a id="btn_reset" href="<?= schoolRouteUrl('modules/students/index.php') ?>" class="btn btn-secondary">Reset</a>
                 </div>
             </div>
         </form>
@@ -183,12 +183,12 @@ ob_start();
                             </td>
                             <td>
                                 <div class="btn-group btn-group-sm">
-                                    <a href="<?= APP_URL ?>/modules/students/view.php?id=<?= $student['id'] ?>" 
+                                    <a href="<?= schoolRouteUrl('modules/students/view.php') ?>?id=<?= $student['id'] ?>"
                                        class="btn btn-info" title="View">
                                         <i class="fas fa-eye"></i>
                                     </a>
                                     <?php if (Auth::hasRole(['super_admin', 'school_admin'])): ?>
-                                    <a href="<?= APP_URL ?>/modules/students/edit.php?id=<?= $student['id'] ?>" 
+                                    <a href="<?= schoolRouteUrl('modules/students/edit.php') ?>?id=<?= $student['id'] ?>"
                                        class="btn btn-warning" title="Edit">
                                         <i class="fas fa-edit"></i>
                                     </a>
@@ -234,7 +234,7 @@ $(document).ready(function() {
 
 function confirmDeleteStudent(id) {
     verifyPasswordAndProceed(function() {
-        window.location.href = '<?= APP_URL ?>/modules/students/index.php?delete=' + id;
+        window.location.href = '<?= schoolRouteUrl('modules/students/index.php') ?>?delete=' + id;
     }, 'Confirm Deletion', 'Please enter your administrator password to permanently archive this student:');
 }
 

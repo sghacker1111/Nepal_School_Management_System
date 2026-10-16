@@ -72,7 +72,7 @@ class Auth {
             setcookie(session_name(), '', ['expires'=>time()-42000, 'path'=>$cookie['path'], 'secure'=>$cookie['secure'], 'httponly'=>true, 'samesite'=>'Lax']);
         }
         session_destroy();
-        header("Location: " . APP_URL . "/index.php");
+        header("Location: " . schoolRouteUrl('index.php'));
         exit;
     }
     
@@ -156,7 +156,7 @@ class Auth {
         static $checked = false;
         if ($checked) return;
         if (!self::isLoggedIn()) {
-            header("Location: " . APP_URL . "/modules/auth/login.php");
+            header("Location: " . schoolRouteUrl('modules/auth/login.php'));
             exit;
         }
         self::checkTimeout();
@@ -168,6 +168,7 @@ class Auth {
         unset($_SESSION['school_subscription_type']);
         require_once __DIR__ . '/request_guard.php';
         guardSchoolRequest();
+        schoolRedirectLegacyDocument();
         $checked = true;
     }
     

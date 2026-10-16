@@ -330,8 +330,8 @@ $student_chunks=array_chunk($students,4);$pageTitle='Print Admit Cards'.($class?
 
 <section class="no-print bg-white p-3 mb-3">
 <h2>Generate & Print Admit Cards — <?= sanitize($exam['name']) ?></h2>
-<a href="view.php?id=<?= $exam_id ?>" class="btn btn-secondary">Back to Exam</a>
-<?php if($class): ?><a href="symbols.php?exam_id=<?= $exam_id ?>&class_id=<?= $class_id ?>" class="btn btn-secondary">Manage Symbol Numbers</a><?php endif; ?>
+<a href="<?= schoolRouteUrl('modules/exams/view.php') ?>?id=<?= $exam_id ?>" class="btn btn-secondary">Back to Exam</a>
+<?php if($class): ?><a href="<?= schoolRouteUrl('modules/exams/symbols.php') ?>?exam_id=<?= $exam_id ?>&class_id=<?= $class_id ?>" class="btn btn-secondary">Manage Symbol Numbers</a><?php endif; ?>
 <?php if($error): ?><div class="alert alert-danger mt-3"><?= sanitize($error) ?></div><?php endif; ?>
 <form method="GET" id="admit_selector" class="row g-3 mt-1">
 <input type="hidden" name="exam_id" value="<?= $exam_id ?>"><div id="selected_ids"></div>

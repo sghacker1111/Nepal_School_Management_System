@@ -62,7 +62,7 @@ if (isset($_GET['toggle_hidden'])) {
             $stmt->execute([$new_hidden, $id, $school_id]);
             Auth::logActivity(Auth::getUserId(), 'Toggle Hidden Academic Year', 'academic_years', $id);
             $success = $new_hidden ? 'Academic Year hidden successfully.' : 'Academic Year shown successfully.';
-            redirect(APP_URL . '/modules/settings/years.php', $success, 'success');
+            redirect(schoolRouteUrl('modules/settings/years.php'), $success, 'success');
         }
     } catch (PDOException $e) {
         $error = schoolPublicError($e);
@@ -112,7 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             
             $db->commit();
             Auth::logActivity(Auth::getUserId(), 'Change Active Academic Year', 'academic_years', $id);
-            redirect(APP_URL . '/modules/settings/years.php', 'Active academic year switched successfully!');
+            redirect(schoolRouteUrl('modules/settings/years.php'), 'Active academic year switched successfully!');
         } catch (PDOException $e) {
             if ($db->inTransaction()) {
                 $db->rollBack();
@@ -281,7 +281,7 @@ function toggleHiddenYear(id, hide) {
         confirmButtonText: confirmBtnText
     }).then((result) => {
         if (result.isConfirmed) {
-            window.location.href = '<?= APP_URL ?>/modules/settings/years.php?toggle_hidden=' + id;
+            window.location.href = '<?= schoolRouteUrl('modules/settings/years.php') ?>?toggle_hidden=' + id;
         }
     });
 }

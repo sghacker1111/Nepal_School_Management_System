@@ -31,7 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if(($_POST['marks_complete']??'')!=='1')throw new InvalidArgumentException('The marks form was incomplete or exceeded the server limit. Nothing was saved. Reload this page or select one subject and try again.');
         saveExamMarks($db, (int)Auth::getSchoolId(), (int)Auth::getUserId(), Auth::getRole(), $_POST);
         Auth::logActivity(Auth::getUserId(), 'Save exam marks', 'exams', (int)$_POST['exam_id']);
-        redirect(APP_URL.'/modules/results/marks_entry.php?'.http_build_query(['exam'=>(int)$_POST['exam_id'],'class'=>(int)$_POST['class_id'],'section'=>(int)($_POST['section_id']??0),'subject'=>$filter_subject_id,'page'=>$marks_page,'student_search'=>$student_search]), 'Marks and attendance saved successfully.');
+        redirect(schoolRouteUrl('modules/results/marks_entry.php') . '?'.http_build_query(['exam'=>(int)$_POST['exam_id'],'class'=>(int)$_POST['class_id'],'section'=>(int)($_POST['section_id']??0),'subject'=>$filter_subject_id,'page'=>$marks_page,'student_search'=>$student_search]), 'Marks and attendance saved successfully.');
     } catch (InvalidArgumentException $e) { $message=$e->getMessage();$message_type='error'; }
     catch (PDOException $e) { error_log($e->getMessage());$message='Marks could not be saved. Please try again.';$message_type='error'; }
 }
@@ -184,8 +184,8 @@ ob_start();
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="fas fa-edit text-primary"></i> Class-Wide Marks Entry Sheet</h2>
     <?php if($exam_id&&$class_id&&$subjects): ?><div class="d-flex gap-2">
-        <?php if(Auth::getRole()!=='teacher'||$teacherIsClassTeacher): ?><a class="btn btn-outline-info" href="<?= APP_URL ?>/modules/results/ledger.php?<?= htmlspecialchars(http_build_query(['exam'=>$exam_id,'class'=>$class_id,'section'=>$section_id])) ?>"><i class="fas fa-print"></i> Full-class ledger</a><?php endif; ?>
-        <a class="btn btn-outline-primary" href="<?= APP_URL ?>/modules/results/ledger.php?<?= htmlspecialchars(http_build_query(['exam'=>$exam_id,'class'=>$class_id,'section'=>$section_id,'subject'=>$filter_subject_id?:reset($subjects)['subject_id']])) ?>"><i class="fas fa-print"></i> Subject ledger</a>
+        <?php if(Auth::getRole()!=='teacher'||$teacherIsClassTeacher): ?><a class="btn btn-outline-info" href="<?= schoolRouteUrl('modules/results/ledger.php') ?>?<?= htmlspecialchars(http_build_query(['exam'=>$exam_id,'class'=>$class_id,'section'=>$section_id])) ?>"><i class="fas fa-print"></i> Full-class ledger</a><?php endif; ?>
+        <a class="btn btn-outline-primary" href="<?= schoolRouteUrl('modules/results/ledger.php') ?>?<?= htmlspecialchars(http_build_query(['exam'=>$exam_id,'class'=>$class_id,'section'=>$section_id,'subject'=>$filter_subject_id?:reset($subjects)['subject_id']])) ?>"><i class="fas fa-print"></i> Subject ledger</a>
     </div><?php endif; ?>
 </div>
 <?php if(Auth::getRole()==='teacher'&&$class_id): ?><div class="alert alert-info no-print"><?= $teacherIsClassTeacher?'Class teacher access: view and correct all configured subjects in this class. Locked or published exams remain view-only.':'Subject teacher access: view and enter marks for your assigned subjects and sections only.' ?></div><?php endif; ?>

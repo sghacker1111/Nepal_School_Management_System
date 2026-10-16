@@ -18,7 +18,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
         importCdc2083Scope($db,$school,true,$key,$code);
         $db->commit();
         Auth::logActivity(Auth::getUserId(),'Confirmed CDC workbook course '.$key,'class_subjects');
-        redirect(APP_URL.'/modules/settings/cdc.php?grade='.$source['class_grade'],'School course confirmed. Saved exam settings were not changed.');
+        redirect(schoolRouteUrl('modules/settings/cdc.php') . '?grade='.$source['class_grade'],'School course confirmed. Saved exam settings were not changed.');
     }catch(Throwable $e){if($db->inTransaction())$db->rollBack();$error=$e instanceof InvalidArgumentException?$e->getMessage():'The course could not be saved. Please try again.';}
 }
 $grade=max(1,min(12,(int)($_GET['grade']??4)));
@@ -27,7 +27,7 @@ foreach($q as $row)if($row['curriculum_key'])$current[$row['curriculum_key']]=$r
 $pageTitle='CDC 2083 curriculum & grading';$activePage='cdc_grading';ob_start();
 $show=static fn($v)=>$v===null?'Not specified':sanitize($v);
 ?>
-<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3"><div><h2>CDC 2083 curriculum & grading</h2><p class="text-muted mb-0">Imported workbook values, school offerings and grading rules in one place.</p></div><a class="btn btn-outline-primary" href="<?= APP_URL ?>/modules/classes/index.php">Class subject settings</a></div>
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3"><div><h2>CDC 2083 curriculum & grading</h2><p class="text-muted mb-0">Imported workbook values, school offerings and grading rules in one place.</p></div><a class="btn btn-outline-primary" href="<?= schoolRouteUrl('modules/classes/index.php') ?>">Class subject settings</a></div>
 <?php if($error):?><div class="alert alert-danger"><?= sanitize($error) ?></div><?php endif;?>
 <div class="alert alert-info">The workbook is a source-aligned reference, not a complete national course catalogue. Class 11 is a sample; Class 12 is illustrative. Existing offerings and historical exams are retained. Electives still require individual student selection.</div>
 <div class="card mb-3"><div class="card-body"><form method="GET" class="d-flex align-items-center gap-3"><label for="grade" class="form-label mb-0">Class</label><select id="grade" name="grade" class="form-select w-auto" onchange="this.form.submit()"><?php foreach(range(1,12) as $g):?><option value="<?= $g ?>" <?= $g===$grade?'selected':'' ?>>Class <?= $g ?></option><?php endforeach;?></select><button class="btn btn-outline-secondary">View</button><span class="text-muted">1 credit hour = 32 working hours</span></form></div></div>

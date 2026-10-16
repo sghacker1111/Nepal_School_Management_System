@@ -90,7 +90,7 @@ ob_start();
 <div class="d-flex justify-content-between align-items-center mb-4 no-print">
     <h2><i class="fas fa-file-alt text-primary"></i> Question Paper Generator</h2>
     <div>
-        <a href="<?= APP_URL ?>/modules/learning/index.php" class="btn btn-secondary me-2">
+        <a href="<?= schoolRouteUrl('modules/learning/index.php') ?>" class="btn btn-secondary me-2">
             <i class="fas fa-arrow-left"></i> Back
         </a>
         <?php if ($generated): ?>

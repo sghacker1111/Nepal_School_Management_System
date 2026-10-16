@@ -78,7 +78,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
             $success='Weekly routine generated successfully for '.count($ready).' classes; every first period uses the class teacher.';
         }else throw new InvalidArgumentException('Choose a valid routine action.');
         Auth::logActivity($actor,'Update weekly routine','classes',$class_id?:null);$db->commit();
-        redirect(APP_URL.'/modules/classes/routine.php?'.http_build_query(['class_id'=>$class_id,'day'=>$day,'profile_id'=>$profile_id]),$success,'success');
+        redirect(schoolRouteUrl('modules/classes/routine.php') . '?'.http_build_query(['class_id'=>$class_id,'day'=>$day,'profile_id'=>$profile_id]),$success,'success');
     }catch(Throwable $e){if($db->inTransaction())$db->rollBack();if($e instanceof InvalidArgumentException)$error=$e->getMessage();else{error_log('Routine: '.$e->getMessage());$error='The routine could not be saved. Please try again; existing schedules are unchanged.';}}
 }
 $subjects=$class?routineSubjects($db,$school_id,$class_id):[];$unique=[];$subjectTeachers=[];

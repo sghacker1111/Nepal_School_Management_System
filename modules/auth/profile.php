@@ -20,7 +20,7 @@ $stmt->execute([$user_id]);
 $user = $stmt->fetch();
 
 if (!$user) {
-    redirect(APP_URL . '/modules/auth/logout.php');
+    redirect(schoolRouteUrl('modules/auth/logout.php'));
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

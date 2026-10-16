@@ -26,7 +26,7 @@ $stmt->execute([$id, $school_id]);
 $student = $stmt->fetch();
 
 if (!$student) {
-    redirect(APP_URL . '/modules/students/index.php', 'Student not found', 'error');
+    redirect(schoolRouteUrl('modules/students/index.php'), 'Student not found', 'error');
 }
 
 $pageTitle = 'Student Profile: ' . $student['first_name_en'] . ' ' . $student['last_name_en'];
@@ -38,11 +38,11 @@ ob_start();
 <div class="d-flex justify-content-between align-items-center mb-4 no-print">
     <h2><i class="fas fa-user-graduate"></i> Student Profile</h2>
     <div>
-        <a href="<?= APP_URL ?>/modules/students/index.php" class="btn btn-secondary me-2">
+        <a href="<?= schoolRouteUrl('modules/students/index.php') ?>" class="btn btn-secondary me-2">
             <i class="fas fa-arrow-left"></i> Back to List
         </a>
         <?php if (Auth::hasRole(['super_admin', 'school_admin'])): ?>
-        <a href="<?= APP_URL ?>/modules/students/edit.php?id=<?= $student['id'] ?>" class="btn btn-warning me-2">
+        <a href="<?= schoolRouteUrl('modules/students/edit.php') ?>?id=<?= $student['id'] ?>" class="btn btn-warning me-2">
             <i class="fas fa-edit"></i> Edit Profile
         </a>
         <?php endif; ?>

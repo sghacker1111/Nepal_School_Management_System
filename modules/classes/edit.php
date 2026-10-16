@@ -24,7 +24,7 @@ $stmt->execute([$class_id, $school_id]);
 $class = $stmt->fetch();
 
 if (!$class) {
-    redirect(APP_URL . '/modules/classes/index.php', 'Class not found', 'error');
+    redirect(schoolRouteUrl('modules/classes/index.php'), 'Class not found', 'error');
 }
 
 // Fetch active teachers
@@ -114,7 +114,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->execute([$name, $name_np, $level, $grading_type, $class_teacher_name, $class_teacher_id ?: null, $class_teacher_signature, $is_grading_teaching, $class_id]);
                 Auth::logActivity(Auth::getUserId(), 'Edit Class Details', 'classes', $class_id);
                 $db->commit();
-                redirect(APP_URL . '/modules/classes/index.php', 'Class updated successfully');
+                redirect(schoolRouteUrl('modules/classes/index.php'), 'Class updated successfully');
             }
             if($db->inTransaction())$db->rollBack();
         } catch (PDOException|InvalidArgumentException $e) {
@@ -132,7 +132,7 @@ ob_start();
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="fas fa-edit"></i> Edit Class Details</h2>
-    <a href="<?= APP_URL ?>/modules/classes/index.php" class="btn btn-secondary">
+    <a href="<?= schoolRouteUrl('modules/classes/index.php') ?>" class="btn btn-secondary">
         <i class="fas fa-arrow-left"></i> Back to List
     </a>
 </div>

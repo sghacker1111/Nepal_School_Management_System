@@ -40,7 +40,7 @@ ob_start();
             <h2 class="fw-bold text-primary mb-1"><i class="fas fa-camera-retro me-2"></i> OCR Question Paper Scanner</h2>
             <p class="text-muted mb-0">Scan printed/handwritten papers, images, or PDF documents into editable text format using advanced AI OCR.</p>
         </div>
-        <a href="<?= APP_URL ?>/index.php" class="btn btn-outline-secondary">
+        <a href="<?= schoolRouteUrl('index.php') ?>" class="btn btn-outline-secondary">
             <i class="fas fa-arrow-left"></i> Dashboard
         </a>
     </div>

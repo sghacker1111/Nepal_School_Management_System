@@ -22,12 +22,12 @@ $stmt->execute([$exam_id, $school_id]);
 $exam = $stmt->fetch();
 
 if (!$exam) {
-    redirect(APP_URL . '/modules/exams/index.php', 'Exam not found', 'error');
+    redirect(schoolRouteUrl('modules/exams/index.php'), 'Exam not found', 'error');
 }
-if(($exam['creation_mode']??'manual')==='automatic')redirect(APP_URL.'/modules/exams/view.php?id='.$exam_id,'Automatic exam settings are read-only. Create a manual exam to customize defaults.','error');
+if(($exam['creation_mode']??'manual')==='automatic')redirect(schoolRouteUrl('modules/exams/view.php') . '?id='.$exam_id,'Automatic exam settings are read-only. Create a manual exam to customize defaults.','error');
 
 if ($exam['is_locked'] || $exam['is_published']) {
-    redirect(APP_URL . '/modules/exams/index.php', 'Locked exams cannot be edited.', 'error');
+    redirect(schoolRouteUrl('modules/exams/index.php'), 'Locked exams cannot be edited.', 'error');
 }
 
 $hasMarks = examHasMarks($db,$exam_id);
@@ -35,7 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         $addedInternal=updateExamDetails($db,$school_id,$exam_id,$_POST);
         Auth::logActivity(Auth::getUserId(),$addedInternal?'Enabled Internal Assessment; Theory Marks Preserved':'Edit Exam Details','exams',$exam_id);
-        redirect(APP_URL . '/modules/exams/index.php',$addedInternal?'Internal assessment enabled. Existing theory marks are preserved. Enter the missing internal marks before publishing.':'Exam details updated successfully.');
+        redirect(schoolRouteUrl('modules/exams/index.php'),$addedInternal?'Internal assessment enabled. Existing theory marks are preserved. Enter the missing internal marks before publishing.':'Exam details updated successfully.');
     } catch (InvalidArgumentException $e) { $error=$e->getMessage(); }
     catch (PDOException $e) { error_log($e->getMessage());$error='The exam could not be updated. Please try again.'; }
 }
@@ -50,7 +50,7 @@ ob_start();
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="fas fa-edit"></i> Edit Exam Details</h2>
-    <a href="<?= APP_URL ?>/modules/exams/index.php" class="btn btn-secondary">
+    <a href="<?= schoolRouteUrl('modules/exams/index.php') ?>" class="btn btn-secondary">
         <i class="fas fa-arrow-left"></i> Back to List
     </a>
 </div>

@@ -29,7 +29,7 @@ if (isset($_GET['delete'])) {
             $stmt->execute([$delete_id, $school_id]);
         }
         Auth::logActivity(Auth::getUserId(), 'Delete Specification Grid', 'specification_grids', $delete_id);
-        redirect(APP_URL . '/modules/learning/specification_grids.php', 'Specification grid deleted successfully.', 'success');
+        redirect(schoolRouteUrl('modules/learning/specification_grids.php'), 'Specification grid deleted successfully.', 'success');
     } catch (PDOException $e) {
         $error = schoolPublicError($e);
     }
@@ -43,7 +43,7 @@ if (isset($_GET['make_universal'])) {
         $stmt = $db->prepare("UPDATE specification_grids SET school_id = 0 WHERE id = ?");
         $stmt->execute([$id]);
         Auth::logActivity(Auth::getUserId(), 'Make Grid Universal', 'specification_grids', $id);
-        redirect(APP_URL . '/modules/learning/specification_grids.php', 'Specification grid is now universal for all schools.', 'success');
+        redirect(schoolRouteUrl('modules/learning/specification_grids.php'), 'Specification grid is now universal for all schools.', 'success');
     } catch (PDOException $e) {
         $error = schoolPublicError($e);
     }
@@ -83,7 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $stmt->execute([$grid_school_id, $class_id, $subject_id, $grid_name, $config_json]);
                 $grid_id = $db->lastInsertId();
                 Auth::logActivity(Auth::getUserId(), 'Create Specification Grid', 'specification_grids', $grid_id);
-                redirect(APP_URL . '/modules/learning/specification_grids.php', 'Specification grid created successfully.', 'success');
+                redirect(schoolRouteUrl('modules/learning/specification_grids.php'), 'Specification grid created successfully.', 'success');
             } elseif ($action === 'edit') {
                 $grid_id = (int)($_POST['grid_id'] ?? 0);
                 if ($is_admin) {
@@ -102,7 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $stmt->execute([$grid_name, $class_id, $subject_id, $config_json, $grid_id, $school_id]);
                 }
                 Auth::logActivity(Auth::getUserId(), 'Update Specification Grid', 'specification_grids', $grid_id);
-                redirect(APP_URL . '/modules/learning/specification_grids.php', 'Specification grid updated successfully.', 'success');
+                redirect(schoolRouteUrl('modules/learning/specification_grids.php'), 'Specification grid updated successfully.', 'success');
             }
         } catch (PDOException $e) {
             $error = schoolPublicError($e);
@@ -215,7 +215,7 @@ ob_start();
                                 <?php endif; ?>
                                 <td><span class="badge bg-primary fs-6"><?= $total_marks ?> Marks</span></td>
                                 <td class="text-end">
-                                    <a href="<?= APP_URL ?>/modules/learning/paper_generator.php?class_id=<?= $g['class_id'] ?>&subject_id=<?= $g['subject_id'] ?>&generation_mode=auto" class="btn btn-sm btn-outline-success" title="Generate Paper using this Grid">
+                                    <a href="<?= schoolRouteUrl('modules/learning/paper_generator.php') ?>?class_id=<?= $g['class_id'] ?>&subject_id=<?= $g['subject_id'] ?>&generation_mode=auto" class="btn btn-sm btn-outline-success" title="Generate Paper using this Grid">
                                         <i class="fas fa-magic"></i> Use Grid
                                     </a>
                                     <?php if ($is_admin || $g['school_id'] == $school_id): ?>

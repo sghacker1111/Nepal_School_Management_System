@@ -27,7 +27,7 @@ $academicYears = $stmt->fetchAll();
 $academicYearId=is_scalar($_POST['academic_year_id']??null)?(int)$_POST['academic_year_id']:(int)($academicYears[0]['id']??0);
 
 if (!$academicYears) {
-    redirect(APP_URL . '/modules/exams/index.php', 'Add an academic year in school settings before creating an exam.', 'error');
+    redirect(schoolRouteUrl('modules/exams/index.php'), 'Add an academic year in school settings before creating an exam.', 'error');
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST'&&$error==='') {
@@ -35,7 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'&&$error==='') {
             $new_id=createExamFromTemplate($db,(int)$school_id,(int)Auth::getUserId(),$_POST);
             
             Auth::logActivity(Auth::getUserId(), 'Create Exam', 'exams', $new_id);
-            redirect(APP_URL . '/modules/exams/view.php?id=' . $new_id, $mode==='automatic'?'Exam created successfully with locked default settings. You can now assign symbols and enter marks.':'Exam created successfully. Now review subjects and weightage.');
+            redirect(schoolRouteUrl('modules/exams/view.php') . '?id=' . $new_id, $mode==='automatic'?'Exam created successfully with locked default settings. You can now assign symbols and enter marks.':'Exam created successfully. Now review subjects and weightage.');
         } catch (InvalidArgumentException $e) { $error=$e->getMessage(); }
         catch (PDOException $e) {
             $error = schoolPublicError($e);
@@ -52,7 +52,7 @@ ob_start();
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="fas fa-plus-circle"></i> Create New Exam</h2>
-    <a href="<?= APP_URL ?>/modules/exams/index.php" class="btn btn-secondary">
+    <a href="<?= schoolRouteUrl('modules/exams/index.php') ?>" class="btn btn-secondary">
         <i class="fas fa-arrow-left"></i> Back to List
     </a>
 </div>

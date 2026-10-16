@@ -4,7 +4,7 @@ require_once __DIR__.'/question_correction_service.php';require_once __DIR__.'/q
 Auth::requireRole($correctionAdmin?['super_admin']:['school_admin','teacher']);
 $db=getDB();$actor=learningActor($db,(int)Auth::getUserId(),(int)Auth::getSchoolId(),Auth::isReadOnly());
 try{questionCorrectionActor($db,$actor);}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),403);}
-$route=APP_URL.'/modules/'.($correctionAdmin?'super_admin':'learning').'/question_corrections.php';
+$route=schoolRouteUrl('modules/'.($correctionAdmin?'super_admin':'learning').'/question_corrections.php');
 $pageTitle=$correctionAdmin?'Correction Questions':'My correction requests';$activePage=$correctionAdmin?'super_admin_corrections':'question_corrections';
 $error='';$detail=null;$question=null;$rows=[];
 $view=$_GET['view']??'list';if(!is_string($view)||!in_array($view,$correctionAdmin?['list','detail']:['list','request','detail'],true))denySchoolRequest('Choose a valid correction page.',422);

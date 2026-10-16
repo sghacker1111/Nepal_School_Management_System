@@ -25,7 +25,7 @@ $stmt->execute([$id, $school_id]);
 $teacher = $stmt->fetch();
 
 if (!$teacher) {
-    redirect(APP_URL . '/modules/teachers/index.php', 'Teacher not found', 'error');
+    redirect(schoolRouteUrl('modules/teachers/index.php'), 'Teacher not found', 'error');
 }
 
 // Parse family details JSON
@@ -185,7 +185,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $db->commit();
                 
                 Auth::logActivity(Auth::getUserId(), 'Edit Teacher', 'users', $id);
-                redirect(APP_URL . '/modules/teachers/index.php', 'Teacher updated successfully');
+                redirect(schoolRouteUrl('modules/teachers/index.php'), 'Teacher updated successfully');
             }
         } catch (PDOException $e) {
             if ($db->inTransaction()) {
@@ -204,7 +204,7 @@ ob_start();
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="fas fa-edit"></i> Edit Teacher Profile</h2>
-    <a href="<?= APP_URL ?>/modules/teachers/index.php" class="btn btn-secondary">
+    <a href="<?= schoolRouteUrl('modules/teachers/index.php') ?>" class="btn btn-secondary">
         <i class="fas fa-arrow-left"></i> Back to List
     </a>
 </div>
@@ -425,7 +425,7 @@ ob_start();
                     <button type="submit" class="btn btn-primary w-100 py-2 mb-2">
                         <i class="fas fa-save"></i> Save Changes
                     </button>
-                    <a href="<?= APP_URL ?>/modules/teachers/index.php" class="btn btn-outline-secondary w-100 py-2">
+                    <a href="<?= schoolRouteUrl('modules/teachers/index.php') ?>" class="btn btn-outline-secondary w-100 py-2">
                         Cancel
                     </a>
                 </div>

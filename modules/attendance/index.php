@@ -69,7 +69,7 @@ ob_start();
     <div class="col-md-3"><label for="attendanceClass" class="form-label">Class</label><select name="class" id="attendanceClass" class="form-select" onchange="this.form.elements.section.value='';this.form.submit()"><option value="">Select Class</option><?php foreach($classes as $class): ?><option value="<?= (int)$class['id'] ?>" <?= $classId===(int)$class['id']?'selected':'' ?>><?= sanitize($class['name']) ?></option><?php endforeach; ?></select></div>
     <div class="col-md-2"><label for="attendanceSection" class="form-label">Section</label><select name="section" id="attendanceSection" class="form-select" onchange="this.form.submit()"><option value="">All Sections</option><?php foreach($sections as $section): ?><option value="<?= (int)$section['id'] ?>" <?= $sectionId===(int)$section['id']?'selected':'' ?>><?= sanitize($section['name']) ?></option><?php endforeach; ?></select></div>
     <div class="col-md-4"><label for="attendanceSearch" class="form-label">Student name, roll or student ID</label><input type="search" name="search" id="attendanceSearch" class="form-control" maxlength="100" value="<?= sanitize($search) ?>" placeholder="Name, roll, student ID or EMIS"></div>
-    <div class="col-md-3 d-flex align-items-end gap-2"><button class="btn btn-primary">Load attendance</button><a href="<?= APP_URL ?>/modules/attendance/index.php" class="btn btn-outline-secondary">Reset</a></div>
+    <div class="col-md-3 d-flex align-items-end gap-2"><button class="btn btn-primary">Load attendance</button><a href="<?= schoolRouteUrl('modules/attendance/index.php') ?>" class="btn btn-outline-secondary">Reset</a></div>
 </form></div></div>
 <?php if($classId): ?>
 <div class="card mb-3"><div class="card-body">

@@ -413,9 +413,9 @@ window.MathJax = {
 
 <div class="d-flex justify-content-between align-items-center mb-4 no-print">
     <h2><i class="fas fa-file-invoice text-primary"></i> Normal Paper Generator</h2>
-    <?php if(in_array(Auth::getRole(),['super_admin','school_admin','teacher'],true)&&Auth::hasAccess('exam_paper_generator')): ?><a class="btn btn-outline-primary" href="<?= APP_URL ?>/modules/learning/exam_paper_generator.php">Open separate Exam Paper Generator</a><?php endif; ?>
+    <?php if(in_array(Auth::getRole(),['super_admin','school_admin','teacher'],true)&&Auth::hasAccess('exam_paper_generator')): ?><a class="btn btn-outline-primary" href="<?= schoolRouteUrl('modules/learning/exam_paper_generator.php') ?>">Open separate Exam Paper Generator</a><?php endif; ?>
     <div>
-        <a href="<?= APP_URL ?>/index.php" class="btn btn-secondary">
+        <a href="<?= schoolRouteUrl('index.php') ?>" class="btn btn-secondary">
             <i class="fas fa-arrow-left"></i> Dashboard
         </a>
     </div>
@@ -681,7 +681,7 @@ window.MathJax = {
                             
                             <div class="d-flex gap-2">
                                 <button type="button" class="btn btn-outline-success w-50" onclick="navigator.clipboard.writeText(document.getElementById('ocrOutputText').value); alert('OCR text copied to clipboard!');"><i class="fas fa-copy"></i> Copy Text</button>
-                                <a href="questions.php" class="btn btn-primary w-50"><i class="fas fa-plus"></i> Go to Question Bank</a>
+                                <a href="<?= schoolRouteUrl('modules/learning/questions.php') ?>" class="btn btn-primary w-50"><i class="fas fa-plus"></i> Go to Question Bank</a>
                             </div>
                         </div>
                     </div>
@@ -1025,7 +1025,7 @@ $(document).ready(function() {
     
     if (classId && subjectId) {
         $.ajax({
-            url: '../learning/questions.php',
+            url: <?= json_encode(schoolRouteUrl('modules/learning/questions.php')) ?>,
             data: {
                 action_get_chapters: 1,
                 class_id: classId,

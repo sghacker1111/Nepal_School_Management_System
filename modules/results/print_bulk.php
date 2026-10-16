@@ -109,7 +109,7 @@ ob_start();
     <div>
         <a href="?exam=<?= $exam_id ?>&class=<?= $class_id ?>&section=<?= $section_id ?>&system=gpa&<?= sanitize($issueQuery) ?>" class="btn btn-<?= $grading_system === 'gpa' ? 'primary' : 'outline-primary' ?> me-2">GPA Format</a>
         <a href="?exam=<?= $exam_id ?>&class=<?= $class_id ?>&section=<?= $section_id ?>&system=percentage&<?= sanitize($issueQuery) ?>" class="btn btn-<?= $grading_system === 'percentage' ? 'primary' : 'outline-primary' ?> me-2">Percentage Format</a>
-        <a href="<?= APP_URL ?>/modules/results/index.php" class="btn btn-secondary me-2">
+        <a href="<?= schoolRouteUrl('modules/results/index.php') ?>" class="btn btn-secondary me-2">
             <i class="fas fa-arrow-left"></i> Back
         </a>
         <?php if (!empty($students)): ?>

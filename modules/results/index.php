@@ -112,13 +112,13 @@ ob_start();
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="fas fa-poll"></i> Student Exam Results</h2>
     <div class="d-flex gap-2">
-        <a href="<?= APP_URL ?>/modules/results/ledger.php?<?= htmlspecialchars(http_build_query(['exam'=>$exam_id,'class'=>$class_id,'section'=>$section_id])) ?>" class="btn btn-outline-info">
+        <a href="<?= schoolRouteUrl('modules/results/ledger.php') ?>?<?= htmlspecialchars(http_build_query(['exam'=>$exam_id,'class'=>$class_id,'section'=>$section_id])) ?>" class="btn btn-outline-info">
             <i class="fas fa-poll-h"></i> Ledger Grid
         </a>
-        <a href="<?= APP_URL ?>/modules/results/print_bulk.php" class="btn btn-outline-success">
+        <a href="<?= schoolRouteUrl('modules/results/print_bulk.php') ?>" class="btn btn-outline-success">
             <i class="fas fa-print"></i> Bulk Print Cards
         </a>
-        <a href="<?= APP_URL ?>/modules/results/marks_entry.php?<?= htmlspecialchars(http_build_query(['exam'=>$exam_id,'class'=>$class_id,'section'=>$section_id])) ?>" class="btn btn-primary">
+        <a href="<?= schoolRouteUrl('modules/results/marks_entry.php') ?>?<?= htmlspecialchars(http_build_query(['exam'=>$exam_id,'class'=>$class_id,'section'=>$section_id])) ?>" class="btn btn-primary">
             <i class="fas fa-edit"></i> Marks Entry
         </a>
     </div>
@@ -215,7 +215,7 @@ ob_start();
                             </td>
                             <td class="text-end">
                                 <?php if ($student['total_obtained'] !== null): ?>
-                                    <a href="<?= APP_URL ?>/modules/results/report_card.php?student=<?= $student['id'] ?>&exam=<?= $exam_id ?>" 
+                                    <a href="<?= schoolRouteUrl('modules/results/report_card.php') ?>?student=<?= $student['id'] ?>&exam=<?= $exam_id ?>"
                                        class="btn btn-sm btn-outline-success" target="_blank">
                                         <i class="fas fa-file-invoice"></i> Report Card
                                     </a>

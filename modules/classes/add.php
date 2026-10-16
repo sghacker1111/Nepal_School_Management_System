@@ -92,7 +92,7 @@ if (isset($_POST['add_class'])) {
             
             Auth::logActivity(Auth::getUserId(), 'Add Class', 'classes', $new_id);
             $db->commit();
-            redirect(APP_URL . '/modules/classes/index.php', 'Class added successfully');
+            redirect(schoolRouteUrl('modules/classes/index.php'), 'Class added successfully');
         } catch (PDOException|InvalidArgumentException $e) {
             if($db->inTransaction())$db->rollBack();
             $error = $e instanceof InvalidArgumentException?$e->getMessage():schoolPublicError($e);
@@ -114,7 +114,7 @@ if (isset($_POST['add_section'])) {
             $stmt->execute([$class_id, $section_name, $teacher_id, $school_id]);
             $new_id = $db->lastInsertId();
             Auth::logActivity(Auth::getUserId(), 'Add Section', 'sections', $new_id);
-            redirect(APP_URL . '/modules/classes/index.php', 'Section added successfully');
+            redirect(schoolRouteUrl('modules/classes/index.php'), 'Section added successfully');
         } catch (PDOException $e) {
             $error = schoolPublicError($e);
         }
@@ -139,7 +139,7 @@ ob_start();
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="fas fa-plus-circle"></i> Add Class / Section</h2>
-    <a href="<?= APP_URL ?>/modules/classes/index.php" class="btn btn-secondary">
+    <a href="<?= schoolRouteUrl('modules/classes/index.php') ?>" class="btn btn-secondary">
         <i class="fas fa-arrow-left"></i> Back to List
     </a>
 </div>

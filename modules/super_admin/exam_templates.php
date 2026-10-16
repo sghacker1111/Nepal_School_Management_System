@@ -14,7 +14,7 @@ if($_SERVER['REQUEST_METHOD']==='POST')try{
     if(($_POST['action']??'')!=='save_template'||examTemplateId($_POST['template_id']??0)!==$id)throw new InvalidArgumentException('Choose a valid exam template action.');
     saveExamTemplate($db,(int)Auth::getUserId(),$id,$_POST);
     Auth::logActivity(Auth::getUserId(),'Update default exam template','exam_templates',$id);
-    redirect(APP_URL.'/modules/super_admin/exam_templates.php?'.http_build_query(['template_id'=>$id,'filter_class'=>$class]),'Default exam template saved successfully. Existing exams are unchanged.');
+    redirect(schoolRouteUrl('modules/super_admin/exam_templates.php') . '?'.http_build_query(['template_id'=>$id,'filter_class'=>$class]),'Default exam template saved successfully. Existing exams are unchanged.');
 }catch(InvalidArgumentException $e){$error=$e->getMessage();}catch(Throwable $e){error_log($e->getMessage());$error='The defaults could not be saved. Existing exams are unchanged.';}
 $catalog=examTemplateCatalog($db);$schemes=examTemplateSchemes($db,$selected);
 $classes=$db->query('SELECT id,name FROM classes WHERE school_id=0 AND is_active=1 ORDER BY id')->fetchAll();

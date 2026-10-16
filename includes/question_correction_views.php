@@ -2,7 +2,7 @@
 require_once __DIR__.'/exam_question_language.php';
 function questionCorrectionContentUrl(array $q,bool $edit=false):string {
     $file=($q['bank_kind']??'learning')==='exam'?($q['type']==='MCQ'?'exam_mcqs.php':'exam_questions.php'):'questions.php';
-    return APP_URL.'/modules/learning/'.$file.'?'.http_build_query($edit?['view'=>'edit','question_id'=>$q['id'],'bank_ui'=>'1']:['record_id'=>$q['id'],'bank_ui'=>'1']);
+    return schoolRouteUrl('modules/learning/'.$file,$edit?['view'=>'edit','question_id'=>$q['id'],'bank_ui'=>'1']:['record_id'=>$q['id'],'bank_ui'=>'1']);
 }
 function questionCorrectionRichCard(PDO $db,array $q,string $heading):void {
     $q=questionCorrectionSnapshot($q);$c=$db->prepare('SELECT name FROM classes WHERE id=?');$c->execute([$q['class_id']]);$s=$db->prepare('SELECT name_en FROM subjects WHERE id=?');$s->execute([$q['subject_id']]);

@@ -34,7 +34,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'&&in_array($_POST['action']??'', ['remove_
             $db->prepare('UPDATE classes SET is_active=1 WHERE id=? AND school_id=?')->execute([$id,$school_id]);$message='Class restored successfully.';
             Auth::logActivity(Auth::getUserId(),'Restore archived class','classes',$id);
         }
-        $db->commit();redirect(APP_URL.'/modules/classes/index.php',$message,'success');
+        $db->commit();redirect(schoolRouteUrl('modules/classes/index.php'),$message,'success');
     }catch(Throwable $e){if($db->inTransaction())$db->rollBack();$cleanupError=$e instanceof InvalidArgumentException?$e->getMessage():schoolPublicError($e);}
 }
 
@@ -44,17 +44,17 @@ if (isset($_GET['delete_class']) && Auth::hasRole(['super_admin', 'school_admin'
     $stmt = $db->prepare("UPDATE classes SET is_active=0 WHERE id = ? AND school_id = ?");
     $stmt->execute([$id, $school_id]);
     Auth::logActivity(Auth::getUserId(), 'Archive Class', 'classes', $id);
-    redirect(APP_URL . '/modules/classes/index.php', 'Class archived. Its records are retained.');
+    redirect(schoolRouteUrl('modules/classes/index.php'), 'Class archived. Its records are retained.');
 }
 
 if (isset($_GET['delete_section']) && Auth::hasRole(['super_admin', 'school_admin'])) {
     $id = (int)$_GET['delete_section'];
     $used=$db->prepare('SELECT COUNT(*) FROM students WHERE section_id=? AND school_id=?');$used->execute([$id,$school_id]);
-    if($used->fetchColumn())redirect(APP_URL.'/modules/classes/index.php','This section has student records and cannot be deleted.','error');
+    if($used->fetchColumn())redirect(schoolRouteUrl('modules/classes/index.php'),'This section has student records and cannot be deleted.','error');
     $stmt = $db->prepare("DELETE FROM sections WHERE id = ? AND school_id = ?");
     $stmt->execute([$id, $school_id]);
     Auth::logActivity(Auth::getUserId(), 'Delete Section', 'sections', $id);
-    redirect(APP_URL . '/modules/classes/index.php', 'Section deleted successfully');
+    redirect(schoolRouteUrl('modules/classes/index.php'), 'Section deleted successfully');
 }
 
 // Fetch classes
@@ -85,7 +85,7 @@ ob_start();
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="fas fa-school"></i> Class & Section Management</h2>
     <?php if (Auth::hasRole(['super_admin', 'school_admin'])): ?>
-    <a href="<?= APP_URL ?>/modules/classes/add.php" class="btn btn-primary">
+    <a href="<?= schoolRouteUrl('modules/classes/add.php') ?>" class="btn btn-primary">
         <i class="fas fa-plus"></i> Add Class / Section
     </a>
     <?php endif; ?>
@@ -140,10 +140,10 @@ ob_start();
                                     </td>
                                      <?php if (Auth::hasRole(['super_admin', 'school_admin'])): ?>
                                      <td class="text-end">
-                                         <a href="<?= APP_URL ?>/modules/classes/edit.php?class_id=<?= $class['id'] ?>" class="btn btn-sm btn-outline-warning me-1" title="Edit Class Details">
+                                         <a href="<?= schoolRouteUrl('modules/classes/edit.php') ?>?class_id=<?= $class['id'] ?>" class="btn btn-sm btn-outline-warning me-1" title="Edit Class Details">
                                              <i class="fas fa-edit"></i> Edit
                                          </a>
-                                         <a href="<?= APP_URL ?>/modules/classes/subjects.php?class_id=<?= $class['id'] ?>" class="btn btn-sm btn-outline-primary me-1" title="Configure Subjects">
+                                         <a href="<?= schoolRouteUrl('modules/classes/subjects.php') ?>?class_id=<?= $class['id'] ?>" class="btn btn-sm btn-outline-primary me-1" title="Configure Subjects">
                                              <i class="fas fa-book"></i> Subjects
                                          </a>
                                          <?php if(!$class['is_active']): ?><details class="d-inline-block"><summary class="btn btn-sm btn-outline-success">Restore</summary><form method="POST"><input type="hidden" name="action" value="restore_class"><input type="hidden" name="class_id" value="<?= (int)$class['id'] ?>"><label>Current administrator password<input type="password" class="form-control" name="password" autocomplete="current-password" required></label><button class="btn btn-sm btn-success">Confirm restore</button></form></details><?php else: ?>
@@ -219,13 +219,13 @@ ob_start();
 <script>
 function confirmDeleteClass(id) {
     verifyPasswordAndProceed(function() {
-        window.location.href = '<?= APP_URL ?>/modules/classes/index.php?delete_class=' + id;
+        window.location.href = '<?= schoolRouteUrl('modules/classes/index.php') ?>?delete_class=' + id;
     }, 'Confirm Archive', 'Please enter your administrator password to archive this class. Its students, marks and all linked records will be retained:');
 }
 
 function confirmDeleteSection(id) {
     verifyPasswordAndProceed(function() {
-        window.location.href = '<?= APP_URL ?>/modules/classes/index.php?delete_section=' + id;
+        window.location.href = '<?= schoolRouteUrl('modules/classes/index.php') ?>?delete_section=' + id;
     }, 'Confirm Deletion', 'Please enter your administrator password to permanently delete this section:');
 }
 </script>

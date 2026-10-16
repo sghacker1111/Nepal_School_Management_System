@@ -244,7 +244,7 @@ ob_start();
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="fas fa-file-import text-primary"></i> EMIS Teacher Import & Export</h2>
-    <a href="<?= APP_URL ?>/modules/teachers/index.php" class="btn btn-secondary">
+    <a href="<?= schoolRouteUrl('modules/teachers/index.php') ?>" class="btn btn-secondary">
         <i class="fas fa-arrow-left"></i> Back to Teachers List
     </a>
 </div>
@@ -279,7 +279,7 @@ ob_start();
                     <div class="alert alert-info border-start border-info border-4">
                         <h6 class="fw-bold mb-1"><i class="fas fa-info-circle me-1"></i> Tip: Auto-generated login profiles</h6>
                         <p class="mb-0 small text-dark">
-                            If the <em>Username</em> column is missing, the system will automatically generate a clean username from their name. Imported accounts are disabled for safety. Set a unique password and activate each account in <a href="<?= APP_URL ?>/modules/settings/users.php">Staff accounts</a>.
+                            If the <em>Username</em> column is missing, the system will automatically generate a clean username from their name. Imported accounts are disabled for safety. Set a unique password and activate each account in <a href="<?= schoolRouteUrl('modules/settings/users.php') ?>">Staff accounts</a>.
                         </p>
                     </div>
                 </div>

@@ -109,7 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $db->commit();
                 
                 Auth::logActivity(Auth::getUserId(), 'Add Subject and Class Mapping', 'subjects', $new_subject_id);
-                redirect(APP_URL . '/modules/subjects/index.php', 'Subject added and mapped successfully with Theory & Internal evaluation components.');
+                redirect(schoolRouteUrl('modules/subjects/index.php'), 'Subject added and mapped successfully with Theory & Internal evaluation components.');
             } catch (PDOException|InvalidArgumentException $e) {
                 if ($db->inTransaction()) {
                     $db->rollBack();
@@ -134,7 +134,7 @@ ob_start();
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="fas fa-plus-circle"></i> Add New Subject</h2>
-    <a href="<?= APP_URL ?>/modules/subjects/index.php" class="btn btn-secondary">
+    <a href="<?= schoolRouteUrl('modules/subjects/index.php') ?>" class="btn btn-secondary">
         <i class="fas fa-arrow-left"></i> Back to List
     </a>
 </div>

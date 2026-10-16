@@ -254,7 +254,7 @@ function verifyPasswordAndProceed(onSuccess, title = 'Security Verification', te
                 Swal.showValidationMessage('Password is required');
                 return false;
             }
-            return fetch(`${appUrl}/modules/auth/verify_password.php`, {
+            return fetch(`${appUrl}/account/verify-password`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

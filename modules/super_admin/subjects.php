@@ -18,7 +18,7 @@ require_once __DIR__.'/../../includes/school_validation.php';
 $filter_class=(int)($_GET['filter_class']??$_POST['filter_class']??0);
 $show_hidden=(string)($_GET['show_hidden']??$_POST['show_hidden']??'0')==='1';
 if($filter_class)try{schoolRecord($db,'classes',$filter_class,0);}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),404);}
-$catalogReturn=APP_URL.'/modules/super_admin/subjects.php?'.http_build_query(['filter_class'=>$filter_class,'show_hidden'=>$show_hidden?'1':'0']);
+$catalogReturn=schoolRouteUrl('modules/super_admin/subjects.php') . '?'.http_build_query(['filter_class'=>$filter_class,'show_hidden'=>$show_hidden?'1':'0']);
 
 
 // Handle AJAX Chapter Actions
@@ -732,7 +732,7 @@ function loadChaptersList() {
     
     // Fetch chapters via AJAX (fallback to cdc curriculum if empty)
     $.ajax({
-        url: 'subjects.php',
+        url: <?= json_encode(schoolRouteUrl('modules/super_admin/subjects.php')) ?>,
         data: {
             action_get_chapters: 1,
             class_id: classId,
@@ -794,7 +794,7 @@ function addChapter() {
     }
     
     $.ajax({
-        url: 'subjects.php',
+        url: <?= json_encode(schoolRouteUrl('modules/super_admin/subjects.php')) ?>,
         type: 'POST',
         data: {
             action_chapter: 'add',
@@ -830,7 +830,7 @@ function deleteChapter(name) {
     // We need to fetch the ID of the chapter first or delete by name
     // Let's create an AJAX request that deletes by name
     $.ajax({
-        url: 'subjects.php',
+        url: <?= json_encode(schoolRouteUrl('modules/super_admin/subjects.php')) ?>,
         type: 'POST',
         data: {
             action_chapter: 'delete_by_name',

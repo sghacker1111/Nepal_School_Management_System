@@ -181,11 +181,11 @@ ob_start();
 <div class="d-flex justify-content-between align-items-center mb-4 no-print">
     <h2><i class="fas fa-poll-h"></i> <?= $isSubjectLedger?'Subject Marks Ledger':'Full-Class Result Ledger' ?></h2>
     <div>
-        <a href="<?= APP_URL ?>/modules/results/index.php" class="btn btn-secondary me-2">
+        <a href="<?= schoolRouteUrl('modules/results/index.php') ?>" class="btn btn-secondary me-2">
             <i class="fas fa-arrow-left"></i> Back to Results
         </a>
         <?php if ($exam_id && $class_id && $subjects): ?>
-        <?php if($canOpenMarks): ?><a class="btn btn-outline-primary me-2" href="<?= APP_URL ?>/modules/results/marks_entry.php?<?= htmlspecialchars(http_build_query(['exam'=>$exam_id,'class'=>$class_id,'section'=>$section_id,'subject'=>$subject_id?:''])) ?>"><?= $role==='teacher'&&!$teacherScope['class_teacher']?'Open assigned marks entry':'View / correct marks' ?></a><?php endif; ?>
+        <?php if($canOpenMarks): ?><a class="btn btn-outline-primary me-2" href="<?= schoolRouteUrl('modules/results/marks_entry.php') ?>?<?= htmlspecialchars(http_build_query(['exam'=>$exam_id,'class'=>$class_id,'section'=>$section_id,'subject'=>$subject_id?:''])) ?>"><?= $role==='teacher'&&!$teacherScope['class_teacher']?'Open assigned marks entry':'View / correct marks' ?></a><?php endif; ?>
         <button onclick="window.print()" class="btn btn-primary">
             <i class="fas fa-print"></i> Print Ledger
         </button>

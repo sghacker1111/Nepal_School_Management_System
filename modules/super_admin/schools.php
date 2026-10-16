@@ -16,7 +16,7 @@ $success = '';
 
 // Package checkboxes are the single source of access; keep legacy flags/data intact.
 if (isset($_GET['perm_action']) || isset($_GET['view_perm_action']) || isset($_GET['hub_perm_action'])) {
-    redirect(APP_URL . '/modules/super_admin/schools.php', 'Use Edit School to activate or remove packages and set their expiry.');
+    redirect(schoolRouteUrl('modules/super_admin/schools.php'), 'Use Edit School to activate or remove packages and set their expiry.');
 }
 
 // Handle Add/Edit School Actions
@@ -185,7 +185,7 @@ ob_start();
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="fas fa-university text-primary"></i> School Management</h2>
     <div>
-        <a href="<?= APP_URL ?>/modules/super_admin/index.php" class="btn btn-secondary me-2">
+        <a href="<?= schoolRouteUrl('modules/super_admin/index.php') ?>" class="btn btn-secondary me-2">
             <i class="fas fa-arrow-left"></i> Control Center
         </a>
         <button class="btn btn-primary" onclick="showAddModal()">

@@ -12,7 +12,7 @@ try{
     if($importContextRequireTopic&&$importSelected['chapter'])$importTopicChoices=learningCatalogTopics($db,$importContextActor,(int)$importSelected['class'],(int)$importSelected['subject'],(int)$importSelected['chapter']);
 }catch(InvalidArgumentException $ignore){}
 ?>
-<fieldset class="col-12 mb-2" data-question-import-context data-catalog-url="<?= sanitize(APP_URL.'/modules/learning/'.($importContextPage??($importContextKey==='bank'?'questions.php':'exam_questions.php')).'?action=import_catalog&bank_ui=1') ?>">
+<fieldset class="col-12 mb-2" data-question-import-context data-catalog-url="<?= sanitize(schoolRouteUrl('modules/learning/'.($importContextPage??($importContextKey==='bank'?'questions.php':'exam_questions.php')),['action'=>'import_catalog','bank_ui'=>1])) ?>">
 <legend class="fs-6 fw-bold">Select existing catalog entries</legend>
 <p class="small text-muted">Every row must contain matching <?= $importContextRequireTopic?'Class, Subject, Chapter and Topic':'Class, Subject and Chapter' ?> values. A mismatch rejects the whole file. Imports never create catalog entries.<?= $importContextRequireTopic?'':' Exam questions cover the chapter; a Topic column is not needed.' ?></p>
 <script type="application/json" data-import-subjects><?= json_encode($importContextSubjects,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?></script>

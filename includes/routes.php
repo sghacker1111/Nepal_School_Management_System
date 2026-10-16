@@ -122,3 +122,19 @@ function schoolCanonicalUrl(string $url): ?string {
     $canonical=schoolRouteUrl($controller);
     return $canonical.(isset($parts['query'])?'?'.$parts['query']:'').(isset($parts['fragment'])?'#'.$parts['fragment']:'');
 }
+
+/** Canonicalize safe document navigation only, after authentication/guards. */
+function schoolRedirectLegacyDocument(): void {
+    if(defined('ERP_RESOLVED_CONTROLLER')||($_SERVER['REQUEST_METHOD']??'GET')!=='GET'
+        ||($_SERVER['HTTP_HX_REQUEST']??'')==='true'
+        ||!str_contains($_SERVER['HTTP_ACCEPT']??'','text/html')
+        ||str_contains($_SERVER['HTTP_ACCEPT']??'','application/json')
+        ||strtolower($_SERVER['HTTP_X_REQUESTED_WITH']??'')==='xmlhttprequest')return;
+    $route=schoolRouteForController(schoolControllerPath());
+    // Mixed modes may return downloads or JSON; page links are already clean.
+    if(!$route||$route['kind']!=='page'||!empty($_GET['action'])||schoolMutationQuery($_GET))return;
+    $request=$_SERVER['REQUEST_URI']??'';
+    if(!str_contains(parse_url($request,PHP_URL_PATH)??'','.php'))return;
+    $canonical=schoolCanonicalUrl($request);
+    if($canonical){header('Location: '.$canonical,true,302);exit;}
+}

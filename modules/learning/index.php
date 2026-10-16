@@ -28,7 +28,7 @@ if (!$is_admin && isset($_GET['action']) && $_GET['action'] === 'request_hub_per
     $stmt = $db->prepare("UPDATE schools SET learning_hub_permission_status = 'requested' WHERE id = ?");
     $stmt->execute([$school_id]);
     Auth::logActivity(Auth::getUserId(), 'Request Learning Hub Access', 'schools', $school_id);
-    redirect(APP_URL . '/modules/learning/index.php', 'Your request for access has been submitted.');
+    redirect(schoolRouteUrl('modules/learning/index.php'), 'Your request for access has been submitted.');
 }
 
 require_once __DIR__.'/../../includes/learning_content_service.php';
@@ -127,14 +127,14 @@ window.MathJax = {
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="fas fa-book-open text-primary"></i> Learning Hub</h2>
     <div>
-        <a href="<?= APP_URL ?>/modules/learning/practice_mcqs.php" class="btn btn-success"><i class="fas fa-circle-check"></i> Practice MCQs</a>
+        <a href="<?= schoolRouteUrl('modules/learning/practice_mcqs.php') ?>" class="btn btn-success"><i class="fas fa-circle-check"></i> Practice MCQs</a>
         <?php if($is_admin&&(int)$school_id===0): ?><a href="?unassigned=1" class="btn btn-outline-warning">Review unassigned legacy notes</a><?php endif; ?>
         <?php if ($canCreateNote): ?>
         <button class="btn btn-primary" onclick="showAddNoteModal()">
             <i class="fas fa-plus"></i> Add Study Note
         </button>
         <?php endif; ?>
-        <a href="<?= APP_URL ?>/index.php" class="btn btn-secondary">
+        <a href="<?= schoolRouteUrl('index.php') ?>" class="btn btn-secondary">
             <i class="fas fa-arrow-left"></i> Dashboard
         </a>
     </div>
