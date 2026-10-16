@@ -2,7 +2,7 @@
 
 Date: 2026-10-16 (Asia/Katmandu)
 
-Status: conversational design approved; written specification awaiting user review.
+Status: written specification approved by the user on 2026-10-16; implementation plan awaiting review.
 
 Baseline: release `c7ca3d6e85828838062cdf38b307c145e33fe2b8`. This specification does not implement or deploy application changes.
 
