@@ -37,6 +37,7 @@ function guardSchoolRequest(): void {
     preg_match('~/modules/([^/]+)/([^/]+)$~', $script, $parts);
     $module = $parts[1] ?? '';
     $file = $parts[2] ?? '';
+    $correctionRoute=in_array($module,['learning','super_admin'],true)&&$file==='question_corrections.php';
     $role = Auth::getRole();
     if($role==='student'){
         $studentPage=$module==='learning'&&in_array($file,['index.php','practice_mcqs.php','exam_questions.php','exam_mcqs.php'],true);
@@ -56,7 +57,8 @@ function guardSchoolRequest(): void {
     $mutation = schoolMutationQuery($_GET);
     if ($module === 'super_admin' && $role !== 'super_admin') denySchoolRequest('System administrator access is required.');
     $accessModule=$module==='learning'?(['questions.php'=>'questions','exam_questions.php'=>'exam_questions','exam_mcqs.php'=>'exam_questions','exam_paper_generator.php'=>'exam_paper_generator','exam_specification_grids.php'=>'exam_specification_grids','paper_generator.php'=>'paper_generator','question_grid.php'=>'paper_generator','specification_grids.php'=>'specification_grids','curriculum.php'=>'curriculum','ocr_scanner.php'=>'ocr_scanner'][$file]??'learning'):$module;
-    if ($module && !in_array($module, ['auth','super_admin'], true) && !Auth::hasAccess($accessModule)) denySchoolRequest('This module is not included in your school package.');
+    if ($module && !$correctionRoute && !in_array($module, ['auth','super_admin'], true) && !Auth::hasAccess($accessModule)) denySchoolRequest('This module is not included in your school package.');
+    if($correctionRoute&&(!in_array($role,['super_admin','school_admin','teacher'],true)||($role==='super_admin'&&(int)Auth::getSchoolId()>0)))denySchoolRequest('Correction requests require a school teacher/admin or the system administrator, outside school preview.');
     if($module==='learning'&&in_array($file,['questions.php','exam_questions.php','exam_mcqs.php'],true)&&($write||$mutation)&&!Auth::canAddQuestions())denySchoolRequest('Your package allows question viewing, not adding or editing questions.');
     if($module==='exams'&&isset($_GET['reopen'])&& !in_array($role,['super_admin','school_admin'],true))denySchoolRequest('Only a school administrator may reopen marks.');
     if ($role !== 'super_admin' && !(int)Auth::getSchoolId()) denySchoolRequest('Your account has no school assignment. Contact an administrator.');
@@ -75,7 +77,7 @@ function guardSchoolRequest(): void {
     }
     if (!$write) {
         require_once __DIR__ . '/school_validation.php';
-        try { validateSchoolReferences(getDB(), (int)(Auth::getSchoolId() ?? 0), $module, [], $_GET); validateTeacherLearningRequest(getDB(),(int)(Auth::getSchoolId()??0),$module,$file,[], $_GET); validateTeacherResultRequest(getDB(),(int)(Auth::getSchoolId()??0),$module,$file,[],$_GET); }
+        try { validateSchoolReferences(getDB(), (int)(Auth::getSchoolId() ?? 0), $module, [], $_GET,$file); validateTeacherLearningRequest(getDB(),(int)(Auth::getSchoolId()??0),$module,$file,[], $_GET); validateTeacherResultRequest(getDB(),(int)(Auth::getSchoolId()??0),$module,$file,[],$_GET); }
         catch (InvalidArgumentException $e) { denySchoolRequest($e->getMessage(), 404); }
         return;
     }
@@ -131,6 +133,6 @@ function guardSchoolRequest(): void {
         }
     }
     require_once __DIR__ . '/school_validation.php';
-    try { validateSchoolReferences(getDB(), (int)(Auth::getSchoolId() ?? 0), $module, $_POST, $_GET); validateTeacherLearningRequest(getDB(),(int)(Auth::getSchoolId()??0),$module,$file,$_POST,$_GET); validateTeacherResultRequest(getDB(),(int)(Auth::getSchoolId()??0),$module,$file,$_POST,$_GET); }
+    try { validateSchoolReferences(getDB(), (int)(Auth::getSchoolId() ?? 0), $module, $_POST, $_GET,$file); validateTeacherLearningRequest(getDB(),(int)(Auth::getSchoolId()??0),$module,$file,$_POST,$_GET); validateTeacherResultRequest(getDB(),(int)(Auth::getSchoolId()??0),$module,$file,$_POST,$_GET); }
     catch (InvalidArgumentException $e) { denySchoolRequest($e->getMessage(), 422); }
 }
