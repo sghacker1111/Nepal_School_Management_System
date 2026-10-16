@@ -1,7 +1,9 @@
 <?php
 /** Shared HTTP authorization and request integrity checks. */
 require_once __DIR__.'/routes.php';
+require_once __DIR__.'/app_response.php';
 function denySchoolRequest(string $message, int $status = 403): never {
+    if(schoolIsAppRequest())schoolAppError($message,$status);
     http_response_code($status);
     if (strtolower($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'xmlhttprequest' || str_contains($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json')) {
         header('Content-Type: application/json');
@@ -71,9 +73,11 @@ function guardSchoolRequest(): void {
     if (($write || $mutation) && Auth::isReadOnly() && $module !== 'auth') denySchoolRequest('School preview is read-only. Sign in as a school administrator to make changes.');
     if (!$write && $mutation) {
         // Old bookmarked action links remain usable, but a GET never changes records.
-        $url = htmlspecialchars($_SERVER['REQUEST_URI'] ?? '', ENT_QUOTES, 'UTF-8');
+        $url = htmlspecialchars(schoolCanonicalUrl($_SERVER['REQUEST_URI']??'')??schoolRouteUrl('index.php'), ENT_QUOTES, 'UTF-8');
         $token = htmlspecialchars(Auth::generateCSRFToken(), ENT_QUOTES, 'UTF-8');
-        echo '<!doctype html><meta charset="utf-8"><title>Confirm action</title><main style="font:16px system-ui;max-width:650px;margin:10vh auto;padding:24px"><h1>Confirm this change</h1><p>This action changes school records. Continue only if you intended it.</p><form method="post" action="'.$url.'"><input type="hidden" name="'.CSRF_TOKEN_NAME.'" value="'.$token.'"><button type="submit">Confirm action</button> <a href="'.htmlspecialchars(APP_URL).'">Cancel</a></form></main>';
+        if(schoolIsAppRequest()){schoolAppHeaders();echo schoolPageConfig('confirm-action',['title'=>'Confirm action']);}
+        else echo '<!doctype html><meta charset="utf-8"><title>Confirm action</title>';
+        echo '<section class="card card-body" role="region"><h1>Confirm this change</h1><p>This action changes school records. Continue only if you intended it.</p><form method="post" action="'.$url.'"><input type="hidden" name="'.CSRF_TOKEN_NAME.'" value="'.$token.'"><button type="submit">Confirm action</button> <a href="'.htmlspecialchars(APP_URL).'">Cancel</a></form></section>';
         exit;
     }
     if (!$write) {

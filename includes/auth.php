@@ -72,8 +72,7 @@ class Auth {
             setcookie(session_name(), '', ['expires'=>time()-42000, 'path'=>$cookie['path'], 'secure'=>$cookie['secure'], 'httponly'=>true, 'samesite'=>'Lax']);
         }
         session_destroy();
-        header("Location: " . schoolRouteUrl('index.php'));
-        exit;
+        schoolAppUnauthenticated();
     }
     
     /**
@@ -156,8 +155,7 @@ class Auth {
         static $checked = false;
         if ($checked) return;
         if (!self::isLoggedIn()) {
-            header("Location: " . schoolRouteUrl('modules/auth/login.php'));
-            exit;
+            schoolAppUnauthenticated();
         }
         self::checkTimeout();
         $stmt = getDB()->prepare('SELECT id, role, school_id, full_name, status FROM users WHERE id=?');
@@ -178,8 +176,7 @@ class Auth {
     public static function requireRole($roles) {
         self::requireLogin();
         if (!self::hasRole($roles)) {
-            http_response_code(403);
-            die("Access denied. You don't have permission to access this page.");
+            denySchoolRequest("Access denied. You don't have permission to access this page.");
         }
     }
     

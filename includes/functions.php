@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__.'/routes.php';
+require_once __DIR__.'/app_response.php';
 require_once __DIR__ . '/grading.php';
 require_once __DIR__.'/print_signature.php';
 
@@ -44,8 +45,7 @@ function redirect($url, $message = '', $type = 'success') {
         $_SESSION['flash_message'] = $message;
         $_SESSION['flash_type'] = $type;
     }
-    header('Location: '.(schoolCanonicalUrl($url)??$url));
-    exit;
+    schoolAppRedirect($url);
 }
 
 /**

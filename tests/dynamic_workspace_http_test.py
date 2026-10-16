@@ -33,7 +33,7 @@ def run():
     assert re.findall(r'data-question-id="(\d+)"',partial)==full_ids
     assert 'name="csrf_token"' in partial and app.token in partial
     assert 'hx-sync="#questionBankPanel:replace"' in partial
-    headers,fallback=hx(app,path,target='main-content');assert 'X-ERP-Fragment' not in headers and '<!DOCTYPE' in fallback
+    headers,fallback=hx(app,path,target='main-content');assert headers['X-ERP-Fragment']=='app-page' and '<!DOCTYPE' not in fallback and 'data-erp-config=' in fallback
     for table,rows in protected.items():assert app.snapshot(table)==rows,table
     # HTMX headers never weaken mutation CSRF or teacher subject restrictions.
     app.request('/modules/learning/exam_mcqs.php',{'action':'delete','question_id':ids['MCQ'][0]},csrf=False,status=419)

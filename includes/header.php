@@ -75,6 +75,30 @@ if($layoutRole==='student')$groups=['Learning'=>[
     ['exam_questions','Released Exam Questions','file-circle-question','/modules/learning/exam_questions.php','exam_questions'],
     ['exam_mcqs','Released Multiple Choice Questions','list-check','/modules/learning/exam_mcqs.php','exam_questions'],
 ]];
+$navigation=[];
+foreach($groups as $group=>$items){
+    $navigation[$group]=[];
+    foreach($items as [$key,$label,$icon,$path,$module]){
+        if($module&&!Auth::hasAccess($module))continue;
+        if($layoutRole==='super_admin'&&!$layoutSchoolId&&in_array($key,['routine','exams','results','reports'],true))continue;
+        if($layoutRole==='teacher'&&in_array($key,['teachers','exams','reports'],true))continue;
+        if($layoutRole==='exam_officer'&&in_array($key,['teachers','attendance','reports'],true))continue;
+        if(in_array($layoutRole,['accountant','cashier','auditor'],true)&&$key!=='dashboard'&&$module!=='accounting')continue;
+        if(in_array($layoutRole,['cashier','auditor'],true)&&in_array($key,['accounting_bill','accounting_generate','accounting_subscription'],true))continue;
+        if($layoutRole==='auditor'&&$key==='accounting_payment')continue;
+        $navigation[$group][]=['key'=>$key,'label'=>$label,'icon'=>$icon,'url'=>schoolAppLocation(APP_URL.$path)];
+    }
+}
+$currentRoute=schoolRouteForController(schoolControllerPath());
+$pageMetadata=schoolPageConfig($pageId??($currentRoute['pageId']??'error'),array_replace($pageConfig??[],[
+    'title'=>($pageTitle??'Dashboard').' · '.APP_NAME,'activePage'=>$activePage??'',
+    'assets'=>array_map(static fn($style)=>APP_URL.$style,$pageStyles??[]),
+    'navigation'=>$navigation,'shell'=>['school'=>$layoutSchool?:'System administration','year'=>$layoutYear?:null,'role'=>$layoutRole,'fullName'=>$_SESSION['full_name']??'Account','readOnly'=>Auth::isReadOnly()],
+]));
+$pageBody=$pageMetadata.(Auth::isReadOnly()?'<div class="alert alert-warning no-print">School preview is read-only. Records cannot be changed from this session.</div>':'').displayFlashMessage().$content;
+if(schoolIsAppRequest()){
+    schoolAppHeaders();echo $pageBody;return;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -129,9 +153,7 @@ if($layoutRole==='student')$groups=['Learning'=>[
     </ul></section><?php endforeach; ?>
 </nav>
 <main class="content-wrapper tw:transition-colors" id="main-content">
-    <?php if (Auth::isReadOnly()): ?><div class="alert alert-warning no-print">School preview is read-only. Records cannot be changed from this session.</div><?php endif; ?>
-    <?= displayFlashMessage() ?>
-    <?= $content ?>
+    <?= $pageBody ?>
 </main>
 <script src="<?= APP_URL ?>/assets/js/nepali-date-converter.js"></script>
 <script src="<?= APP_URL ?>/assets/js/school-dates.js"></script>

@@ -11,12 +11,11 @@ Auth::requireLogin();
 if(Auth::getRole()==='student'){
     $studentPage=Auth::hasAccess('learning')?'/modules/learning/index.php':(Auth::hasAccess('exam_questions')?'/modules/learning/exam_questions.php':null);
     if($studentPage===null)denySchoolRequest('No student learning section is enabled for this school. Contact your school administrator.');
-    header('Location: '.APP_URL.$studentPage);exit;
+    schoolAppRedirect(APP_URL.$studentPage);
 }
 
 if (Auth::getRole() === 'super_admin' && !Auth::isReadOnly()) {
-    header("Location: " . schoolRouteUrl('modules/super_admin/index.php'));
-    exit;
+    schoolAppRedirect(schoolRouteUrl('modules/super_admin/index.php'));
 }
 
 $db = getDB();

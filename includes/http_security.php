@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__.'/app_response.php';
 function schoolRequestIsHttps():bool {
     return (!empty($_SERVER['HTTPS'])&&$_SERVER['HTTPS']!=='off')
         ||(getenv('ERP_TRUST_PROXY')==='1'&&($_SERVER['HTTP_X_FORWARDED_PROTO']??'')==='https');
@@ -18,6 +19,7 @@ if(PHP_SAPI!=='cli'){
     header('Cache-Control: no-store, private');
     set_exception_handler(static function(Throwable $error):void {
         error_log(get_class($error).': '.$error->getMessage());
+        if(schoolIsAppRequest())schoolAppError('The operation could not be completed. Please try again or contact an administrator.',500);
         http_response_code(500);header('Content-Type: text/html; charset=UTF-8');
         echo '<!doctype html><title>Request could not be completed</title><main><h1>Request could not be completed</h1><p>No technical details are exposed. Contact an administrator if this continues.</p></main>';
     });
