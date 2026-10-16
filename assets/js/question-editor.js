@@ -26,6 +26,15 @@ function fixNepaliInLatex(tex) {
 function convertLatexToSpan(content) {
     if (!content) return content;
     const root=document.createElement('div');root.innerHTML=content;
+    // Older HTML imports retained the widget class but the server sanitizer
+    // removed data-tex. Recover the portable delimiters before ignoring widgets.
+    root.querySelectorAll('span.math-tex').forEach(span=>{
+        const source=mathSource(span);
+        if(!source)return;
+        span.setAttribute('data-tex',source.tex);span.setAttribute('data-mode',source.mode);
+        span.setAttribute('contenteditable','false');
+        span.textContent=(source.mode==='block'?'\\[':'\\(')+source.tex+(source.mode==='block'?'\\]':'\\)');
+    });
     const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT),nodes=[];
     while(walker.nextNode())if(!walker.currentNode.parentElement.closest('.math-tex,script,style'))nodes.push(walker.currentNode);
     // Only text nodes are converted: never HTML attributes or existing widgets.
@@ -42,6 +51,24 @@ function convertLatexToSpan(content) {
         if(matched){fragment.append(document.createTextNode(node.textContent.slice(end)));node.replaceWith(fragment);}
     }
     return root.innerHTML;
+}
+
+function unwrapMath(text, mode='inline') {
+    text=String(text??'').trim();
+    for(const [open,close,kind] of [['\\[','\\]','block'],['$$','$$','block'],['\\(','\\)','inline'],['$','$','inline']]){
+        if(text.startsWith(open)&&text.endsWith(close)&&text.length>open.length+close.length)return {tex:text.slice(open.length,-close.length).trim(),mode:kind};
+    }
+    return text?{tex:text,mode:mode==='block'?'block':'inline'}:null;
+}
+function mathSource(span) {
+    const stored=span.getAttribute('data-tex');
+    if(stored&&stored.trim())return unwrapMath(stored,span.getAttribute('data-mode'));
+    const carrier=span.querySelector('script[type^="math/tex"],annotation[encoding="application/x-tex"]');
+    if(carrier)return unwrapMath(carrier.textContent,/display/.test(carrier.getAttribute('type')||'')?'block':'inline');
+    // Never mistake rendered glyphs for TeX; only portable delimited text is safe.
+    const text=span.textContent.trim();
+    if(/^(?:\\\(|\\\[|\$)/.test(text))return unwrapMath(text,span.getAttribute('data-mode'));
+    return null;
 }
 
 function init(selector){
@@ -72,6 +99,7 @@ function init(selector){
             toolbar: 'undo redo | blocks fontfamily fontsize | bold italic underline forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | table | math_tex | fullscreen code',
             branding: false,
             promotion: false,
+            extended_valid_elements: 'span[class|style|lang|title|contenteditable|data-tex|data-mode]',
             // Styling inside editor iframe to support Arial for English, Kokila for Nepali, and locked TeX equations
             content_style: `
                 @font-face {
@@ -141,8 +169,8 @@ function init(selector){
                     tempDiv.innerHTML = e.content;
                     const spans = tempDiv.querySelectorAll('span.math-tex');
                     spans.forEach(span => {
-                        const tex = span.getAttribute('data-tex');
-                        const mode = span.getAttribute('data-mode') || 'inline';
+                        const source=mathSource(span);if(!source)return;
+                        const {tex,mode}=source;
                         const replacement = (mode === 'inline') ? '\\(' + tex + '\\)' : '\\[' + tex + '\\]';
                         span.replaceWith(document.createTextNode(replacement));
                     });
@@ -218,7 +246,7 @@ function init(selector){
 
                 // Double click formula widget to trigger TeX editing modal
                 editor.on('dblclick', function (e) {
-                    const target = e.target.closest('span.math-tex');
+                    const target = (e.target.nodeType===3?e.target.parentElement:e.target)?.closest('span.math-tex');
                     if (target) {
                         e.preventDefault();
                         e.stopPropagation();
@@ -242,14 +270,21 @@ function init(selector){
 }
 function openTexModal(editorId, targetSpan = null) {
     activeEditorId = editorId;
-    activeTexSpan = targetSpan;
+    const editor=window.tinymce?.get(editorId);
+    activeTexSpan = targetSpan || editor?.selection.getNode?.()?.closest?.('span.math-tex') || null;
 
     let initialText = '';
     let mode = 'inline';
 
     if (activeTexSpan) {
-        initialText = activeTexSpan.getAttribute('data-tex') || '';
-        mode = activeTexSpan.getAttribute('data-mode') || 'inline';
+        const source=mathSource(activeTexSpan);
+        if(!source){
+            // Do not replace a legacy rendered-only equation with an empty one.
+            editor?.notificationManager?.open({text:'This equation has no saved TeX source. Restore its original TeX using the HTML Source editor.',type:'warning'});
+            activeTexSpan=null;return;
+        }
+        initialText = source.tex;
+        mode = source.mode;
     } else {
         // Get text selection from active editor
         if (window.tinymce && window.tinymce.get(editorId)) {
@@ -325,13 +360,18 @@ function insertTexIntoEditor() {
 
             if (activeTexSpan) {
                 // Update existing locked math span
-                activeTexSpan.setAttribute('data-tex', input);
-                activeTexSpan.setAttribute('data-mode', mode);
-                if (mode === 'inline') {
-                    activeTexSpan.textContent = '\\(' + input + '\\)';
-                } else {
-                    activeTexSpan.textContent = '\\[' + input + '\\]';
-                }
+                editor.getWin().MathJax?.typesetClear?.([activeTexSpan]);
+                const update=()=>{
+                    activeTexSpan.setAttribute('data-tex', input);
+                    activeTexSpan.setAttribute('data-mode', mode);
+                    if (mode === 'inline') {
+                        activeTexSpan.textContent = '\\(' + input + '\\)';
+                    } else {
+                        activeTexSpan.textContent = '\\[' + input + '\\]';
+                    }
+                };
+                if(editor.undoManager)editor.undoManager.transact(update);else update();
+                editor.nodeChanged?.();editor.setDirty?.(true);
                 editor.save();
 
                 // Trigger MathJax typeset inside editor document

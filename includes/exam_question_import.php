@@ -120,16 +120,17 @@ function examImportReadUpload(array $file):array {
     return $rows;
 }
 
-function examImportQuestions(PDO $db,array $actor,array $rows,string $mode,string $visibility,string $kind='mcq',array $selection=[]):array {
+function examImportQuestions(PDO $db,array $actor,array $rows,string $mode,string $visibility,string $kind='mcq',array $selection=[],string $bankKind='exam'):array {
     questionImportFormat($mode);learningVisibility($visibility);examImportKind($kind);
-    if(!learningPurposeAllowed($db,$actor,'exam_bank')||$actor['read_only']||!in_array($actor['role'],['super_admin','school_admin','teacher'],true))throw new InvalidArgumentException('Your account cannot import exam questions.');
+    if(!in_array($bankKind,['exam','learning'],true))throw new InvalidArgumentException('Invalid question bank.');
+    if(!learningPurposeAllowed($db,$actor,$bankKind==='exam'?'exam_bank':'bank')||$actor['read_only']||!in_array($actor['role'],['super_admin','school_admin','teacher'],true))throw new InvalidArgumentException('Your account cannot import questions.');
     $classes=learningReadClasses($db,$actor);$subjects=examImportSubjects($db,$actor,$classes);
     if(!$subjects)throw new InvalidArgumentException('No assigned class subjects are available for importing.');
     $map=examImportHeaders($rows[0],$mode,$kind);$ids=[];$errors=[];$skipped=0;
     // Any unexpected storage error rolls back the whole batch. Invalid rows alone
     // are skipped, with savepoints retaining neither catalog inserts nor questions.
-    return learningWrite($db,function()use($db,$actor,$rows,$map,$mode,$visibility,$kind,$selection,$classes,$subjects,&$ids,&$errors,&$skipped){
-        $context=questionImportContext($db,$actor,$selection);
+    return learningWrite($db,function()use($db,$actor,$rows,$map,$mode,$visibility,$kind,$selection,$classes,$subjects,$bankKind,&$ids,&$errors,&$skipped){
+        $context=questionImportContext($db,$actor,$selection,$bankKind==='learning');
         questionImportMatchContext($rows,$map,$context);
         foreach(array_slice($rows,1) as $offset=>$row){
             if(!array_filter($row,static fn($v)=>trim((string)$v)!==''))continue;
@@ -156,7 +157,7 @@ function examImportQuestions(PDO $db,array $actor,array $rows,string $mode,strin
                 $content=questionImportRowContent($get,$mode);
                 if($type!=='MCQ'&&$content['type']==='MCQ')throw new InvalidArgumentException('Rows with MCQ options must use Type MCQ.');
                 $content['marks']=$marks;
-                $ids[]=learningSaveQuestion($db,$actor,$content+['class_id'=>$class,'subject_id'=>$subject,'chapter'=>$context['catalog']['chapter'],'topic'=>$context['catalog']['topic'],'type'=>$type,'difficulty'=>$difficulty,'cognitive_domain'=>$domain,'required_minutes'=>$minutes,'visibility'=>$visibility,'student_visible'=>'0'],null,'exam',false);
+                $ids[]=learningSaveQuestion($db,$actor,$content+['class_id'=>$class,'subject_id'=>$subject,'chapter'=>$context['catalog']['chapter'],'topic'=>$context['catalog']['topic']??'','type'=>$type,'difficulty'=>$difficulty,'cognitive_domain'=>$domain,'required_minutes'=>$minutes,'visibility'=>$visibility,'student_visible'=>'0'],null,$bankKind,false);
                 $db->exec('RELEASE SAVEPOINT exam_import_row');
             }catch(InvalidArgumentException $error){
                 $db->exec('ROLLBACK TO SAVEPOINT exam_import_row');$db->exec('RELEASE SAVEPOINT exam_import_row');$skipped++;
@@ -169,9 +170,10 @@ function examImportQuestions(PDO $db,array $actor,array $rows,string $mode,strin
 }
 
 /** Examples use a real writable class subject/catalog, not an arbitrary grade. */
-function examImportSample(PDO $db,array $actor,string $mode,int $class=0,int $subject=0,string $kind='mcq',array $selection=[]):array {
-    questionImportFormat($mode);examImportKind($kind);$context=questionImportContext($db,$actor,$selection);
-    $c=$context['class'];$chapter=$context['chapter'];$topic=$context['topic']['name'];$subjectLabel=questionImportSubjectLabel($context);$source=$actor['school_id']===0?'Shared':'School';
+function examImportSample(PDO $db,array $actor,string $mode,int $class=0,int $subject=0,string $kind='mcq',array $selection=[],string $bankKind='exam'):array {
+    if(!in_array($bankKind,['exam','learning'],true))throw new InvalidArgumentException('Invalid question bank.');
+    questionImportFormat($mode);examImportKind($kind);$context=questionImportContext($db,$actor,$selection,$bankKind==='learning');
+    $c=$context['class'];$chapter=$context['chapter'];$topic=$context['topic']['name']??'';$subjectLabel=questionImportSubjectLabel($context);$source=$actor['school_id']===0?'Shared':'School';
     $headers=['Class','Subject','Chapter','Topic','Type','Difficulty','Source','Cognitive Level','Marks','Required Minutes','Question (English)','Question (Nepali)','Answer (English)','Answer (Nepali)','Option A (English)','Option A (Nepali)','Option B (English)','Option B (Nepali)','Option C (English)','Option C (Nepali)','Option D (English)','Option D (Nepali)','Correct Option'];
     $base=[$c['name'],$subjectLabel,$chapter['name'],$topic];
     if($kind==='mcq')$rows=[
@@ -195,5 +197,6 @@ function examImportSample(PDO $db,array $actor,string $mode,int $class=0,int $su
         $rows[1][10]=$kind==='mcq'?'<p>What is \\(\\frac{1}{2}+\\frac{1}{2}\\)?</p>':'<p>Explain why \\(\\frac{1}{2}+\\frac{1}{2}=1\\).</p>';
         $rows[1][12]='<p>\\[\\frac{1+1}{2}=1\\]</p>';
     }
+    if($bankKind==='exam'){array_splice($headers,3,1);foreach($rows as &$row)array_splice($row,3,1);unset($row);}
     return [$headers,$rows];
 }

@@ -28,6 +28,23 @@ element('btnInsertTex').listeners.click();
 assert.equal(np.e.saved,1);assert.equal(hidden,1);
 assert(np.e.inserted[0].includes('&lt;img'),'TeX input is escaped both as an attribute and display text');
 assert(!np.e.inserted[0].includes('<img'),'A formula must never insert raw markup');
+// Historical imports keep class=math-tex, but safeRichHtml strips data-tex.
+// Double-click must recover delimiters rather than opening an empty modal.
+const legacy={attrs:{},textContent:'\\(\\frac{1}{2}+x^2\\)',getAttribute(key){return this.attrs[key]??null;},setAttribute(key,v){this.attrs[key]=v;},querySelector(){return null;}};
+np.e.handlers.dblclick({target:{nodeType:1,closest:()=>legacy},preventDefault(){},stopPropagation(){}});
+assert.equal(element('texInput').value,'\\frac{1}{2}+x^2');
+assert.equal(element('texDisplayMode').value,'inline');
+element('texInput').value='\\frac{3}{4}+x^2';element('btnInsertTex').listeners.click();
+assert.equal(legacy.attrs['data-tex'],'\\frac{3}{4}+x^2');
+assert.equal(legacy.textContent,'\\(\\frac{3}{4}+x^2\\)');
+legacy.attrs={'data-tex':'x<2','data-mode':'block'};
+np.e.handlers.dblclick({target:{nodeType:1,closest:()=>legacy},preventDefault(){},stopPropagation(){}});
+assert.equal(element('texInput').value,'x<2');assert.equal(element('texDisplayMode').value,'block');
+const noSource={getAttribute:()=>null,querySelector:()=>null,textContent:'rendered glyphs only'};
+const shownBefore=shown;
+np.e.handlers.dblclick({target:{nodeType:1,closest:()=>noSource},preventDefault(){},stopPropagation(){}});
+assert.equal(shown,shownBefore,'A rendered-only legacy formula must not be replaced by a blank one');
+assert(config.extended_valid_elements.includes('data-tex'),'TinyMCE must retain source carriers');
 assert.match(fs.readFileSync('modules/learning/questions.php','utf8'),/includes\/question_editor\.php/,'Normal bank loads the shared editor');
 assert.match(fs.readFileSync('includes/exam_question_editor_form.php','utf8'),/question_editor\.php/,'Both separate exam pages load the same complete editor component');
 assert(!fs.readFileSync('assets/js/exam-questions.js','utf8').includes('tinymce.init('),'No separate reduced exam editor remains');

@@ -5,13 +5,14 @@ const EXAM_TYPES=['MCQ','Very Short','Short','Long','Reasoning','Difference Betw
 function examCount(mixed $value,string $label,bool $zero=false):int {
     if(!is_scalar($value)||!preg_match('/^\d{1,3}$/',(string)$value)||(int)$value<($zero?0:1)||(int)$value>200)throw new InvalidArgumentException($label.' must be '.($zero?'0':'1').'–200.');return (int)$value;
 }
-function examPaperScope(PDO $db,array $actor,int $class,int $subject,bool $write=false):void {
-    if(!learningPurposeAllowed($db,$actor,'exam_paper'))throw new InvalidArgumentException('Your school package does not allow exam paper generation.');
+function examPaperScope(PDO $db,array $actor,int $class,int $subject,bool $write=false,string $bankKind='exam'):void {
+    if(!in_array($bankKind,['exam','learning'],true))throw new InvalidArgumentException('Invalid paper bank.');
+    if(!learningPurposeAllowed($db,$actor,$bankKind==='exam'?'exam_paper':'paper'))throw new InvalidArgumentException('Your school package does not allow this paper generator.');
     if(!in_array($subject,array_map('intval',array_column(learningReadSubjects($db,$actor,$class),'id')),true))throw new InvalidArgumentException('Choose a visible subject in the selected class.');
     if(($write&&$actor['read_only'])||($actor['role']==='teacher'&&!teacherOwnsSubject($db,$actor['school_id'],$actor['id'],$class,$subject)))throw new InvalidArgumentException('Teachers may generate and manage grids only for their assigned class subjects.');
 }
-function examNormalizeGrid(PDO $db,array $actor,int $class,int $subject,array $input,bool $chapterMode=false):array {
-    examPaperScope($db,$actor,$class,$subject);
+function examNormalizeGrid(PDO $db,array $actor,int $class,int $subject,array $input,bool $chapterMode=false,string $bankKind='exam'):array {
+    examPaperScope($db,$actor,$class,$subject,false,$bankKind);
     $full=learningDecimalUnits($input['full_marks']??null,100000,'Full marks');$minutes=learningDecimalUnits($input['duration_minutes']??null,60000,'Exam duration');
     $catalog=learningCatalogChapters($db,$actor,$class,$subject);$names=[];foreach($catalog as $c)foreach($c['alias_ids'] as $id)$names[(int)$id]=$c;
     $resolve=function($ids,string $label)use($names):array {if(!is_array($ids)||!array_is_list($ids)||!count($ids)||count($ids)>100)throw new InvalidArgumentException('Select chapters for '.$label.'.');$found=[];foreach($ids as $id){$id=learningId($id);if(!isset($names[$id]))throw new InvalidArgumentException('A chapter in '.$label.' is unavailable in this class subject.');$found[$names[$id]['id']]=$names[$id];}return array_values($found);};
@@ -27,7 +28,9 @@ function examNormalizeGrid(PDO $db,array $actor,int $class,int $subject,array $i
         $difficulty=$row['difficulty']??'';if(!is_string($difficulty)||!in_array($difficulty,['','Easy','Medium','Hard','Challenging'],true))throw new InvalidArgumentException('Choose a valid difficulty.');
         $domains=$row['domains']??[];if(!is_array($domains)||array_diff(array_keys($domains),array_keys(EXAM_DOMAINS)))throw new InvalidArgumentException('Use K, U, A and HA domain counts.');
         $quota=[];foreach(EXAM_DOMAINS as $key=>$label)$quota[$key]=examCount($domains[$key]??0,$key.' count',true);if(array_sum($quota)>0&&array_sum($quota)!==$quantity)throw new InvalidArgumentException('K + U + A + HA must equal the question count in '.$name.'.');
-        $topicIds=$row['topic_ids']??[];if(!is_array($topicIds)||!array_is_list($topicIds)||count($topicIds)>100)throw new InvalidArgumentException('Select valid topic filters.');$availableTopics=[];
+        // Saved exam grids may contain old topic IDs. Preserve their stored JSON,
+        // but chapter-wide exam generation no longer applies those constraints.
+        $topicIds=$bankKind==='learning'?($row['topic_ids']??[]):[];if(!is_array($topicIds)||!array_is_list($topicIds)||count($topicIds)>100)throw new InvalidArgumentException('Select valid topic filters.');$availableTopics=[];
         if($topicIds)foreach($chapters as $c)foreach(learningCatalogTopics($db,$actor,$class,$subject,(int)$c['id']) as $t)foreach($t['alias_ids'] as $id)$availableTopics[(int)$id]=$t['alias_ids'];
         $expandedTopics=[];foreach($topicIds as $id){$id=learningId($id);if(!isset($availableTopics[$id]))throw new InvalidArgumentException('Choose topics within the row chapters.');foreach($availableTopics[$id] as $alias)$expandedTopics[(int)$alias]=true;}$topicIds=array_keys($expandedTopics);
         $rows[]=['name'=>trim($name),'type'=>$type,'chapter_ids'=>array_map('intval',array_column($chapters,'id')),'chapter_names'=>array_column($chapters,'name'),'topic_ids'=>array_values(array_unique($topicIds)),'count'=>$quantity,'total_marks'=>learningDecimalString($marks),'total_units'=>$marks,'marks_each'=>$each===null?null:learningDecimalString($each),'each_units'=>$each,'difficulty'=>$difficulty,'domains'=>$quota];$total+=$marks;$count+=$quantity;
@@ -63,10 +66,7 @@ function examChapterGridInput(PDO $db,array $actor,int $class,int $subject,array
         if(!$chapter||!is_array($allocation))throw new InvalidArgumentException('Choose only chapters from the selected class subject.');
         $canonical=(int)$chapter['id'];if(isset($seen[$canonical]))throw new InvalidArgumentException('Use one allocation per chapter.');$seen[$canonical]=true;
         $quantity=examCount($allocation['count']??0,'Chapter question count',true);
-        $topics=$allocation['topic_ids']??[];
-        if(!is_array($topics)||!array_is_list($topics)||count($topics)>100)throw new InvalidArgumentException('Choose valid chapter topics.');
-        $allowed=[];if($topics)foreach(learningCatalogTopics($db,$actor,$class,$subject,$canonical) as $topic)foreach($topic['alias_ids'] as $alias)$allowed[(int)$alias]=true;
-        foreach($topics as $topic)if(!isset($allowed[learningId($topic)]))throw new InvalidArgumentException('Choose topics within their own chapter.');
+        $topics=[]; // Exam questions can combine any topics in the chapter.
         if(!$quantity)continue;
         $marks=learningDecimalUnits($allocation['marks']??null,100000,'Chapter marks');$total+=$marks;
         $rows[]=['name'=>mb_substr($chapter['name'],0,100),'type'=>$kind==='mcq'?'MCQ':'Written','chapter_ids'=>[$canonical],'topic_ids'=>$topics,'count'=>$quantity,'total_marks'=>learningDecimalString($marks)];
@@ -117,10 +117,10 @@ function examSaveGrid(PDO $db,array $actor,int $class,int $subject,string $name,
 }
 function examArchiveGrid(PDO $db,array $actor,int $id,bool $archive):void {learningWrite($db,function()use($db,$actor,$id,$archive){$r=examGridRecord($db,$actor,$id,true);if(!examGridCanEdit($db,$actor,$r))throw new InvalidArgumentException('Only the grid creator may archive or restore it.');if(!$archive)curriculumAssertGridRestorable($db,examGridInputJson($r['config_json']));$db->prepare('UPDATE exam_paper_grids SET archived_at=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=?')->execute([$archive?date('Y-m-d H:i:s'):null,$id]);learningAudit($db,$actor,$archive?'Archive exam grid':'Restore exam grid','exam_paper_grids',$id);});}
 /** Bounded exact allocation, including overlapping chapter pools, variable marks and time. */
-function examGeneratePaper(PDO $db,array $actor,int $class,int $subject,array $input,bool $chapterMode=false):array {
-    $grid=examNormalizeGrid($db,$actor,$class,$subject,$input,$chapterMode);$pool=learningContentList($db,$actor,'questions',['class_id'=>$class,'subject_id'=>$subject],'exam_paper');
+function examGeneratePaper(PDO $db,array $actor,int $class,int $subject,array $input,bool $chapterMode=false,string $bankKind='exam'):array {
+    $grid=examNormalizeGrid($db,$actor,$class,$subject,$input,$chapterMode,$bankKind);$pool=learningContentList($db,$actor,'questions',['class_id'=>$class,'subject_id'=>$subject],$bankKind==='exam'?'exam_paper':'paper');
     $questions=[];
-    foreach($pool as $q){try{$q['marks_units']=learningDecimalUnits((string)$q['marks'],100000,'Question marks');$q['minutes_units']=learningDecimalUnits((string)$q['required_minutes'],60000,'Question minutes');}catch(InvalidArgumentException $e){continue;}
+    foreach($pool as $q){try{$q['marks_units']=learningDecimalUnits((string)$q['marks'],100000,'Question marks');$q['minutes_units']=$bankKind==='learning'&&empty($q['required_minutes'])?0:learningDecimalUnits((string)$q['required_minutes'],60000,'Question minutes');}catch(InvalidArgumentException $e){continue;}
         if(!in_array($q['cognitive_domain'],EXAM_DOMAINS,true))continue;
         if($q['type']==='MCQ'){$en=json_decode($q['options']??'{}',true);$np=json_decode($q['options_np']??'{}',true);if(!is_array($en)||!is_array($np)||!in_array($q['correct_option'],['A','B','C','D'],true))continue;$valid=true;foreach(['A','B','C','D'] as $o)if(!questionImportHasContent($en[$o]??'')&&!questionImportHasContent($np[$o]??''))$valid=false;if(!$valid)continue;}
         $questions[(int)$q['id']]=$q;

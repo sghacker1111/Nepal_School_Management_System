@@ -14,7 +14,7 @@ with ERPHttpFixture() as app:
     app.db.execute("INSERT INTO chapters(school_id,class_id,subject_id,name) VALUES(1,?,?,'Import collision chapter')",(cls,original));app.db.commit()
     app.login('teacher')
     page=app.request('/modules/learning/questions.php?class='+str(cls))
-    subject_options=re.search(r'<select[^>]+name="subject"[^>]*>(.*?)</select>',page,re.S).group(1)
+    subject_options=re.search(r'<select[^>]+name="subject_id"[^>]*>(.*?)</select>',page,re.S).group(1)
     assert 'ZZCOLLIDE' in subject_options,'Canonical-equal selector labels distinguish codes'
     app.import_context=catalog_context(app,1,cls,duplicate,'Import collision chapter','Collision topic')
     headers=['Class','Subject','Chapter','Topic','Question HTML']

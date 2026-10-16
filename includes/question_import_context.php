@@ -22,11 +22,11 @@ function questionImportWriterSubjects(PDO $db,array $actor,array $classes):array
     return $result;
 }
 
-function questionImportContext(PDO $db,array $actor,array $input):array {
+function questionImportContext(PDO $db,array $actor,array $input,bool $requireTopic=true):array {
     $ids=[];
-    foreach(['class','subject','chapter','topic'] as $field){
+    foreach($requireTopic?['class','subject','chapter','topic']:['class','subject','chapter'] as $field){
         $value=$input['import_'.$field.'_id']??null;
-        if(!is_scalar($value)||!preg_match('/^[1-9][0-9]*$/',(string)$value))throw new InvalidArgumentException('Select an existing Class, Subject, Chapter and Topic before importing.');
+        if(!is_scalar($value)||!preg_match('/^[1-9][0-9]*$/',(string)$value))throw new InvalidArgumentException('Select an existing Class, Subject, Chapter'.($requireTopic?' and Topic':'').' before importing.');
         $ids[$field.'_id']=(int)$value;
     }
     $classes=learningReadClasses($db,$actor);$subjects=questionImportWriterSubjects($db,$actor,$classes)[$ids['class_id']]??[];
@@ -37,23 +37,26 @@ function questionImportContext(PDO $db,array $actor,array $input):array {
     $chapter=null;$topic=null;
     foreach(learningCatalogChapters($db,$actor,$ids['class_id'],$ids['subject_id']) as $c)if(in_array($ids['chapter_id'],$c['alias_ids'],true))$chapter=$c;
     if(!$chapter)throw new InvalidArgumentException('Select an existing Chapter in the selected Class and Subject.');
-    foreach(learningCatalogTopics($db,$actor,$ids['class_id'],$ids['subject_id'],(int)$chapter['id']) as $t)if(in_array($ids['topic_id'],$t['alias_ids'],true))$topic=$t;
-    if(!$topic)throw new InvalidArgumentException('Select an existing Topic in the selected Chapter.');
-    $catalog=learningCatalogSelection($db,$actor,$ids['class_id'],$ids['subject_id'],['chapter'=>$chapter['name'],'topic'=>$topic['name']],false);
-    return $ids+['class'=>$class,'subject'=>$subject,'chapter'=>$chapter,'topic'=>$topic,'catalog'=>$catalog,'classes'=>$classes,'subjects'=>$subjects];
+    if($requireTopic){
+        foreach(learningCatalogTopics($db,$actor,$ids['class_id'],$ids['subject_id'],(int)$chapter['id']) as $t)if(in_array($ids['topic_id'],$t['alias_ids'],true))$topic=$t;
+        if(!$topic)throw new InvalidArgumentException('Select an existing Topic in the selected Chapter.');
+    }
+    $catalog=learningCatalogSelection($db,$actor,$ids['class_id'],$ids['subject_id'],['chapter'=>$chapter['name'],'topic'=>$topic['name']??''],false);
+    return $ids+['require_topic'=>$requireTopic,'class'=>$class,'subject'=>$subject,'chapter'=>$chapter,'topic'=>$topic,'catalog'=>$catalog,'classes'=>$classes,'subjects'=>$subjects];
 }
 
 /** Preflight the entire file before any save. No blank metadata fallbacks. */
 function questionImportMatchContext(array $rows,array $map,array $context):void {
-    foreach(['class','subject','chapter','topic'] as $field)if(!isset($map[$field]))throw new InvalidArgumentException('Import rejected: missing required '.$field.' column. No questions were imported.');
+    $fields=($context['require_topic']??true)?['class','subject','chapter','topic']:['class','subject','chapter'];
+    foreach($fields as $field)if(!isset($map[$field]))throw new InvalidArgumentException('Import rejected: missing required '.$field.' column. No questions were imported.');
     $errors=[];
     foreach(array_slice($rows,1) as $offset=>$row){
         if(!array_filter($row,static fn($v)=>trim((string)$v)!==''))continue;
         try{
-            $values=[];foreach(['class','subject','chapter','topic'] as $field){$values[$field]=trim((string)($row[$map[$field]]??''));if($values[$field]==='')throw new InvalidArgumentException(ucfirst($field).' is required in every spreadsheet row.');}
+            $values=[];foreach($fields as $field){$values[$field]=trim((string)($row[$map[$field]]??''));if($values[$field]==='')throw new InvalidArgumentException(ucfirst($field).' is required in every spreadsheet row.');}
             if(questionImportClassId($context['classes'],$values['class'])!==$context['class_id'])throw new InvalidArgumentException('Class does not match the selected Class.');
             if(questionImportSubjectId($context['subjects'],$values['subject'])!==$context['subject_id'])throw new InvalidArgumentException('Subject does not match the selected Subject.');
-            foreach(['chapter','topic'] as $field){
+            foreach(array_intersect(['chapter','topic'],$fields) as $field){
                 $labels=array_filter([$context[$field]['name'],$context[$field]['name_np']??'']);
                 if(!in_array(curriculumNameKey($values[$field]),array_map('curriculumNameKey',$labels),true))throw new InvalidArgumentException(ucfirst($field).' does not match the selected existing '.ucfirst($field).'. Imports cannot create chapters or topics.');
             }

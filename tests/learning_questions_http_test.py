@@ -17,9 +17,9 @@ with ERPHttpFixture() as app:
     app.request(route,{'action':'set_visibility','question_id':new[0],'visibility':'public'})
     assert app.db.execute('SELECT visibility FROM questions WHERE id=?',(new[0],)).fetchone()==('public',)
     app.login('unrelated_teacher');body=app.request(route+'?search=Creator+owned+test')
-    table=re.search(r'<table\b.*?</table>',body,re.S).group(0)
-    assert 'Creator owned test' in table and 'onclick="editQuestion(' not in table
-    app.login('other_admin');body=app.request(route+'?search=Creator+owned+test');assert 'Creator owned test' not in re.search(r'<table\b.*?</table>',body,re.S).group(0)
+    table=re.search(r'<section class="exam-question-list".*?</section>',body,re.S).group(0)
+    assert 'Creator owned test' in table and 'view=edit' not in table
+    app.login('other_admin');body=app.request(route+'?search=Creator+owned+test');assert 'Creator owned test' not in re.search(r'<section class="exam-question-list".*?</section>',body,re.S).group(0)
     app.login('teacher');before=app.snapshot('questions')
     app.request(route,{**payload,'school_id':0,'created_by_user_id':f['ids']['co_teacher']},status=403)
     assert app.snapshot('questions')==before

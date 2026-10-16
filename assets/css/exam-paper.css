@@ -1,4 +1,4 @@
-.exam-paper{max-width:1000px;margin-inline:auto;color:#111;font-size:16px;line-height:1.45;overflow-wrap:anywhere}
+.exam-paper{--exam-reading-size:16px;--erp-kokila-size:22px;max-width:1000px;margin-inline:auto;color:#111;font-size:16px;line-height:1.45;overflow-wrap:anywhere}
 .exam-chapter-table th:first-child{width:52%;min-width:220px}.exam-chapter-table td{min-width:140px}.exam-chapter-topics{max-width:36rem}.exam-chapter-topics summary{cursor:pointer;color:var(--bs-primary,#0d6efd)}.exam-chapter-topics label{overflow-wrap:anywhere}
 .exam-print-header{display:flex;justify-content:center;align-items:center;gap:18px;text-align:center;border-bottom:2px solid #222;padding-bottom:14px;margin-bottom:12px}
 .exam-print-header h2{font-size:1.5em;margin:0}.exam-print-header h3{font-size:1.2em;margin:.3em 0}.exam-print-header p{margin:.2em 0}.exam-print-logo{width:75px;height:75px;object-fit:contain;flex-shrink:0}
@@ -10,7 +10,7 @@
 @media print{
  @page{size:A4 portrait;margin:12mm}
  .no-print,.top-navbar,.sidebar,.sidebar-backdrop,.breadcrumbs,.app-footer,.toast-container{display:none!important}
- .exam-paper{width:100%;max-width:none;border:0!important;box-shadow:none!important;margin:0;padding:0;font-size:12pt}
+ .exam-paper{--exam-reading-size:12pt;--erp-kokila-size:16.5pt;width:100%;max-width:none;border:0!important;box-shadow:none!important;margin:0;padding:0;font-size:12pt}
  .exam-paper .font-nepali{font-size:20pt}.exam-mcq-options{grid-template-columns:repeat(2,minmax(0,1fr))}.exam-print-header h2{font-size:18pt}
  #examAnswersSheet{display:none!important}.print-exam-answers #examQuestionSheet{display:none!important}.print-exam-answers #examAnswersSheet{display:block!important}
  #main-content,main{margin:0!important;padding:0!important;max-width:none!important}

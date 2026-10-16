@@ -12,3 +12,11 @@
 .exam-bank-option>.exam-bank-nepali{grid-column:2}.exam-bank-answer{padding-top:10px;border-top:1px solid #e0e7ee}.exam-bank-answer>summary{font-weight:650;font-size:1.05rem;cursor:pointer;margin-bottom:12px}
 .exam-question-editor .form-label{font-weight:600}.exam-question-editor{padding:clamp(16px,2vw,28px)}
 @media(max-width:600px){.exam-question-list{--exam-reading-size:1.25rem}.exam-question-meta{font-size:.9rem}.exam-question-card{padding:16px}}
+.exam-bank-print-heading{display:none}
+@media print{
+ @page{size:A4 portrait;margin:12mm}
+ .no-print,.sidebar,.sidebar-backdrop,.top-navbar,.breadcrumbs,.app-footer,.toast-container,.exam-bank-toolbar,#examQuestionFilters,#examQuestionCount,.pagination,.exam-bank-answer{display:none!important}
+ main,#main-content{margin:0!important;padding:0!important;max-width:none!important}
+ .exam-bank-print-heading{display:block}.exam-question-card{border:0;box-shadow:none;padding:0 0 14px;border-radius:0;break-inside:avoid}
+ .exam-question-list{--exam-reading-size:12pt;--erp-kokila-size:16.5pt}.exam-question-meta{font-size:9pt}.exam-bank-option{background:none!important}
+}

@@ -7,11 +7,13 @@ require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__.'/../../includes/learning_content.php';
+require_once __DIR__.'/../../includes/exam_question_language.php';
 
 Auth::requireRole(['super_admin', 'school_admin', 'teacher', 'exam_officer']);
 
 $db = getDB();
 $school_id = Auth::getSchoolId();
+try{$questionLanguage=examQuestionLanguage($_GET['language']??'both');}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
 
 // Filters/Inputs
 $class_id = $_GET['class'] ?? '';
@@ -78,6 +80,7 @@ if ($school_id) {
 
 $pageTitle = 'Question Paper Generator';
 $activePage = 'learning';
+$pageStyles=['/assets/css/exam-question-language.css?v='.(int)filemtime(__DIR__.'/../../assets/css/exam-question-language.css')];
 
 ob_start();
 ?>
@@ -91,7 +94,7 @@ ob_start();
             <i class="fas fa-arrow-left"></i> Back
         </a>
         <?php if ($generated): ?>
-        <button onclick="window.print()" class="btn btn-primary">
+        <button type="button" data-exam-print="questions" class="btn btn-primary">
             <i class="fas fa-print"></i> Print Exam Paper
         </button>
         <?php endif; ?>
@@ -112,7 +115,7 @@ ob_start();
             
             <div class="col-md-3">
                 <label class="form-label">Select Class *</label>
-                <select name="class" id="classSelect" class="form-select" required onchange="this.form.submit()">
+                <select name="class" id="classSelect" class="form-select" required onchange="this.form.elements.subject.value='';this.form.submit()">
                     <option value="">Choose Class</option>
                     <?php foreach ($classes as $c): ?>
                     <option value="<?= $c['id'] ?>" <?= $class_id == $c['id'] ? 'selected' : '' ?>><?= sanitize($c['name']) ?></option>
@@ -145,6 +148,7 @@ ob_start();
                 <input type="number" name="long_count" class="form-control" value="<?= $num_long ?>" min="0">
             </div>
 
+            <div class="col-md-4"><label for="gridLanguage" class="form-label">Question / print language</label><select id="gridLanguage" name="language" class="form-select" data-exam-language-control><?php foreach(examQuestionLanguages() as $key=>$label): ?><option value="<?= $key ?>" <?= $questionLanguage===$key?'selected':'' ?>><?= $label ?></option><?php endforeach; ?></select></div>
             <div class="col-md-12 my-2">
                 <label class="form-label d-block fw-bold text-muted small"><i class="fas fa-magic"></i> CDC Exam Grid Presets</label>
                 <div class="d-flex flex-wrap gap-2">
@@ -201,7 +205,7 @@ function applyPreset(mcq, short, long, title) {
 
 <?php if ($generated): ?>
 <!-- A4 Paper Output -->
-<div class="paper-preview p-5 bg-white border mx-auto position-relative" style="max-width: 800px; min-height: 1120px; font-family: 'Times New Roman', Times, serif; color: #000; box-shadow: 0 0 10px rgba(0,0,0,0.05);">
+<div class="paper-preview p-5 bg-white border mx-auto position-relative" style="--exam-reading-size:16px;--erp-kokila-size:22px;max-width: 800px; min-height: 1120px; font-family: 'Times New Roman', Times, serif; color: #000; box-shadow: 0 0 10px rgba(0,0,0,0.05);">
     
     <!-- Paper Header -->
     <div class="text-center mb-4">
@@ -235,19 +239,18 @@ function applyPreset(mcq, short, long, title) {
     <div class="group-section mb-4">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h6 class="fw-bold text-decoration-underline mb-0">Group 'A' (Multiple Choice Questions)</h6>
-            <span class="fw-bold font-monospace">[<?= count($mcqs) ?> &times; 1 = <?= count($mcqs) * 1 ?> Marks]</span>
+            <span class="fw-bold font-monospace">[<?= count($mcqs) ?> questions = <?= array_sum(array_column($mcqs,'marks')) ?> Marks]</span>
         </div>
         <ol class="ps-3" style="font-size: 1.05rem;">
             <?php foreach ($mcqs as $q): ?>
             <li class="mb-3">
-                <div class="mb-2 mathjax-render"><?= safeRichHtml($q['question_text']) ?></div>
-                <?php if(!empty($q['question_text_np'])): ?><div class="mb-2 font-nepali mathjax-render"><?= safeRichHtml($q['question_text_np']) ?></div><?php endif; ?>
+                <div class="mb-2 mathjax-render"><?= examQuestionRichVariants($q['question_text'],$q['question_text_np']??'',$questionLanguage,true) ?></div>
                 <?php 
                 $opts = json_decode($q['options'] ?? '{}', true);
                 if (!empty($opts)):
                 ?>
                 <div class="row g-2 ps-3" style="font-size: 0.95rem;">
-                    <?php $optsNp=json_decode($q['options_np']??'{}',true);foreach(['A','B','C','D'] as $key): ?><div class="col-6 mathjax-render"><?= strtolower($key) ?>) <?= safeRichHtml($opts[$key]??'') ?><?php if(!empty($optsNp[$key])): ?><div class="font-nepali"><?= safeRichHtml($optsNp[$key]) ?></div><?php endif; ?></div><?php endforeach; ?>
+                    <?php $optsNp=json_decode($q['options_np']??'{}',true);foreach(['A','B','C','D'] as $key): ?><div class="col-6 mathjax-render"><?= strtolower($key) ?>) <?= examQuestionRichVariants($opts[$key]??'',$optsNp[$key]??'',$questionLanguage) ?></div><?php endforeach; ?>
                 </div>
                 <?php endif; ?>
             </li>
@@ -262,14 +265,14 @@ function applyPreset(mcq, short, long, title) {
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h6 class="fw-bold text-decoration-underline mb-0">Group 'B' (Short Answer Questions)</h6>
             <span class="fw-bold font-monospace">
-                [<?= count($shorts) ?> &times; <?= $shorts[0]['marks'] ?> = <?= count($shorts) * $shorts[0]['marks'] ?> Marks]
+                [<?= count($shorts) ?> questions = <?= array_sum(array_column($shorts,'marks')) ?> Marks]
             </span>
         </div>
         <ol class="ps-3" style="font-size: 1.05rem;">
             <?php foreach ($shorts as $q): ?>
             <li class="mb-3">
                 <div class="d-flex justify-content-between">
-                    <div class="mathjax-render"><?= safeRichHtml($q['question_text']) ?><?php if(!empty($q['question_text_np'])): ?><div class="font-nepali"><?= safeRichHtml($q['question_text_np']) ?></div><?php endif; ?></div>
+                    <div class="mathjax-render"><?= examQuestionRichVariants($q['question_text'],$q['question_text_np']??'',$questionLanguage,true) ?></div>
                     <span class="font-monospace text-muted small">[<?= $q['marks'] ?>]</span>
                 </div>
             </li>
@@ -284,14 +287,14 @@ function applyPreset(mcq, short, long, title) {
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h6 class="fw-bold text-decoration-underline mb-0">Group 'C' (Long Answer Questions)</h6>
             <span class="fw-bold font-monospace">
-                [<?= count($longs) ?> &times; <?= $longs[0]['marks'] ?> = <?= count($longs) * $longs[0]['marks'] ?> Marks]
+                [<?= count($longs) ?> questions = <?= array_sum(array_column($longs,'marks')) ?> Marks]
             </span>
         </div>
         <ol class="ps-3" style="font-size: 1.05rem;">
             <?php foreach ($longs as $q): ?>
             <li class="mb-3">
                 <div class="d-flex justify-content-between">
-                    <div class="mathjax-render"><?= safeRichHtml($q['question_text']) ?><?php if(!empty($q['question_text_np'])): ?><div class="font-nepali"><?= safeRichHtml($q['question_text_np']) ?></div><?php endif; ?></div>
+                    <div class="mathjax-render"><?= examQuestionRichVariants($q['question_text'],$q['question_text_np']??'',$questionLanguage,true) ?></div>
                     <span class="font-monospace text-muted small">[<?= $q['marks'] ?>]</span>
                 </div>
             </li>
@@ -329,6 +332,7 @@ function applyPreset(mcq, short, long, title) {
 </style>
 <?php endif; ?>
 
+<script src="<?= APP_URL ?>/assets/js/exam-question-language.js?v=<?= (int)filemtime(__DIR__.'/../../assets/js/exam-question-language.js') ?>"></script>
 <?php
 $content = ob_get_clean();
 include __DIR__ . '/../../includes/header.php';

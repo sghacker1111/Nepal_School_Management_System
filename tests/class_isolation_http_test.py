@@ -38,7 +38,7 @@ with ERPHttpFixture() as app:
             body=app.request(path);assert 'OnlyGrade'+str(grade)+' Pupil' in body
             assert not any('OnlyGrade'+str(other)+' Pupil' in body for other in classes if other!=grade)
         body=app.request(f'/modules/learning/questions.php?class={cid}')
-        t=re.search(r'<table\b.*?</table>',body,re.S).group(0)
+        t=re.search(r'<section class="exam-question-list".*?</section>',body,re.S).group(0)
         assert 'OnlyGrade'+str(grade)+' question' in t
         assert not any('OnlyGrade'+str(other)+' question' in t for other in classes if other!=grade)
     app.request('/modules/subjects/index.php?class='+str(app.fixture['otherClass']),status=404)

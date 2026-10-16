@@ -1,6 +1,6 @@
 """Chapter-table generation and recoverable exam deletion on synthetic records only."""
 import json,re
-from http_support import ERPHttpFixture
+from http_support import ERPHttpFixture,visible_exam_text
 from learning_sharing_support import extend_learning
 
 GEN='/modules/learning/exam_paper_generator.php'
@@ -30,7 +30,7 @@ def run():
     body=app.request(path)
     assert 'id="examChapterEditor"' in body and 'Advanced grid' in body and 'name="config_json"' not in body
     counts=re.findall(r'data-chapter-count[^>]*value="([^"]+)"',body);assert len(counts)>=2 and set(counts)=={'0'}
-    assert 'No. of Questions' in body and 'Marks <span' in body and 'Choose topics (optional)' in body
+    assert 'No. of Questions' in body and 'Marks <span' in body and 'Choose topics (optional)' not in body
     assert all(str(t) in body for t in topics) and '[object Object]' not in body
     base={'action':'generate','generation_mode':'chapter','class_id':cls,'subject_id':sub,'exam_title':'Chapter paper','duration_minutes':'30','generation_kind':'written',f'chapters[{a}][count]':'2',f'chapters[{a}][marks]':'5',f'chapters[{b}][count]':'0',f'chapters[{b}][marks]':'1000'}
     questions=app.snapshot('questions')
@@ -43,9 +43,9 @@ def run():
     body=app.request(GEN,topic);sheet=body.split('id="examQuestionSheet"')[1].split('id="examAnswersSheet"')[0]
     assert 'Long from topic' in sheet and 'Short from topic' not in sheet
     failed={**topic,f'chapters[{a}][topic_ids][]':[topics[0]]}
-    body=app.request(GEN,failed,status=422);assert 'No complete paper' in body and 'id="examQuestionSheet"' not in body
-    assert f'name="chapters[{a}][marks]"' in body and 'value="3"' in body and 'checked' in body
-    app.request(GEN,{**topic,f'chapters[{a}][topic_ids][]':[topics[2]]},status=422)
+    body=app.request(GEN,failed);assert 'id="examQuestionSheet"' in body and 'Long from topic' in body
+    assert f'name="chapters[{a}][marks]"' in body and 'value="3"' in body and 'Choose topics' not in body
+    app.request(GEN,{**topic,f'chapters[{a}][topic_ids][]':[topics[2]]})
     app.request(GEN,{**base,'chapters[999999][count]':'0'},status=422)
     app.request(GEN,{**base,f'chapters[{a}][count]':'0'},status=422)
     app.request(GEN,{**base,'generation_kind':'all'},status=422)
@@ -53,7 +53,7 @@ def run():
     app.request(GEN,base,csrf=False,status=419)
     mcq={**base,'generation_kind':'mcq',f'chapters[{a}][marks]':'2'}
     body=app.request(GEN,mcq);sheet=body.split('id="examQuestionSheet"')[1].split('id="examAnswersSheet"')[0]
-    assert sheet.count('MCQ from topic')==2 and 'Short from topic' not in sheet and 'Long from topic' not in sheet
+    assert visible_exam_text(sheet).count('MCQ from topic')==2 and 'Short from topic' not in sheet and 'Long from topic' not in sheet
     advanced=app.request(path+'&generation_mode=advanced');assert 'name="config_json"' in advanced and 'id="examChapterEditor"' not in advanced
     for route,kind in ((MCQ,'MCQ'),(WRITTEN,'Short')):
       qid=ids[kind][0];original=app.db.execute('SELECT * FROM questions WHERE id=?',(qid,)).fetchone()

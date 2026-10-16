@@ -39,10 +39,20 @@ function learningSaveQuestion(PDO $db,array $actor,array $input,?int $id=null,st
         }
         $get=static function($key)use($input):string {$value=$input[$key]??'';if(!is_scalar($value))throw new InvalidArgumentException('Enter valid question content.');return (string)$value;};
         $content=questionImportRowContent($get,'html');
-        if($bankKind==='exam')$content['marks']=learningDecimalString(learningDecimalUnits($input['marks']??null,100000,'Question marks'));
+        if($bankKind==='exam'||isset($input['marks']))$content['marks']=learningDecimalString(learningDecimalUnits($input['marks']??null,100000,'Question marks'));
+        // Exam authoring is chapter-wide. Retain legacy topic links on an edit in
+        // the same scope rather than silently detaching historical references.
+        if($bankKind==='exam'&&isset($old)&&(int)$old['class_id']===$class&&(int)$old['subject_id']===$subject&&curriculumNameKey((string)($input['chapter']??''))===curriculumNameKey((string)$old['chapter'])){
+            $supplied=false;foreach(['topic','topic_id','catalog_topic_id'] as $key)if(array_key_exists($key,$input))$supplied=true;
+            if(!$supplied)foreach(['topic_id','catalog_topic_id'] as $key)$input[$key]=$old[$key]??null;
+        }
         $catalog=learningCatalogSelection($db,$actor,$class,$subject,$input,$allowCatalogCreate&&learningCanManageCatalog($actor));
         $domain=$input['cognitive_domain']??'Knowledge';if(!is_string($domain)||!in_array($domain,['Knowledge','Understanding','Application','Higher Ability'],true))throw new InvalidArgumentException('Choose a valid cognitive level.');
         $values=$content+['class_id'=>$class,'subject_id'=>$subject,'chapter'=>$catalog['chapter'],'topic_id'=>$catalog['topic_id'],'catalog_chapter_id'=>$catalog['catalog_chapter_id'],'catalog_topic_id'=>$catalog['catalog_topic_id'],'visibility'=>$visibility,'cognitive_domain'=>$domain,'updated_at'=>date('Y-m-d H:i:s')];
+        if($bankKind==='learning'){
+            if(isset($input['difficulty'])){if(!is_string($input['difficulty'])||!in_array($input['difficulty'],['Easy','Medium','Hard','Challenging'],true))throw new InvalidArgumentException('Choose a valid difficulty.');$values['difficulty']=$input['difficulty'];}
+            if(isset($input['required_minutes']))$values['required_minutes']=$input['required_minutes']===''?null:learningDecimalString(learningDecimalUnits($input['required_minutes'],60000,'Required minutes'));
+        }
         if($bankKind==='exam'){
             $level=$input['difficulty']??'Medium';$minutes=$input['required_minutes']??null;
             if(!is_string($level)||!in_array($level,['Easy','Medium','Hard','Challenging'],true))throw new InvalidArgumentException('Choose Easy, Medium, Hard or Challenging.');

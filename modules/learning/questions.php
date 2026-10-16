@@ -1,4 +1,13 @@
 <?php
+// New shared, paginated bank UI. Keep old API/import clients working while
+// all new add/edit/import forms use the same validated workflow as exam banks.
+$legacyBankRequest=($_SERVER['REQUEST_METHOD']==='POST'&&!isset($_POST['bank_ui']))||isset($_GET['action_get_chapters'])||isset($_GET['action_get_topics'])||in_array($_GET['action']??'',['request_permission','request_view_permission'],true)||(($_GET['action']??'')==='download_template'&&!isset($_GET['bank_ui']))||isset($_GET['make_universal']);
+if(!$legacyBankRequest){
+    foreach(['class','subject','class_id','subject_id'] as $field)if(isset($_GET[$field])&&(!is_scalar($_GET[$field])||!preg_match('/^\d*$/',(string)$_GET[$field]))) {http_response_code(404);exit('Choose a valid class or subject.');}
+    $_GET['class_id']=$_GET['class_id']??$_GET['class']??0;$_GET['subject_id']=$_GET['subject_id']??$_GET['subject']??0;
+    $questionBankKind='learning';$category=$_GET['category']??'all';$examSection=$category==='mcq'?'mcq':($category==='other'?'written':'all');
+    include __DIR__.'/../../includes/exam_question_page.php';return;
+}
 /**
  * Learning Portal - Question Bank CRUD
  */

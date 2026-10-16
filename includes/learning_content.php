@@ -122,6 +122,7 @@ function learningContentList(PDO $db,array $actor,string $kind,array $filters,st
         if($kind!=='questions'||!in_array($filters['question_group'],['mcq','written'],true))throw new InvalidArgumentException('Choose a valid question section.');
         $where[]=$filters['question_group']==='mcq'?"type='MCQ'":"type<>'MCQ'";
     }
+    if(isset($filters['cognitive_domain'])){if(!is_string($filters['cognitive_domain'])||!in_array($filters['cognitive_domain'],['Knowledge','Understanding','Application','Higher Ability'],true))throw new InvalidArgumentException('Choose a valid cognitive level.');$where[]='cognitive_domain=?';$params[]=$filters['cognitive_domain'];}
     if(isset($filters['topic_alias_ids'])){
         $aliases=$filters['topic_alias_ids'];if(!is_array($aliases)||!$aliases||count($aliases)>100)throw new InvalidArgumentException('Choose a valid topic.');
         foreach($aliases as $alias)if(!is_scalar($alias)||!preg_match('/^[1-9][0-9]*$/',(string)$alias))throw new InvalidArgumentException('Choose a valid topic.');

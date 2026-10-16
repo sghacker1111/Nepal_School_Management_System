@@ -6,11 +6,13 @@ require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__.'/../../includes/exam_question_language.php';
 
 Auth::requireLogin();
 
 $db = getDB();
 $school_id = Auth::getSchoolId();
+try{$questionLanguage=examQuestionLanguage($_GET['language']??'both');}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
 $is_admin = (Auth::getRole() === 'super_admin');
 $success = '';
 $error = '';
@@ -68,6 +70,7 @@ $noteTopics=[];foreach($chapterRows as $row)if($row['name']===$selected_chapter)
 if($reviewLegacy){$notes=array_values(array_filter(learningContentList($db,$contentActor,'learning_notes',['record_id'=>$_GET['record_id']??'']),static fn($n)=>learningNoteNeedsCatalogReview($db,$contentActor,$n)));foreach($notes as &$note)$note['needs_catalog_review']=true;unset($note);$questions=[];}
 $pageTitle = 'Learning Hub';
 $activePage = 'learning';
+$pageStyles=['/assets/css/exam-question-language.css?v='.(int)filemtime(__DIR__.'/../../assets/css/exam-question-language.css')];
 
 ob_start();
 ?>
@@ -178,6 +181,7 @@ window.MathJax = {
             </div>
             <div class="col-md-6"><select name="source" class="form-select" onchange="this.form.submit()"><?php foreach(['all'=>'All content','shared'=>'Shared catalog','school'=>'This school','mine'=>'My content'] as $value=>$label): ?><option value="<?= $value ?>" <?= $filter_source===$value?'selected':'' ?>><?= $label ?></option><?php endforeach; ?></select></div>
             <?php if($canCreateNote): ?><div class="col-md-6"><select name="archived" class="form-select" onchange="this.form.submit()"><option value="">Active notes</option><option value="1" <?= $filter_archived?'selected':'' ?>>My archived notes</option></select></div><?php endif; ?>
+            <div class="col-md-4"><label for="hubQuestionLanguage" class="form-label">Question language</label><select id="hubQuestionLanguage" name="language" class="form-select" onchange="this.form.submit()"><?php foreach(examQuestionLanguages() as $key=>$label): ?><option value="<?= $key ?>" <?= $questionLanguage===$key?'selected':'' ?>><?= $label ?></option><?php endforeach; ?></select></div>
         </form>
     </div>
 </div>
@@ -261,20 +265,14 @@ window.MathJax = {
                                 <div class="card-body p-3">
                                     <span class="badge bg-secondary mb-2"><?= sanitize($q['type']) ?> (<?= $q['marks'] ?> Marks)</span>
 
-                                    <div class="fw-bold mb-2">Q. <span class="mathjax-render"><?= safeRichHtml($q['question_text']) ?></span></div>
-                                    <?php if ($q['question_text_np']): ?>
-                                    <div class="text-muted mb-2 font-nepali">Q. <span class="mathjax-render"><?= safeRichHtml($q['question_text_np']) ?></span></div>
-                                    <?php endif; ?>
+                                    <div class="fw-bold mb-2 mathjax-render">Q. <?= examQuestionRich($q['question_text'],$q['question_text_np']??'',$questionLanguage,true) ?></div>
 
                                     <!-- MCQ Options -->
                                     <?php if ($q['type'] === 'MCQ' && $q['options']):
                                         $opts = json_decode($q['options'], true);
                                     ?>
                                         <div class="row g-2 mb-3 bg-white p-2 rounded border border-light">
-                                            <div class="col-6">A: <span class="mathjax-render"><?= safeRichHtml($opts['A'] ?? '') ?></span></div>
-                                            <div class="col-6">B: <span class="mathjax-render"><?= safeRichHtml($opts['B'] ?? '') ?></span></div>
-                                            <div class="col-6">C: <span class="mathjax-render"><?= safeRichHtml($opts['C'] ?? '') ?></span></div>
-                                            <div class="col-6">D: <span class="mathjax-render"><?= safeRichHtml($opts['D'] ?? '') ?></span></div>
+                                            <?php $optsNp=json_decode($q['options_np']??'{}',true)?:[];foreach(['A','B','C','D'] as $option): ?><div class="col-6 mathjax-render"><?= $option ?>: <?= examQuestionRich($opts[$option]??'',$optsNp[$option]??'',$questionLanguage) ?></div><?php endforeach; ?>
                                         </div>
                                     <?php endif; ?>
 
@@ -284,12 +282,9 @@ window.MathJax = {
                                             <?php
                                             if ($q['type'] === 'MCQ') {
                                                 echo 'Correct Option: <strong>' . sanitize($q['correct_option']) . '</strong>';
-                                            } else {
-                                                echo !empty($q['answer']) ? safeRichHtml($q['answer']) : 'No answer guide supplied.';
-                                                if ($q['answer_np']) {
-                                                    echo '<hr class="my-1"><span class="text-muted font-nepali">' . safeRichHtml($q['answer_np']) . '</span>';
-                                                }
                                             }
+                                            if(!empty($q['answer'])||!empty($q['answer_np']))echo examQuestionRich($q['answer']??'',$q['answer_np']??'',$questionLanguage);
+                                            elseif($q['type']!=='MCQ')echo 'No answer guide supplied.';
                                             ?>
                                         </div>
                                     </div>

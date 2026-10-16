@@ -56,7 +56,7 @@ def run():
     with ERPHttpFixture() as app:
         original={t:app.snapshot(t) for t in ('students','marks','exams','ac_invoices','ac_payments','ac_journals')}
         record=seed_source(app)
-        assert 'data-import-template' in app.request(PAGE)
+        assert 'data-exam-import-mode' in app.request(PAGE+'?view=import')
         assert 'practiceReviewBack' in app.request(PRACTICE)
         # Both CSV template types preserve rich questions/options/model answers.
         for kind in ('mcq','other'):

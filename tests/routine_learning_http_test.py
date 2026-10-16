@@ -52,15 +52,14 @@ with ERPHttpFixture() as app:
     assert re.search(r'<option value="BS" selected>BS only',body) and re.search(r'<option value="ymd" selected>YYYY-MM-DD',body)
     assert 'print-signature-name' in body and 'print-signature-post' in body
     questions='/modules/learning/questions.php'
-    body=app.request(questions);assert 'disabled' in select(body,'subject') and 'Quick Add Class' not in body and 'quickAddSubject' not in body
-    body=app.request(f'{questions}?class={cls}');assert 'Synthetic Optional' in select(body,'subject')
-    mapping=json.loads(re.search(r'const classSubjectsMap = (.*?);',body).group(1));assert all(int(r['class_id'])!=f['otherClass'] for r in mapping)
-    ids=[int(r['subject_id']) for r in mapping if int(r['class_id'])==cls];assert ids.count(own)==1
+    body=app.request(questions);assert 'disabled' in select(body,'subject_id') and 'Quick Add Class' not in body and 'quickAddSubject' not in body
+    body=app.request(f'{questions}?class={cls}');assert 'Synthetic Optional' in select(body,'subject_id')
+    options=select(body,'subject_id');assert len(re.findall(r'<option value="'+str(own)+r'"',options))==1
     body=app.request(f'/modules/learning/paper_generator.php?class_id={cls}');assert 'Synthetic Optional' in select(body,'subject_id')
     app.request(questions,{'action_quick_add_class':1,'class_name':'Forbidden'},status=422)
     app.login('teacher')
     before=app.snapshot('class_routines');app.request(routine,grid,status=403);assert app.snapshot('class_routines')==before
-    body=app.request(f'{questions}?class={cls}');options=select(body,'subject');assert str(own) in options and 'Synthetic Optional' in options # Public viewing is separate from assigned-subject creation.
+    body=app.request(f'{questions}?class={cls}');options=select(body,'subject_id');assert str(own) in options and 'Synthetic Optional' in options # Public viewing is separate from assigned-subject creation.
     other=app.db.execute('SELECT subject_id FROM class_subjects WHERE class_id=? AND subject_id<>? AND subject_id<>? LIMIT 1',(cls,own,opt)).fetchone()[0]
     app.request(f'{questions}?class={cls}&subject={other}')
     app.request('/modules/learning/paper_generator.php',{'action_save_grid':1,'class_id':cls,'subject_id':other,'grid_name':'Forged','grid_data':'{}'},status=422)

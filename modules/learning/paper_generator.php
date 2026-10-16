@@ -1,4 +1,7 @@
 <?php
+if(!isset($_POST['action_save_grid'])&&!isset($_POST['action_generate'])&&($_POST['generation_mode']??$_GET['generation_mode']??'rows')==='rows'){
+    include __DIR__.'/../../includes/learning_test_paper_page.php';return;
+}
 /**
  * Normal Paper Generator and school-defined allocation grids.
  */
@@ -7,6 +10,7 @@ require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__.'/../../includes/learning_content.php';
+require_once __DIR__.'/../../includes/exam_question_language.php';
 
 Auth::requireRole(['super_admin', 'school_admin', 'principal', 'teacher', 'exam_officer']);
 Auth::requireAccess('paper_generator');
@@ -14,6 +18,7 @@ Auth::requireAccess('paper_generator');
 $db = getDB();
 $school_id = Auth::getSchoolId();
 $is_admin = (Auth::getRole() === 'super_admin');
+try{$questionLanguage=examQuestionLanguage($_POST['language']??$_GET['language']??'both');}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
 
 // Handle Grid Layout Save via AJAX
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_save_grid'])) {
@@ -244,6 +249,7 @@ if ($subject_id) {
 
 $pageTitle = 'Normal Paper Generator';
 $activePage = 'paper_generator';
+$pageStyles=['/assets/css/exam-question-language.css?v='.(int)filemtime(__DIR__.'/../../assets/css/exam-question-language.css')];
 
 ob_start();
 ?>
@@ -272,6 +278,8 @@ ob_start();
     overflow-x: auto;
 }
 .a4-sheet {
+    --exam-reading-size:12pt;
+    --erp-kokila-size:16.5pt;
     background: #ffffff;
     width: 210mm;
     min-height: 297mm;
@@ -430,7 +438,7 @@ window.MathJax = {
                 <h5 class="mb-0 text-primary fw-bold"><i class="fas fa-sliders-h"></i> Configuration Panel</h5>
             </div>
             <div class="card-body p-4">
-                <form id="paramForm" method="GET" action="">
+                <form id="paramForm" method="GET" action=""><input type="hidden" name="language" value="<?= $questionLanguage ?>">
                     <div class="mb-3">
                         <label class="form-label fw-semibold">1. Select Target Class *</label>
                         <select name="class_id" class="form-select" onchange="document.getElementById('paramForm').submit();" required>
@@ -494,6 +502,8 @@ window.MathJax = {
             <input type="hidden" name="subject_id" value="<?= htmlspecialchars($subject_id) ?>">
             <input type="hidden" name="exam_id" value="<?= htmlspecialchars($exam_id) ?>">
             <input type="hidden" name="generation_mode" value="<?= htmlspecialchars($generation_mode) ?>">
+            <label for="legacyPaperLanguage" class="form-label">Question / print language</label><select id="legacyPaperLanguage" name="language" class="form-select mb-3" data-exam-language-control><?php foreach(examQuestionLanguages() as $key=>$label): ?><option value="<?= $key ?>" <?= $questionLanguage===$key?'selected':'' ?>><?= $label ?></option><?php endforeach; ?></select>
+            <a class="btn btn-outline-primary mb-3" href="?<?= http_build_query(['class_id'=>$class_id,'subject_id'=>$subject_id,'generation_mode'=>'rows','language'=>$questionLanguage]) ?>">Chapter / topic Test Paper Builder</a>
             <input type="hidden" name="action_generate" value="1">
 
             <?php if ($generation_mode === 'auto'): ?>
@@ -698,7 +708,7 @@ window.MathJax = {
         <h5 class="mb-0 text-success fw-bold"><i class="fas fa-print"></i> Printable Paper Preview</h5>
         <div>
             <button class="btn btn-outline-secondary me-2" onclick="exportToWord()"><i class="fas fa-file-word text-primary"></i> Export to Word (.doc)</button>
-            <button class="btn btn-success" onclick="window.print()"><i class="fas fa-print"></i> Print / Save PDF</button>
+            <label for="legacyPrintLanguage" class="form-label">Print language</label><select id="legacyPrintLanguage" class="form-select d-inline-block w-auto" data-exam-language-control><?php foreach(examQuestionLanguages() as $key=>$label): ?><option value="<?= $key ?>" <?= $questionLanguage===$key?'selected':'' ?>><?= $label ?></option><?php endforeach; ?></select><button type="button" class="btn btn-success" data-exam-print="questions"><i class="fas fa-print"></i> Print / Save PDF</button>
         </div>
     </div>
     <div class="card-body paper-preview-container">
@@ -776,14 +786,9 @@ window.MathJax = {
                             <span class="question-marks">[<?= $q['marks'] ?>]</span>
                             <div style="margin-left: 25px; text-indent: -25px;">
                                 <?= $q_idx ?>. 
-                                <span class="mathjax-render"><?= fixNepaliInLatex($q['question_text']) ?></span>
+                                <div class="mathjax-render"><?= examQuestionRichVariants($q['question_text'],$q['question_text_np']??'',$questionLanguage,true) ?></div>
                             </div>
                             
-                            <?php if ($q['question_text_np']): ?>
-                            <div style="margin-left: 25px; margin-top:2px;" class="text-muted small font-nepali">
-                                <span class="mathjax-render"><?= fixNepaliInLatex($q['question_text_np']) ?></span>
-                            </div>
-                            <?php endif; ?>
 
                             <!-- MCQ Options Rendering -->
                             <?php if ($type === 'MCQ' && !empty($q['options'])): 
@@ -791,10 +796,7 @@ window.MathJax = {
                                 $opts_np = json_decode($q['options_np'], true);
                             ?>
                                 <div class="mcq-options-grid">
-                                    <div>A. <span class="mathjax-render"><?= fixNepaliInLatex($opts['A'] ?? '') ?></span> <?= isset($opts_np['A']) && !empty($opts_np['A']) ? ' <span class="text-muted small font-nepali">(' . fixNepaliInLatex($opts_np['A']) . ')</span>' : '' ?></div>
-                                    <div>B. <span class="mathjax-render"><?= fixNepaliInLatex($opts['B'] ?? '') ?></span> <?= isset($opts_np['B']) && !empty($opts_np['B']) ? ' <span class="text-muted small font-nepali">(' . fixNepaliInLatex($opts_np['B']) . ')</span>' : '' ?></div>
-                                    <div>C. <span class="mathjax-render"><?= fixNepaliInLatex($opts['C'] ?? '') ?></span> <?= isset($opts_np['C']) && !empty($opts_np['C']) ? ' <span class="text-muted small font-nepali">(' . fixNepaliInLatex($opts_np['C']) . ')</span>' : '' ?></div>
-                                    <div>D. <span class="mathjax-render"><?= fixNepaliInLatex($opts['D'] ?? '') ?></span> <?= isset($opts_np['D']) && !empty($opts_np['D']) ? ' <span class="text-muted small font-nepali">(' . fixNepaliInLatex($opts_np['D']) . ')</span>' : '' ?></div>
+                                    <?php foreach(['A','B','C','D'] as $option): ?><div><?= $option ?>. <?= examQuestionRichVariants($opts[$option]??'',$opts_np[$option]??'',$questionLanguage) ?></div><?php endforeach; ?>
                                 </div>
                             <?php endif; ?>
                         </div>
@@ -863,7 +865,8 @@ function exportToWord() {
             ".mcq-options-grid {margin-left:20px;}"+
             "</style></head><body>";
     const footerHTML = "</body></html>";
-    const sourceHTML = headerHTML + document.getElementById("printArea").innerHTML + footerHTML;
+    const paperClone=document.getElementById('printArea').cloneNode(true);paperClone.querySelectorAll('[data-exam-language-view][hidden]').forEach(node=>node.remove());
+    const sourceHTML = headerHTML + paperClone.innerHTML + footerHTML;
     
     const source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(sourceHTML);
     const fileDownload = document.createElement("a");
@@ -1040,6 +1043,7 @@ $(document).ready(function() {
 });
 </script>
 
+<script src="<?= APP_URL ?>/assets/js/exam-question-language.js?v=<?= (int)filemtime(__DIR__.'/../../assets/js/exam-question-language.js') ?>"></script>
 <?php
 $content = ob_get_clean();
 include __DIR__ . '/../../includes/header.php';

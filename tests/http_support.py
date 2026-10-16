@@ -5,6 +5,21 @@ from urllib.request import build_opener, HTTPCookieProcessor, Request
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from http.cookiejar import CookieJar
+from html.parser import HTMLParser
+
+def visible_exam_text(html):
+    """Ignore inactive pre-rendered print languages, retaining visible question text."""
+    class ExamText(HTMLParser):
+        def __init__(self):super().__init__(convert_charrefs=True);self.stack=[];self.text=[]
+        def handle_starttag(self,tag,attrs):
+            attrs=dict(attrs);skip=(self.stack[-1][1] if self.stack else False) or ('data-exam-language-view' in attrs and 'hidden' in attrs)
+            if tag not in ('area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr'):self.stack.append((tag,skip))
+        def handle_endtag(self,tag):
+            for i in range(len(self.stack)-1,-1,-1):
+                if self.stack[i][0]==tag:del self.stack[i:];break
+        def handle_data(self,data):
+            if not self.stack or not self.stack[-1][1]:self.text.append(data)
+    parser=ExamText();parser.feed(html);return ''.join(parser.text)
 
 class ERPHttpFixture:
     def __init__(self,session_name=None):

@@ -60,13 +60,13 @@ $otherResult=$import($teacher,[$otherHeaders,$otherRow],'html','private','other'
 erpEqual($other['type'],'Short','Written type is preserved');erpEqual($other['options'],null,'No English options on written imports');erpEqual($other['options_np'],null,'No Nepali options on written imports');erpEqual($other['correct_option'],null,'No answer key on written imports');
 foreach(['normal','html'] as $mode)foreach(['mcq','other'] as $kind){
     [$sampleHeaders,$sampleRows]=examImportSample($db,$teacher,$mode,$f['class'],$f['subject'],$kind,$selection);
-    erpEqual(count($sampleHeaders),$kind==='mcq'?23:14,'Separate template column count '.$kind.' '.$mode);
+    erpEqual(count($sampleHeaders),$kind==='mcq'?22:13,'Chapter-only template column count '.$kind.' '.$mode);
     erpEqual(count($sampleRows),$kind==='mcq'?2:4,'Separate template example count '.$kind.' '.$mode);
-    if($kind==='other')erpEqual(array_column($sampleRows,4),['Very Short','Short','Long','Difference Between'],'All requested written types shown');
+    if($kind==='other')erpEqual(array_column($sampleRows,3),['Very Short','Short','Long','Difference Between'],'All requested written types shown');
 }
 // A metadata mismatch after a good row rejects the entire file without writes.
 $before=(int)$db->query('SELECT COUNT(*) FROM questions')->fetchColumn();
-foreach([0,1,2,3] as $index){$bad=$row;$bad[$index]='Unmatched value';erpReject(fn()=>$import($teacher,[$headers,$row,$bad]),'Whole batch metadata mismatch');erpEqual((int)$db->query('SELECT COUNT(*) FROM questions')->fetchColumn(),$before,'No earlier row saved');}
+foreach([0,1,2] as $index){$bad=$row;$bad[$index]='Unmatched value';erpReject(fn()=>$import($teacher,[$headers,$row,$bad]),'Whole batch metadata mismatch');erpEqual((int)$db->query('SELECT COUNT(*) FROM questions')->fetchColumn(),$before,'No earlier row saved');}
 foreach(array_keys($selection) as $field){$badSelection=$selection;unset($badSelection[$field]);erpReject(fn()=>questionImportContext($db,$teacher,$badSelection),'All four selections required');}
 erpReject(fn()=>examImportQuestions($db,$teacher,[$headers,$row],'normal','private'),'No selection bypass at service level');
 $db->prepare('UPDATE chapters SET name_np=? WHERE id=?')->execute(['आयात अध्याय',$chapter]);$db->prepare('UPDATE topics SET name_np=? WHERE id=?')->execute(['आयात विषय',$topic]);

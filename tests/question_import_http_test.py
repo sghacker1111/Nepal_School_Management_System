@@ -30,7 +30,7 @@ with ERPHttpFixture() as app:
     app.login('admin');url='/modules/learning/questions.php'
     app.import_context=catalog_context(app)
     protected={t:app.snapshot(t) for t in ('students','marks','exams','ac_invoices','ac_payments')}
-    page=app.request(url)
+    page=app.request(url+'?view=import')
     assert 'name="import_chapter_id"' in page and 'name="import_topic_id"' in page and 'Fallback Defaults' not in page
     for kind in ('mcq','other'):
       for fmt in ('csv','xlsx'):

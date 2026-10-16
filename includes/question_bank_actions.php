@@ -1,0 +1,6 @@
+<?php if($q['can_edit']): ?>
+<div class="d-flex flex-wrap gap-2 no-print">
+<?php if(!$filters['archived']): ?><a class="btn btn-sm btn-outline-primary" href="<?= sanitize($url(['view'=>'edit','question_id'=>$q['id']])) ?>">Edit</a>
+<form method="post" class="d-inline"><input type="hidden" name="bank_ui" value="1"><input type="hidden" name="action" value="set_visibility"><input type="hidden" name="question_id" value="<?= $q['id'] ?>"><input type="hidden" name="visibility" value="<?= $q['visibility']==='private'?'public':'private' ?>"><button class="btn btn-sm btn-outline-secondary"><?= $q['visibility']==='private'?($isExamBank?'Share with staff':'Publish'):'Make private' ?></button></form><?php endif; ?>
+<form method="post" class="d-inline" onsubmit="return confirm('<?= $filters['archived']?'Restore this question?':'Delete this question? It will be removed from lists and paper generation. You can restore it from Deleted / archived.' ?>')"><input type="hidden" name="bank_ui" value="1"><input type="hidden" name="action" value="<?= $filters['archived']?'restore':'delete' ?>"><input type="hidden" name="question_id" value="<?= $q['id'] ?>"><button class="btn btn-sm <?= $filters['archived']?'btn-outline-success':'btn-outline-danger' ?>"><?= $filters['archived']?'Restore':'Delete' ?></button></form>
+</div><?php endif; ?>

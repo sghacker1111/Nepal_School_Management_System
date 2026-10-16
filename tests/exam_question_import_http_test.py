@@ -42,7 +42,7 @@ def seed_exam_import(app):
     chapter = app.db.execute("INSERT INTO chapters(school_id,class_id,subject_id,name) VALUES(1,?,?,'Import unit')", (f['class'], f['subject'])).lastrowid
     topic = app.db.execute("INSERT INTO topics(school_id,class_id,subject_id,chapter_id,name) VALUES(1,?,?,?,'Import topic')", (f['class'], f['subject'], chapter)).lastrowid
     app.db.commit(); app.login('teacher')
-    app.import_context=dict(import_class_id=f['class'],import_subject_id=f['subject'],import_chapter_id=chapter,import_topic_id=topic)
+    app.import_context=dict(import_class_id=f['class'],import_subject_id=f['subject'],import_chapter_id=chapter)
     cls = app.db.execute('SELECT name FROM classes WHERE id=?', (f['class'],)).fetchone()[0]
     sub = app.db.execute('SELECT code FROM subjects WHERE id=?', (f['subject'],)).fetchone()[0]
     row = [cls, sub, 'Import unit', 'Import topic', 'Short', 'Hard', 'School',
@@ -58,12 +58,12 @@ def run():
         assert 'Import Exam Questions' in page and 'HTML Source' in page
         assert 'import_content_mode' in page and 'excel_file' in page
         assert 'id="examImportForm-mcq"' not in page and 'id="examImportForm-other"' in page
-        assert page.count('name="import_chapter_id"')==1 and page.count('name="import_topic_id"')==1
+        assert page.count('name="import_chapter_id"')==1 and 'name="import_topic_id"' not in page
         mcq_page=app.request(MCQ_PAGE+'?view=import');assert 'id="examImportForm-mcq"' in mcq_page and 'id="examImportForm-other"' not in mcq_page
         catalog=json.loads(app.request(PAGE+f'?action=import_catalog&class_id={f["class"]}&subject_id={f["subject"]}'))
         assert any(c['id']==chapter for c in catalog['chapters']) and any(t['id']==topic for t in catalog['topics'][str(chapter)])
         scope_before={t:app.snapshot(t) for t in ('questions','chapters','topics','activity_logs')}
-        for index in (0,1,2,3):
+        for index in (0,1,2):
             bad=row.copy();bad[index]=''
             body=upload(app,csv_bytes([HEADERS,row,bad]),status=422)
             assert 'Row 3:' in body and 'No questions were imported' in body
@@ -77,7 +77,7 @@ def run():
         bad=row.copy();bad[2]='Other existing chapter';bad[3]='Other existing topic'
         upload(app,csv_bytes([HEADERS,row,bad]),status=422)
         assert app.snapshot('questions')==scope_before['questions']
-        upload(app,csv_bytes([HEADERS,row]),status=422,import_topic_id=alternate['import_topic_id'])
+        # Topic selection is deliberately not part of chapter-wide exam preflight.
         # Every mode/format template must import as-is for the downloading teacher.
         for kind in ('mcq', 'other'):
           count = 2 if kind == 'mcq' else 4
@@ -88,14 +88,14 @@ def run():
                 assert f'.{fmt}' in headers['Content-Disposition']
                 if fmt == 'csv':
                     data = list(csv.reader(io.StringIO(sample.decode('utf-8-sig'))))
-                    assert len(data) == count + 1 and len(data[0]) == len(MCQ_HEADERS if kind == 'mcq' else HEADERS)
-                    if kind == 'mcq': assert all(r[4] == 'MCQ' and r[-1] in 'ABCD' and all(r[i] or r[i+1] for i in (14,16,18,20)) for r in data[1:])
-                    else: assert {r[4] for r in data[1:]} == {'Very Short','Short','Long','Difference Between'} and not any('Option' in h for h in data[0])
+                    assert len(data) == count + 1 and len(data[0]) == len(MCQ_HEADERS if kind == 'mcq' else HEADERS)-1 and 'Topic' not in data[0]
+                    if kind == 'mcq': assert all(r[3] == 'MCQ' and r[-1] in 'ABCD' and all(r[i] or r[i+1] for i in (13,15,17,19)) for r in data[1:])
+                    else: assert {r[3] for r in data[1:]} == {'Very Short','Short','Long','Difference Between'} and not any('Option' in h for h in data[0])
                 else:
                     with zipfile.ZipFile(io.BytesIO(sample)) as book:
                         sheet = book.read('xl/worksheets/sheet1.xml').decode()
                         assert '<pane' in sheet and '<cols>' in sheet
-                        assert '<c r="I2" s="2"><v>1</v></c>' in sheet
+                        assert '<c r="H2" s="2"><v>1</v></c>' in sheet
                 body = upload(app, sample, 'sample.' + fmt, mode, kind=kind)
                 assert f'Successfully imported {count} exam questions' in body, body[-3000:]
         # A wrong form/sample combination cannot save or silently change types.
@@ -116,7 +116,7 @@ def run():
         assert 'Successfully imported 1 exam questions' in upload(app, csv_bytes([HEADERS, row]))
         q = app.db.execute("SELECT id,question_text,marks,required_minutes,cognitive_domain,bank_kind,visibility,student_visible,topic_id FROM questions WHERE question_text LIKE '%Exam import%'").fetchone()
         assert q[1] == 'Exam import 1 &lt; 2 &amp; 3' and float(q[2]) == 2.5 and float(q[3]) == 3.25
-        assert q[4:] == ('Application', 'exam', 'private', 0, topic)
+        assert q[4:] == ('Application', 'exam', 'private', 0, None)
         assert 'Exam import' not in app.request('/modules/learning/questions.php')
         rich = row.copy(); rich[10] = '<p><strong>Exam fraction</strong> \\(\\frac{1}{2}\\)</p><script>bad()</script>'
         rich[12] = '<ul><li>\\[x=1\\]</li></ul><img src="javascript:bad" onerror="bad()">'
@@ -131,7 +131,7 @@ def run():
         assert 'Successfully imported 1 exam questions' in body and '1 row(s) skipped' in body and 'Row 3:' in body
         snapshots = {t: app.snapshot(t) for t in ('questions', 'chapters', 'topics')}
         bad_rows = []
-        for index, value in ((0, 'Class 1'), (1, 'Unassigned subject'), (2, 'Unknown unit'), (3, 'Unknown topic'), (4, 'Essay'), (5, 'Impossible'), (6, 'Shared'), (7, 'Bad domain'), (8, '1.001'), (9, '0'), (10, '')):
+        for index, value in ((0, 'Class 1'), (1, 'Unassigned subject'), (2, 'Unknown unit'), (4, 'Essay'), (5, 'Impossible'), (6, 'Shared'), (7, 'Bad domain'), (8, '1.001'), (9, '0'), (10, '')):
             bad = row.copy(); bad[index] = value
             if index == 10: bad[11] = ''
             bad_rows.append(bad)
