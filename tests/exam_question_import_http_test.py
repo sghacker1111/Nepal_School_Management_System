@@ -70,7 +70,7 @@ def run():
             for t,r in scope_before.items():assert app.snapshot(t)==r,t
         for field in app.import_context:
             upload(app,csv_bytes([HEADERS,row]),status=422,**{field:''})
-            upload(app,csv_bytes([HEADERS,row]),status=422,**{field:'999999'})
+            upload(app,csv_bytes([HEADERS,row]),status=403 if field in ('import_class_id','import_subject_id') else 422,**{field:'999999'})
             for t,r in scope_before.items():assert app.snapshot(t)==r,t
         # Existing but different catalog choices cannot be silently substituted.
         alternate=catalog_context(app,1,f['class'],f['subject'],'Other existing chapter','Other existing topic')

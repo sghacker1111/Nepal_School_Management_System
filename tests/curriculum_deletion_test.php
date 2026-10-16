@@ -58,5 +58,5 @@ erpEqual(curriculumDependencyReport($db,0,'topics',$child)['total'],1,'Legacy no
 erpReject(fn()=>curriculumDelete($db,0,'topics',$child),'Legacy note blocks topic removal');
 $db->prepare('UPDATE learning_notes SET archived_at=CURRENT_TIMESTAMP WHERE id=?')->execute([$legacy]);curriculumDelete($db,0,'topics',$child);
 erpReject(fn()=>curriculumAssertContentRestorable($db,schoolRecord($db,'learning_notes',$legacy,0)),'Legacy topic must be restored before legacy note');
-erpEqual((int)$db->query("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'")->fetchColumn(),17,'Schema17 catalog retention fields are installed');
+erpEqual((int)$db->query("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'")->fetchColumn(),18,'Schema18 retains catalog deletion fields');
 echo 'Curriculum deletion checks passed: '.$GLOBALS['erp_checks'].PHP_EOL;

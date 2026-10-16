@@ -21,7 +21,7 @@ $classes=$isExamBank?examReadClasses($db,$actor):learningReadClasses($db,$actor)
 $subjects=$isExamBank?examReadSubjects($db,$actor,$class):learningReadSubjects($db,$actor,$class);$chapters=[];$topicRows=[];$error='';$edit=null;
 if($isExamBank&&$actor['role']==='teacher'){
     foreach([[$class,$subject],[(int)($_POST['import_class_id']??$_GET['import_class_id']??0),(int)($_POST['import_subject_id']??$_GET['import_subject_id']??0)]] as [$scopeClass,$scopeSubject]){
-        if(($scopeClass&&!in_array($scopeClass,array_map('intval',array_column($classes,'id')),true))||($scopeSubject&&!examContentScopeAllowed($db,$actor,['class_id'=>$scopeClass,'subject_id'=>$scopeSubject])))denySchoolRequest('You may access exam questions only for your assigned class subjects.',403);
+        if(($scopeClass&&!in_array($scopeClass,array_map('intval',array_column($classes,'id')),true))||($scopeClass&&$scopeSubject&&!examContentScopeAllowed($db,$actor,['class_id'=>$scopeClass,'subject_id'=>$scopeSubject])))denySchoolRequest('You may access exam questions only for your assigned class subjects.',403);
     }
 }
 $writerSubjects=examImportSubjects($db,$actor,$classes);$canCreate=in_array($actor['role'],['super_admin','school_admin','teacher'],true)&&!$actor['read_only']&&Auth::canAddQuestions()&&(bool)$writerSubjects;

@@ -36,7 +36,7 @@ def run():
     prior={table:app.snapshot(table) for table in ('chapters','topics','questions','learning_notes','students','marks')}
     old_columns={table:[r[1] for r in app.db.execute(f'PRAGMA table_info({table})')] for table in prior}
     app.login('admin')
-    assert app.db.execute("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'").fetchone()==('17',)
+    assert app.db.execute("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'").fetchone()==('18',)
     assert list((Path(app.tmp.name)/'.backups').glob('*.sqlite')),'Schema16 upgrade makes a pre-upgrade backup'
     for table,rows in prior.items():assert app.db.execute('SELECT '+','.join(old_columns[table])+f' FROM {table} ORDER BY id').fetchall()==rows,table
     f,cls,sub,ch,tid,ids=seed_curriculum_delete(app)
