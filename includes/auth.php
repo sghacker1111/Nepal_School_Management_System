@@ -3,6 +3,7 @@
  * Authentication & Session Management
  */
 require_once __DIR__.'/http_security.php';
+require_once __DIR__.'/routes.php';
 
 class Auth {
     
@@ -120,7 +121,7 @@ class Auth {
     public static function isReadOnly() {
         self::startSession();
         if (self::getRole() === 'super_admin' && !empty($_SESSION['viewing_school_id'])) {
-            $script = $_SERVER['SCRIPT_NAME'] ?? '';
+            $script = schoolControllerPath();
             if (strpos($script, '/modules/super_admin/') !== false) {
                 return false;
             }

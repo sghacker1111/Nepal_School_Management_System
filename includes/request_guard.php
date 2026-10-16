@@ -1,5 +1,6 @@
 <?php
 /** Shared HTTP authorization and request integrity checks. */
+require_once __DIR__.'/routes.php';
 function denySchoolRequest(string $message, int $status = 403): never {
     http_response_code($status);
     if (strtolower($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'xmlhttprequest' || str_contains($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json')) {
@@ -33,7 +34,7 @@ function schoolRoleCanWrite(string $role, string $module, string $file): bool {
 function guardSchoolRequest(): void {
     require_once __DIR__.'/nepali_dates.php';
     try{schoolNormalizeDateFields($_GET);schoolNormalizeDateFields($_POST);}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
-    $script = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
+    $script = schoolControllerPath();
     preg_match('~/modules/([^/]+)/([^/]+)$~', $script, $parts);
     $module = $parts[1] ?? '';
     $file = $parts[2] ?? '';
