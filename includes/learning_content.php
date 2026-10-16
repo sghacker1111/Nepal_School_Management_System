@@ -3,6 +3,7 @@ require_once __DIR__.'/learning_catalog.php';
 require_once __DIR__.'/teaching_scope.php';
 require_once __DIR__.'/student_learning.php';
 require_once __DIR__.'/packages.php';
+require_once __DIR__.'/exam_content_policy.php';
 
 function learningActor(PDO $db,int $userId,int $school=0,bool $readOnly=false):array {
     $q=$db->prepare('SELECT id,role,school_id FROM users WHERE id=? AND status=1');$q->execute([$userId]);$user=$q->fetch(PDO::FETCH_ASSOC);
@@ -63,6 +64,7 @@ function learningCanView(PDO $db,array $actor,array $record,string $purpose='stu
     if(!learningBankPurposeMatches($record,$purpose)||!learningPurposeAllowed($db,$actor,$purpose)||!empty($record['archived_at']))return false;
     if($actor['role']==='student'&&$purpose==='exam_view'&&((int)($record['student_visible']??0)!==1||($record['visibility']??'private')!=='public'))return false;
     $scope=learningRecordScope($db,$actor,$record);if(!$scope)return false;
+    if(str_starts_with($purpose,'exam_')&&!examContentScopeAllowed($db,$actor,$scope))return false;
     return learningScopeCanView($db,$actor,$record,$scope);
 }
 /** A list resolves scopes once; public rows require no further database queries. */
@@ -138,6 +140,7 @@ function learningContentList(PDO $db,array $actor,string $kind,array $filters,st
         $key=$r['school_id'].':'.$r['class_id'].':'.$r['subject_id'];
         if(!array_key_exists($key,$scopeCache))$scopeCache[$key]=learningRecordScope($db,$actor,$r);
         $scope=$scopeCache[$key];if(!$scope)continue;
+        if(str_starts_with($purpose,'exam_')&&!examContentScopeAllowed($db,$actor,$scope))continue;
         if(!empty($filters['class_id'])&&$scope['class_id']!==(int)$filters['class_id'])continue;
         if(!empty($filters['subject_id'])&&$scope['subject_id']!==(int)$filters['subject_id'])continue;
         $editKey=$key.':'.($r['created_by_user_id']??0);$viewKey=$editKey.':'.($r['visibility']??'private');

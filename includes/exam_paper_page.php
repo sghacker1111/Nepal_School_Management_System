@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__.'/exam_paper_service.php';
 function examPageSelectors(PDO $db,array $actor):array {
-    $classes=[];$byClass=[];foreach(learningReadClasses($db,$actor) as $c){$subjects=learningReadSubjects($db,$actor,(int)$c['id']);if($actor['role']==='teacher')$subjects=array_values(array_filter($subjects,static fn($s)=>teacherOwnsSubject($db,$actor['school_id'],$actor['id'],(int)$c['id'],(int)$s['id'])));if(!$subjects)continue;$classes[]=$c;$byClass[$c['id']]=$subjects;}return [$classes,$byClass];
+    $classes=[];$byClass=[];foreach(examReadClasses($db,$actor) as $c){$subjects=examReadSubjects($db,$actor,(int)$c['id']);if(!$subjects)continue;$classes[]=$c;$byClass[$c['id']]=$subjects;}return [$classes,$byClass];
 }
 function examPageCatalog(PDO $db,array $actor,int $class,int $subject):array {
     if(!$subject)return [[],[],[],[]];examPaperScope($db,$actor,$class,$subject);$chapters=learningCatalogChapters($db,$actor,$class,$subject);return [$chapters,[],examGridList($db,$actor,$class,$subject),examPaperReferences($db,$actor,$class,$subject)];

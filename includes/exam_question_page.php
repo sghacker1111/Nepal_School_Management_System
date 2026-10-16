@@ -17,8 +17,13 @@ if(!is_string($view)||!in_array($view,['list','add','edit','import'],true))denyS
 try{$pagination=learningQuestionPagination($_GET['page']??1,$_GET['per_page']??10);}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
 try{$questionLanguage=examQuestionLanguage($_GET['language']??'both');}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
 $class=(int)($_POST['class_id']??$_GET['class_id']??0);$subject=(int)($_POST['subject_id']??$_GET['subject_id']??0);
-$classes=learningReadClasses($db,$actor);if($isStudent&&!$class)$class=(int)($classes[0]['id']??0);
-$subjects=learningReadSubjects($db,$actor,$class);$chapters=[];$topicRows=[];$error='';$edit=null;
+$classes=$isExamBank?examReadClasses($db,$actor):learningReadClasses($db,$actor);if($isStudent&&!$class)$class=(int)($classes[0]['id']??0);
+$subjects=$isExamBank?examReadSubjects($db,$actor,$class):learningReadSubjects($db,$actor,$class);$chapters=[];$topicRows=[];$error='';$edit=null;
+if($isExamBank&&$actor['role']==='teacher'){
+    foreach([[$class,$subject],[(int)($_POST['import_class_id']??$_GET['import_class_id']??0),(int)($_POST['import_subject_id']??$_GET['import_subject_id']??0)]] as [$scopeClass,$scopeSubject]){
+        if(($scopeClass&&!in_array($scopeClass,array_map('intval',array_column($classes,'id')),true))||($scopeSubject&&!examContentScopeAllowed($db,$actor,['class_id'=>$scopeClass,'subject_id'=>$scopeSubject])))denySchoolRequest('You may access exam questions only for your assigned class subjects.',403);
+    }
+}
 $writerSubjects=examImportSubjects($db,$actor,$classes);$canCreate=in_array($actor['role'],['super_admin','school_admin','teacher'],true)&&!$actor['read_only']&&Auth::canAddQuestions()&&(bool)$writerSubjects;
 if($subject){try{$chapters=learningCatalogChapters($db,$actor,$class,$subject);}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),404);}}
 if(in_array($_GET['action']??'',['catalog','import_catalog'],true)){
@@ -96,7 +101,7 @@ if($view==='edit'){
             throw new InvalidArgumentException('This question belongs to the other question section.');
         }
     }catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),404);}
-    $class=(int)$edit['class_id'];$subject=(int)$edit['subject_id'];$subjects=learningReadSubjects($db,$actor,$class);$chapters=learningCatalogChapters($db,$actor,$class,$subject);
+    $class=(int)$edit['class_id'];$subject=(int)$edit['subject_id'];$subjects=$isExamBank?examReadSubjects($db,$actor,$class):learningReadSubjects($db,$actor,$class);$chapters=learningCatalogChapters($db,$actor,$class,$subject);
 }
 $questions=[];
 if($view==='list'){

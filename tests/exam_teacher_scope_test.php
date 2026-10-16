@@ -1,0 +1,24 @@
+<?php
+require_once __DIR__.'/test_support.php';['db'=>$db,'fixture'=>$f]=erpTestFixture();
+require_once __DIR__.'/learning_sharing_fixture.php';$f=learningSharingFixture($db,$f);
+require_once __DIR__.'/../includes/learning_content.php';
+$actors=[];foreach($f['ids'] as $name=>$id)$actors[$name]=learningActor($db,$id);
+$q=['school_id'=>1,'class_id'=>$f['class'],'subject_id'=>$f['subject'],'bank_kind'=>'exam','created_by_user_id'=>$actors['teacher']['id'],'visibility'=>'public','archived_at'=>null,'student_visible'=>1];
+erpEqual(learningCanView($db,$actors['unrelated_teacher'],$q,'exam_bank'),false,'Public exam is assignment-scoped');
+foreach(['teacher','co_teacher','school_admin'] as $name)erpCheck(learningCanView($db,$actors[$name],$q,'exam_bank'),'Assigned/admin exam read '.$name);
+$shared=learningCatalogScope($db,1,$f['class'],$f['subject'])['shared']+$q;
+erpEqual(learningCanView($db,$actors['unrelated_teacher'],$shared,'exam_bank'),false,'Shared exam assignment required');
+erpCheck(learningCanView($db,$actors['teacher'],$shared,'exam_bank'),'Shared scope resolved to assignment');
+erpCheck(learningCanView($db,$actors['student_login'],$q,'exam_view'),'Released enrolled student unchanged');
+$normal=$q;$normal['bank_kind']='learning';erpCheck(learningCanView($db,$actors['unrelated_teacher'],$normal,'bank'),'Normal browsing unchanged');
+$db->prepare("INSERT INTO questions(school_id,class_id,subject_id,chapter,question_text,bank_kind,visibility,created_by_user_id) VALUES(1,?,?,'Scope','Assignment secret','exam','public',?)")->execute([$f['class'],$f['subject'],$actors['teacher']['id']]);$id=(int)$db->lastInsertId();
+$pagination=learningQuestionPagination();erpEqual(learningContentList($db,$actors['unrelated_teacher'],'questions',[],'exam_bank',$pagination),[],'No out-of-scope list rows');erpEqual($pagination['total'],0,'No leaked counts');
+erpReject(fn()=>learningContentRecord($db,$actors['unrelated_teacher'],'questions',$id,'exam_bank'),'Direct ID denied');
+erpEqual(examReadClasses($db,$actors['unrelated_teacher']),[],'No exam classes without subjects');
+$db->prepare('UPDATE classes SET class_teacher_id=? WHERE id=?')->execute([$actors['unrelated_teacher']['id'],$f['class']]);
+erpEqual(learningCanView($db,$actors['unrelated_teacher'],$q,'exam_bank'),false,'Class teacher alone grants no exam read');
+erpEqual(count(examReadSubjects($db,$actors['teacher'],$f['class'])),1,'Only assigned subject selector');
+$db->prepare('UPDATE class_subjects SET teacher_id=? WHERE school_id=1 AND class_id=? AND subject_id=?')->execute([$actors['co_teacher']['id'],$f['class'],$f['subject']]);
+erpEqual(learningCanView($db,$actors['teacher'],$q,'exam_bank'),false,'Revocation immediate even creator');
+erpCheck(learningCanView($db,$actors['teacher'],$normal,'bank'),'Normal creator read after revocation unchanged');
+echo 'Exam teacher scope passed: '.$GLOBALS['erp_checks'].PHP_EOL;
