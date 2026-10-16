@@ -94,6 +94,7 @@ $pageMetadata=schoolPageConfig($pageId??($currentRoute['pageId']??'error'),array
     'title'=>($pageTitle??'Dashboard').' · '.APP_NAME,'activePage'=>$activePage??'',
     'assets'=>array_values(array_unique([...schoolPageAssetIds($pageStyles??[]),...($pageAssets??[])])),
     'navigation'=>$navigation,'shell'=>['school'=>$layoutSchool?:'System administration','year'=>$layoutYear?:null,'role'=>$layoutRole,'fullName'=>$_SESSION['full_name']??'Account','readOnly'=>Auth::isReadOnly()],
+    'routes'=>array_map(static fn($route)=>['url'=>schoolRouteUrl($route['controller']),'legacyUrl'=>APP_URL.'/'.$route['controller'],'enhanced'=>$route['enhanced'],'kind'=>$route['kind']],schoolRoutes()),
 ]));
 $pageBody=$pageMetadata.(Auth::isReadOnly()?'<div class="alert alert-warning no-print">School preview is read-only. Records cannot be changed from this session.</div>':'').displayFlashMessage().$content;
 if(schoolIsAppRequest()){
@@ -118,7 +119,7 @@ if(schoolIsAppRequest()){
 <script src="<?= APP_URL ?>/assets/js/request-security.js"></script>
 <script defer src="<?= schoolAsset('workspace.js') ?>"></script>
 </head>
-<body x-data="workspace" @keydown.escape.window="closeAll" hx-history="false">
+<body x-data="workspace" @keydown.escape.window="closeAll" @erp-navigated.window="closeAll" hx-history="false">
 <div id="erpProgress" class="erp-progress" aria-hidden="true"></div>
 <p id="erpUpdateStatus" class="visually-hidden" role="status" aria-live="polite"></p>
 <a class="visually-hidden-focusable skip-link" href="#main-content">Skip to content</a>
@@ -132,7 +133,7 @@ if(schoolIsAppRequest()){
         <li><a class="dropdown-item" href="<?= schoolRouteUrl('modules/super_admin/switch_school.php') ?>?school_id=0">System administration</a></li>
         <?php foreach (getDB()->query('SELECT id,name_en FROM schools ORDER BY name_en') as $s): ?><li><a class="dropdown-item" href="<?= schoolRouteUrl('modules/super_admin/switch_school.php') ?>?school_id=<?= (int)$s['id'] ?>"><?= sanitize($s['name_en']) ?></a></li><?php endforeach; ?>
         </ul></div><?php endif; ?>
-        <div class="dropdown" @click.outside="closeAccount"><button type="button" class="btn btn-light dropdown-toggle" @click="toggleAccount" :aria-expanded="accountOpen" aria-controls="accountMenu" aria-label="Account menu"><i class="fa-regular fa-circle-user"></i> <span class="d-none d-lg-inline"><?= sanitize($_SESSION['full_name'] ?? 'Account') ?></span></button>
+        <div class="dropdown" @click.outside="closeAccount"><button type="button" class="btn btn-light dropdown-toggle" @click="toggleAccount" :aria-expanded="accountOpen" aria-controls="accountMenu" aria-label="Account menu"><i class="fa-regular fa-circle-user"></i> <span class="d-none d-lg-inline" id="erpAccountName"><?= sanitize($_SESSION['full_name'] ?? 'Account') ?></span></button>
         <ul id="accountMenu" class="dropdown-menu dropdown-menu-end" :class="{ 'show': accountOpen }" x-cloak><li class="dropdown-header"><?= sanitize(ucwords(str_replace('_',' ',$layoutRole))) ?></li><li><a class="dropdown-item" href="<?= schoolRouteUrl('modules/auth/profile.php') ?>">My profile</a></li><li><a class="dropdown-item" href="<?= schoolRouteUrl('modules/auth/change_password.php') ?>">Change password</a></li><li><hr class="dropdown-divider"></li><li><a class="dropdown-item" href="<?= schoolRouteUrl('modules/auth/logout.php') ?>">Sign out</a></li></ul></div>
     </div>
 </header>

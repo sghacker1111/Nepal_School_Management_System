@@ -1,5 +1,4 @@
-/* Progressive, same-origin GET updates only. Financial/marks mutations continue
- * to use the established PHP POST + CSRF + redirect workflows. */
+/* Narrow panel compatibility plus the app's explicitly scoped GET transport. */
 (() => {
     const sameOrigin = value => {
         try { const url = new URL(value, location.href); return /^https?:$/.test(url.protocol) && url.origin === location.origin; } catch { return false; }
@@ -13,8 +12,10 @@
         banner.append(text, link); document.body.append(banner);
     }
     function install(htmx) {
+        if (window.erpDynamicInstalled) return;
+        window.erpDynamicInstalled = true;
         htmx.config.historyCacheSize = 0;
-        htmx.config.refreshOnHistoryMiss = true;
+        htmx.config.refreshOnHistoryMiss = false;
         htmx.config.historyRestoreAsHxRequest = false;
         htmx.config.selfRequestsOnly = true;
         htmx.config.allowScriptTags = false;
@@ -28,7 +29,8 @@
         });
         document.addEventListener('htmx:beforeRequest', event => {
             const target = event.detail.target;
-            if (target?.id !== 'questionBankPanel') { event.preventDefault(); return; }
+            const appTransport = target?.id === 'main-content' && event.detail.elt?.hasAttribute('data-erp-transport');
+            if (target?.id !== 'questionBankPanel' && !appTransport) { event.preventDefault(); return; }
             document.getElementById('erpRequestError')?.remove(); target.setAttribute('aria-busy', 'true');
         });
         document.addEventListener('htmx:beforeSwap', event => {
@@ -40,8 +42,8 @@
                 recover('The update could not be loaded. Your existing work has not changed.', event.detail.requestConfig?.path || xhr.responseURL);
             }
         });
-        document.addEventListener('htmx:afterRequest', event => event.detail.target?.removeAttribute('aria-busy'));
-        for (const name of ['htmx:sendError', 'htmx:timeout', 'htmx:swapError']) document.addEventListener(name, event => recover('Connection interrupted. Try loading this page again.', event.detail.requestConfig?.path));
+        document.addEventListener('htmx:afterRequest', event => { if(event.detail.target?.id==='questionBankPanel')event.detail.target.removeAttribute('aria-busy'); });
+        for (const name of ['htmx:sendError', 'htmx:timeout', 'htmx:swapError']) document.addEventListener(name, event => { if(event.detail.target?.id!=='main-content')recover('Connection interrupted. Try loading this page again.', event.detail.requestConfig?.path); });
         document.addEventListener('htmx:afterSwap', event => {
             if (event.detail.target?.id !== 'questionBankPanel') return;
             // outerHTML swaps can leave detail.target pointing to the removed

@@ -10,13 +10,19 @@ function fixture() {
     return {dom,config,fire,panel:dom.window.document.getElementById('questionBankPanel')};
 }
 test('sensitive HTMX caching, eval and script execution are disabled',()=>{
-    const {dom,config}=fixture();assert.equal(config.historyCacheSize,0);assert.equal(config.selfRequestsOnly,true);assert.equal(config.allowEval,false);assert.equal(config.allowScriptTags,false);assert.equal(config.refreshOnHistoryMiss,true);dom.window.close();
+    const {dom,config}=fixture();assert.equal(config.historyCacheSize,0);assert.equal(config.selfRequestsOnly,true);assert.equal(config.allowEval,false);assert.equal(config.allowScriptTags,false);assert.equal(config.refreshOnHistoryMiss,false);dom.window.close();
 });
 test('only same-origin GET requests get a CSRF header',()=>{
     const {dom,fire}=fixture();const detail={path:'/modules/learning/exam_questions.php',verb:'get',headers:{}};
     assert(!fire('htmx:configRequest',detail).defaultPrevented);assert.equal(detail.headers['X-CSRF-Token'],'test-token');
     for(const path of ['https://attacker.invalid/','javascript:alert(1)'])assert(fire('htmx:configRequest',{path,verb:'get',headers:{}}).defaultPrevented);
     assert(fire('htmx:configRequest',{path:'/',verb:'post',headers:{}}).defaultPrevented);dom.window.close();
+});
+test('main app requests require the scoped transport source',()=>{
+    const {dom,fire}=fixture();const target=dom.window.document.createElement('main');target.id='main-content';
+    assert(fire('htmx:beforeRequest',{target}).defaultPrevented);
+    const source=dom.window.document.createElement('span');source.dataset.erpTransport='';
+    assert(!fire('htmx:beforeRequest',{target,elt:source}).defaultPrevented);dom.window.close();
 });
 test('hosting challenge or expired-login HTML never replaces school content',()=>{
     const {dom,fire,panel}=fixture();

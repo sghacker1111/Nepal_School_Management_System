@@ -3,6 +3,7 @@ import htmx from 'htmx.org';
 import '../assets/js/dynamic-workspace.js';
 import * as lifecycle from './app/page-lifecycle.js';
 import * as dirtyForms from './app/dirty-forms.js';
+import * as navigation from './app/navigation.js';
 
 // CSP build: no new Function/eval required to operate the navigation.
 Alpine.data('workspace', () => ({
@@ -39,5 +40,14 @@ window.Alpine = Alpine;
 window.htmx = htmx;
 window.erpPages = lifecycle;
 window.erpFormState = dirtyForms;
+window.erpNavigation = navigation;
 window.erpDynamic.install(htmx);
 Alpine.start();
+const startNavigation = () => {
+    try {
+        const dispose = navigation.installNavigation(htmx);
+        window.erpAppReady = dispose.ready || Promise.resolve();
+        window.erpAppReady.catch(() => navigation.recoverNavigation('This page could not be initialized.', location.href));
+    } catch { navigation.recoverNavigation('This page needs a full-page visit.', location.href); }
+};
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', startNavigation, {once:true}); else startNavigation();
