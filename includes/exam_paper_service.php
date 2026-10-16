@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__.'/learning_content_service.php';
+require_once __DIR__.'/exam_mixed_paper.php';
 const EXAM_DOMAINS=['K'=>'Knowledge','U'=>'Understanding','A'=>'Application','HA'=>'Higher Ability'];
 const EXAM_TYPES=['MCQ','Very Short','Short','Long','Reasoning','Difference Between'];
 function examCount(mixed $value,string $label,bool $zero=false):int {
@@ -56,6 +57,7 @@ function examGridInputJson(mixed $value):array {
 function examChapterGridInput(PDO $db,array $actor,int $class,int $subject,array $input):array {
     examPaperScope($db,$actor,$class,$subject);
     $kind=$input['generation_kind']??'';
+    if($kind==='mixed')return examMixedGridInput($db,$actor,$class,$subject,examGridInputJson($input['mixed_config_json']??null));
     if(!is_string($kind)||!in_array($kind,['written','mcq'],true))throw new InvalidArgumentException('Choose Written Questions or MCQs.');
     $allocations=$input['chapters']??[];
     if(!is_array($allocations)||!count($allocations)||count($allocations)>100)throw new InvalidArgumentException('Choose chapter allocations in this class subject.');
