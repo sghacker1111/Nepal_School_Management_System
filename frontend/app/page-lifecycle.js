@@ -1,3 +1,4 @@
+import {trackForms} from './dirty-forms.js';
 // Only bundled adapters and these fixed asset IDs can initialize an app page.
 const pages = new Map();
 const loads = new WeakMap();
@@ -92,6 +93,7 @@ export async function mountPage(root, metadata) {
         const win = root.ownerDocument.defaultView;
         const shared = [win.initSchoolControls?.(root, context), win.initSchoolDates?.(root, context)];
         const dispose = await init(root, context);
+        if (active === entry) shared.push(trackForms(root, context));
         const cleanup = async () => { for (const fn of [dispose, ...shared].reverse()) if (typeof fn === 'function') await fn(); };
         if (active !== entry) await cleanup(); else entry.dispose = cleanup;
     } catch (error) { if (active === entry) await disposePage(); throw error; }

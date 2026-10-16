@@ -2,6 +2,7 @@ import Alpine from '@alpinejs/csp';
 import htmx from 'htmx.org';
 import '../assets/js/dynamic-workspace.js';
 import * as lifecycle from './app/page-lifecycle.js';
+import * as dirtyForms from './app/dirty-forms.js';
 
 // CSP build: no new Function/eval required to operate the navigation.
 Alpine.data('workspace', () => ({
@@ -37,5 +38,6 @@ Alpine.data('workspace', () => ({
 window.Alpine = Alpine;
 window.htmx = htmx;
 window.erpPages = lifecycle;
+window.erpFormState = dirtyForms;
 window.erpDynamic.install(htmx);
 Alpine.start();
