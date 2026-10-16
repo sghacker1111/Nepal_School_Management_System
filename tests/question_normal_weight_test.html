@@ -1,0 +1,9 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Question normal-weight regression</title>
+<link rel="stylesheet" href="../assets/css/exam-question-bank.css?normal-weight=1"><link rel="stylesheet" href="../assets/css/exam-question-language.css?normal-weight=1">
+<section class="exam-question-list"><article class="exam-bank-rich exam-bank-question"><div class="exam-bilingual-content"><div class="exam-language-pair">
+<div class="exam-language-en" lang="en"><p id="english">Question prose</p><strong id="bold">Imported emphasis</strong><span id="inline" style="font-weight:900">Inline bold</span><mjx-container><span id="math" style="font-weight:700">Vector notation</span></mjx-container></div>
+<div class="exam-language-ne font-nepali" lang="ne"><p id="nepali">नेपाली प्रश्न</p><b id="boldNp">नेपाली विकल्प</b></div>
+</div></div></article></section><pre id="result" role="status">Running</pre>
+<script>
+addEventListener('load',()=>{const failures=[];for(const id of ['english','nepali','bold','boldNp','inline'])if(getComputedStyle(document.getElementById(id)).fontWeight!=='400')failures.push(id+': expected 400, got '+getComputedStyle(document.getElementById(id)).fontWeight);if(getComputedStyle(document.getElementById('math')).fontWeight!=='700')failures.push('Math notation weight changed');document.getElementById('result').textContent=failures.length?'FAIL\n'+failures.join('\n'):'PASS: English/Nepali/imported prose normal; mathematical weight preserved';});
+</script></html>

@@ -67,7 +67,7 @@ def run():
     app.login('co_teacher');app.request(MCQ,payload,status=403)
     app.request(MCQ+f'?view=edit&question_id={ids["MCQ"][0]}',status=404)
     app.login('unrelated_teacher')
-    assert len(cards(app.request(MCQ+'?per_page=100')))==33,'Private questions do not count toward an unrelated teacher page'
+    assert not cards(app.request(MCQ+'?per_page=100')),'All exam questions require an exact teaching assignment'
     app.login('student_login')
     for route,kind in ((MCQ,'MCQ'),(WRITTEN,'Short')):
       body=app.request(route+'?per_page=20&page=2');assert cards(body)==list(reversed(ids[kind][:33]))[20:]

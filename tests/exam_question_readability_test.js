@@ -3,7 +3,7 @@ const css=fs.readFileSync('assets/css/exam-question-bank.css','utf8');
 assert.match(css,/--exam-reading-size:1\.333333rem/,'English is 16pt at a 16px root');
 assert.match(css,/--exam-nepali-scale:1\.375/,'Nepali has 22pt for each 16pt English');
 assert.match(css,/\.exam-bank-rich\s*\{[^}]*font-size:var\(--exam-reading-size\)!important/s);
-assert.match(css,/\.exam-bank-rich\.exam-bank-nepali[^}]*font-size:var\(--erp-kokila-size\)!important[^}]*font-weight:700/s);
+assert.match(css,/\.exam-bank-rich\.exam-bank-nepali[^}]*font-size:var\(--erp-kokila-size\)!important[^}]*font-weight:400/s);
 assert.match(css,/font-size:inherit!important;font-family:inherit!important/,'Imported small inline formatting cannot shrink questions/options/answers');
 assert.match(css,/@media\(max-width:600px\)/,'Mobile retains enlarged text with smaller spacing');
 const page=fs.readFileSync('includes/exam_question_page.php','utf8');

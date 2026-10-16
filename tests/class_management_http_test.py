@@ -12,7 +12,7 @@ def class_names(body):
 with ERPHttpFixture() as app:
     f = app.fixture
     schema_before = app.db.execute("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'").fetchone()
-    assert schema_before == ('17',)
+    assert schema_before == ('18',)
     valid = app.db.execute("SELECT id FROM classes WHERE school_id=1 AND name='Class 7'").fetchone()[0]
     valid_before = app.db.execute('SELECT * FROM classes WHERE id=?', (valid,)).fetchone()
     app.db.execute("UPDATE users SET username='sgsunil' WHERE id=?", (f['ids']['teacher'],))

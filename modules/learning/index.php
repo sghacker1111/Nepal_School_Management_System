@@ -265,7 +265,7 @@ window.MathJax = {
                                 <div class="card-body p-3">
                                     <span class="badge bg-secondary mb-2"><?= sanitize($q['type']) ?> (<?= $q['marks'] ?> Marks)</span>
 
-                                    <div class="fw-bold mb-2 mathjax-render">Q. <?= examQuestionRich($q['question_text'],$q['question_text_np']??'',$questionLanguage,true) ?></div>
+                                    <div class="mb-2 mathjax-render">Q. <?= examQuestionRich($q['question_text'],$q['question_text_np']??'',$questionLanguage,true) ?></div>
 
                                     <!-- MCQ Options -->
                                     <?php if ($q['type'] === 'MCQ' && $q['options']):

@@ -19,8 +19,11 @@ function schoolRecord(PDO $db, string $table, int $id, int $school,bool $lock=fa
     if (!$row) throw new InvalidArgumentException('The selected '.str_replace('_',' ', $table).' record does not belong to this school.');
     return $row;
 }
-function validateSchoolReferences(PDO $db, int $school, string $module, array $data, array $query = []): void {
+function validateSchoolReferences(PDO $db, int $school, string $module, array $data, array $query = [],string $file=''): void {
     if (in_array($module, ['super_admin','auth'], true)) return;
+    // This route resolves global question IDs and original-school request IDs in
+    // the correction service; it accepts no writable scope/ownership fields.
+    if($module==='learning'&&$file==='question_corrections.php')return;
     $values = array_replace($query, $data);
     if($module==='students'&&array_key_exists('emis_registration_number',$data))studentEmisRegistrationNumber($data['emis_registration_number']);
     if($module==='students' && isset($data['gender']) && !in_array($data['gender'],['Male','Female','Other'],true))throw new InvalidArgumentException('Choose a valid gender.');

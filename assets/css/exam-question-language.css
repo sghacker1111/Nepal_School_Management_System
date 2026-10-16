@@ -4,6 +4,8 @@
 .exam-bilingual-content .exam-language-en{font-family:Arial,Helvetica,sans-serif!important;font-size:var(--exam-reading-size,1em)!important;line-height:1.65}
 .exam-bilingual-content .exam-language-ne{font-family:Kokila,'Nirmala UI',serif!important;font-size:var(--erp-kokila-size,1.375em)!important;line-height:1.45}
 .exam-language-pair :is(p,span,div,strong,b,em,i,u,s,a,li,td,th,font,small){font-size:inherit!important;font-family:inherit!important}
+/* Reading-only normalization: leave saved editor HTML and mathematical weights intact. */
+.exam-language-en,.exam-language-ne,.exam-language-pair :is(p,span,div,strong,b,em,i,u,s,a,li,td,th,font,small):not(mjx-container *){font-weight:400!important}
 .exam-language-pair :is(table,pre){display:table;max-width:100%;margin:.3em 0}.exam-language-pair img{max-width:100%;height:auto}
 .exam-language-missing{font-size:.9em;color:#697584;font-style:italic}
 [data-exam-language-view][hidden]{display:none!important}

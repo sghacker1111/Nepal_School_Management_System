@@ -38,10 +38,20 @@ function migrateSchoolExtensions(PDO $db):void {
     $version=$db->query("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'")->fetchColumn();
     if(!ctype_digit((string)$version)||(int)$version>SCHOOL_SCHEMA_VERSION)throw new InvalidArgumentException('This database schema requires a newer application; no downgrade was performed.');
     if((int)$version===SCHOOL_SCHEMA_VERSION)return;
+    // Schema 18 only adds correction requests. Never rerun older data cleanups
+    // against an already-current school catalog during this unrelated upgrade.
+    if((int)$version===17){
+        require_once __DIR__.'/question_correction_schema.php';
+        migrateQuestionCorrections($db);
+        $db->prepare('UPDATE app_meta SET meta_value=? WHERE meta_key=?')->execute([(string)SCHOOL_SCHEMA_VERSION,'workflow_schema']);
+        return;
+    }
     require_once __DIR__.'/learning_schema.php';
     migrateLearningContent($db);
     require_once __DIR__.'/exam_paper_schema.php';
     migrateExamPaperSchema($db);
+    require_once __DIR__.'/question_correction_schema.php';
+    migrateQuestionCorrections($db);
     require_once __DIR__.'/student_learning.php';
     migrateStudentLearningAccounts($db);
     require_once __DIR__.'/curriculum_catalog.php';
