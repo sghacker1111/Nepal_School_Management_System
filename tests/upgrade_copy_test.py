@@ -9,11 +9,11 @@ root=Path(__file__).resolve().parents[1]
 def snapshot(db,baseline=None):
     tables={row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     result={}
-    for table in ['students','marks','exams','users','attendances','ac_invoices','ac_payments','ac_journals','ac_journal_lines','ac_credits','ac_advance_entries','questions','learning_notes','chapters','topics']:
+    for table in ['students','marks','exams','users','attendances','ac_invoices','ac_payments','ac_journals','ac_journal_lines','ac_credits','ac_advance_entries','questions','learning_notes','chapters','topics','question_correction_requests']:
         if baseline is not None and table not in baseline:continue
         if table in tables:
             cols=[row[1] for row in db.execute(f'PRAGMA table_info({table})')]
-            stable=baseline[table]['columns'] if baseline is not None else (cols if table in ['questions','learning_notes','chapters','topics'] else ['id']+[col for col in cols if col.endswith('_minor')])
+            stable=baseline[table]['columns'] if baseline is not None else (cols if table in ['questions','learning_notes','chapters','topics','question_correction_requests'] else ['id']+[col for col in cols if col.endswith('_minor')])
             where='';params=[]
             if baseline is not None and table in ['chapters','topics']:
                 params=[row[baseline[table]['columns'].index('id')] for row in baseline[table]['rows']]

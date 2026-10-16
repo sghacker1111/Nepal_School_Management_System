@@ -42,6 +42,8 @@ function migrateSchoolExtensions(PDO $db):void {
     migrateLearningContent($db);
     require_once __DIR__.'/exam_paper_schema.php';
     migrateExamPaperSchema($db);
+    require_once __DIR__.'/question_correction_schema.php';
+    migrateQuestionCorrections($db);
     require_once __DIR__.'/student_learning.php';
     migrateStudentLearningAccounts($db);
     require_once __DIR__.'/curriculum_catalog.php';
