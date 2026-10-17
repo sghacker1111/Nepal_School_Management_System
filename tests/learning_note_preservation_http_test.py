@@ -2,6 +2,7 @@ import json,re,subprocess
 from urllib.parse import urlencode
 from http_support import ERPHttpFixture
 from learning_sharing_support import extend_learning
+from app_response_http_test import config as app_config
 
 with ERPHttpFixture() as app:
     failures=[]
@@ -25,11 +26,13 @@ with ERPHttpFixture() as app:
     title="King's & Queens"
     result=json.loads(app.request(catalog,{'action':'add_chapter','class_id':gc,'subject_id':gs,'name':title}));assert result['success']
     body=app.request(hub+'?'+urlencode({'class_id':gc,'subject_id':gs,'chapter':title}))
-    function=re.search(r'function showAddNoteModal\(\) \{(.*?)\n\}',body,re.S).group(1)
+    controller=(app.root/'frontend/pages/generated/learning-index.js').read_text(encoding='utf8')
+    function=re.search(r'function showAddNoteModal\(\) \{(.*?)\n\}',controller,re.S).group(1)
     # Execute the emitted JavaScript literal, not a grep assertion on serialization style.
     match=re.search(r"document\.getElementById\('modalNoteChapter'\)\.value\s*=\s*([^\n]+);",function)
     literal=match.group(1)
-    evaluated=subprocess.run(['node','-e','process.stdout.write(String('+literal+'));'],capture_output=True,text=True,check=True).stdout
+    data={'values':app_config(body.encode())['values']}
+    evaluated=subprocess.run(['node','-e','const config='+json.dumps(data)+';process.stdout.write(String('+literal+'));'],capture_output=True,text=True,check=True).stdout
     if evaluated!=title:failures.append('Add Note chooses an entity-encoded chapter instead of the option title')
     assert not failures,'; '.join(failures)
     print(f'Learning note preservation HTTP passed: {app.count} requests; alias IDs, legacy review and exact JS chapter title')

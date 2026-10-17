@@ -22,7 +22,8 @@ dirty original checkout is not a migration target and must not be overwritten.
 - Native modal, tab, accordion, dropdown, toast and alert components replace the
   Bootstrap JavaScript runtime. School forms and the shared mathematical editor
   use `ErpUI`. Dialogs trap/restore keyboard focus and retain lifecycle events.
-- HTMX progressively updates Question Bank, Exam Questions and MCQ filters/pages.
+- HTMX progressively updates the persistent app shell across all 70 interactive
+  routes, including Question Bank, Exam Questions and MCQ filters/pages.
   The same PHP route and authorization run for complete and partial responses.
   Full links and GET forms still work without HTMX. Selected filters remain in
   the URL; dependent subject/chapter/topic controls are reset on parent changes.
@@ -36,10 +37,20 @@ dirty original checkout is not a migration target and must not be overwritten.
   sortable ledgers still use isolated jQuery/DataTables; rich editors, MathJax and
   specialist date/print controllers retain their established behavior.
 
-This is **not** a claim that every module has been rebuilt as an HTMX screen or that
-every historical controller has been rewritten. Marks, payments and other mutations
-deliberately retain their verified PHP POST/CSRF/redirect paths. Further module-level
-UX changes can be delivered incrementally without replacing the data model.
+All 78 controllers are registered: 70 interactive routes have bundled mount/dispose
+adapters; 8 authentication, JSON-only and standalone print boundaries remain native.
+Marks, payments and other mutations still use the existing PHP services, CSRF,
+transactions and server-side authorization. A confirmed POST follows with a GET;
+an uncertain POST is never retried or aborted. See `single-page-route-coverage.md`.
+
+The shell retains its document/navigation identity, updates clean canonical URLs
+and refetches Back/Forward without storing school HTML or form data in browser
+storage. Account/school context changes clear private content before rebuilding.
+Same-context validation retains the current draft. Edits made during a slow save
+remain unsaved rather than being overwritten; previews also remain unsaved drafts.
+Bundled controls own only their page's events/editors/tables/dialogs/timers. Leaving
+practice stops its audio/fullscreen/observers; leaving OCR terminates its workers.
+Library URLs are fixed, not selected by fragments; no response-script evaluation.
 
 ## Build and verify
 
@@ -101,7 +112,7 @@ Primary references: [local builds](https://forum.infinityfree.com/t/can-i-ssh-in
 No authenticated production MySQL verification or deployment of this branch is
 implied by local SQLite, JavaScript or browser test results.
 
-## Local verification (2026-10-16)
+## Earlier baseline verification (2026-10-16, before complete app navigation)
 
 - Full regression: **315/315 commands passed**, including 216 PHP syntax checks,
   PHP/JavaScript domain suites, HTTP workflows, deployment exclusions, correction
@@ -117,3 +128,32 @@ implied by local SQLite, JavaScript or browser test results.
   unchanged. Physical printing and actual-host MySQL staging remain release gates.
 - Original local database SHA-256 remained
   `69B8C3AC52DC3C3D5ACC10D188E9FD64065CF7BD6BA0E2F4B48142D701E1E67C`.
+
+## Complete-navigation verification (2026-10-17)
+
+- Final full regression: **342/342 commands passed**, including 223 PHP syntax
+  checks, every app lifecycle suite, domain/HTTP tests, concurrency, deployment
+  safeguards and the consistent-copy upgrade (`failures: []`, 313.5 seconds).
+- Clean installation/build succeeded; `npm audit` reports zero vulnerabilities.
+- The UI command now discovers every `tests/*_test.mjs` suite (61 checks), not only
+  the two baseline suites. The full regression runner also discovers all app suites.
+- Real PHP fixtures mount 34 school/admin, 11 attendance/result, 23 learning and
+  12 accounting pages in isolated DOMs; no production credentials or records used.
+- Coverage checks match all 78 discovered controllers against the finite registry,
+  70 bundled adapters and 8 reviewed native boundaries; canonical/legacy role,
+  tenant, expiry, JSON/download and native-filter behavior is tested.
+- Independent GPT-6.1 Sol review found four issues (pending-save edits, import retry,
+  changed-context validation and unsaved previews). All were fixed and its focused
+  disposable rerun passed 30/30 with no remaining concrete findings.
+- Interactive acceptance for this complete navigation migration is **pending**:
+  Local browser use is disabled in Work settings. The owner deferred that check
+  until code completion; no alternate browser transport was used to bypass it.
+  After the owner replied "enabled", another attempt returned the same disabled
+  error. No browser page was created and no visual-success claim is made.
+  Earlier baseline screenshots are not evidence for the complete migration.
+- The unused disposable browser fixture stopped cleanly and verified protected
+  rows unchanged. The original database SHA-256 again matched
+  `69B8C3AC52DC3C3D5ACC10D188E9FD64065CF7BD6BA0E2F4B48142D701E1E67C`.
+- No push/merge/deployment is authorized by the implementation plan. Actual-host
+  Apache/InfinityFree recovery, restored MySQL staging and physical printing remain
+  release gates. Build/deployment excludes private data and build/test sources.

@@ -2,15 +2,17 @@
 const scopes = new Set();
 const formStates = new WeakMap();
 
-function snapshot(form) {
+export function formSnapshot(form) {
     const win = form.ownerDocument.defaultView;
-    return JSON.stringify([...form.elements].filter(field => field.name && !['submit', 'button', 'reset'].includes(field.type) && field.name !== 'csrf_token').map(field => {
-        if (field.type === 'file') return [field.name, 'files', [...(field.files || [])].map(file => [file.name, file.size, file.type, file.lastModified])];
-        if (field.type === 'checkbox' || field.type === 'radio') return [field.name, field.value, field.checked];
-        if (field.multiple && field.options) return [field.name, [...field.selectedOptions].map(option => option.value)];
-        return [field.name, win.tinymce?.get?.(field.id)?.getContent?.() ?? field.value];
+    return JSON.stringify([...form.elements].filter(field => !['submit', 'button', 'reset','fieldset','output'].includes(field.type) && field.name !== 'csrf_token').map((field,index) => {
+        const key=field.name||'@'+(field.id||index);
+        if (field.type === 'file') return [key, 'files', [...(field.files || [])].map(file => [file.name, file.size, file.type, file.lastModified])];
+        if (field.type === 'checkbox' || field.type === 'radio') return [key, field.value, field.checked];
+        if (field.multiple && field.options) return [key, [...field.selectedOptions].map(option => option.value)];
+        return [key, win.tinymce?.get?.(field.id)?.getContent?.() ?? field.value];
     }));
 }
+const snapshot=formSnapshot;
 
 function register(form, scope) {
     if (form.method.toLowerCase() !== 'post' || formStates.has(form)) return;
@@ -77,7 +79,7 @@ export function setMutationUncertain(form, statusUrl) {
     const link = form.ownerDocument.createElement('a'); link.href = url.href; link.target = '_blank'; link.rel = 'noopener'; link.textContent = 'Check saved records in a new tab'; notice.append(link); form.prepend(notice);
 }
 
-export function markSaved(form) {
+export function markSaved(form,baseline=snapshot(form)) {
     const state = formStates.get(form); if (!state) return;
-    state.baseline = snapshot(form); state.state = 'clean'; state.scope.forced = false; form.querySelector('[data-mutation-recovery]')?.remove();
+    state.baseline = baseline; state.state = 'clean'; state.scope.forced = false; form.querySelector('[data-mutation-recovery]')?.remove();
 }

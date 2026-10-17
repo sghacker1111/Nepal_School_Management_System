@@ -8,13 +8,13 @@ commands=[]
 php=os.environ.get('ERP_TEST_PHP','php')
 php_files=sorted(p for p in root.rglob('*.php') if not {'node_modules','.git','scratch','.superpowers'} & set(p.relative_to(root).parts))
 commands.extend(('lint '+str(p.relative_to(root)),[php,'-l',str(p)]) for p in php_files)
-groups={'PHP':sorted(root.glob('tests/*_test.php')),'JavaScript':sorted(root.glob('tests/*_test.js')),'HTTP':sorted(root.glob('tests/*_http_test.py'))}
+groups={'PHP':sorted(root.glob('tests/*_test.php')),'JavaScript':sorted(root.glob('tests/*_test.js')),'App lifecycle':sorted(root.glob('tests/*_test.mjs')),'HTTP':sorted(root.glob('tests/*_http_test.py'))}
 for kind,files in groups.items():
     for p in files:
         if p.name=='upgrade_test.php':continue
-        runtime=php if kind=='PHP' else 'node' if kind=='JavaScript' else os.sys.executable
-        commands.append((str(p.relative_to(root)),[runtime,str(p)]))
-commands.extend([('native UI tests',['node','--test','tests/ui_components_test.mjs','tests/dynamic_workspace_test.mjs']),('legacy HTTP',[os.sys.executable,'tests/http_test.py']),('deployment safety',[os.sys.executable,'tests/deployment_test.py']),('correction concurrency',[os.sys.executable,'tests/question_correction_concurrency_test.py'])])
+        runtime=php if kind=='PHP' else 'node' if kind in ('JavaScript','App lifecycle') else os.sys.executable
+        commands.append((str(p.relative_to(root)),[runtime]+(['--test'] if kind=='App lifecycle' else [])+[str(p)]))
+commands.extend([('legacy HTTP',[os.sys.executable,'tests/http_test.py']),('deployment safety',[os.sys.executable,'tests/deployment_test.py']),('correction concurrency',[os.sys.executable,'tests/question_correction_concurrency_test.py'])])
 if args.upgrade_source:commands.append(('consistent-copy upgrade',[os.sys.executable,'tests/upgrade_copy_test.py','--source',str(args.upgrade_source.resolve())]))
 failures=[];started=time.time()
 with (out/'verification.log').open('w',encoding='utf-8') as log:

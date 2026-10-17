@@ -157,7 +157,7 @@ $pageTitle=($view==='list'?'':ucfirst($view).' ').$sectionTitle;$activePage=$isE
 $panel='<section id="questionBankPanel" aria-label="Filtered questions">'.schoolProtectForms(ob_get_clean(),Auth::generateCSRFToken()).'</section>';
 if(($_SERVER['REQUEST_METHOD']??'GET')==='GET'&&($_SERVER['HTTP_HX_REQUEST']??'')==='true'&&($_SERVER['HTTP_HX_TARGET']??'')==='questionBankPanel'){
     ob_end_clean();
-    header('Content-Type: text/html; charset=UTF-8');header('X-ERP-Fragment: question-list');header('Vary: HX-Request, HX-Target');
+    header('Content-Type: text/html; charset=UTF-8');header('X-ERP-Fragment: question-list');header('X-ERP-Context: '.schoolAppContextVersion());header('Vary: HX-Request, HX-Target');
     header('Cache-Control: no-store, private');echo $panel;exit;
 }
 echo $panel;

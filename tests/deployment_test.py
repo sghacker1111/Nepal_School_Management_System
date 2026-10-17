@@ -14,6 +14,7 @@ required = {
     '**/uploads', '**/uploads/**', 'config/config.php',
     'config/local.php', 'config/*.local.php', '**/__pycache__/**',
     '**/*.pyc', 'scratch/**', 'tests/**', 'docs/**', '**/*.log',
+    'frontend/**','tools/**','package.json','package-lock.json','.superpowers/**',
 }
 assert required <= patterns, f'Missing persistent-data exclusions: {sorted(required - patterns)}'
 assert re.search(r'^        dangerous-clean-slate: false$', workflow, re.M), 'Destructive clean-slate deployment must stay disabled'
@@ -25,4 +26,6 @@ for secret in ('FTP_SERVER', 'FTP_USERNAME', 'FTP_PASSWORD'):
     assert '${{ secrets.' + secret + ' }}' in workflow, f'Use the configured {secret} secret'
 # Keep source migrations available; the real database itself must remain excluded.
 assert '*.sql' not in patterns and '**/*.sql' not in patterns
+assert 'npm ci --no-fund' in workflow and 'npm run build' in workflow and 'npm run test:ui' in workflow
+assert not any(pattern in ('assets/**','assets/dist/**','app.php','.htaccess') for pattern in patterns),'Runtime routing and compiled assets must ship'
 print(f'Deployment safety checks passed: {len(required)} runtime exclusions, secrets, destination and serialized non-destructive FTP.')

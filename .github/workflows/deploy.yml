@@ -74,4 +74,5 @@ jobs:
           tools/**
           package.json
           package-lock.json
+          .superpowers/**
           **/*.log

@@ -31,12 +31,24 @@
             const target = event.detail.target;
             const appTransport = target?.id === 'main-content' && event.detail.elt?.hasAttribute('data-erp-transport');
             if (target?.id !== 'questionBankPanel' && !appTransport) { event.preventDefault(); return; }
+            if(target.id==='questionBankPanel'&&window.erpFormState?.hasUnsavedChanges()){
+                event.preventDefault();recover('Finish or discard your unsaved changes before changing these filters.',event.detail.requestConfig?.path);return;
+            }
             document.getElementById('erpRequestError')?.remove(); target.setAttribute('aria-busy', 'true');
         });
         document.addEventListener('htmx:beforeSwap', event => {
             const { xhr, target } = event.detail;
             if (target?.id !== 'questionBankPanel') return;
             const valid = xhr.status === 200 && xhr.getResponseHeader('X-ERP-Fragment') === 'question-list' && /^text\/html(?:;|$)/i.test(xhr.getResponseHeader('Content-Type') || '');
+            let current;
+            try{const marker=document.getElementById('main-content')?.firstElementChild;current=marker?.hasAttribute('data-erp-config')?JSON.parse(marker.getAttribute('data-erp-config')).contextVersion:null;}catch{}
+            if(valid&&current&&xhr.getResponseHeader('X-ERP-Context')!==current){
+                event.detail.shouldSwap=false;
+                // An account/school switch in another tab invalidates the entire
+                // private shell, even when this request targets only a list.
+                document.getElementById('main-content').replaceChildren();document.querySelectorAll('#sidebar .nav-group').forEach(node=>node.remove());
+                Promise.resolve(window.erpPages?.disposePage?.()).finally(()=>recover('Your account context changed. Open the full page to continue.',event.detail.requestConfig?.path));return;
+            }
             if (!valid) {
                 event.detail.shouldSwap = false; target.removeAttribute('aria-busy');
                 recover('The update could not be loaded. Your existing work has not changed.', event.detail.requestConfig?.path || xhr.responseURL);

@@ -3,6 +3,7 @@ import '../frontend/pages/learning.js';import '../frontend/pages/questions.js';i
 import {mountPage,disposePage,preparePageSubmit} from '../frontend/app/page-lifecycle.js';
 import {createPageScope} from '../frontend/pages/page-scope.js';
 import {confirmNavigation} from '../frontend/app/dirty-forms.js';
+import {installForms} from '../frontend/app/forms.js';
 test('editor revisits own one TeX dialog and retain imported equation source',async()=>{
  const dom=new JSDOM('<main id="main-content"></main>',{url:'https://school.example/exam-questions',runScripts:'outside-only'}),win=dom.window,root=win.document.querySelector('main');
  win.CSS??={};win.CSS.escape??=value=>value;const editors=new Map();
@@ -43,4 +44,12 @@ test('OCR filenames are displayed as text rather than inserted as HTML',async()=
  await mountPage(root,{pageId:'learning-ocr-scanner',assets:[],modules:['learning-ocr-scanner'],values:{}});
  const input=root.querySelector('#fileInput'),name='<img src=x onerror=alert(1)>.png';Object.defineProperty(input,'files',{value:[new win.File(['synthetic'],name,{type:'image/png'})]});input.dispatchEvent(new win.Event('change',{bubbles:true}));
  assert.equal(root.querySelector('.ocr-file-name').textContent,name);assert.equal(root.querySelector('#fileList img'),null);assert.equal(root.querySelectorAll('[data-ocr-remove]').length,1);await disposePage();dom.window.close();
+});
+test('an enhanced import can be corrected and submitted again after validation fails',async()=>{
+ const dom=new JSDOM('<main id="main-content"><form method="post" data-exam-import-form="mcq"><input name="import_content_mode" value="normal"><button type="submit">Import MCQs</button></form></main>',{url:'https://school.example/exam-mcqs'}),win=dom.window,root=win.document.querySelector('main');let calls=0;
+ const off=installForms({}, {window:win,isEnhancedURL:()=>true,cancelNavigation(){},request:async()=>{calls++;return{status:422,text:'<div hidden data-erp-config="{&quot;routeId&quot;:&quot;learning-exam-mcqs&quot;,&quot;pageId&quot;:&quot;learning-exam-mcqs&quot;,&quot;mutation&quot;:{&quot;outcome&quot;:&quot;invalid&quot;}}"></div><div class="alert alert-danger">Fix row 2.</div>',header:name=>name==='X-ERP-Fragment'?'app-page':name==='Content-Type'?'text/html':null};}});
+ const forms=await import('../frontend/app/forms.js');win.erpForms=forms;
+ await mountPage(root,{pageId:'learning-exam-mcqs',modules:['external-exam-questions'],assets:[],values:{}});
+ for(let attempt=0;attempt<2;attempt++){root.querySelector('form').requestSubmit();for(let n=0;n<50&&!root.querySelector('[data-form-error]');n++)await new Promise(resolve=>setImmediate(resolve));assert.equal(calls,attempt+1);assert.equal(root.querySelector('button').disabled,false);root.querySelector('[data-form-error]')?.remove();}
+ await disposePage();off();win.close();
 });

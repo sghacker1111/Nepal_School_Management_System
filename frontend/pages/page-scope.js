@@ -1,5 +1,5 @@
 import {navigate,isEnhancedURL} from '../app/navigation.js';
-import {markSaved,setMutationPending,setMutationUncertain} from '../app/dirty-forms.js';
+import {markSaved,setMutationPending,setMutationUncertain,formSnapshot} from '../app/dirty-forms.js';
 import {pageLibraries} from './page-libraries.js';
 let serial=0;
 /** Keeps selectors/callbacks attached to this page, never a later school's DOM. */
@@ -39,20 +39,20 @@ export function createPageScope(root,context){
   if(!mutationForm){mutationForm=doc.createElement('form');mutationForm.method='post';mutationForm.dataset.erpNative='';mutationForm.dataset.erpMutationMonitor='';page.append(mutationForm);}
   if(writeCount++===0)setMutationPending(mutationForm,true);
  };
- const endWrite=(saved,unknown=false,form=lastForm)=>{
+ const endWrite=(saved,unknown=false,form=lastForm,submitted)=>{
   writeCount=Math.max(0,writeCount-1);
   if(unknown){uncertain=true;setMutationUncertain(mutationForm,win.location.href);}
   else if(!writeCount&&!uncertain){setMutationPending(mutationForm,false);markSaved(mutationForm);}
-  if(saved&&form)markSaved(form);
+  if(saved&&form)markSaved(form,submitted);
  };
  const fetchPage=(input,init={})=>{
-  const write=!['GET','HEAD'].includes((init.method||'GET').toUpperCase()),form=lastForm;
+  const write=!['GET','HEAD'].includes((init.method||'GET').toUpperCase()),form=lastForm,submitted=form?formSnapshot(form):undefined;
   const key=writeKey(input,init.body);if(write&&writes.has(key))return writes.get(key);
   const run=async()=>{
   if(write)startWrite();
   try{
    const response=await win.fetch(input,write?init:{...init,signal});
-   if(write){const json=await response.clone().json().catch(()=>null);endWrite(response.ok&&json?.success===true,response.status>=500||response.ok&&typeof json?.success!=='boolean',form);}
+   if(write){const json=await response.clone().json().catch(()=>null);endWrite(response.ok&&json?.success===true,response.status>=500||response.ok&&typeof json?.success!=='boolean',form,submitted);}
    return response;
   }catch(error){if(write)endWrite(false,true,form);throw error;}
   };
@@ -76,11 +76,11 @@ export function createPageScope(root,context){
  };
  if(jq)for(const key of Object.keys(jq))if(!(key in $))$[key]=jq[key];
  $.ajax=options=>{
-  const write=!['GET','HEAD'].includes((options.method||options.type||'GET').toUpperCase()),form=lastForm;
+  const write=!['GET','HEAD'].includes((options.method||options.type||'GET').toUpperCase()),form=lastForm,submitted=form?formSnapshot(form):undefined;
   const key=writeKey(options.url,options.data);if(write&&writes.has(key))return writes.get(key);
   if(write)startWrite();
   const request=jq.ajax({...options,
-   success:guard(function(data,...args){if(write)endWrite(data?.success===true,typeof data?.success!=='boolean',form);return options.success?.call(this,data,...args);}),
+   success:guard(function(data,...args){if(write)endWrite(data?.success===true,typeof data?.success!=='boolean',form,submitted);return options.success?.call(this,data,...args);}),
    error:function(xhr,...args){if(write)endWrite(false,xhr.status===0||xhr.status>=500,form);if(!signal.aborted)options.error?.call(this,xhr,...args);},
    complete:function(...args){if(write)writes.delete(key);if(!signal.aborted)return options.complete?.apply(this,args);},
   });

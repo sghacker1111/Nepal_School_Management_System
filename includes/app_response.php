@@ -47,17 +47,20 @@ function schoolPageActionArgs(string $module,array $values): string {
     return htmlspecialchars(json_encode($values,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_INVALID_UTF8_SUBSTITUTE|JSON_THROW_ON_ERROR),ENT_QUOTES,'UTF-8');
 }
 
+function schoolAppContextVersion():string {
+    $session=$_SESSION??[];
+    return hash('sha256',json_encode([(int)($session['user_id']??0),(string)($session['role']??''),(int)($session['school_id']??0),(int)($session['viewing_school_id']??0)],JSON_THROW_ON_ERROR));
+}
 function schoolPageConfig(string $pageId,array $config=[]): string {
     if(!preg_match('/^[a-z][a-z0-9-]{0,100}$/D',$pageId))throw new InvalidArgumentException('Invalid page identity.');
     $route=schoolRouteForController(schoolControllerPath());
     $session=$_SESSION??[];
-    $context=[(int)($session['user_id']??0),(string)($session['role']??''),(int)($session['school_id']??0),(int)($session['viewing_school_id']??0)];
     $metadata=array_replace($config,[
         'routeId'=>$route['id']??'error','pageId'=>$pageId,
         'title'=>(string)($config['title']??(defined('APP_NAME')?APP_NAME:'School ERP')),
         'canonicalUrl'=>schoolCanonicalUrl($_SERVER['REQUEST_URI']??'')??schoolRouteUrl('index.php'),
         'activePage'=>(string)($config['activePage']??''),
-        'contextVersion'=>hash('sha256',json_encode($context,JSON_THROW_ON_ERROR)),
+        'contextVersion'=>schoolAppContextVersion(),
         'csrfToken'=>(string)($session[defined('CSRF_TOKEN_NAME')?CSRF_TOKEN_NAME:'csrf_token']??''),
         'assets'=>array_values($config['assets']??[]),
     ]);

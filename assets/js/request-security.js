@@ -4,7 +4,7 @@
     window.erpRequestSecurityInstalled = true;
     const nativeFetch = window.fetch.bind(window);
     window.fetch = (input, init = {}) => {
-        const url = new URL(typeof input === 'string' ? input : input.url, location.href);
+        const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, location.href);
         if (url.origin === location.origin) {
             const headers = new Headers(init.headers || (input instanceof Request ? input.headers : undefined));
             headers.set('X-CSRF-Token', window.CSRF_TOKEN || '');

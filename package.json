@@ -5,7 +5,7 @@
   "description": "Build-time assets only. Production runs PHP and MySQL, not Node.js.",
   "scripts": {
     "build": "node tools/build-assets.mjs",
-    "test:ui": "node --test tests/ui_components_test.mjs tests/dynamic_workspace_test.mjs"
+    "test:ui": "node --test \"tests/*_test.mjs\""
   },
   "dependencies": {
     "@alpinejs/csp": "3.17.4",

@@ -27,6 +27,7 @@ def run():
     headers,partial=hx(app,path)
     assert headers['X-ERP-Fragment']=='question-list'
     assert headers.get('Cache-Control')=='no-store, private'
+    assert headers.get('X-ERP-Context') and headers.get('X-ERP-Context') in full
     assert partial.startswith('<section id="questionBankPanel"') and '<!DOCTYPE' not in partial
     assert 'top-navbar' not in partial and '<script' not in partial
     full_ids=re.findall(r'data-question-id="(\d+)"',full)

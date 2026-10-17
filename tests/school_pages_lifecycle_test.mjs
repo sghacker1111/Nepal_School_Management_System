@@ -24,3 +24,8 @@ test('page JSON saves are not duplicated or aborted by navigation',async()=>{
  release(new Response(JSON.stringify({success:true}),{headers:{'Content-Type':'application/json'}}));await Promise.all([first,duplicate]);assert.equal(await confirmNavigation(),true);
  controller.abort();stop();dom.window.close();
 });
+test('JSON page saves also retain edits newer than the submitted snapshot',async()=>{
+ const dom=new JSDOM('<main><form method="post"><input name="name" value="Submitted"><button type="button">Save</button></form></main>',{url:'https://school.example/classes/subjects'}),win=dom.window,root=win.document.querySelector('main');let release,pending;
+ win.fetch=async()=>new Promise(resolve=>release=resolve);const controller=new win.AbortController(),scope=createPageScope(root,{signal:controller.signal}),off=trackForms(root,{});
+ scope.bindActions({save(){pending=scope.fetch('/classes/subjects',{method:'POST',body:'name=Submitted'});}});root.querySelector('button').setAttribute('data-erp-click','save');root.querySelector('button').click();root.querySelector('input').value='Newer';release(new Response('{"success":true}',{headers:{'Content-Type':'application/json'}}));await pending;win.confirm=()=>false;assert.equal(await confirmNavigation(),false);assert.equal(root.querySelector('input').value,'Newer');controller.abort();off();win.close();
+});

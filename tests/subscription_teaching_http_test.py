@@ -2,6 +2,7 @@
 import json, re
 from html import unescape
 from http_support import ERPHttpFixture
+from app_response_http_test import config as app_config
 
 with ERPHttpFixture() as app:
     f=app.fixture
@@ -28,7 +29,7 @@ with ERPHttpFixture() as app:
     grid_path='/modules/learning/specification_grids.php'
     grid={'action':'add','name':'Own grid','class_id':cls,'subject_id':own,'count_MCQ':5,'marks_MCQ':1}
     body=app.request(grid_path,grid);assert 'Own grid' in body
-    mapping=json.loads(re.search(r'const gridSubjectsByClass=(.*?);',body).group(1))
+    mapping=json.loads(app_config(body.encode())['values']['learning-specification-grids-value-0'])
     assert [int(s['id']) for s in mapping[str(cls)]]==[own]
     grid_id=app.db.execute("SELECT id FROM specification_grids WHERE name='Own grid'").fetchone()[0]
     app.request(grid_path,{**grid,'action':'edit','grid_id':grid_id,'name':'Edited own grid'})
