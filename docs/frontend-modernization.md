@@ -103,14 +103,15 @@ Primary references: [local builds](https://forum.infinityfree.com/t/can-i-ssh-in
 4. Confirm desktop and 390px navigation/forms plus HTMX filters, paging, back/forward,
    login-expiry and full-page recovery behavior on the actual host.
 5. Deploy the reviewed code-only release after approval. Keep production
-   `config/config.php`, `config/local.php`, uploads, backups and database files excluded.
+   `config/database.local.php`, uploads, backups and database files excluded.
    The FTP workflow remains main-only, serialized and non-destructive.
 6. On failure, roll back application assets/PHP to the previous release. Since this
    change has no database migration, do not restore an old database and discard school
    work performed after the backup.
 
-No authenticated production MySQL verification or deployment of this branch is
-implied by local SQLite, JavaScript or browser test results.
+Local import/readback on MySQL 8.0.45 is verified by the migration-specific test
+suite. This does not verify the host's MySQL version, credentials or authenticated
+production workflows, and no production import/deployment is implied.
 
 ## Earlier baseline verification (2026-10-16, before complete app navigation)
 

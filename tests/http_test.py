@@ -240,7 +240,7 @@ with tempfile.TemporaryDirectory(prefix='erp-http-') as tmp:
                 request('/modules/classes/subjects.php?class_id='+str(c),{'action':'edit_mapping','mapping_id':row[0],'credit_hours':row[1],'is_optional':'0'})
                 assert db.execute('SELECT th_credit_hours,in_credit_hours,th_full_marks,in_full_marks FROM class_subjects WHERE id=?',(row[0],)).fetchone()==(None,None,None,None)
                 request('/modules/subjects/edit.php?id='+str(subject))
-        for path in ['/database.sqlite','/database_sqlite.sql','/config/migrate.php','/.git/config','/tests/http_fixture.php']:request(path,expected=404)
+        for path in ['/database.sqlite','/database_sqlite.sql','/school_erp_mysql.sql.gz','/migration-manifest.json','/nested/projected-manifest-private.json','/nested/migration-report-private.json','/verification-error.json','/statements.jsonl','/private-migration/package.sql','/config/migrate.php','/.git/config','/tests/http_fixture.php']:request(path,expected=404)
         login('teacher');request('/modules/settings/users.php',expected=403);request('/modules/settings/cdc.php',expected=403);request('/modules/classes/routine.php',{'action':'generate'},expected=403)
         login('admin')
         for path in ['/modules/super_admin/index.php','/modules/super_admin/schools.php','/modules/super_admin/users.php','/modules/super_admin/subjects.php','/modules/classes/index.php','/modules/learning/questions.php','/modules/settings/cdc.php']:request(path)

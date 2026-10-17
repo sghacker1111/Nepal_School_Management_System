@@ -10,6 +10,9 @@ required = {
     '**/.git*', '**/.git*/**', '**/node_modules/**', '**/.env*',
     '**/*.sqlite', '**/*.sqlite-*', '**/*.sqlite3', '**/*.sqlite3-*',
     '**/*.db', '**/*.db-*', '**/*.bak',
+    '**/*.sql.gz','**/school_erp_mysql*.sql*','**/migration-manifest*.json',
+    '**/source-manifest*.json','**/projected-manifest*.json','**/migration-report*.md',
+    '**/*migration-report*.json','**/verification-error.json','**/statements.jsonl',
     '**/.backups', '**/.backups/**', '**/backups', '**/backups/**',
     '**/uploads', '**/uploads/**', 'config/config.php',
     'config/local.php', 'config/*.local.php', '**/__pycache__/**',
@@ -26,6 +29,16 @@ for secret in ('FTP_SERVER', 'FTP_USERNAME', 'FTP_PASSWORD'):
     assert '${{ secrets.' + secret + ' }}' in workflow, f'Use the configured {secret} secret'
 # Keep source migrations available; the real database itself must remain excluded.
 assert '*.sql' not in patterns and '**/*.sql' not in patterns
+assert '**/*.sql.gz' in patterns and '**/school_erp_mysql*.sql*' in patterns
+assert '**/migration-manifest*.json' in patterns and '**/projected-manifest*.json' in patterns and '**/statements.jsonl' in patterns
 assert 'npm ci --no-fund' in workflow and 'npm run build' in workflow and 'npm run test:ui' in workflow
 assert not any(pattern in ('assets/**','assets/dist/**','app.php','.htaccess') for pattern in patterns),'Runtime routing and compiled assets must ship'
+htaccess=(Path(__file__).resolve().parents[1]/'.htaccess').read_text(encoding='utf-8')
+router=(Path(__file__).resolve().parents[1]/'router.php').read_text(encoding='utf-8')
+assert 'sql(\\.gz)?' in htaccess and 'private-migration' in htaccess and 'statements\\.jsonl' in htaccess
+assert 'sql(?:\\.gz)?' in router and '(?:migration|source|projected)-manifest' in router and 'statements\\.jsonl' in router and 'private-migration' in router
+assert not (Path(__file__).resolve().parents[1]/'database_sqlite.sql').exists()
+assert not (Path(__file__).resolve().parents[1]/'database.sql').exists()
+assert (Path(__file__).resolve().parents[1]/'tests/fixtures/database_sqlite.sql').is_file()
+assert (Path(__file__).resolve().parents[1]/'tests/fixtures/legacy_mysql.sql').is_file()
 print(f'Deployment safety checks passed: {len(required)} runtime exclusions, secrets, destination and serialized non-destructive FTP.')

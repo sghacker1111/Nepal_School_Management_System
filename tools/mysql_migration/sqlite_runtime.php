@@ -8,7 +8,7 @@ function openIsolatedSchoolSqlite(array $settings):PDO {
     $substring=static function($value,$delimiter,$count){$parts=explode($delimiter,(string)$value);return implode($delimiter,$count>0?array_slice($parts,0,$count):array_slice($parts,$count));};
     if(method_exists($db,'createFunction'))$db->createFunction('SUBSTRING_INDEX',$substring,3);else $db->sqliteCreateFunction('SUBSTRING_INDEX',$substring,3);
     $fresh=!$db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")->fetchColumn();$root=dirname(__DIR__,2);
-    if($fresh)$db->exec(file_get_contents(is_file($root.'/tests/fixtures/database_sqlite.sql')?$root.'/tests/fixtures/database_sqlite.sql':$root.'/database_sqlite.sql'));
+    if($fresh){$fixture=$root.'/tests/fixtures/database_sqlite.sql';if(!is_file($fixture))throw new RuntimeException('The isolated SQLite fixture is missing.');$db->exec(file_get_contents($fixture));}
     require_once $root.'/includes/schema.php';
     if(!$fresh){
         $meta=$db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='app_meta'")->fetchColumn();$version=$meta?$db->query("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'")->fetchColumn():false;

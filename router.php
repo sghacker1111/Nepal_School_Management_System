@@ -2,7 +2,7 @@
 // Router for PHP's local server. The production rewrite uses the same registry.
 $rawPath=parse_url($_SERVER['REQUEST_URI'],PHP_URL_PATH)??'/';
 $path=rawurldecode($rawPath);
-if (str_contains($path,'..') || preg_match('~(?:^|/)(?:\.[^/]+|config|includes|scratch|tests|docs|backups|frontend|tools|node_modules)(?:/|$)|^/package(?:-lock)?\.json$|\.(?:sqlite3?(?:-[a-z]+)?|db(?:-[a-z]+)?|sql|log|env|bak|bat|md|py|ps1|sh|ini|toml|ya?ml)$|^/uploads/.*\.(?:php\d*|phtml|phar)$~i',$path)) {
+if (str_contains($path,'..') || preg_match('~(?:^|/)(?:\.[^/]+|config|includes|scratch|tests|docs|backups|frontend|tools|node_modules|private-migration)(?:/|$)|^/package(?:-lock)?\.json$|(?:^|/)(?:migration|source|projected)-manifest[^/]*\.json$|(?:^|/)(?:migration-report[^/]*\.json|verification-error\.json|statements\.jsonl)$|\.(?:sqlite3?(?:-[a-z]+)?|db(?:-[a-z]+)?|sql(?:\.gz)?|log|env|bak|bat|md|py|ps1|sh|ini|toml|ya?ml)$|^/uploads/.*\.(?:php\d*|phtml|phar)$~i',$path)) {
     http_response_code(404);echo 'Not found';return true;
 }
 require_once __DIR__.'/includes/routes.php';

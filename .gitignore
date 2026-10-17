@@ -28,8 +28,14 @@ config/*.local.php
 *.sqlite3
 *.db
 school_erp_mysql*.sql*
+*.sql.gz
 *.sql.statements.jsonl
 migration-manifest*.json
+source-manifest*.json
+projected-manifest*.json
 migration-report*.md
+*migration-report*.json
+verification-error.json
+statements.jsonl
 /exports/
 /private-migration/

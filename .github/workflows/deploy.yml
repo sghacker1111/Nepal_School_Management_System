@@ -56,6 +56,15 @@ jobs:
           **/*.db
           **/*.db-*
           **/*.bak
+          **/*.sql.gz
+          **/school_erp_mysql*.sql*
+          **/migration-manifest*.json
+          **/source-manifest*.json
+          **/projected-manifest*.json
+          **/migration-report*.md
+          **/*migration-report*.json
+          **/verification-error.json
+          **/statements.jsonl
           **/.backups
           **/.backups/**
           **/backups
