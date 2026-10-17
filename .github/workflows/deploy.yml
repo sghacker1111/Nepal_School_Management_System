@@ -39,6 +39,7 @@ jobs:
         npm ci --no-fund
         npm run build
         npm run test:ui
+        python3 tests/ftp_runtime_test.py
 
   web-deploy:
     name: Deploy to InfinityFree over TLS
@@ -143,3 +144,11 @@ jobs:
           package-lock.json
           .superpowers/**
           **/*.log
+
+    - name: Verify deployed question editors and math runtime (read-only)
+      env:
+        FTP_SERVER: ${{ secrets.FTP_SERVER }}
+        FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+        FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        FTP_SERVER_DIR: ${{ steps.hosting.outputs.directory }}
+      run: python3 tools/verify_ftp_runtime.py

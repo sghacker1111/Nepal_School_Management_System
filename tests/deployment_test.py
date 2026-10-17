@@ -44,7 +44,9 @@ assert '*.sql' not in patterns and '**/*.sql' not in patterns
 assert '**/*.sql.gz' in patterns and '**/school_erp_mysql*.sql*' in patterns
 assert '**/migration-manifest*.json' in patterns and '**/projected-manifest*.json' in patterns and '**/statements.jsonl' in patterns
 assert 'npm ci --no-fund' in workflow and 'npm run build' in workflow and 'npm run test:ui' in workflow
-assert not any(pattern in ('assets/**','assets/dist/**','app.php','.htaccess') for pattern in patterns),'Runtime routing and compiled assets must ship'
+assert not any(pattern in ('assets/**','assets/dist/**','assets/vendor/**','app.php','.htaccess') for pattern in patterns),'Runtime routing, compiled assets and self-hosted editor libraries must ship'
+assert 'copyEditorAssets(root)' in (Path(__file__).resolve().parents[1]/'tools/build-assets.mjs').read_text(encoding='utf-8'),'Build the editor, plugins, math renderer and fonts before FTP'
+assert 'run: python3 tools/verify_ftp_runtime.py' in workflow,'FTP success must also verify deployed editor/runtime files read-only'
 htaccess=(Path(__file__).resolve().parents[1]/'.htaccess').read_text(encoding='utf-8')
 router=(Path(__file__).resolve().parents[1]/'router.php').read_text(encoding='utf-8')
 assert 'sql(\\.gz)?' in htaccess and 'private-migration' in htaccess and 'statements\\.jsonl' in htaccess

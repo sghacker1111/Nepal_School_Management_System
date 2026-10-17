@@ -1,3 +1,4 @@
+import {editorInstances} from '../app/editor-instances.js';
 // Async libraries may finish after navigation. They own actual nodes, not IDs
 // which could now belong to another school or a newly mounted editor.
 export function pageLibraries(page,context,cleanups){
@@ -6,7 +7,7 @@ export function pageLibraries(page,context,cleanups){
  const owns=editor=>editor&&page.contains(editor.getElement?.());
  const tinymce=win.tinymce&&new Proxy(win.tinymce,{get(target,key){
   if(key==='get')return id=>{const editor=target.get(id);return owns(editor)?editor:undefined;};
-  if(key==='triggerSave')return()=>{if(!signal.aborted)for(const editor of target.editors||[])if(owns(editor))editor.save();};
+  if(key==='triggerSave')return()=>{if(!signal.aborted)for(const editor of editorInstances(win))if(owns(editor))editor.save();};
   if(key==='init')return options=>{
    current();const nodes=options.target?[options.target]:[...page.querySelectorAll(options.selector)];
    return Promise.all(nodes.map(node=>target.init({...options,selector:undefined,target:node,setup(editor){if(signal.aborted){editor.remove?.();return;}options.setup?.(editor);}}))).then(groups=>{const editors=groups.flat();if(signal.aborted)editors.forEach(editor=>editor.remove?.());return editors;});

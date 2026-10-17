@@ -14,7 +14,7 @@ class NativeMySQLHttpTests(unittest.TestCase):
                   'exam_question_import_http_test.py', 'question_source_http_test.py',
                   'exam_teacher_scope_http_test.py', 'question_corrections_http_test.py',
                   'accounting_http_test.py', 'single_page_coverage_http_test.py',
-                  'learning_app_http_test.py','mysql_auth_preview_http.py')
+                  'learning_app_http_test.py','question_authoring_app_http_test.py','mysql_auth_preview_http.py')
         for suite in suites:
             with self.subTest(suite=suite):
                 env = {**os.environ, 'ERP_HTTP_NATIVE_MYSQL': '1'}

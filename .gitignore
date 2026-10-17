@@ -21,6 +21,8 @@ __pycache__/
 # Build tools are local/CI-only. Generated public bundles are committed.
 node_modules/
 frontend/generated-utilities.css
+# Rebuilt by npm run build in local/CI; these public assets DO deploy over FTP.
+/assets/vendor/
 
 # Private MySQL configuration and migration packages are not source code.
 config/*.local.php

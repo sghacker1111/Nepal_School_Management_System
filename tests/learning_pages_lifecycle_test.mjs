@@ -4,6 +4,18 @@ import {mountPage,disposePage,preparePageSubmit} from '../frontend/app/page-life
 import {createPageScope} from '../frontend/pages/page-scope.js';
 import {confirmNavigation} from '../frontend/app/dirty-forms.js';
 import {installForms} from '../frontend/app/forms.js';
+
+test('TinyMCE 6 get() registry synchronizes current editors and removes stale instances on navigation',async()=>{
+ const dom=new JSDOM('<main id="main-content"><form method="post"><textarea id="owned">Old</textarea></form></main><textarea id="outside"></textarea>',{url:'https://school.example/exam-questions'}),win=dom.window,root=win.document.querySelector('main');
+ let saved=0,foreignSaved=0,removed=0,foreignRemoved=0;const node=root.querySelector('textarea'),outside=win.document.querySelector('#outside');
+ const editor={id:'owned',getElement:()=>node,getContent:()=>'<p>Updated \\(x^2\\)</p>',save(){saved++;node.value=this.getContent();},remove(){removed++;instances.splice(instances.indexOf(this),1);}};
+ const foreign={id:'outside',getElement:()=>outside,save(){foreignSaved++;},remove(){foreignRemoved++;}};const instances=[editor,foreign];
+ win.tinymce={get(id){return id===undefined?instances.slice():instances.find(e=>e.id===id);}};
+ const controller=new win.AbortController(),scope=createPageScope(root,{signal:controller.signal});
+ scope.tinymce.triggerSave();assert.equal(saved,1);assert.equal(foreignSaved,0);scope.dispose();
+ await mountPage(root,{pageId:'learning-exam-questions',assets:[],values:{}});await preparePageSubmit(root.querySelector('form'));
+ assert.equal(saved,2);assert.match(node.value,/Updated/);await disposePage();assert.equal(removed,1);assert.equal(foreignRemoved,0);win.close();
+});
 test('editor revisits own one TeX dialog and retain imported equation source',async()=>{
  const dom=new JSDOM('<main id="main-content"></main>',{url:'https://school.example/exam-questions',runScripts:'outside-only'}),win=dom.window,root=win.document.querySelector('main');
  win.CSS??={};win.CSS.escape??=value=>value;const editors=new Map();

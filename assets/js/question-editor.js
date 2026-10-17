@@ -1,7 +1,7 @@
 /* Shared Question Bank / Exam Questions editor: formatting and portable TeX. */
 (function(){
 'use strict';
-let activeEditorId='',texModalObj,activeTexSpan=null;
+let activeEditorId='',texModalObj,activeTexSpan=null,activeTexBookmark=null;
 const editorScopes=new WeakMap();
 function escapeHtml(text) {
     return text
@@ -79,7 +79,7 @@ function init(selector,root=document,context={}){
  const dispose=()=>{
   if(disposed)return;disposed=true;removers.splice(0).forEach(fn=>fn());
   owned.forEach(editor=>editor.remove?.());owned.clear();texModalObj?.dispose?.();
-  activeEditorId='';activeTexSpan=null;editorScopes.delete(root);
+  activeEditorId='';activeTexSpan=null;activeTexBookmark=null;editorScopes.delete(root);
  };
  editorScopes.set(root,dispose);context.signal?.addEventListener('abort',dispose,{once:true});
  context.onBeforeSubmit?.(form=>{for(const editor of owned)if(editor.getElement?.()?.form===form)editor.save();});
@@ -92,7 +92,7 @@ function init(selector,root=document,context={}){
 
     // Clear activeTexSpan when modal hidden
     listen(modal,'hidden.erp.modal', function () {
-        activeTexSpan = null;
+        activeTexSpan = null;activeTexBookmark=null;
     });
 
     // Event listeners for live MathJax TeX preview
@@ -228,7 +228,7 @@ function init(selector,root=document,context={}){
                     doc.head.appendChild(configScript);
 
                     const script = doc.createElement('script');
-                    script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
+                    script.src = (window.APP_URL || window.location.origin).replace(/\/$/, '') + '/assets/vendor/mathjax-3.2.2/tex-mml-chtml.js';
                     script.async = true;
                     script.onload = function() {
                         if (win.MathJax && win.MathJax.typesetPromise) {
@@ -287,6 +287,9 @@ function init(selector,root=document,context={}){
 function openTexModal(editorId, targetSpan = null) {
     activeEditorId = editorId;
     const editor=window.tinymce?.get(editorId);
+    const body=editor?.getBody?.(),range=editor?.selection.getRng?.();
+    if(body&&(!range||!body.contains(range.startContainer))){editor.selection.select(body,true);editor.selection.collapse(false);}
+    activeTexBookmark=editor?.selection.getBookmark?.(2,true)||null;
     activeTexSpan = targetSpan || editor?.selection.getNode?.()?.closest?.('span.math-tex') || null;
 
     let initialText = '';
@@ -373,6 +376,10 @@ function insertTexIntoEditor() {
 
         if (window.tinymce && window.tinymce.get(activeEditorId)) {
             const editor = window.tinymce.get(activeEditorId);
+            // A toolbar dialog moves focus out of the iframe. Restore the
+            // editor selection before inserting, including on a brand-new field.
+            editor.focus?.();
+            if(activeTexBookmark)editor.selection.moveToBookmark?.(activeTexBookmark);
 
             if (activeTexSpan) {
                 // Update existing locked math span

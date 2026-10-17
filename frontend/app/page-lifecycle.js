@@ -1,4 +1,5 @@
 import {trackForms} from './dirty-forms.js';
+import {editorInstances} from './editor-instances.js';
 // Only bundled adapters and these fixed asset IDs can initialize an app page.
 const pages = new Map();
 const loads = new WeakMap();
@@ -10,8 +11,8 @@ const assets = Object.freeze({
     'practice-css': '/assets/css/mcq-practice.css',
     'question-bank-css': '/assets/css/exam-question-bank.css',
     'accounting-css': '/assets/css/accounting.css',
-    tinymce: 'https://cdn.jsdelivr.net/npm/tinymce@6/tinymce.min.js',
-    mathjax: 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js',
+    tinymce: '/assets/vendor/tinymce-6.8.6/tinymce.min.js',
+    mathjax: '/assets/vendor/mathjax-3.2.2/tex-mml-chtml.js',
     tesseract: 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js',
     pdfjs: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js',
 });
@@ -36,8 +37,10 @@ async function loadAsset(id, doc) {
     let cache = loads.get(doc); if (!cache) { cache = new Map(); loads.set(doc, cache); }
     if (cache.has(id)) return cache.get(id);
     const win = doc.defaultView, path = assets[id];
-    if ((id === 'tinymce' && win.tinymce) || (id === 'mathjax' && win.MathJax?.typesetPromise)
-        || (id === 'tesseract' && win.Tesseract) || (id === 'pdfjs' && win.pdfjsLib)) return;
+    const available = () => id === 'tinymce' ? typeof win.tinymce?.init === 'function'
+        : id === 'mathjax' ? typeof win.MathJax?.typesetPromise === 'function'
+        : id === 'tesseract' ? !!win.Tesseract : id === 'pdfjs' ? !!win.pdfjsLib : true;
+    if (!path.endsWith('.css') && available()) return;
     if(id==='mathjax')win.MathJax={tex:{inlineMath:[['\\(','\\)'],['$','$']],displayMath:[['\\[','\\]'],['$$','$$']],processEscapes:true}};
     const url = path.startsWith('/') ? new URL((win.APP_URL || win.location.origin).replace(/\/$/, '') + path).href : path;
     const css = path.endsWith('.css');
@@ -45,12 +48,22 @@ async function loadAsset(id, doc) {
     if (existing && css) { cache.set(id, Promise.resolve()); return; }
     const promise = new Promise((resolve, reject) => {
         const node = existing || doc.createElement(css ? 'link' : 'script');
-        const timer = win.setTimeout(() => { cache.delete(id); reject(new Error('Required asset timed out: ' + id)); }, 20000);
-        node.addEventListener('load', async () => {
-            win.clearTimeout(timer);
-            try { if (id === 'mathjax') await win.MathJax?.startup?.promise; resolve(); } catch (error) { reject(error); }
-        }, {once: true});
-        node.addEventListener('error', () => { win.clearTimeout(timer); cache.delete(id); if (!existing) node.remove(); reject(new Error('Required asset unavailable: ' + id)); }, {once: true});
+        let settled = false;
+        const cleanup = () => { win.clearTimeout(timer); node.removeEventListener('load', loaded); node.removeEventListener('error', failed); };
+        const fail = message => {
+            if (settled) return; settled = true; cleanup(); cache.delete(id); node.remove(); reject(new Error(message + id));
+        };
+        const failed = () => fail('Required asset unavailable: ');
+        const loaded = async () => {
+            try {
+                if (!available()) { failed(); return; }
+                if (id === 'mathjax') await win.MathJax.startup?.promise;
+                if (settled) return; settled = true; cleanup(); resolve();
+            } catch { failed(); }
+        };
+        const timer = win.setTimeout(() => fail('Required asset timed out: '), 20000);
+        node.addEventListener('load', loaded, {once: true});
+        node.addEventListener('error', failed, {once: true});
         if (!existing) {
             node.dataset.erpAsset = id;
             if (css) { node.rel = 'stylesheet'; node.href = url; }
@@ -63,7 +76,7 @@ async function loadAsset(id, doc) {
 
 function disposeOwned(root) {
     const win = root.ownerDocument.defaultView;
-    for (const editor of [...(win.tinymce?.editors || [])]) if (root.contains(editor.getElement?.())) editor.remove();
+    for (const editor of editorInstances(win)) if (root.contains(editor.getElement?.())) editor.remove();
     const $ = win.jQuery;
     if ($?.fn?.dataTable) for (const table of root.querySelectorAll('table')) if ($.fn.dataTable.isDataTable(table)) $(table).DataTable().destroy();
     for (const type of ['Modal', 'Collapse', 'Toast', 'Tooltip', 'Popover']) {

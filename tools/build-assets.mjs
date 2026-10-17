@@ -3,6 +3,7 @@ import { mkdir, copyFile, cp, writeFile, readFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import {copyEditorAssets} from './copy-editor-assets.mjs';
 const root = fileURLToPath(new URL('../', import.meta.url));
 process.chdir(root);
 await mkdir('assets/dist', { recursive: true });
@@ -56,6 +57,7 @@ for (const name of ['vendor.js.LEGAL.txt', 'workspace.js.LEGAL.txt']) {
 }
 await copyFile('node_modules/@fortawesome/fontawesome-free/css/all.min.css', 'assets/dist/icons.css');
 await cp('node_modules/@fortawesome/fontawesome-free/webfonts', 'assets/webfonts', { recursive: true });
+await copyEditorAssets(root);
 // Cache-busting manifest contains only public generated files, never school data.
 const { createHash } = await import('node:crypto');
 const files = ['app.css', 'workspace.js', 'print-controls.js', 'vendor.js', 'vendor.css', 'icons.css', 'ui-components.js'];
