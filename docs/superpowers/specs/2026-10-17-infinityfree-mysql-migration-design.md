@@ -1,7 +1,7 @@
 # SQLite to InfinityFree MySQL migration
 
 Date: 2026-10-17, Asia/Kathmandu
-Status: Proposed design; written-spec approval and implementation-plan approval are still required.
+Status: Written specification approved by the owner on 2026-10-17 ("approve it"); implementation-plan approval is still required.
 
 ## Intent and boundaries
 
@@ -214,6 +214,6 @@ snapshot. Rollback must not discard school work entered after cutover.
 - [x] Interpret approval conservatively: local preparation, empty target, no live overwrite.
 - [x] Document alternatives, preservation, conversion, configuration, cleanup and tests.
 - [x] Self-review for placeholders, conflicting promises and scope ambiguity.
-- [ ] Owner reviews and approves this written specification.
+- [x] Owner reviews and approves this written specification.
 - [ ] Write an implementation plan and obtain its approval/execution choice.
 - [ ] Implement, verify and deliver the private import package locally.
