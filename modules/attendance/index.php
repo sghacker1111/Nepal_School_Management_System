@@ -51,13 +51,13 @@ $pageTitle='Student Attendance';$activePage='attendance';
 $pageStyles=['/assets/css/attendance.css'];
 ob_start();
 ?>
-<div class="d-flex justify-content-between align-items-center mb-4 no-print"><h2><i class="fas fa-calendar-check"></i> Student Attendance</h2><button class="btn btn-outline-secondary" onclick="window.print()">Print saved sheet</button></div>
+<div class="d-flex justify-content-between align-items-center mb-4 no-print"><h2><i class="fas fa-calendar-check"></i> Student Attendance</h2><button class="btn btn-outline-secondary" data-erp-click="attendance-index-action-0" data-erp-click-args="<?= schoolPageActionArgs("attendance-index",[]) ?>">Print saved sheet</button></div>
 <?php if($message): ?><div data-notify class="alert alert-<?= $messageType ?>"><?= sanitize($message) ?></div><?php endif; ?>
 <div class="card mb-4 no-print"><div class="card-body">
 <form method="GET" class="row g-3" id="attendanceFilters">
-    <div class="col-md-2"><label for="attendanceView" class="form-label">View</label><select name="view" id="attendanceView" class="form-select" onchange="this.form.submit()">
+    <div class="col-md-2"><label for="attendanceView" class="form-label">View</label><select name="view" id="attendanceView" class="form-select" data-erp-change="attendance-index-action-1" data-erp-change-args="<?= schoolPageActionArgs("attendance-index",[]) ?>">
     <?php foreach(['daily'=>'Daily','monthly'=>'Monthly','yearly'=>'Yearly','range'=>'Date range'] as $value=>$label): ?><option value="<?= $value ?>" <?= $period['view']===$value?'selected':'' ?>><?= $label ?></option><?php endforeach; ?></select></div>
-    <div class="col-md-2"><label for="attendanceCalendar" class="form-label">Calendar</label><select name="calendar" id="attendanceCalendar" class="form-select" data-previous="<?= $period['calendar'] ?>" onchange="changeAttendanceCalendar(this)"><option value="AD" <?= $period['calendar']==='AD'?'selected':'' ?>>AD (English)</option><option value="BS" <?= $period['calendar']==='BS'?'selected':'' ?>>BS (नेपाली)</option></select></div>
+    <div class="col-md-2"><label for="attendanceCalendar" class="form-label">Calendar</label><select name="calendar" id="attendanceCalendar" class="form-select" data-previous="<?= $period['calendar'] ?>"><option value="AD" <?= $period['calendar']==='AD'?'selected':'' ?>>AD (English)</option><option value="BS" <?= $period['calendar']==='BS'?'selected':'' ?>>BS (नेपाली)</option></select></div>
     <?php if($period['view']==='daily'): ?><div class="col-md-3"><label for="attendanceDate" class="form-label">Date (<?= $period['calendar'] ?>)</label><input id="attendanceDate" name="date_input" data-calendar="<?= $period['calendar'] ?>" class="form-control" type="<?= $period['calendar']==='AD'?'date':'text' ?>" value="<?= sanitize($period['dateInput']) ?>" placeholder="YYYY-MM-DD" required></div><?php endif; ?>
     <?php if(in_array($period['view'],['monthly','yearly'],true)): ?>
     <div class="col-md-2"><label for="attendanceYear" class="form-label">Year (<?= $period['calendar'] ?>)</label><input name="year" id="attendanceYear" type="number" class="form-control" min="<?= $period['calendar']==='BS'?2000:1900 ?>" max="<?= $period['calendar']==='BS'?2090:2100 ?>" value="<?= $period['year'] ?>" required></div>
@@ -66,8 +66,8 @@ ob_start();
     <?php if($period['view']==='range'): ?>
     <?php foreach(['range_start'=>'From','range_end'=>'To'] as $field=>$label): ?><div class="col-md-3"><label for="<?= $field ?>" class="form-label"><?= $label ?> (<?= $period['calendar'] ?>)</label><input id="<?= $field ?>" name="<?= $field ?>" data-calendar="<?= $period['calendar'] ?>" type="<?= $period['calendar']==='AD'?'date':'text' ?>" class="form-control" placeholder="YYYY-MM-DD" value="<?= sanitize($field==='range_start'?$period['fromInput']:$period['toInput']) ?>" required></div><?php endforeach; ?>
     <?php endif; ?>
-    <div class="col-md-3"><label for="attendanceClass" class="form-label">Class</label><select name="class" id="attendanceClass" class="form-select" onchange="this.form.elements.section.value='';this.form.submit()"><option value="">Select Class</option><?php foreach($classes as $class): ?><option value="<?= (int)$class['id'] ?>" <?= $classId===(int)$class['id']?'selected':'' ?>><?= sanitize($class['name']) ?></option><?php endforeach; ?></select></div>
-    <div class="col-md-2"><label for="attendanceSection" class="form-label">Section</label><select name="section" id="attendanceSection" class="form-select" onchange="this.form.submit()"><option value="">All Sections</option><?php foreach($sections as $section): ?><option value="<?= (int)$section['id'] ?>" <?= $sectionId===(int)$section['id']?'selected':'' ?>><?= sanitize($section['name']) ?></option><?php endforeach; ?></select></div>
+    <div class="col-md-3"><label for="attendanceClass" class="form-label">Class</label><select name="class" id="attendanceClass" class="form-select" data-erp-change="attendance-index-action-2" data-erp-change-args="<?= schoolPageActionArgs("attendance-index",[]) ?>"><option value="">Select Class</option><?php foreach($classes as $class): ?><option value="<?= (int)$class['id'] ?>" <?= $classId===(int)$class['id']?'selected':'' ?>><?= sanitize($class['name']) ?></option><?php endforeach; ?></select></div>
+    <div class="col-md-2"><label for="attendanceSection" class="form-label">Section</label><select name="section" id="attendanceSection" class="form-select" data-erp-change="attendance-index-action-3" data-erp-change-args="<?= schoolPageActionArgs("attendance-index",[]) ?>"><option value="">All Sections</option><?php foreach($sections as $section): ?><option value="<?= (int)$section['id'] ?>" <?= $sectionId===(int)$section['id']?'selected':'' ?>><?= sanitize($section['name']) ?></option><?php endforeach; ?></select></div>
     <div class="col-md-4"><label for="attendanceSearch" class="form-label">Student name, roll or student ID</label><input type="search" name="search" id="attendanceSearch" class="form-control" maxlength="100" value="<?= sanitize($search) ?>" placeholder="Name, roll, student ID or EMIS"></div>
     <div class="col-md-3 d-flex align-items-end gap-2"><button class="btn btn-primary">Load attendance</button><a href="<?= schoolRouteUrl('modules/attendance/index.php') ?>" class="btn btn-outline-secondary">Reset</a></div>
 </form></div></div>
@@ -98,14 +98,10 @@ ob_start();
 <?php else: ?><?= sanitize($value?:'—') ?><?php endif; ?></td><?php endforeach; ?></tr><?php endforeach; ?>
 </tbody></table></div></div></div>
 <?php if($canEdit&&$expectedCells): ?><div class="card mt-3 no-print"><div class="card-body"><div class="d-flex flex-wrap align-items-end gap-3">
-<div><label for="attendanceBulk" class="form-label">Set visible cells</label><select id="attendanceBulk" class="form-select"><option value="P">Present</option><option value="A">Absent</option><option value="L">Late</option><option value="H">Holiday</option></select></div><button type="button" class="btn btn-outline-primary" onclick="markAttendancePage()">Apply to visible page</button>
+<div><label for="attendanceBulk" class="form-label">Set visible cells</label><select id="attendanceBulk" class="form-select"><option value="P">Present</option><option value="A">Absent</option><option value="L">Late</option><option value="H">Holiday</option></select></div><button type="button" id="attendanceApply" class="btn btn-outline-primary">Apply to visible page</button>
 <?php if($hasExisting): ?><div><label for="edit_password" class="form-label">Password to correct saved attendance</label><input type="password" id="edit_password" name="edit_password" class="form-control" autocomplete="current-password"><small class="text-muted">Required only when changing an already saved status.</small></div><?php endif; ?>
 <button type="submit" name="save_attendance" value="1" class="btn btn-primary">Save visible attendance</button></div><p class="small text-muted mt-2 mb-0">Only this page is saved. A blank selection keeps any existing attendance unchanged.</p></div></div><?php endif; ?>
 </form>
 <?php else: ?><div class="alert alert-info">No students match this class, section and search.</div><?php endif; ?>
 <?php else: ?><div class="alert alert-info">Select a class to view or mark attendance. Class teachers see only their supervised classes.</div><?php endif; ?>
-<script>
-function markAttendancePage(){const status=document.getElementById('attendanceBulk').value;document.querySelectorAll('.attendance-cell').forEach(input=>{input.value=status;});}
-</script>
-<script src="<?= APP_URL ?>/assets/js/attendance-controls.js"></script>
 <?php $content=ob_get_clean();include __DIR__.'/../../includes/header.php'; ?>

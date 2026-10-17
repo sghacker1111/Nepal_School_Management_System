@@ -48,6 +48,7 @@ function schoolRoutes(): array {
 
 function schoolPageAdapterReady(string $id):bool {
     if(in_array($id,['error','confirm-action','dashboard','auth-profile','auth-change-password'],true))return true;
+    if(in_array($id,['attendance-index','results-index','results-ledger','results-marks-entry','results-print-bulk','reports-index'],true))return true;
     if(in_array($id,['students-admit-card','exams-admit-cards','super-admin-switch-school','super-admin-question-corrections'],true))return false;
     return (bool)preg_match('/^(students|teachers|classes|subjects|exams|settings|super-admin)-/',$id);
 }

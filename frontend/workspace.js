@@ -10,6 +10,9 @@ import '../assets/js/curriculum-delete.js';
 import './pages/school.js';
 import './pages/academics.js';
 import './pages/administration.js';
+import '../assets/js/attendance-controls.js';
+import './pages/attendance.js';
+import './pages/results.js';
 
 // CSP build: no new Function/eval required to operate the navigation.
 Alpine.data('workspace', () => ({

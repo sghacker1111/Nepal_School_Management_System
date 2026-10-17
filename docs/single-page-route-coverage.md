@@ -21,7 +21,7 @@ All 78 existing controllers are explicitly registered. Enhanced routes have bund
 | `/accounting/settings` | `modules/accounting/settings.php` | page | Pending adapter and HTTP verification |
 | `/accounting/student` | `modules/accounting/student.php` | page | Pending adapter and HTTP verification |
 | `/accounting/subscriptions` | `modules/accounting/subscriptions.php` | page | Pending adapter and HTTP verification |
-| `/attendance` | `modules/attendance/index.php` | page | Pending adapter and HTTP verification |
+| `/attendance` | `modules/attendance/index.php` | page | Scoped adapter; automated HTTP/DOM coverage; browser pending |
 | `/account/change-password` | `modules/auth/change_password.php` | page | Scoped adapter; automated HTTP/DOM coverage; browser pending |
 | `/login` | `modules/auth/login.php` | auth | Native boundary/document; not boosted |
 | `/logout` | `modules/auth/logout.php` | auth | Native boundary/document; not boosted |
@@ -51,11 +51,11 @@ All 78 existing controllers are explicitly registered. Enhanced routes have bund
 | `/learning/question-grid` | `modules/learning/question_grid.php` | page | Pending adapter and HTTP verification |
 | `/learning/question-bank` | `modules/learning/questions.php` | mixed | Pending adapter and HTTP verification |
 | `/learning/specification-grids` | `modules/learning/specification_grids.php` | mixed | Pending adapter and HTTP verification |
-| `/reports` | `modules/reports/index.php` | page | Pending adapter and HTTP verification |
-| `/results` | `modules/results/index.php` | page | Pending adapter and HTTP verification |
-| `/results/ledger` | `modules/results/ledger.php` | page | Pending adapter and HTTP verification |
-| `/results/marks-entry` | `modules/results/marks_entry.php` | page | Pending adapter and HTTP verification |
-| `/results/print-bulk` | `modules/results/print_bulk.php` | mixed | Pending adapter and HTTP verification |
+| `/reports` | `modules/reports/index.php` | page | Scoped adapter; automated HTTP/DOM coverage; browser pending |
+| `/results` | `modules/results/index.php` | page | Scoped adapter; automated HTTP/DOM coverage; browser pending |
+| `/results/ledger` | `modules/results/ledger.php` | page | Scoped adapter; automated HTTP/DOM coverage; browser pending |
+| `/results/marks-entry` | `modules/results/marks_entry.php` | page | Scoped adapter; automated HTTP/DOM coverage; browser pending |
+| `/results/print-bulk` | `modules/results/print_bulk.php` | mixed | Scoped adapter; automated HTTP/DOM coverage; browser pending |
 | `/results/report-card` | `modules/results/report_card.php` | print | Native boundary/document; not boosted |
 | `/settings/cdc` | `modules/settings/cdc.php` | page | Scoped adapter; automated HTTP/DOM coverage; browser pending |
 | `/settings/school` | `modules/settings/school.php` | page | Scoped adapter; automated HTTP/DOM coverage; browser pending |

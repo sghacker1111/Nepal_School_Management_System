@@ -186,7 +186,7 @@ ob_start();
         </a>
         <?php if ($exam_id && $class_id && $subjects): ?>
         <?php if($canOpenMarks): ?><a class="btn btn-outline-primary me-2" href="<?= schoolRouteUrl('modules/results/marks_entry.php') ?>?<?= htmlspecialchars(http_build_query(['exam'=>$exam_id,'class'=>$class_id,'section'=>$section_id,'subject'=>$subject_id?:''])) ?>"><?= $role==='teacher'&&!$teacherScope['class_teacher']?'Open assigned marks entry':'View / correct marks' ?></a><?php endif; ?>
-        <button onclick="window.print()" class="btn btn-primary">
+        <button data-erp-click="results-ledger-action-0" data-erp-click-args="<?= schoolPageActionArgs("results-ledger",[]) ?>" class="btn btn-primary">
             <i class="fas fa-print"></i> Print Ledger
         </button>
         <?php endif; ?>
@@ -201,7 +201,7 @@ ob_start();
         <form method="GET" action="" class="row g-3">
             <div class="col-md-3">
                 <label class="form-label" for="ledgerExam">Select Exam</label>
-                <select name="exam" id="ledgerExam" class="form-select" required onchange="this.form.elements.subject.value='';this.form.submit()">
+                <select name="exam" id="ledgerExam" class="form-select" required data-erp-change="results-ledger-action-1" data-erp-change-args="<?= schoolPageActionArgs("results-ledger",[]) ?>">
                     <option value="">Choose Exam</option>
                     <?php foreach ($exams as $e): ?>
                     <option value="<?= $e['id'] ?>" <?= $exam_id == $e['id'] ? 'selected' : '' ?>>
@@ -212,7 +212,7 @@ ob_start();
             </div>
             <div class="col-md-3">
                 <label class="form-label" for="ledgerClass">Select Class</label>
-                <select name="class" id="ledgerClass" class="form-select" required onchange="this.form.elements.section.value='';this.form.elements.subject.value='';this.form.submit()">
+                <select name="class" id="ledgerClass" class="form-select" required data-erp-change="results-ledger-action-2" data-erp-change-args="<?= schoolPageActionArgs("results-ledger",[]) ?>">
                     <option value="">Choose Class</option>
                     <?php foreach ($classes as $c): ?>
                     <option value="<?= $c['id'] ?>" <?= $class_id == $c['id'] ? 'selected' : '' ?>>
@@ -223,7 +223,7 @@ ob_start();
             </div>
             <div class="col-md-3">
                 <label class="form-label" for="ledgerSection">Select Section (Optional)</label>
-                <select name="section" id="ledgerSection" class="form-select" onchange="this.form.submit()">
+                <select name="section" id="ledgerSection" class="form-select" data-erp-change="results-ledger-action-3" data-erp-change-args="<?= schoolPageActionArgs("results-ledger",[]) ?>">
                     <option value="">All <?= $canFullLedger?'':'Assigned ' ?>Sections</option>
                     <?php foreach ($sections as $s): ?>
                     <option value="<?= $s['id'] ?>" <?= $section_id == $s['id'] ? 'selected' : '' ?>>
@@ -234,14 +234,14 @@ ob_start();
             </div>
             <div class="col-md-3">
                 <label class="form-label" for="ledgerSubject">Subject</label>
-                <select name="subject" id="ledgerSubject" class="form-select" onchange="this.form.elements.section.value='';this.form.submit()" <?= !$all_subjects?'disabled':'' ?>>
+                <select name="subject" id="ledgerSubject" class="form-select" data-erp-change="results-ledger-action-4" data-erp-change-args="<?= schoolPageActionArgs("results-ledger",[]) ?>" <?= !$all_subjects?'disabled':'' ?>>
                     <?php if($canFullLedger): ?><option value="">All Subjects (full-class ledger)</option><?php endif; ?>
                     <?php if(!$all_subjects): ?><option value="">Select an exam and class first</option><?php endif; ?>
                     <?php foreach($all_subjects as $sub): ?><option value="<?= (int)$sub['subject_id'] ?>" <?= $subject_id===(int)$sub['subject_id']?'selected':'' ?>><?= sanitize($sub['subject_name'].($sub['subject_code']?' ('.$sub['subject_code'].')':'')) ?></option><?php endforeach; ?>
                 </select>
             </div>
             <div class="col-md-2 d-flex align-items-end">
-                <div class="w-100"><label class="form-label" for="ledgerMode">Print mode</label><select name="mode" id="ledgerMode" class="form-select" onchange="this.form.submit()"><option value="grade" <?= $ledgerMode==='grade'?'selected':'' ?>>Grade Only</option><option value="marks" <?= $ledgerMode==='marks'?'selected':'' ?>>Marks Only</option></select></div>
+                <div class="w-100"><label class="form-label" for="ledgerMode">Print mode</label><select name="mode" id="ledgerMode" class="form-select" data-erp-change="results-ledger-action-5" data-erp-change-args="<?= schoolPageActionArgs("results-ledger",[]) ?>"><option value="grade" <?= $ledgerMode==='grade'?'selected':'' ?>>Grade Only</option><option value="marks" <?= $ledgerMode==='marks'?'selected':'' ?>>Marks Only</option></select></div>
             </div>
             <div class="col-md-2 d-flex align-items-end">
                 <button type="submit" class="btn btn-info w-100">
@@ -260,7 +260,7 @@ ob_start();
             <div class="col-md-4">
                 <div class="input-group">
                     <span class="input-group-text"><i class="fas fa-sort"></i> Sort By</span>
-                    <select id="sortSelector" class="form-select form-select-sm" onchange="applySorting()">
+                    <select id="sortSelector" class="form-select form-select-sm" data-erp-change="results-ledger-action-6" data-erp-change-args="<?= schoolPageActionArgs("results-ledger",[]) ?>">
                         <option value="roll">Roll Number (Ascending)</option>
                         <option value="name">Student Name (A-Z)</option>
                         <option value="gpa-desc">Grade / percentage (High to Low)</option>
@@ -271,7 +271,7 @@ ob_start();
             <div class="col-md-4">
                 <div class="input-group">
                     <span class="input-group-text"><i class="fas fa-filter"></i> Filter Status</span>
-                    <select id="filterSelector" class="form-select form-select-sm" onchange="applyFiltering()">
+                    <select id="filterSelector" class="form-select form-select-sm" data-erp-change="results-ledger-action-7" data-erp-change-args="<?= schoolPageActionArgs("results-ledger",[]) ?>">
                         <option value="all">Show All Candidates</option>
                         <option value="pass">Show <?= ($selected_class && $selected_class['grading_type'] === 'gpa') ? 'Graded' : 'Pass' ?> Only</option>
                         <option value="fail">Show <?= ($selected_class && $selected_class['grading_type'] === 'gpa') ? 'Not Graded' : 'Fail / NG' ?> Only</option>
@@ -392,47 +392,7 @@ ob_start();
     </div>
 </div>
 
-<script>
-function applySorting() {
-    const selector = document.getElementById('sortSelector').value;
-    const tbody = document.getElementById('ledgerBody');
-    const rows = Array.from(tbody.querySelectorAll('tr'));
-    
-    rows.sort((a, b) => {
-        if (selector === 'roll') {
-            return parseInt(a.getAttribute('data-roll')) - parseInt(b.getAttribute('data-roll'));
-        } else if (selector === 'name') {
-            return a.getAttribute('data-name').localeCompare(b.getAttribute('data-name'));
-        } else if (selector === 'gpa-desc') {
-            return parseFloat(b.getAttribute('data-gpa')) - parseFloat(a.getAttribute('data-gpa'));
-        } else if (selector === 'gpa-asc') {
-            return parseFloat(a.getAttribute('data-gpa')) - parseFloat(b.getAttribute('data-gpa'));
-        }
-        return 0;
-    });
-    
-    // Clear and append
-    tbody.innerHTML = '';
-    rows.forEach(r => tbody.appendChild(r));
-}
-
-function applyFiltering() {
-    const filter = document.getElementById('filterSelector').value;
-    const tbody = document.getElementById('ledgerBody');
-    const rows = tbody.querySelectorAll('tr');
-    
-    rows.forEach(row => {
-        const status = row.getAttribute('data-status');
-        if (filter === 'all') {
-            row.style.display = '';
-        } else if (filter === status) {
-            row.style.display = '';
-        } else {
-            row.style.display = 'none';
-        }
-    });
-}
-</script>
+<?php schoolPageModule("results-ledger"); ?>
 
 <?php else: ?>
 <div class="card text-center py-5 no-print">

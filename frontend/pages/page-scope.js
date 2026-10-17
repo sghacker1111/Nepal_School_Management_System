@@ -22,7 +22,7 @@ export function createPageScope(root,context){
  const location=new Proxy(win.location,{get(target,key){if(key==='reload')return()=>{if(!signal.aborted)void navigate(win.location.href,{history:'replace'});};const value=Reflect.get(target,key,target);return typeof value==='function'?value.bind(target):value;},set(target,key,value){if(key==='href'){if(signal.aborted)return true;isEnhancedURL(value)?void navigate(value):win.location.assign(value);return true;}return Reflect.set(target,key,value,target);}});
  const scopedWin=new Proxy(win,{get(target,key){
   if(key==='document')return scopedDoc;if(key==='location')return location;
-  if(key==='addEventListener')return(type,fn,options)=>listen(win,type,fn,options);
+  if(key==='addEventListener')return(type,fn,options)=>{if(type==='load'&&doc.readyState==='complete')ready.push(fn);else listen(win,type,fn,options);};
   const value=Reflect.get(target,key,target);return typeof value==='function'?guard(value.bind(target)):value;
  }});
  const startWrite=()=>{

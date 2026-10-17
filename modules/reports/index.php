@@ -66,7 +66,7 @@ ob_start();
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="fas fa-chart-bar text-primary"></i> School Statistical Reports</h2>
-    <button onclick="window.print()" class="btn btn-secondary no-print">
+    <button data-erp-click="reports-index-action-0" data-erp-click-args="<?= schoolPageActionArgs("reports-index",[]) ?>" class="btn btn-secondary no-print">
         <i class="fas fa-print"></i> Print Report Sheet
     </button>
 </div>

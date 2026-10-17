@@ -203,7 +203,7 @@ ob_start();
             <div class="col-md-3"><label class="form-label" for="studentSearch">Student name, ID, roll or symbol</label><input id="studentSearch" name="student_search" class="form-control" value="<?= sanitize($student_search) ?>" placeholder="Search this class"></div>
             <div class="col-md-2">
                 <label class="form-label fw-bold">Exam</label>
-                <select name="exam" class="form-select" required onchange="this.form.elements.subject.value='';this.form.submit()">
+                <select name="exam" class="form-select" required data-erp-change="results-marks-entry-action-0" data-erp-change-args="<?= schoolPageActionArgs("results-marks-entry",[]) ?>">
                     <option value="">Select Exam</option>
                     <?php foreach ($exams as $e): ?>
                     <option value="<?= $e['id'] ?>" <?= $exam_id == $e['id'] ? 'selected' : '' ?>>
@@ -215,7 +215,7 @@ ob_start();
             
             <div class="col-md-2">
                 <label class="form-label fw-bold">Class</label>
-                <select name="class" class="form-select" required onchange="this.form.elements.section.value='';this.form.elements.subject.value='';this.form.submit()">
+                <select name="class" class="form-select" required data-erp-change="results-marks-entry-action-1" data-erp-change-args="<?= schoolPageActionArgs("results-marks-entry",[]) ?>">
                     <option value="">Select Class</option>
                     <?php foreach ($classes as $c): ?>
                     <option value="<?= $c['id'] ?>" <?= $class_id == $c['id'] ? 'selected' : '' ?>>
@@ -227,7 +227,7 @@ ob_start();
             
             <div class="col-md-2">
                 <label class="form-label fw-bold">Section</label>
-                <select name="section" class="form-select" onchange="this.form.elements.subject.value='';this.form.submit()">
+                <select name="section" class="form-select" data-erp-change="results-marks-entry-action-2" data-erp-change-args="<?= schoolPageActionArgs("results-marks-entry",[]) ?>">
                     <option value="">All Sections</option>
                     <?php foreach ($sections as $s): ?>
                     <option value="<?= $s['id'] ?>" <?= $section_id == $s['id'] ? 'selected' : '' ?>>
@@ -239,7 +239,7 @@ ob_start();
 
             <div class="col-md-3">
                 <label class="form-label fw-bold">Subject (Optional)</label>
-                <select name="subject" class="form-select" onchange="this.form.submit()">
+                <select name="subject" class="form-select" data-erp-change="results-marks-entry-action-3" data-erp-change-args="<?= schoolPageActionArgs("results-marks-entry",[]) ?>">
                     <option value="">All Subjects</option>
                     <?php foreach ($all_subjects as $sub): ?>
                     <option value="<?= $sub['subject_id'] ?>" <?= $filter_subject_id == $sub['subject_id'] ? 'selected' : '' ?>>
@@ -395,7 +395,7 @@ ob_start();
                 <a class="btn btn-outline-primary btn-sm ms-2" href="?<?= sanitize(http_build_query(array_replace($_GET,['page'=>$number]))) ?>"><?= $label ?></a>
             <?php endforeach; ?>
         </nav><?php endif; ?>
-        <script>document.querySelectorAll('.elective-select').forEach(box=>box.addEventListener('change',()=>{document.querySelectorAll('input[type="number"][data-elective="'+box.dataset.elective+'"]').forEach(field=>field.disabled=!box.checked);}));</script>
+        <?php schoolPageModule("results-marks-entry"); ?>
     </div>
 </div>
 <?php else: ?>
@@ -418,45 +418,7 @@ ob_start();
     }
 </style>
 
-<script>
-$(document).ready(function() {
-    // Disable scrolling changing value
-    $('table').on('wheel', 'input[type="number"]', function(e) {
-        $(this).blur();
-    });
-
-    // Keyboard navigation
-    $('table').on('keydown', 'input[type="number"]', function(e) {
-        var key = e.which || e.keyCode;
-        
-        // 38 = Arrow Up, 40 = Arrow Down, 13 = Enter
-        if (key === 38 || key === 40 || key === 13) {
-            e.preventDefault();
-            
-            var $rows = $('table tbody tr');
-            var $currentRow = $(this).closest('tr');
-            var rowIndex = $rows.index($currentRow);
-            
-            var $rowInputs = $currentRow.find('input[type="number"]');
-            var colIndex = $rowInputs.index(this);
-            
-            var targetRowIndex = rowIndex;
-            if (key === 38) {
-                targetRowIndex = rowIndex - 1; // Up
-            } else {
-                targetRowIndex = rowIndex + 1; // Down (Arrow Down or Enter)
-            }
-            
-            if (targetRowIndex >= 0 && targetRowIndex < $rows.length) {
-                var $targetRowInputs = $rows.eq(targetRowIndex).find('input[type="number"]');
-                if ($targetRowInputs.length > colIndex) {
-                    $targetRowInputs.eq(colIndex).focus().select();
-                }
-            }
-        }
-    });
-});
-</script>
+<?php schoolPageModule("results-marks-entry"); ?>
 
 <?php
 $content = ob_get_clean();

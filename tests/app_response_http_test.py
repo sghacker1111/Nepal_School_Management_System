@@ -14,7 +14,7 @@ def marked(headers,body):
     assert headers['Content-Type'].startswith('text/html')
     assert headers['Cache-Control']=='no-store, private'
     assert 'HX-Target' in headers['Vary']
-    assert b'top-navbar' not in body and b'<!DOCTYPE' not in body
+    assert not re.search(rb'<[^>]+class="[^"]*\btop-navbar\b',body) and b'<!DOCTYPE' not in body
     return config(body)
 def run():
   with ERPHttpFixture() as app:

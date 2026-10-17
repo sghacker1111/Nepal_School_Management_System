@@ -127,7 +127,7 @@ ob_start();
             <input type="hidden" name="system" value="<?= htmlspecialchars($grading_system) ?>">
             <div class="col-md-4">
                 <label class="form-label">Select Exam</label>
-                <select name="exam" class="form-select" required onchange="this.form.submit()">
+                <select name="exam" class="form-select" required data-erp-change="results-print-bulk-action-0" data-erp-change-args="<?= schoolPageActionArgs("results-print-bulk",[]) ?>">
                     <option value="">Choose Exam</option>
                     <?php foreach ($exams as $e): ?>
                     <option value="<?= $e['id'] ?>" <?= $exam_id == $e['id'] ? 'selected' : '' ?>>
@@ -138,7 +138,7 @@ ob_start();
             </div>
             <div class="col-md-3">
                 <label class="form-label">Select Class</label>
-                <select name="class" class="form-select" required onchange="this.form.submit()">
+                <select name="class" class="form-select" required data-erp-change="results-print-bulk-action-1" data-erp-change-args="<?= schoolPageActionArgs("results-print-bulk",[]) ?>">
                     <option value="">Choose Class</option>
                     <?php foreach ($classes as $c): ?>
                     <option value="<?= $c['id'] ?>" <?= $class_id == $c['id'] ? 'selected' : '' ?>>
@@ -149,7 +149,7 @@ ob_start();
             </div>
             <div class="col-md-3">
                 <label class="form-label">Select Section (Optional)</label>
-                <select name="section" class="form-select" onchange="this.form.submit()">
+                <select name="section" class="form-select" data-erp-change="results-print-bulk-action-2" data-erp-change-args="<?= schoolPageActionArgs("results-print-bulk",[]) ?>">
                     <option value="">All Sections</option>
                     <?php foreach ($sections as $s): ?>
                     <option value="<?= $s['id'] ?>" <?= $section_id == $s['id'] ? 'selected' : '' ?>>
