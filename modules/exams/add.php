@@ -68,7 +68,7 @@ ob_start();
         <h5 class="mb-0"><i class="fas fa-file-invoice"></i> Exam Definition Details</h5>
     </div>
     <div class="card-body p-4">
-        <form method="GET" class="row g-3 mb-4"><div class="col-md-6"><label for="creationMode" class="form-label">Creation mode</label><select id="creationMode" name="creation_mode" class="form-select" onchange="this.form.submit()"><option value="manual" <?= $mode==='manual'?'selected':'' ?>>Manual — customize defaults</option><option value="automatic" <?= $mode==='automatic'?'selected':'' ?>>Automatic — locked default settings</option></select></div><div class="col-md-6"><label for="examTemplate" class="form-label">Super-admin default exam</label><select id="examTemplate" name="template_id" class="form-select" onchange="this.form.submit()"><?php foreach($templates as $t): ?><option value="<?= (int)$t['id'] ?>" <?= $templateId===(int)$t['id']?'selected':'' ?>><?= sanitize($t['name']) ?></option><?php endforeach; ?></select></div></form>
+        <form method="GET" class="row g-3 mb-4"><div class="col-md-6"><label for="creationMode" class="form-label">Creation mode</label><select id="creationMode" name="creation_mode" class="form-select" data-erp-change="exams-add-action-0" data-erp-change-args="<?= schoolPageActionArgs("exams-add",[]) ?>"><option value="manual" <?= $mode==='manual'?'selected':'' ?>>Manual — customize defaults</option><option value="automatic" <?= $mode==='automatic'?'selected':'' ?>>Automatic — locked default settings</option></select></div><div class="col-md-6"><label for="examTemplate" class="form-label">Super-admin default exam</label><select id="examTemplate" name="template_id" class="form-select" data-erp-change="exams-add-action-1" data-erp-change-args="<?= schoolPageActionArgs("exams-add",[]) ?>"><?php foreach($templates as $t): ?><option value="<?= (int)$t['id'] ?>" <?= $templateId===(int)$t['id']?'selected':'' ?>><?= sanitize($t['name']) ?></option><?php endforeach; ?></select></div></form>
         <div class="alert alert-info"><?= $mode==='automatic'?'Automatic exam: default settings are read-only. Choose your school dates below. Marks, schedules, symbols and lock/reopen remain available.':'Manual exam: defaults are loaded from the selected template. Edit them to suit your school; existing exams are not changed.' ?></div>
         <form method="POST" action="">
             <input type="hidden" name="creation_mode" value="<?= sanitize($mode) ?>"><input type="hidden" name="template_id" value="<?= $templateId ?>"><input type="hidden" name="template_revision" value="<?= (int)($template['revision']??0) ?>">
@@ -117,13 +117,9 @@ ob_start();
     </div>
 </div>
 
-<script>
-<?php if($mode==='automatic'): ?>['type','result_system','has_internal','display_calendar','date_format'].forEach(id=>document.getElementById(id).disabled=true);<?php endif; ?>
-document.getElementById('type').addEventListener('change',function(){
-    const internal=document.getElementById('has_internal');internal.disabled=this.value==='unit';
-    if(internal.disabled)internal.checked=false;
-});
-</script>
+<?php schoolPageModule("exams-add");schoolPageValue("exams-add-value-0",($mode==='automatic')?'true':'false');
+if($mode==='automatic'):
+endif; ?>
 
 <?php
 $content = ob_get_clean();

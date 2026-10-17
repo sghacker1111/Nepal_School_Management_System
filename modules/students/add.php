@@ -226,7 +226,7 @@ ob_start();
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Class <span class="text-danger">*</span></label>
-                    <select name="class_id" id="classSelect" class="form-select" required onchange="loadSections()">
+                    <select name="class_id" id="classSelect" class="form-select" required data-erp-change="students-add-action-0" data-erp-change-args="<?= schoolPageActionArgs("students-add",[]) ?>">
                         <option value="">Select Class</option>
                         <?php foreach ($classes as $class): ?>
                         <option value="<?= $class['id'] ?>" <?= ($_POST['class_id'] ?? '') == $class['id'] ? 'selected' : '' ?>>

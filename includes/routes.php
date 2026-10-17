@@ -34,16 +34,22 @@ function schoolRoutes(): array {
         'learning/ocr_scanner','learning/practice_mcqs','learning/index','learning/paper_generator',
         'learning/exam_paper_generator','learning/exam_specification_grids','learning/specification_grids',
         'super_admin/subjects','super_admin/exam_templates','accounting/invoice','accounting/receipt','accounting/credit'];
-    $routes=[['id'=>'dashboard','path'=>'/','controller'=>'index.php','kind'=>'page','pageId'=>'dashboard','enhanced'=>false]];
+    $routes=[['id'=>'dashboard','path'=>'/','controller'=>'index.php','kind'=>'page','pageId'=>'dashboard','enhanced'=>true]];
     foreach($groups as $group=>$files){
         $prefix=match($group){'auth'=>'account','super_admin'=>'admin',default=>$group};
         foreach($files as $file){
             $key=$group.'/'.$file;$id=str_replace('_','-',$group.'-'.$file);
             $path=$overrides[$key]??('/'.$prefix.($file==='index'?'':'/'.str_replace('_','-',$file)));
-            $routes[]=['id'=>$id,'path'=>$path,'controller'=>'modules/'.$key.'.php','kind'=>$kinds[$key]??(in_array($key,$mixed,true)?'mixed':'page'),'pageId'=>$id,'enhanced'=>false];
+            $routes[]=['id'=>$id,'path'=>$path,'controller'=>'modules/'.$key.'.php','kind'=>$kinds[$key]??(in_array($key,$mixed,true)?'mixed':'page'),'pageId'=>$id,'enhanced'=>schoolPageAdapterReady($id)];
         }
     }
     return $routes;
+}
+
+function schoolPageAdapterReady(string $id):bool {
+    if(in_array($id,['error','confirm-action','dashboard','auth-profile','auth-change-password'],true))return true;
+    if(in_array($id,['students-admit-card','exams-admit-cards','super-admin-switch-school','super-admin-question-corrections'],true))return false;
+    return (bool)preg_match('/^(students|teachers|classes|subjects|exams|settings|super-admin)-/',$id);
 }
 
 function schoolRouteBasePath(): string {

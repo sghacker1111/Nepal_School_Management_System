@@ -5,6 +5,11 @@ import * as lifecycle from './app/page-lifecycle.js';
 import * as dirtyForms from './app/dirty-forms.js';
 import * as navigation from './app/navigation.js';
 import * as forms from './app/forms.js';
+import '../assets/js/routine-controls.js';
+import '../assets/js/curriculum-delete.js';
+import './pages/school.js';
+import './pages/academics.js';
+import './pages/administration.js';
 
 // CSP build: no new Function/eval required to operate the navigation.
 Alpine.data('workspace', () => ({

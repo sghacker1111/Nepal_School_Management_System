@@ -94,7 +94,7 @@ ob_start();
 <div class="row">
     <?php if($cleanupError): ?><div class="alert alert-danger" role="alert"><?= sanitize($cleanupError) ?></div><?php endif; ?>
     <?php if(Auth::hasRole(['super_admin','school_admin'])): ?><div class="mb-3"><a href="?show_archived=<?= $showArchived?'0':'1' ?>" class="btn btn-outline-secondary"><?= $showArchived?'Hide archived classes':'Show archived classes' ?></a></div><?php endif; ?>
-    <?php foreach($legacyClasses as $legacyId): ?><div class="col-12 mb-3"><div class="alert alert-warning"><h5>Remove legacy class “7” (ID <?= (int)$legacyId ?>)</h5><p>This school contains teacher sgsunil. Remove this incorrect class from active lists without deleting its students, marks, fees, subjects or history.</p><form method="POST" onsubmit="return confirm('Remove only this class named exactly 7 from active lists? Its linked records will be retained.')"><input type="hidden" name="action" value="remove_legacy_seven"><input type="hidden" name="class_id" value="<?= (int)$legacyId ?>"><label class="d-block mb-2"><input type="checkbox" name="confirm_cleanup" value="1" required> Confirm this is the incorrect class</label><label>Current administrator password<input class="form-control" type="password" name="password" autocomplete="current-password" required></label><button class="btn btn-danger ms-2">Remove legacy class 7</button></form></div></div><?php endforeach; ?>
+    <?php foreach($legacyClasses as $legacyId): ?><div class="col-12 mb-3"><div class="alert alert-warning"><h5>Remove legacy class “7” (ID <?= (int)$legacyId ?>)</h5><p>This school contains teacher sgsunil. Remove this incorrect class from active lists without deleting its students, marks, fees, subjects or history.</p><form method="POST" data-erp-submit="classes-index-action-0" data-erp-submit-args="<?= schoolPageActionArgs("classes-index",[]) ?>"><input type="hidden" name="action" value="remove_legacy_seven"><input type="hidden" name="class_id" value="<?= (int)$legacyId ?>"><label class="d-block mb-2"><input type="checkbox" name="confirm_cleanup" value="1" required> Confirm this is the incorrect class</label><label>Current administrator password<input class="form-control" type="password" name="password" autocomplete="current-password" required></label><button class="btn btn-danger ms-2">Remove legacy class 7</button></form></div></div><?php endforeach; ?>
     <!-- Classes Column -->
     <div class="col-md-7 mb-4">
         <div class="card h-100 shadow-sm border-0">
@@ -147,7 +147,7 @@ ob_start();
                                              <i class="fas fa-book"></i> Subjects
                                          </a>
                                          <?php if(!$class['is_active']): ?><details class="d-inline-block"><summary class="btn btn-sm btn-outline-success">Restore</summary><form method="POST"><input type="hidden" name="action" value="restore_class"><input type="hidden" name="class_id" value="<?= (int)$class['id'] ?>"><label>Current administrator password<input type="password" class="form-control" name="password" autocomplete="current-password" required></label><button class="btn btn-sm btn-success">Confirm restore</button></form></details><?php else: ?>
-                                         <button onclick="confirmDeleteClass(<?= $class['id'] ?>)" class="btn btn-sm btn-outline-danger" title="Archive class">
+                                         <button data-erp-click="classes-index-action-1" data-erp-click-args="<?= schoolPageActionArgs("classes-index",[(string)($class['id'])]) ?>" class="btn btn-sm btn-outline-danger" title="Archive class">
                                              <i class="fas fa-trash"></i>
                                          </button>
                                          <?php endif; ?>
@@ -196,7 +196,7 @@ ob_start();
                                     <td><small class="text-muted"><i class="fas fa-user-tie"></i> <?= sanitize($section['teacher_name'] ?? 'Not Assigned') ?></small></td>
                                     <?php if (Auth::hasRole(['super_admin', 'school_admin'])): ?>
                                     <td class="text-end">
-                                        <button onclick="confirmDeleteSection(<?= $section['id'] ?>)" class="btn btn-sm btn-outline-danger" title="Delete">
+                                        <button data-erp-click="classes-index-action-2" data-erp-click-args="<?= schoolPageActionArgs("classes-index",[(string)($section['id'])]) ?>" class="btn btn-sm btn-outline-danger" title="Delete">
                                             <i class="fas fa-trash"></i>
                                         </button>
                                     </td>
@@ -216,19 +216,8 @@ ob_start();
     </div>
 </div>
 
-<script>
-function confirmDeleteClass(id) {
-    verifyPasswordAndProceed(function() {
-        window.location.href = '<?= schoolRouteUrl('modules/classes/index.php') ?>?delete_class=' + id;
-    }, 'Confirm Archive', 'Please enter your administrator password to archive this class. Its students, marks and all linked records will be retained:');
-}
-
-function confirmDeleteSection(id) {
-    verifyPasswordAndProceed(function() {
-        window.location.href = '<?= schoolRouteUrl('modules/classes/index.php') ?>?delete_section=' + id;
-    }, 'Confirm Deletion', 'Please enter your administrator password to permanently delete this section:');
-}
-</script>
+<?php schoolPageModule("classes-index");schoolPageValue("classes-index-value-0",(string)(schoolRouteUrl('modules/classes/index.php')));
+schoolPageValue("classes-index-value-1",(string)(schoolRouteUrl('modules/classes/index.php'))); ?>
 
 <?php
 $content = ob_get_clean();

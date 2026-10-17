@@ -34,6 +34,19 @@ function schoolPageMutation($error='', $success='', ?string $explicit=null): arr
     return ['outcome'=>$outcome];
 }
 
+function schoolPageModule(string $id): void {
+    if(!preg_match('/^[a-z][a-z0-9-]{0,100}$/D',$id))throw new InvalidArgumentException('Invalid page module.');
+    $GLOBALS['erpPageModules'][$id]=true;
+}
+function schoolPageValue(string $key,string $value): void {
+    $GLOBALS['erpPageValues'][$key]=$value;
+}
+function schoolPageActionArgs(string $module,array $values): string {
+    schoolPageModule($module);
+    $values=array_map(static fn($value)=>html_entity_decode((string)$value,ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8'),$values);
+    return htmlspecialchars(json_encode($values,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_INVALID_UTF8_SUBSTITUTE|JSON_THROW_ON_ERROR),ENT_QUOTES,'UTF-8');
+}
+
 function schoolPageConfig(string $pageId,array $config=[]): string {
     if(!preg_match('/^[a-z][a-z0-9-]{0,100}$/D',$pageId))throw new InvalidArgumentException('Invalid page identity.');
     $route=schoolRouteForController(schoolControllerPath());

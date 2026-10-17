@@ -46,7 +46,7 @@ ob_start();
             <i class="fas fa-edit"></i> Edit Profile
         </a>
         <?php endif; ?>
-        <button onclick="window.print()" class="btn btn-dark">
+        <button data-erp-click="students-view-action-0" data-erp-click-args="<?= schoolPageActionArgs("students-view",[]) ?>" class="btn btn-dark">
             <i class="fas fa-print"></i> Print
         </button>
     </div>

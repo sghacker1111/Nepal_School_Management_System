@@ -483,7 +483,7 @@ ob_start();
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <button type="button" onclick="printAdmitCards()" class="btn btn-info text-white w-100 fw-bold">
+                <button type="button" data-erp-click="exams-view-action-0" data-erp-click-args="<?= schoolPageActionArgs("exams-view",[]) ?>" class="btn btn-info text-white w-100 fw-bold">
                     <i class="fas fa-id-card"></i> Generate & Print Cards
                 </button>
             </div>
@@ -624,90 +624,10 @@ ob_start();
     </div>
 </div>
 
-<script>
-function printAdmitCards() {
-    const classId = document.getElementById('print_class_id').value;
-    if (!classId) {
-        Swal.fire('Error', 'Please select a class first.', 'error');
-        return;
-    }
-    window.open('<?= schoolRouteUrl('modules/exams/admit_cards.php') ?>?exam_id=<?= $exam_id ?>&class_id=' + classId, '_blank');
-}
-
-// Dynamic class-subject dropdown filtering
-const classSubjectsMap = <?= json_encode($class_subjects_json,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;
-const editMapping = <?= $edit_mapping ? json_encode($edit_mapping) : 'null' ?>;
-
-document.addEventListener('DOMContentLoaded', function() {
-    const classSelect = document.getElementById('class_id');
-    const subjectSelect = document.getElementById('subject_id');
-    const creditHoursInput = document.getElementById('credit_hours');
-    const intCreditInput = document.getElementById('internal_credit_hours');
-    const extCreditInput = document.getElementById('external_credit_hours');
-    const thFullInput = document.getElementById('form_theory_full');
-    const thPassInput = document.getElementById('form_theory_pass');
-    const inFullInput = document.getElementById('form_practical_full');
-    const inPassInput = document.getElementById('form_practical_pass');
-    
-    function updateSubjects() {
-        const classId = classSelect.value;
-        const selectedSubjectId = editMapping ? editMapping.subject_id : '';
-        
-        if (classId) {
-            subjectSelect.innerHTML = '<option value="">Choose Subject</option>';
-            if (classSubjectsMap[classId]) {
-                classSubjectsMap[classId].forEach(sub => {
-                    const opt = document.createElement('option');
-                    opt.value = sub.id;
-                    opt.textContent = sub.name;
-                    opt.dataset.thCredit = sub.th_credit ?? '';
-                    opt.dataset.inCredit = sub.in_credit ?? '';
-                    opt.dataset.thFull = sub.th_full ?? '';
-                    opt.dataset.thPass = sub.th_pass ?? '';
-                    opt.dataset.inFull = sub.in_full ?? '';
-                    opt.dataset.inPass = sub.in_pass ?? '';
-                    if (sub.id == selectedSubjectId) {
-                        opt.selected = true;
-                    }
-                    subjectSelect.appendChild(opt);
-                });
-            } else {
-                subjectSelect.innerHTML = '<option value="">No Subjects Mapped to Class</option>';
-            }
-        } else {
-            subjectSelect.innerHTML = '<option value="">Choose Class First</option>';
-        }
-    }
-
-    function onSubjectChange() {
-        if (editMapping) return; // Do not overwrite when explicitly editing an existing mapping
-        const selectedOpt = subjectSelect.options[subjectSelect.selectedIndex];
-        if (selectedOpt && selectedOpt.value) {
-            const thCr = parseFloat(selectedOpt.dataset.thCredit) || 0;
-            const inCr = parseFloat(selectedOpt.dataset.inCredit) || 0;
-            if (extCreditInput) extCreditInput.value = selectedOpt.dataset.thCredit || '';
-            if (intCreditInput) intCreditInput.value = selectedOpt.dataset.inCredit || '';
-            if (creditHoursInput) {
-                creditHoursInput.value = (thCr + inCr > 0) ? (thCr + inCr) : '';
-            }
-            if (thFullInput && selectedOpt.dataset.thFull) thFullInput.value = selectedOpt.dataset.thFull;
-            if (thPassInput && selectedOpt.dataset.thPass) thPassInput.value = selectedOpt.dataset.thPass;
-            if (inFullInput && selectedOpt.dataset.inFull) inFullInput.value = selectedOpt.dataset.inFull;
-            if (inPassInput && selectedOpt.dataset.inPass) inPassInput.value = selectedOpt.dataset.inPass;
-        }
-    }
-    
-    if (classSelect) {
-        classSelect.addEventListener('change', updateSubjects);
-        // Pre-fill / trigger on page load (essential for edit states)
-        updateSubjects();
-    }
-
-    if (subjectSelect) {
-        subjectSelect.addEventListener('change', onSubjectChange);
-    }
-});
-</script>
+<?php schoolPageModule("exams-view");schoolPageValue("exams-view-value-0",(string)(schoolRouteUrl('modules/exams/admit_cards.php')));
+schoolPageValue("exams-view-value-1",(string)($exam_id));
+schoolPageValue("exams-view-value-2",(string)(json_encode($class_subjects_json,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT)));
+schoolPageValue("exams-view-value-3",(string)($edit_mapping ? json_encode($edit_mapping) : 'null')); ?>
 
 <?php
 $content = ob_get_clean();

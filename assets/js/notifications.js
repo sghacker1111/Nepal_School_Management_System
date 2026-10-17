@@ -33,7 +33,7 @@
     if(!response.ok||json?.success===false)schoolNotify(json?.message||'The request failed ('+response.status+'). Reload and try again.','error');
     else if(json?.success===true&&json.message)schoolNotify(json.message);
    }return response;
-  }catch(error){if(same)schoolNotify('The request could not reach the server. Check your connection and retry.','error');throw error;}
+  }catch(error){if(same&&error?.name!=='AbortError')schoolNotify('The request could not reach the server. Check your connection and retry.','error');throw error;}
  };
  if(window.jQuery){jQuery(document).ajaxError((event,xhr)=>schoolNotify(xhr.responseJSON?.message||'The request failed ('+xhr.status+'). Please retry.','error'));jQuery(document).ajaxSuccess((event,xhr)=>{const data=xhr.responseJSON;if(data?.success===false)schoolNotify(data.message||'The change could not be saved.','error');else if(data?.success===true&&data.message)schoolNotify(data.message);});}
 })();

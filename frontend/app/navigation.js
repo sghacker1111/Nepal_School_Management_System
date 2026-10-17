@@ -168,5 +168,6 @@ export function installNavigation(htmx, dependencies = {}) {
     };
     doc.addEventListener('click', click); win.addEventListener('popstate', pop, true); doc.addEventListener('htmx:pushedIntoHistory', panelHistory);
     const dispose = () => { state.abort?.abort(); state.sequence++; doc.removeEventListener('click', click); win.removeEventListener('popstate', pop, true); doc.removeEventListener('htmx:pushedIntoHistory', panelHistory); if (app === state) app = null; };
-    dispose.ready = isEnhancedURL(win.location.href) ? (dependencies.mountPage || mountPage)(root, metadata) : Promise.resolve(); return dispose;
+    dispose.ready = isEnhancedURL(win.location.href) ? (dependencies.mountPage || mountPage)(root, metadata)
+        : metadata.modules?.some(id=>id.startsWith('shared-')) ? (dependencies.mountPage || mountPage)(root,{...metadata,pageId:'compatibility'}) : Promise.resolve(); return dispose;
 }

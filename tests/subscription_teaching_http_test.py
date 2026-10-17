@@ -1,5 +1,6 @@
 """Actual forms plus crafted URLs/POSTs against a disposable school database."""
 import json, re
+from html import unescape
 from http_support import ERPHttpFixture
 
 with ERPHttpFixture() as app:
@@ -56,7 +57,8 @@ with ERPHttpFixture() as app:
     before=app.snapshot('schools'),app.snapshot('users')
     body=app.request(schools,{**school,'packages[]':[]})
     assert 'Tick at least one package' in body and 'TestPassword123!' not in body
-    recovery=json.loads(re.search(r'const recovery=(.*?);',body).group(1))
+    metadata=json.loads(unescape(re.search(r'data-erp-config="([^"]+)"',body).group(1)))
+    recovery=json.loads(metadata['values']['super-admin-schools-value-1'])
     assert recovery['name_en']==school['name_en'] and recovery['packages']==[] and 'admin_password' not in recovery
     assert (app.snapshot('schools'),app.snapshot('users'))==before
     body=app.request(schools,school);assert 'School registered' in body

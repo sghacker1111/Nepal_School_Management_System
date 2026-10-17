@@ -143,7 +143,7 @@ ob_start();
                                    title="<?= $teacher['status'] == 1 ? 'Deactivate' : 'Activate' ?>">
                                     <i class="fas <?= $teacher['status'] == 1 ? 'fa-ban' : 'fa-check' ?>"></i>
                                 </a>
-                                <button onclick="confirmDeleteTeacher(<?= $teacher['id'] ?>)" class="btn btn-sm btn-outline-danger" title="Archive">
+                                <button data-erp-click="teachers-index-action-0" data-erp-click-args="<?= schoolPageActionArgs("teachers-index",[(string)($teacher['id'])]) ?>" class="btn btn-sm btn-outline-danger" title="Archive">
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </td>
@@ -157,23 +157,7 @@ ob_start();
     </div>
 </div>
 
-<script>
-$(document).ready(function() {
-    $('#teacherTable').DataTable({
-        pageLength: 10,
-        order: [[0, 'asc']],
-        language: {
-            emptyTable: "No teachers found."
-        }
-    });
-});
-
-function confirmDeleteTeacher(id) {
-    verifyPasswordAndProceed(function() {
-        window.location.href = '<?= schoolRouteUrl('modules/teachers/index.php') ?>?delete=' + id;
-    }, 'Confirm Deletion', 'Please enter your administrator password to permanently archive this teacher:');
-}
-</script>
+<?php schoolPageModule("teachers-index");schoolPageValue("teachers-index-value-0",(string)(schoolRouteUrl('modules/teachers/index.php'))); ?>
 
 <?php
 $content = ob_get_clean();

@@ -49,7 +49,7 @@ await writeFile('frontend/generated-utilities.css', css);
 const cli = path.resolve('node_modules/@tailwindcss/cli/dist/index.mjs');
 const result = spawnSync(process.execPath, [cli, '-i', 'frontend/app.css', '-o', 'assets/dist/app.css', '--minify'], { stdio: 'inherit' });
 if (result.status !== 0) process.exit(result.status || 1);
-await build({ entryPoints: ['frontend/workspace.js', 'frontend/vendor.js', 'assets/js/ui-components.js'], outdir: 'assets/dist', bundle: true, minify: true, sourcemap: false, target: ['es2020'], legalComments: 'external', entryNames: '[name]' });
+await build({ entryPoints: ['frontend/workspace.js', 'frontend/print-controls.js', 'frontend/vendor.js', 'assets/js/ui-components.js'], outdir: 'assets/dist', bundle: true, minify: true, sourcemap: false, target: ['es2020'], legalComments: 'external', entryNames: '[name]' });
 for (const name of ['vendor.js.LEGAL.txt', 'workspace.js.LEGAL.txt']) {
     const notices = await readFile('assets/dist/' + name, 'utf8');
     await writeFile('assets/dist/' + name, notices.replace(/[\t ]+$/gm, ''));
@@ -58,7 +58,7 @@ await copyFile('node_modules/@fortawesome/fontawesome-free/css/all.min.css', 'as
 await cp('node_modules/@fortawesome/fontawesome-free/webfonts', 'assets/webfonts', { recursive: true });
 // Cache-busting manifest contains only public generated files, never school data.
 const { createHash } = await import('node:crypto');
-const files = ['app.css', 'workspace.js', 'vendor.js', 'vendor.css', 'icons.css', 'ui-components.js'];
+const files = ['app.css', 'workspace.js', 'print-controls.js', 'vendor.js', 'vendor.css', 'icons.css', 'ui-components.js'];
 const manifest = Object.fromEntries(await Promise.all(files.map(async file => [file, createHash('sha256').update(await readFile('assets/dist/' + file)).digest('hex').slice(0, 12)])));
 await writeFile('assets/dist/manifest.json', JSON.stringify(manifest, null, 2) + '\n');
 console.log('Built static PHP-hosting assets. No Node.js process is needed on InfinityFree.');

@@ -15,7 +15,7 @@ routeEqual(count(array_unique(array_column($routes,'path'))),count($routes),'Can
 foreach($routes as $route){
     routeEqual(schoolResolveRoute($route['path'])['controller'],$route['controller'],'Canonical path dispatch');
     routeEqual(in_array($route['kind'],['page','mixed','json','print','auth'],true),true,'Explicit response kind');
-    routeEqual($route['enhanced'],false,'Do not enable unfinished lifecycles');
+    routeEqual($route['enhanced'],schoolPageAdapterReady($route['pageId']),'Enable only verified lifecycle groups');
 }
 foreach(['/' =>'index.php','/students'=>'modules/students/index.php','/results/marks-entry'=>'modules/results/marks_entry.php','/exam-questions'=>'modules/learning/exam_questions.php','/learning/question-bank'=>'modules/learning/questions.php','/login'=>'modules/auth/login.php'] as $path=>$controller)routeEqual(schoolResolveRoute($path)['controller'],$controller,'Public path '.$path);
 routeEqual(schoolResolveRoute('/erp/students','/erp')['controller'],'modules/students/index.php','Subdirectory dispatch');

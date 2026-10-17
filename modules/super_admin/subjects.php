@@ -317,7 +317,7 @@ ob_start();
 <div class="alert alert-success"><i class="fas fa-check-circle"></i> <?= sanitize($success) ?></div>
 <?php endif; ?>
 
-<form method="GET" class="row g-3 mb-4"><div class="col-md-6"><label for="catalogClass" class="form-label">Select class first</label><select id="catalogClass" name="filter_class" class="form-select" onchange="this.form.submit()"><option value="">Choose class</option><?php foreach($classes as $c): ?><option value="<?= $c['id'] ?>" <?= $filter_class===(int)$c['id']?'selected':'' ?>><?= sanitize($c['name']) ?></option><?php endforeach; ?></select></div><div class="col-md-4 d-flex align-items-end"><label><input type="checkbox" name="show_hidden" value="1" <?= $show_hidden?'checked':'' ?> onchange="this.form.submit()"> Include hidden / inactive subjects and mappings</label></div></form>
+<form method="GET" class="row g-3 mb-4"><div class="col-md-6"><label for="catalogClass" class="form-label">Select class first</label><select id="catalogClass" name="filter_class" class="form-select" data-erp-change="super-admin-subjects-action-0" data-erp-change-args="<?= schoolPageActionArgs("super-admin-subjects",[]) ?>"><option value="">Choose class</option><?php foreach($classes as $c): ?><option value="<?= $c['id'] ?>" <?= $filter_class===(int)$c['id']?'selected':'' ?>><?= sanitize($c['name']) ?></option><?php endforeach; ?></select></div><div class="col-md-4 d-flex align-items-end"><label><input type="checkbox" name="show_hidden" value="1" <?= $show_hidden?'checked':'' ?> data-erp-change="super-admin-subjects-action-1" data-erp-change-args="<?= schoolPageActionArgs("super-admin-subjects",[]) ?>"> Include hidden / inactive subjects and mappings</label></div></form>
 <?php if(!$filter_class): ?><p class="alert alert-info">Choose a class to see its subjects and chapters. Class creation belongs in Class Management.</p><?php endif; ?>
 <div class="row g-4">
     <!-- Left Column: Manage Universal Subjects & Mapping -->
@@ -333,7 +333,7 @@ ob_start();
                     <a href="?filter_class=<?= $filter_class ?>&show_hidden=<?= $show_hidden ? '0' : '1' ?>" class="btn btn-sm <?= $show_hidden ? 'btn-warning text-dark' : 'btn-outline-secondary' ?>">
                         <i class="fas <?= $show_hidden ? 'fa-eye-slash' : 'fa-eye' ?>"></i> <?= $show_hidden ? 'Hide Inactive' : 'Show Hidden' ?>
                     </a>
-                    <button class="btn btn-sm btn-primary" onclick="showAddSubjectForm()"><i class="fas fa-plus"></i> Add Subject</button>
+                    <button class="btn btn-sm btn-primary" data-erp-click="super-admin-subjects-action-2" data-erp-click-args="<?= schoolPageActionArgs("super-admin-subjects",[]) ?>"><i class="fas fa-plus"></i> Add Subject</button>
                 </div>
             </div>
             <div class="card-body p-0">
@@ -379,7 +379,7 @@ ob_start();
                                     <?php endif; ?>
                                 </td>
                                 <td class="text-end">
-                                    <button class="btn btn-sm btn-outline-warning" onclick='editSubject(<?= htmlspecialchars(json_encode($s),ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8') ?>)' title="Edit Subject"><i class="fas fa-edit"></i></button>
+                                    <button class="btn btn-sm btn-outline-warning" data-erp-click="super-admin-subjects-action-3" data-erp-click-args="<?= schoolPageActionArgs("super-admin-subjects",[(string)(htmlspecialchars(json_encode($s),ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8'))]) ?>" title="Edit Subject"><i class="fas fa-edit"></i></button>
                                     <form method="POST" class="d-inline"><input type="hidden" name="action_visibility" value="1"><input type="hidden" name="subject_id" value="<?= $s['id'] ?>"><input type="hidden" name="visible" value="<?= !empty($s['is_hidden'])?'1':'0' ?>"><button class="btn btn-sm btn-outline-secondary" title="<?= !empty($s['is_hidden'])?'Unhide Subject':'Hide Subject' ?>"><i class="fas <?= !empty($s['is_hidden'])?'fa-eye':'fa-eye-slash' ?>"></i></button></form>
                                 </td>
                             </tr>
@@ -473,7 +473,7 @@ ob_start();
                 <div class="row g-2 mb-4">
                     <div class="col-md-6">
                         <label class="form-label small fw-semibold">Filter Class</label>
-                        <select id="chapterFilterClass" class="form-select form-select-sm" onchange="window.location.href='?filter_class='+this.value+'&show_hidden=<?= $show_hidden?1:0 ?>'">
+                        <select id="chapterFilterClass" class="form-select form-select-sm" data-erp-change="super-admin-subjects-action-4" data-erp-change-args="<?= schoolPageActionArgs("super-admin-subjects",[(string)($show_hidden?1:0)]) ?>">
                             <option value="">-- Choose Class --</option>
                             <?php foreach ($classes as $c): ?>
                             <option value="<?= $c['id'] ?>" <?= $filter_class===(int)$c['id']?'selected':'' ?>><?= sanitize($c['name']) ?></option>
@@ -482,7 +482,7 @@ ob_start();
                     </div>
                     <div class="col-md-6">
                         <label class="form-label small fw-semibold">Filter Subject</label>
-                        <select id="chapterFilterSubject" class="form-select form-select-sm" onchange="loadChaptersList()">
+                        <select id="chapterFilterSubject" class="form-select form-select-sm" data-erp-change="super-admin-subjects-action-5" data-erp-change-args="<?= schoolPageActionArgs("super-admin-subjects",[]) ?>">
                             <option value="">-- Choose Subject --</option>
                             <?php foreach ($subjects as $s): ?>
                             <option value="<?= $s['id'] ?>"><?= sanitize($s['name_en']) ?></option>
@@ -505,7 +505,7 @@ ob_start();
                             <input type="number" id="newChapterSort" class="form-control form-control-sm" placeholder="Order (e.g. 1)" value="0">
                         </div>
                         <div class="col-md-9 text-end">
-                            <button class="btn btn-sm btn-success px-4" onclick="addChapter()"><i class="fas fa-plus"></i> Add</button>
+                            <button class="btn btn-sm btn-success px-4" data-erp-click="super-admin-subjects-action-6" data-erp-click-args="<?= schoolPageActionArgs("super-admin-subjects",[]) ?>"><i class="fas fa-plus"></i> Add</button>
                         </div>
                     </div>
                 </div>
@@ -574,11 +574,11 @@ ob_start();
                             </div>
                             <div class="mb-2">
                                 <label class="form-label small text-muted mb-0">Credit Hours</label>
-                                <input type="number" step="0.01" name="th_credit_hours" id="subjectThCh" class="form-control form-control-sm font-monospace" value="3.00" oninput="calculateModalTotals()">
+                                <input type="number" step="0.01" name="th_credit_hours" id="subjectThCh" class="form-control form-control-sm font-monospace" value="3.00" data-erp-input="super-admin-subjects-action-7" data-erp-input-args="<?= schoolPageActionArgs("super-admin-subjects",[]) ?>">
                             </div>
                             <div class="mb-2">
                                 <label class="form-label small text-muted mb-0">Full Marks</label>
-                                <input type="number" step="0.01" name="th_full_marks" id="subjectThFm" class="form-control form-control-sm font-monospace" value="75.00" oninput="calculateModalTotals()">
+                                <input type="number" step="0.01" name="th_full_marks" id="subjectThFm" class="form-control form-control-sm font-monospace" value="75.00" data-erp-input="super-admin-subjects-action-8" data-erp-input-args="<?= schoolPageActionArgs("super-admin-subjects",[]) ?>">
                             </div>
                             <div>
                                 <label class="form-label small text-muted mb-0">Pass Marks</label>
@@ -595,11 +595,11 @@ ob_start();
                             </div>
                             <div class="mb-2">
                                 <label class="form-label small text-muted mb-0">Credit Hours</label>
-                                <input type="number" step="0.01" name="in_credit_hours" id="subjectInCh" class="form-control form-control-sm font-monospace" value="1.00" oninput="calculateModalTotals()">
+                                <input type="number" step="0.01" name="in_credit_hours" id="subjectInCh" class="form-control form-control-sm font-monospace" value="1.00" data-erp-input="super-admin-subjects-action-9" data-erp-input-args="<?= schoolPageActionArgs("super-admin-subjects",[]) ?>">
                             </div>
                             <div class="mb-2">
                                 <label class="form-label small text-muted mb-0">Full Marks</label>
-                                <input type="number" step="0.01" name="in_full_marks" id="subjectInFm" class="form-control form-control-sm font-monospace" value="25.00" oninput="calculateModalTotals()">
+                                <input type="number" step="0.01" name="in_full_marks" id="subjectInFm" class="form-control form-control-sm font-monospace" value="25.00" data-erp-input="super-admin-subjects-action-10" data-erp-input-args="<?= schoolPageActionArgs("super-admin-subjects",[]) ?>">
                             </div>
                             <div>
                                 <label class="form-label small text-muted mb-0">Pass Marks</label>
@@ -630,225 +630,10 @@ ob_start();
     </div>
 </div>
 
-<script src="<?= APP_URL ?>/assets/js/curriculum-delete.js?v=<?= (int)filemtime(__DIR__.'/../../assets/js/curriculum-delete.js') ?>"></script>
-<script>
-let subjectModal = null;
-
-document.addEventListener('DOMContentLoaded', function() {
-    subjectModal = new ErpUI.Modal(document.getElementById('subjectModal'));
-});
-
-function calculateModalTotals() {
-    const thCh = parseFloat(document.getElementById('subjectThCh').value) || 0;
-    const inCh = parseFloat(document.getElementById('subjectInCh').value) || 0;
-    const thFm = parseFloat(document.getElementById('subjectThFm').value) || 0;
-    const inFm = parseFloat(document.getElementById('subjectInFm').value) || 0;
-
-    const totalCh = (thCh + inCh).toFixed(2);
-    const totalFm = (thFm + inFm).toFixed(2);
-
-    document.getElementById('modal_total_ch_display').innerText = totalCh + ' CH';
-    document.getElementById('modal_total_fm_display').innerText = totalFm + ' FM';
-}
-
-function showAddSubjectForm() {
-    ['subjectThCh','subjectInCh','subjectThFm','subjectThPm','subjectInFm','subjectInPm'].forEach(id=>document.getElementById(id).disabled=false);
-    document.getElementById('subjectAction').value = 'add';
-    document.getElementById('subjectId').value = '';
-    document.getElementById('subjectModalTitle').innerHTML = '<i class="fas fa-book"></i> Add Universal Subject';
-    
-    document.getElementById('subjectCode').value = '';
-    document.getElementById('subjectNameEn').value = '';
-    document.getElementById('subjectNameNp').value = '';
-    document.getElementById('subjectIsOptional').value = '0';
-    
-    document.getElementById('subjectThCh').value = '3.00';
-    document.getElementById('subjectThFm').value = '75.00';
-    document.getElementById('subjectThPm').value = '26.25';
-    
-    document.getElementById('subjectInCh').value = '1.00';
-    document.getElementById('subjectInFm').value = '25.00';
-    document.getElementById('subjectInPm').value = '10.00';
-    
-    calculateModalTotals();
-    
-    // Show and require class selection for adding
-    document.getElementById('subjectMapClassWrapper').style.display = 'block';
-    document.getElementById('subjectMapClassId').required = true;
-    document.getElementById('subjectMapClassId').value = '';
-    
-    subjectModal.show();
-}
-
-function editSubject(s) {
-    document.getElementById('subjectAction').value = 'edit';
-    document.getElementById('subjectId').value = s.id;
-    document.getElementById('subjectModalTitle').innerHTML = '<i class="fas fa-edit"></i> Edit Universal Subject';
-    
-    document.getElementById('subjectCode').value = s.code;
-    document.getElementById('subjectNameEn').value = s.name_en;
-    document.getElementById('subjectNameNp').value = s.name_np || '';
-    document.getElementById('subjectIsOptional').value = (s.type === 'optional') ? '1' : '0';
-    
-    document.getElementById('subjectThCh').value = parseFloat(s.th_credit_hours || 0).toFixed(2);
-    document.getElementById('subjectThFm').value = parseFloat(s.th_full_marks || 75).toFixed(2);
-    document.getElementById('subjectThPm').value = parseFloat(s.th_pass_marks || 26.25).toFixed(2);
-    
-    document.getElementById('subjectInCh').value = parseFloat(s.in_credit_hours || 0).toFixed(2);
-    document.getElementById('subjectInFm').value = parseFloat(s.in_full_marks || 25).toFixed(2);
-    document.getElementById('subjectInPm').value = parseFloat(s.in_pass_marks || 10).toFixed(2);
-    
-    calculateModalTotals();
-    const thematic=s.assessment_method==='THEMATIC_CONTINUOUS';
-    ['subjectThCh','subjectInCh','subjectThFm','subjectThPm','subjectInFm','subjectInPm'].forEach(id=>{const el=document.getElementById(id);el.disabled=thematic;if(thematic){el.value='';el.placeholder='Not specified';}});
-    if(thematic){document.getElementById('modal_total_ch_display').innerText=s.credit_hours+' CH';document.getElementById('modal_total_fm_display').innerText='Achievement 0–100%';}
-    
-    // Hide and don't require class selection for editing
-    document.getElementById('subjectMapClassWrapper').style.display = 'none';
-    document.getElementById('subjectMapClassId').required = false;
-    document.getElementById('subjectMapClassId').value = '';
-    
-    subjectModal.show();
-}
-
-function loadChaptersList() {
-    const classId = document.getElementById('chapterFilterClass').value;
-    const subjectId = document.getElementById('chapterFilterSubject').value;
-    const wrapper = document.getElementById('chaptersListWrapper');
-    const addWrapper = document.getElementById('addChapterWrapper');
-    
-    if (!classId || !subjectId) {
-        wrapper.innerHTML = `
-            <div class="text-center text-muted py-5">
-                <i class="fas fa-filter fa-2x mb-3 text-muted"></i>
-                <p>Select both Class and Subject filters to manage chapters.</p>
-            </div>
-        `;
-        addWrapper.style.display = 'none';
-        return;
-    }
-    
-    addWrapper.style.display = 'block';
-    
-    // Fetch chapters via AJAX (fallback to cdc curriculum if empty)
-    $.ajax({
-        url: <?= json_encode(schoolRouteUrl('modules/super_admin/subjects.php')) ?>,
-        data: {
-            action_get_chapters: 1,
-            class_id: classId,
-            subject_id: subjectId
-        },
-        dataType: 'json',
-        success: function(chapters) {
-            let html = '';
-            if (chapters.length > 0) {
-                html = `
-                    <div class="table-responsive">
-                        <table class="table table-hover table-sm align-middle">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Chapter Name</th>
-                                    <th class="text-end">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                `;
-                // Chapter names are rendered using textContent below.
-
-                html += `
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-            } else {
-                html = `
-                    <div class="text-center text-muted py-4">
-                        <p>No chapters found for this combination. Fallback catalog has no default chapters either.</p>
-                    </div>
-                `;
-            }
-            wrapper.innerHTML = html;
-            const body=wrapper.querySelector('tbody');
-            if(body)chapters.forEach(ch=>{
-                const row=document.createElement('tr'),label=document.createElement('td'),action=document.createElement('td'),button=document.createElement('button');
-                label.textContent=typeof ch==='string'?ch:ch.name;button.type='button';button.className='btn btn-sm btn-outline-danger';button.textContent='Delete';
-                button.onclick=()=>deleteChapter(typeof ch==='string'?ch:ch.name);action.append(button);row.append(label,action);body.append(row);
-            });
-        },
-        error: function() {
-            wrapper.innerHTML = `<div class="alert alert-danger">Error loading chapters list.</div>`;
-        }
-    });
-}
-
-function addChapter() {
-    const classId = document.getElementById('chapterFilterClass').value;
-    const subjectId = document.getElementById('chapterFilterSubject').value;
-    const name = document.getElementById('newChapterName').value.trim();
-    const nameNp = document.getElementById('newChapterNameNp').value.trim();
-    const sort = document.getElementById('newChapterSort').value;
-    
-    if (!name) {
-        alert("Chapter name is required.");
-        return;
-    }
-    
-    $.ajax({
-        url: <?= json_encode(schoolRouteUrl('modules/super_admin/subjects.php')) ?>,
-        type: 'POST',
-        data: {
-            action_chapter: 'add',
-            class_id: classId,
-            subject_id: subjectId,
-            name: name,
-            name_np: nameNp,
-            sort_order: sort
-        },
-        dataType: 'json',
-        success: function(res) {
-            if (res.success) {
-                document.getElementById('newChapterName').value = '';
-                document.getElementById('newChapterNameNp').value = '';
-                document.getElementById('newChapterSort').value = '0';
-                loadChaptersList();
-            } else {
-                alert("Error: " + res.message);
-            }
-        },
-        error: function() {
-            alert("Error adding chapter.");
-        }
-    });
-}
-
-function deleteChapter(name) {
-    if (!confirm("Are you sure you want to delete chapter: " + name + "?")) return;
-    
-    const classId = document.getElementById('chapterFilterClass').value;
-    const subjectId = document.getElementById('chapterFilterSubject').value;
-    
-    // We need to fetch the ID of the chapter first or delete by name
-    // Let's create an AJAX request that deletes by name
-    $.ajax({
-        url: <?= json_encode(schoolRouteUrl('modules/super_admin/subjects.php')) ?>,
-        type: 'POST',
-        data: {
-            action_chapter: 'delete_by_name',
-            class_id: classId,
-            subject_id: subjectId,
-            name: name
-        },
-        dataType: 'json',
-        success: function(res) {
-            if(res.success){loadChaptersList();Swal.fire('Deleted','Chapter and empty topics deleted. Restore them in Curriculum & Topics Manager → Deleted curriculum.','success');}
-            else CurriculumDeleteUI.showBlocked(res,<?= json_encode(APP_URL) ?>);
-        },
-        error: function() {
-            alert("Error deleting chapter.");
-        }
-    });
-}
-</script>
+<?php schoolPageModule("super-admin-subjects");schoolPageValue("super-admin-subjects-value-0",(string)(json_encode(schoolRouteUrl('modules/super_admin/subjects.php'))));
+schoolPageValue("super-admin-subjects-value-1",(string)(json_encode(schoolRouteUrl('modules/super_admin/subjects.php'))));
+schoolPageValue("super-admin-subjects-value-2",(string)(json_encode(schoolRouteUrl('modules/super_admin/subjects.php'))));
+schoolPageValue("super-admin-subjects-value-3",(string)(json_encode(APP_URL))); ?>
 
 <?php
 $content = ob_get_clean();

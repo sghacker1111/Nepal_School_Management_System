@@ -151,7 +151,7 @@ ob_start();
                                         <?php if (($exam['is_locked'] || $exam['is_published']) && Auth::hasRole(['super_admin','school_admin'])): ?>
                                         <a href="<?= schoolRouteUrl('modules/exams/index.php') ?>?reopen=<?= $exam['id'] ?>" class="btn btn-outline-warning" title="Withdraw results and reopen marks"><i class="fas fa-unlock"></i> Reopen marks</a>
                                         <?php endif; ?>
-                                        <button onclick="confirmDeleteExam(<?= $exam['id'] ?>)" class="btn btn-danger" title="Delete Exam">
+                                        <button data-erp-click="exams-index-action-0" data-erp-click-args="<?= schoolPageActionArgs("exams-index",[(string)($exam['id'])]) ?>" class="btn btn-danger" title="Delete Exam">
                                             <i class="fas fa-trash"></i>
                                         </button>
                                     <?php endif; ?>
@@ -166,32 +166,7 @@ ob_start();
     </div>
 </div>
 
-<script>
-$(document).ready(function() {
-    var table = $('#examsTable').DataTable({
-        pageLength: 10,
-        order: [[2, 'desc'], [0, 'asc']],
-        language: {
-            emptyTable: "No exams created yet."
-        },
-        dom: 'rtip'
-    });
-
-    $('#filter_exam_name').on('keyup change', function() {
-        table.column(0).search(this.value).draw();
-    });
-    
-    $('#filter_year').on('change', function() {
-        table.column(2).search(this.value).draw();
-    });
-});
-
-function confirmDeleteExam(id) {
-    verifyPasswordAndProceed(function() {
-        window.location.href = '<?= schoolRouteUrl('modules/exams/index.php') ?>?delete=' + id;
-    }, 'Confirm Deletion', 'Please enter your administrator password to permanently delete this exam (all marks and configurations will be lost):');
-}
-</script>
+<?php schoolPageModule("exams-index");schoolPageValue("exams-index-value-0",(string)(schoolRouteUrl('modules/exams/index.php'))); ?>
 
 <?php
 $content = ob_get_clean();

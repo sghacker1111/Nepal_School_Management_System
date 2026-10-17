@@ -93,6 +93,7 @@ export async function mountPage(root, metadata) {
         const win = root.ownerDocument.defaultView;
         const shared = [win.initSchoolControls?.(root, context), win.initSchoolDates?.(root, context)];
         const dispose = await init(root, context);
+        if(metadata.shell?.readOnly)root.querySelectorAll('form[method="post" i] input,form[method="post" i] select,form[method="post" i] textarea,form[method="post" i] button').forEach(field=>field.disabled=true);
         if (active === entry) shared.push(trackForms(root, context));
         const cleanup = async () => { for (const fn of [dispose, ...shared].reverse()) if (typeof fn === 'function') await fn(); };
         if (active !== entry) await cleanup(); else entry.dispose = cleanup;
