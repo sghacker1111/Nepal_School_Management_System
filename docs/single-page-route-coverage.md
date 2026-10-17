@@ -5,22 +5,22 @@ All 78 existing controllers are explicitly registered. Enhanced routes have bund
 | Canonical path | Controller | Kind | Lifecycle / verification |
 | --- | --- | --- | --- |
 | `/` | `index.php` | page | Scoped adapter; automated HTTP/DOM coverage; browser pending |
-| `/accounting/create-bill` | `modules/accounting/create_bill.php` | page | Pending adapter and HTTP verification |
-| `/accounting/credit` | `modules/accounting/credit.php` | mixed | Pending adapter and HTTP verification |
-| `/accounting/expenses` | `modules/accounting/expenses.php` | page | Pending adapter and HTTP verification |
-| `/accounting/fees` | `modules/accounting/fees.php` | page | Pending adapter and HTTP verification |
-| `/accounting/generate` | `modules/accounting/generate.php` | page | Pending adapter and HTTP verification |
-| `/accounting` | `modules/accounting/index.php` | page | Pending adapter and HTTP verification |
-| `/accounting/invoice` | `modules/accounting/invoice.php` | mixed | Pending adapter and HTTP verification |
-| `/accounting/invoices` | `modules/accounting/invoices.php` | page | Pending adapter and HTTP verification |
-| `/accounting/journals` | `modules/accounting/journals.php` | page | Pending adapter and HTTP verification |
-| `/accounting/payments` | `modules/accounting/payments.php` | page | Pending adapter and HTTP verification |
-| `/accounting/receipt` | `modules/accounting/receipt.php` | mixed | Pending adapter and HTTP verification |
-| `/accounting/reports` | `modules/accounting/reports.php` | page | Pending adapter and HTTP verification |
+| `/accounting/create-bill` | `modules/accounting/create_bill.php` | page | Scoped adapter; automated HTTP/DOM coverage; browser pending |
+| `/accounting/credit` | `modules/accounting/credit.php` | mixed | Scoped adapter; automated HTTP/DOM coverage; browser pending |
+| `/accounting/expenses` | `modules/accounting/expenses.php` | page | Scoped adapter; automated HTTP/DOM coverage; browser pending |
+| `/accounting/fees` | `modules/accounting/fees.php` | page | Scoped adapter; automated HTTP/DOM coverage; browser pending |
+| `/accounting/generate` | `modules/accounting/generate.php` | page | Scoped adapter; automated HTTP/DOM coverage; browser pending |
+| `/accounting` | `modules/accounting/index.php` | page | Scoped adapter; automated HTTP/DOM coverage; browser pending |
+| `/accounting/invoice` | `modules/accounting/invoice.php` | mixed | Scoped adapter; automated HTTP/DOM coverage; browser pending |
+| `/accounting/invoices` | `modules/accounting/invoices.php` | page | Scoped adapter; automated HTTP/DOM coverage; browser pending |
+| `/accounting/journals` | `modules/accounting/journals.php` | page | Scoped adapter; automated HTTP/DOM coverage; browser pending |
+| `/accounting/payments` | `modules/accounting/payments.php` | page | Scoped adapter; automated HTTP/DOM coverage; browser pending |
+| `/accounting/receipt` | `modules/accounting/receipt.php` | mixed | Scoped adapter; automated HTTP/DOM coverage; browser pending |
+| `/accounting/reports` | `modules/accounting/reports.php` | page | Scoped adapter; automated HTTP/DOM coverage; browser pending |
 | `/accounting/search` | `modules/accounting/search.php` | json | Native boundary/document; not boosted |
-| `/accounting/settings` | `modules/accounting/settings.php` | page | Pending adapter and HTTP verification |
-| `/accounting/student` | `modules/accounting/student.php` | page | Pending adapter and HTTP verification |
-| `/accounting/subscriptions` | `modules/accounting/subscriptions.php` | page | Pending adapter and HTTP verification |
+| `/accounting/settings` | `modules/accounting/settings.php` | page | Scoped adapter; automated HTTP/DOM coverage; browser pending |
+| `/accounting/student` | `modules/accounting/student.php` | page | Scoped adapter; automated HTTP/DOM coverage; browser pending |
+| `/accounting/subscriptions` | `modules/accounting/subscriptions.php` | page | Scoped adapter; automated HTTP/DOM coverage; browser pending |
 | `/attendance` | `modules/attendance/index.php` | page | Scoped adapter; automated HTTP/DOM coverage; browser pending |
 | `/account/change-password` | `modules/auth/change_password.php` | page | Scoped adapter; automated HTTP/DOM coverage; browser pending |
 | `/login` | `modules/auth/login.php` | auth | Native boundary/document; not boosted |

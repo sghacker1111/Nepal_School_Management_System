@@ -20,6 +20,7 @@ import './pages/questions.js';
 import './pages/papers.js';
 import './pages/curriculum.js';
 import './pages/practice.js';
+import './pages/accounting.js';
 
 // CSP build: no new Function/eval required to operate the navigation.
 Alpine.data('workspace', () => ({

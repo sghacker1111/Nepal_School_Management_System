@@ -23,10 +23,11 @@ function acStudentPicker(int $selected=0,bool $required=false):void {
     echo '<div class="mb-3" data-student-picker><label class="form-label" for="studentSearch">Find student by name, ID, class or guardian phone</label><input id="studentSearch" type="search" class="form-control" autocomplete="off" value="'.sanitize($name).'" placeholder="Type at least 2 characters"><input type="hidden" name="student_id" value="'.($selected?:'').'" '.($required?'required':'').'><div class="list-group mt-1" data-student-results></div><small class="text-muted">Select a result to link a bill/payment to the student. Clear the search for an external customer.</small></div>';
 }
 function acRender(string $title,string $content):void {
-    global $error,$activePage,$ac;$pageTitle=$title;
+    global $error,$activePage,$ac,$pageMutationOutcome;$pageTitle=$title;
+    $pageStyles=['/assets/css/accounting.css'];schoolPageModule('external-accounting');
     $links=['index'=>'Overview','fees'=>'Fees & products','create_bill'=>'Create bill','invoices'=>'Invoices','generate'=>'Generate bills','payments'=>'Collect payment','student'=>'Student accounts','subscriptions'=>'Subscriptions','expenses'=>'Expenses','journals'=>'Accounts & journals','reports'=>'Reports','settings'=>'Settings & audit'];
     $nav='<div class="d-flex flex-wrap gap-2 mb-4 no-print">';foreach($links as $p=>$label){if(in_array($p,['create_bill','generate','subscriptions'],true)&&!$ac->can($p==='subscriptions'?'subscription':'invoice'))continue;if($p==='payments'&&!$ac->can('payment'))continue;$nav.='<a class="btn btn-sm btn-outline-secondary" href="'.acUrl($p).'">'.$label.'</a>';}$nav.='</div>';
-    $content='<link rel="stylesheet" href="'.APP_URL.'/assets/css/accounting.css"><div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3"><h2>'.sanitize($title).'</h2><span class="text-muted">Accounting & Billing · NPR</span></div>'.$nav.($error?'<div class="alert alert-danger">'.sanitize($error).'</div>':'').$content.'<script src="'.APP_URL.'/assets/js/accounting.js"></script>';include __DIR__.'/header.php';
+    $content='<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3"><h2>'.sanitize($title).'</h2><span class="text-muted">Accounting & Billing · NPR</span></div>'.$nav.($error?'<div class="alert alert-danger">'.sanitize($error).'</div>':'').$content;include __DIR__.'/header.php';
 }
 function acHandle(callable $callback,string $page,array $args=[]):void {
     global $error;if(($_SERVER['REQUEST_METHOD']??'GET')!=='POST')return;
