@@ -1,6 +1,6 @@
 <?php
-if(PHP_SAPI!=='cli'||!getenv('ERP_DB_PATH'))exit(1);
-require __DIR__.'/../config/bootstrap.php';require __DIR__.'/../includes/database.php';
+if(PHP_SAPI!=='cli'||(!getenv('ERP_DB_PATH')&&getenv('ERP_TEST_MYSQL')!=='1'))exit(1);
+require_once __DIR__.'/../config/bootstrap.php';require_once __DIR__.'/../includes/database.php';
 $db=getDB();
 $hash=password_hash('TestPassword123!',PASSWORD_DEFAULT);
 $db->prepare('UPDATE users SET password=?,school_id=NULL,status=1 WHERE role=?')->execute([$hash,'super_admin']);
@@ -16,6 +16,7 @@ $db->prepare('INSERT INTO students (student_id,academic_year_id,class_id,section
 $db->prepare('INSERT INTO exams (name,type,academic_year_id,school_id,has_internal,result_system) VALUES (?,?,1,1,1,?)')->execute(['Regression Exam','terminal','gpa']);$exam=(int)$db->lastInsertId();
 $db->prepare('INSERT INTO exam_subjects (exam_id,class_id,subject_id,theory_full,theory_pass,practical_full,practical_pass,credit_hours,external_credit_hours,internal_credit_hours,is_optional) VALUES (?,?,?,75,26.25,25,10,4,3,1,0)')->execute([$exam,$class,$subject]);
 $db->exec("INSERT INTO schools (name_en) VALUES ('Other School')");$otherSchool=(int)$db->lastInsertId();provisionSchool($db,$otherSchool);
+$db->prepare('INSERT INTO academic_years (school_id,year_bs,year_ad,is_active,is_hidden) VALUES (?,?,?,?,0)')->execute([$otherSchool,'2081','2024',1]);
 $otherClass=(int)$db->query("SELECT id FROM classes WHERE school_id=$otherSchool AND name='Class 9'")->fetchColumn();
 $otherYear=(int)$db->query("SELECT id FROM academic_years WHERE school_id=$otherSchool LIMIT 1")->fetchColumn();
 $db->prepare("INSERT INTO students(student_id,academic_year_id,class_id,first_name_en,last_name_en,gender,school_id,status) VALUES ('OTHER-1',?,?,'Other','Student','Male',?,'active')")->execute([$otherYear,$otherClass,$otherSchool]);$otherStudent=(int)$db->lastInsertId();

@@ -2,7 +2,7 @@
 require __DIR__.'/test_support.php';['db'=>$db,'fixture'=>$f]=erpTestFixture();require __DIR__.'/../includes/accounting_service.php';
 $ac=new SchoolAccounting($db,1,$f['ids']['school_admin']);
 $ac->savePeriod(['name'=>'Synthetic 2026','start_date'=>'2026-01-01','end_date'=>'2026-12-31']);
-function financialSnapshot(PDO $db):array {$result=[];foreach($db->query("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'ac_%' ORDER BY name")->fetchAll(PDO::FETCH_COLUMN) as $table)$result[$table]=$db->query('SELECT * FROM '.$table)->fetchAll();return $result;}
+function financialSnapshot(PDO $db):array {$result=[];$tables=DB_TYPE==='mysql'?"SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME LIKE 'ac_%' ORDER BY TABLE_NAME":"SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'ac_%' ORDER BY name";foreach($db->query($tables)->fetchAll(PDO::FETCH_COLUMN) as $table)$result[$table]=$db->query('SELECT * FROM `'.$table.'`')->fetchAll();return $result;}
 function rejectsWithoutWrite(PDO $db,callable $fn,string $label):void {$before=financialSnapshot($db);erpReject($fn,$label);erpEqual(financialSnapshot($db),$before,$label.' is atomic');}
 rejectsWithoutWrite($db,fn()=>$ac->saveMethod(['name'=>'Invalid receivable','account_id'=>$ac->control('receivable')]),'Receivable method denied');
 $bill=['student_id'=>$f['student'],'bill_date'=>'2026-10-01','due_date'=>'2026-10-31','items'=>[['particular'=>'Tuition','rate'=>'2500'],['particular'=>'Examination Fee','rate'=>'500']],'idempotency_key'=>'synthetic-bill-3000'];

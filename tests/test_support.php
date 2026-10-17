@@ -1,6 +1,14 @@
 <?php
 /** Synthetic fixtures only. No cleanup helpers belong in production classes. */
 function erpTestFixture(): array {
+    if(getenv('ERP_TEST_MYSQL')==='1'){
+        putenv('ERP_RUNTIME=test');
+        require_once __DIR__.'/../config/bootstrap.php';require_once __DIR__.'/../includes/database.php';
+        require_once __DIR__.'/../includes/accounting_schema.php';
+        $db=getDB();ob_start();require __DIR__.'/http_fixture.php';$output=ob_get_clean();
+        $fixture=json_decode($output,true,512,JSON_THROW_ON_ERROR);
+        return ['db'=>$db,'fixture'=>$fixture,'directory'=>null];
+    }
     $directory=sys_get_temp_dir().DIRECTORY_SEPARATOR.'erp-test-'.bin2hex(random_bytes(12));
     if(!mkdir($directory,0700))throw new RuntimeException('Cannot create disposable fixture.');
     putenv('ERP_RUNTIME=test');putenv('ERP_TEST_SQLITE=1');putenv('ERP_DB_TYPE=sqlite');putenv('ERP_DB_PATH='.$directory.DIRECTORY_SEPARATOR.'test.sqlite');
