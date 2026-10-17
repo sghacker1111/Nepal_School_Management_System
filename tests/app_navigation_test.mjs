@@ -44,9 +44,15 @@ test('back/forward refetches across three routes and a narrow panel history upda
  f.dom.window.history.pushState({htmx:true},'','/classes?chapter=Sets');f.dom.window.document.dispatchEvent(new f.dom.window.CustomEvent('htmx:pushedIntoHistory',{detail:{path:'/classes?chapter=Sets'}}));
  assert(f.dom.window.history.state.erp);f.dom.window.history.back();await waitFor(()=>f.dom.window.location.search==='');assert(calls>=5);assert.equal(f.reloads,0);f.dispose();f.dom.window.close();
 });
-test('cancelled dirty Back restores URL and leaves draft intact',async()=>{
- const f=await fixture();await navigate('/exams');const doc=f.dom.window.document;doc.querySelector('main').insertAdjacentHTML('beforeend','<input value="draft">');f.deps.confirmNavigation=async()=>false;
- f.dom.window.history.back();await waitFor(()=>f.dom.window.location.pathname==='/students');await waitFor(()=>f.dom.window.location.pathname==='/exams');assert.equal(doc.querySelector('main input').value,'draft');f.dispose();f.dom.window.close();
+test('cancelled dirty Back restores URL and leaves draft intact',{timeout:5000},async()=>{
+ const f=await fixture();await navigate('/exams');const doc=f.dom.window.document;doc.querySelector('main').insertAdjacentHTML('beforeend','<input value="draft">');
+ let decide,confirmReached;const decision=new Promise(resolve=>{decide=resolve;}),requested=new Promise(resolve=>{confirmReached=resolve;});
+ f.deps.confirmNavigation=()=>{confirmReached();return decision;};
+ try{
+  f.dom.window.history.back();await requested;
+  assert.equal(f.dom.window.location.pathname,'/students');assert.equal(doc.querySelector('main input').value,'draft');
+  decide(false);await waitFor(()=>f.dom.window.location.pathname==='/exams');assert.equal(doc.querySelector('main input').value,'draft');assert.equal(f.reloads,0);
+ }finally{decide(false);f.dispose();f.dom.window.close();}
 });
 test('HTMX transport captures a marked response without executing its default swap handler',async()=>{
  const dom=new JSDOM('<main id="main-content"></main>',{url:'https://school.example/students'});let context,method;
