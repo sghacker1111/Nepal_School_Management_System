@@ -15,6 +15,7 @@ for kind,files in groups.items():
         runtime=php if kind=='PHP' else 'node' if kind in ('JavaScript','App lifecycle') else os.sys.executable
         commands.append((str(p.relative_to(root)),[runtime]+(['--test'] if kind=='App lifecycle' else [])+[str(p)]))
 commands.extend([('legacy HTTP',[os.sys.executable,'tests/http_test.py']),('deployment safety',[os.sys.executable,'tests/deployment_test.py']),('correction concurrency',[os.sys.executable,'tests/question_correction_concurrency_test.py'])])
+commands.append(('native MySQL migration and workflow suite',[os.sys.executable,'-m','unittest','discover','-s','tests','-p','mysql_*_test.py','-v']))
 if args.upgrade_source:commands.append(('consistent-copy upgrade',[os.sys.executable,'tests/upgrade_copy_test.py','--source',str(args.upgrade_source.resolve())]))
 failures=[];started=time.time()
 with (out/'verification.log').open('w',encoding='utf-8') as log:
