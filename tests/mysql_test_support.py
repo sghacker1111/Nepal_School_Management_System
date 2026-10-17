@@ -1,5 +1,5 @@
 """Synthetic fixtures for a native local MySQL round-trip; never opens owner data."""
-import json,os,sqlite3,subprocess,sys,tempfile,uuid
+import json,os,re,shutil,sqlite3,subprocess,sys,tempfile,uuid
 from contextlib import closing
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/'tools'))
@@ -33,12 +33,17 @@ class MysqlImportFixture:
             self._stop_server();raise
     def __exit__(self,exc_type,exc,tb):
         self._stop_server()
-        if exc_type is None: self.temp.cleanup()
+        if exc_type is None:
+            self._cleanup_server_state();self.temp.cleanup()
         else: self.temp._finalizer.detach()
     def _stop_server(self):
         if self.state_dir.exists() and (self.state_dir/'state.json').exists():
             stopped=subprocess.run(['powershell','-NoProfile','-File',str(self.helper),'-Action','Stop','-StateDirectory',str(self.state_dir)],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=30)
             if stopped.returncode:raise RuntimeError('Owned test MySQL process did not stop; private fixture retained at '+str(self.state_dir))
+    def _cleanup_server_state(self):
+        root=Path(tempfile.gettempdir()).resolve();target=self.state_dir.resolve(strict=True)
+        if target.parent!=root or not re.fullmatch(r'erp-mysql-server-[a-f0-9]{32}',target.name) or not (target/'state.json').is_file():raise RuntimeError('Refusing to remove an unverified MySQL fixture directory.')
+        shutil.rmtree(target)
     def _make_source(self,clean_accounting=False):
         source_dir=self.root/'source';source_dir.mkdir();self.source=source_dir/'source.sqlite';env={**os.environ,'ERP_RUNTIME':'test','ERP_TEST_SQLITE':'1','ERP_DB_TYPE':'sqlite','ERP_DB_PATH':str(self.source)}
         subprocess.run([os.environ.get('ERP_TEST_PHP','php'),'tests/schema7_fixture.php'],cwd=ROOT,env=env,check=True,capture_output=True)

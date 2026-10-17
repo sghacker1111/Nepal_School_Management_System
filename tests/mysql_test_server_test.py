@@ -1,4 +1,4 @@
-import json,os,subprocess,tempfile,unittest,uuid
+import json,os,shutil,subprocess,tempfile,unittest,uuid
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 class ServerTests(unittest.TestCase):
@@ -18,5 +18,6 @@ class ServerTests(unittest.TestCase):
         self.assertNotIn(state['password'],(directory/'server.err').read_text(encoding='utf-8',errors='replace'))
         stop=subprocess.run(['powershell','-NoProfile','-File',str(helper),'-Action','Stop','-StateDirectory',str(directory)],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=30)
         self.assertEqual(stop.returncode,0,'Owned server did not stop safely')
+        target=directory.resolve(strict=True);self.assertEqual(target.parent,Path(tempfile.gettempdir()).resolve());self.assertRegex(target.name,r'^erp-mysql-server-[a-f0-9]{32}$');shutil.rmtree(target)
 
 if __name__=='__main__':unittest.main()
