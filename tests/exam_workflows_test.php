@@ -1,6 +1,6 @@
 <?php
 if(PHP_SAPI!=='cli')exit(1);
-putenv('ERP_DB_TYPE=sqlite');putenv('ERP_DB_PATH='.tempnam(sys_get_temp_dir(),'erp-exam-workflows-'));
+putenv('ERP_RUNTIME=test');putenv('ERP_TEST_SQLITE=1');putenv('ERP_DB_TYPE=sqlite');putenv('ERP_DB_PATH='.tempnam(sys_get_temp_dir(),'erp-exam-workflows-'));
 ob_start();require __DIR__.'/http_fixture.php';$f=json_decode(ob_get_clean(),true,512,JSON_THROW_ON_ERROR);
 require_once __DIR__.'/../includes/exam_mapping_service.php';
 require_once __DIR__.'/../includes/symbol_service.php';

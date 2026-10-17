@@ -26,7 +26,7 @@ with tempfile.TemporaryDirectory(prefix='erp-upgrade-copy-') as directory, closi
     before=snapshot(original)
     target=Path(directory)/'upgrade.sqlite'
     with closing(sqlite3.connect(target)) as copied:original.backup(copied)
-    env={**os.environ,'ERP_DB_TYPE':'sqlite','ERP_DB_PATH':str(target)}
+    env={**os.environ,'ERP_RUNTIME':'test','ERP_TEST_SQLITE':'1','ERP_DB_TYPE':'sqlite','ERP_DB_PATH':str(target)}
     subprocess.run([os.environ.get('ERP_TEST_PHP','php'),'tests/upgrade_test.php'],cwd=root,env=env,check=True)
     with closing(sqlite3.connect(target)) as copied:
         after=snapshot(copied,before)

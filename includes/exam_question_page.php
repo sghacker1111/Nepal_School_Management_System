@@ -1,7 +1,7 @@
 <?php
 $bankKind=$questionBankKind??'exam';$isExamBank=$bankKind==='exam';$needsTopics=!$isExamBank;
 if(!in_array($bankKind,['exam','learning'],true)||!isset($examSection)||!in_array($examSection,$isExamBank?['written','mcq']:['all','written','mcq'],true)){http_response_code(404);exit;}
-require_once __DIR__.'/../config/config.php';
+require_once __DIR__.'/../config/bootstrap.php';
 require_once __DIR__.'/database.php';
 require_once __DIR__.'/auth.php';
 require_once __DIR__.'/functions.php';

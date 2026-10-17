@@ -36,7 +36,7 @@ def run():
   refund={'action':'refund','amount':'100','date':'2026-10-05','reason':'Synthetic app refund','confirm':'1','account_id':account,'idempotency_key':'app-only-refund-key'}
   h,b,_=send(app,f'/accounting/credit?id={credit_id}',data=refund,headers=HX,status=204);assert h['HX-Location']
   h,b,_=send(app,f'/accounting/credit?id={credit_id}',headers=HX);marked(h,b);assert b'RFN-' in b and b'Rs. 100.00' in b
-  source='require "config/config.php"; require "includes/database.php"; require "includes/accounting_service.php"; $ac=new SchoolAccounting(getDB(),1,(int)$argv[1]);echo json_encode($ac->reconcile());'
+  source='require "config/bootstrap.php"; require "includes/database.php"; require "includes/accounting_service.php"; $ac=new SchoolAccounting(getDB(),1,(int)$argv[1]);echo json_encode($ac->reconcile());'
   reconciliation=json.loads(subprocess.run([app.php,'-r',source,str(f['ids']['school_admin'])],cwd=app.root,env=app.env,capture_output=True,text=True,check=True).stdout);assert reconciliation['ok'] is True
   for table,rows in other.items():assert app.db.execute('SELECT * FROM '+table+' WHERE school_id=2 ORDER BY id').fetchall()==rows,table
   for username,denied in [('cashier','/accounting/create-bill'),('auditor','/accounting/payments')]:

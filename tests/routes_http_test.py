@@ -35,7 +35,7 @@ def run():
     h,old,_=send(app,'/modules/settings/users.php'+lookup,headers={'Accept':'application/json'})
     h,new,_=send(app,'/settings/users'+lookup,headers={'Accept':'application/json'})
     assert 'application/json' in h['Content-Type'] and json.loads(old)==json.loads(new)
-    for private in ('/frontend/app.css','/includes/auth.php','/config/config.php','/node_modules/jquery/package.json','/missing','/students%2fedit'):
+    for private in ('/frontend/app.css','/includes/auth.php','/config/bootstrap.php','/config/config.php','/node_modules/jquery/package.json','/missing','/students%2fedit'):
         send(app,private,status=404)
     for table,rows in protected.items():assert app.snapshot(table)==rows,table
     # Multipart data must reach the same native upload handler without a redirect.
@@ -54,6 +54,7 @@ def run():
         mount=Path(mount_root)/'erp';mount.mkdir()
         for folder in ('includes','modules','config','assets'):
             shutil.copytree(app.root/folder,mount/folder)
+        shutil.copytree(app.root/'tools/mysql_migration',mount/'tools/mysql_migration')
         for name in ('index.php','router.php','app.php'):shutil.copyfile(app.root/name,mount/name)
         with socket.socket() as sock:sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
         log=open(Path(mount_root)/'php.log','w+',encoding='utf8')

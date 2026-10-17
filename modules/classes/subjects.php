@@ -2,7 +2,7 @@
 /**
  * Classes Management - Subject Mapping & Teacher Assignment (Compulsory & Optional Subjects)
  */
-require_once __DIR__ . '/../../config/config.php';
+require_once __DIR__ . '/../../config/bootstrap.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';

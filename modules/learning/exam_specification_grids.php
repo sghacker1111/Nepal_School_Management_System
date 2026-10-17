@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__.'/../../config/config.php';require_once __DIR__.'/../../includes/database.php';require_once __DIR__.'/../../includes/auth.php';require_once __DIR__.'/../../includes/functions.php';require_once __DIR__.'/../../includes/exam_paper_page.php';
+require_once __DIR__.'/../../config/bootstrap.php';require_once __DIR__.'/../../includes/database.php';require_once __DIR__.'/../../includes/auth.php';require_once __DIR__.'/../../includes/functions.php';require_once __DIR__.'/../../includes/exam_paper_page.php';
 Auth::requireRole(['super_admin','school_admin','teacher']);Auth::requireAccess('exam_specification_grids');
 $db=getDB();$actor=learningActor($db,(int)Auth::getUserId(),(int)Auth::getSchoolId(),Auth::isReadOnly());$class=(int)($_POST['class_id']??$_GET['class_id']??0);$subject=(int)($_POST['subject_id']??$_GET['subject_id']??0);$error='';$editing=null;$initialConfig=[];$gridName='';
 if($_SERVER['REQUEST_METHOD']==='POST'){

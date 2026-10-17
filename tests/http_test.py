@@ -9,7 +9,7 @@ from http.cookiejar import CookieJar
 
 root=Path(__file__).resolve().parents[1]
 with tempfile.TemporaryDirectory(prefix='erp-http-') as tmp:
-    env={**os.environ,'ERP_DB_TYPE':'sqlite','ERP_DB_PATH':str(Path(tmp)/'test.sqlite'),'ERP_DEBUG':'1'}
+    env={**os.environ,'ERP_RUNTIME':'test','ERP_TEST_SQLITE':'1','ERP_DB_TYPE':'sqlite','ERP_DB_PATH':str(Path(tmp)/'test.sqlite'),'ERP_DEBUG':'1'}
     fixture=subprocess.run(['php','tests/http_fixture.php'],cwd=root,env=env,capture_output=True,text=True,check=True)
     f=json.loads(fixture.stdout)
     with socket.socket() as sock: sock.bind(('127.0.0.1',0)); port=sock.getsockname()[1]

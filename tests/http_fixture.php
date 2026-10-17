@@ -1,6 +1,6 @@
 <?php
 if(PHP_SAPI!=='cli'||!getenv('ERP_DB_PATH'))exit(1);
-require __DIR__.'/../config/config.php';require __DIR__.'/../includes/database.php';
+require __DIR__.'/../config/bootstrap.php';require __DIR__.'/../includes/database.php';
 $db=getDB();
 $hash=password_hash('TestPassword123!',PASSWORD_DEFAULT);
 $db->prepare('UPDATE users SET password=?,school_id=NULL,status=1 WHERE role=?')->execute([$hash,'super_admin']);

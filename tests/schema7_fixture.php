@@ -3,7 +3,7 @@
 if(PHP_SAPI!=='cli'||!getenv('ERP_DB_PATH'))exit(1);
 $target=getenv('ERP_DB_PATH');$parent=realpath(dirname($target));
 if(!$parent||!str_starts_with(strtolower($parent.DIRECTORY_SEPARATOR),strtolower(realpath(sys_get_temp_dir()).DIRECTORY_SEPARATOR))||file_exists($target))throw new RuntimeException('Version7 fixture requires a new OS-temp database.');
-require __DIR__.'/../config/config.php';require __DIR__.'/../includes/schema.php';
+require __DIR__.'/../config/bootstrap.php';require __DIR__.'/../includes/schema.php';
 $db=new PDO('sqlite:'.$target,null,null,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
 $db->exec(file_get_contents(__DIR__.'/../database_sqlite.sql'));migrateSchoolSchema($db);
 require __DIR__.'/../includes/accounting_schema.php';migrateAccountingSchema($db);

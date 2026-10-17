@@ -1,6 +1,6 @@
 <?php
 /** Clean public routes dispatch only to an explicitly registered controller. */
-require_once __DIR__.'/config/config.php';
+require_once __DIR__.'/config/bootstrap.php';
 require_once __DIR__.'/includes/routes.php';
 $requestPath=parse_url($_SERVER['REQUEST_URI']??'/',PHP_URL_PATH);
 $resolved=is_string($requestPath)?schoolResolveRoute($requestPath,schoolRouteBasePath()):null;

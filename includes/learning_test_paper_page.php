@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__.'/../config/config.php';require_once __DIR__.'/database.php';require_once __DIR__.'/auth.php';require_once __DIR__.'/functions.php';
+require_once __DIR__.'/../config/bootstrap.php';require_once __DIR__.'/database.php';require_once __DIR__.'/auth.php';require_once __DIR__.'/functions.php';
 require_once __DIR__.'/learning_test_paper.php';require_once __DIR__.'/exam_paper_page.php';require_once __DIR__.'/exam_question_language.php';
 Auth::requireRole(['super_admin','school_admin','principal','teacher','exam_officer']);Auth::requireAccess('paper_generator');
 $db=getDB();$actor=learningActor($db,(int)Auth::getUserId(),(int)Auth::getSchoolId(),Auth::isReadOnly());

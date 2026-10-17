@@ -4,7 +4,7 @@ $preview=in_array('--preview',$argv,true);
 if($preview){
     $testPath=realpath(dirname(getenv('ERP_DB_PATH')?:''));
     if(!$testPath||!str_starts_with(strtolower($testPath.DIRECTORY_SEPARATOR),strtolower(realpath(sys_get_temp_dir()).DIRECTORY_SEPARATOR)))throw new RuntimeException('Preview requires a temporary database.');
-}else{putenv('ERP_DB_TYPE=sqlite');putenv('ERP_DB_PATH='.tempnam(sys_get_temp_dir(),'erp-enhancements-'));}
+}else{putenv('ERP_RUNTIME=test');putenv('ERP_TEST_SQLITE=1');putenv('ERP_DB_TYPE=sqlite');putenv('ERP_DB_PATH='.tempnam(sys_get_temp_dir(),'erp-enhancements-'));}
 ob_start();require __DIR__.'/http_fixture.php';$f=json_decode(ob_get_clean(),true,512,JSON_THROW_ON_ERROR);
 require_once __DIR__.'/../includes/exam_service.php';
 require_once __DIR__.'/../includes/marks_service.php';

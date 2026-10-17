@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__.'/../../config/config.php';require_once __DIR__.'/../../includes/database.php';require_once __DIR__.'/../../includes/auth.php';require_once __DIR__.'/../../includes/functions.php';require_once __DIR__.'/../../includes/exam_paper_page.php';
+require_once __DIR__.'/../../config/bootstrap.php';require_once __DIR__.'/../../includes/database.php';require_once __DIR__.'/../../includes/auth.php';require_once __DIR__.'/../../includes/functions.php';require_once __DIR__.'/../../includes/exam_paper_page.php';
 require_once __DIR__.'/../../includes/exam_question_language.php';
 require_once __DIR__.'/../../includes/exam_paper_groups.php';
 Auth::requireRole(['super_admin','school_admin','teacher']);Auth::requireAccess('exam_paper_generator');

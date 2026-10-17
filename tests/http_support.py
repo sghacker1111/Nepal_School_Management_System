@@ -28,7 +28,7 @@ class ERPHttpFixture:
     def __enter__(self):
         self.root=Path(__file__).resolve().parents[1]
         self.tmp=tempfile.TemporaryDirectory(prefix='erp-http-fixture-')
-        self.env={**os.environ,'ERP_DB_TYPE':'sqlite','ERP_DB_PATH':str(Path(self.tmp.name)/'test.sqlite')}
+        self.env={**os.environ,'ERP_RUNTIME':'test','ERP_TEST_SQLITE':'1','ERP_DB_TYPE':'sqlite','ERP_DB_PATH':str(Path(self.tmp.name)/'test.sqlite')}
         self.php=os.environ.get('ERP_TEST_PHP','php')
         self.fixture=json.loads(subprocess.run([self.php,'tests/http_fixture.php'],cwd=self.root,env=self.env,capture_output=True,text=True,check=True).stdout)
         self.db=sqlite3.connect(self.env['ERP_DB_PATH'])

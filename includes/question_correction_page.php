@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__.'/../config/config.php';require_once __DIR__.'/database.php';require_once __DIR__.'/auth.php';require_once __DIR__.'/functions.php';
+require_once __DIR__.'/../config/bootstrap.php';require_once __DIR__.'/database.php';require_once __DIR__.'/auth.php';require_once __DIR__.'/functions.php';
 require_once __DIR__.'/question_correction_service.php';require_once __DIR__.'/question_correction_views.php';
 Auth::requireRole($correctionAdmin?['super_admin']:['school_admin','teacher']);
 $db=getDB();$actor=learningActor($db,(int)Auth::getUserId(),(int)Auth::getSchoolId(),Auth::isReadOnly());
