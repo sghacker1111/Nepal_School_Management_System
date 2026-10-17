@@ -19,7 +19,7 @@ try{$pagination=learningQuestionPagination($_GET['page']??1,$_GET['per_page']??1
 try{$questionLanguage=examQuestionLanguage($_GET['language']??'both');}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
 $class=(int)($_POST['class_id']??$_GET['class_id']??0);$subject=(int)($_POST['subject_id']??$_GET['subject_id']??0);
 $classes=$isExamBank?examReadClasses($db,$actor):learningReadClasses($db,$actor);if($isStudent&&!$class)$class=(int)($classes[0]['id']??0);
-$subjects=$isExamBank?examReadSubjects($db,$actor,$class):learningReadSubjects($db,$actor,$class);$chapters=[];$topicRows=[];$error='';$edit=null;
+$subjects=$isExamBank?examReadSubjects($db,$actor,$class):learningReadSubjects($db,$actor,$class);$chapters=[];$topicRows=[];$error='';$edit=null;$catalogRepairNotice='';
 if($isExamBank&&$actor['role']==='teacher'){
     foreach([[$class,$subject],[(int)($_POST['import_class_id']??$_GET['import_class_id']??0),(int)($_POST['import_subject_id']??$_GET['import_subject_id']??0)]] as [$scopeClass,$scopeSubject]){
         if(($scopeClass&&!in_array($scopeClass,array_map('intval',array_column($classes,'id')),true))||($scopeClass&&$scopeSubject&&!examContentScopeAllowed($db,$actor,['class_id'=>$scopeClass,'subject_id'=>$scopeSubject])))denySchoolRequest('You may access exam questions only for your assigned class subjects.',403);
@@ -102,7 +102,16 @@ if($view==='edit'){
             throw new InvalidArgumentException('This question belongs to the other question section.');
         }
     }catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),404);}
-    $class=(int)$edit['class_id'];$subject=(int)$edit['subject_id'];$subjects=$isExamBank?examReadSubjects($db,$actor,$class):learningReadSubjects($db,$actor,$class);$chapters=learningCatalogChapters($db,$actor,$class,$subject);
+    $class=(int)$edit['class_id'];$subject=(int)$edit['subject_id'];
+    try{$subjects=$isExamBank?examReadSubjects($db,$actor,$class):learningReadSubjects($db,$actor,$class);$chapters=learningCatalogChapters($db,$actor,$class,$subject);}
+    catch(InvalidArgumentException $e){
+        // Shared records can outlive an inactive or removed class-subject mapping.
+        // Super-admins may repair the scope in the editor; saves still pass the
+        // normal active class/subject/chapter validation in learningSaveQuestion().
+        if($actor['role']!=='super_admin'||$actor['school_id']!==0)denySchoolRequest($e->getMessage(),422);
+        $catalogRepairNotice='This question’s saved class or subject is no longer active in the curriculum. Choose a valid class, subject, chapter'.($needsTopics?' and topic':'').' before saving. The question text and answers are preserved.';
+        $class=0;$subject=0;$subjects=[];$chapters=[];
+    }
 }
 $questions=[];
 if($view==='list'){
@@ -112,7 +121,9 @@ if($view==='list'){
     try{$questions=learningContentList($db,$actor,'questions',$filters,$purpose,$pagination);}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
     $returnQuery['page']=$pagination['page'];
 }
-$form=$error&&in_array($_POST['action']??'',['add','edit'],true)?$_POST:($edit??[]);$form=array_filter($form,static fn($v)=>is_scalar($v)||$v===null);
+$form=$error&&in_array($_POST['action']??'',['add','edit'],true)?$_POST:($edit??[]);
+if($catalogRepairNotice!==''){$form['class_id']=0;$form['subject_id']=0;$form['chapter']='';$form['topic_id']='';$form['catalog_topic_id']='';}
+$form=array_filter($form,static fn($v)=>is_scalar($v)||$v===null);
 $formClass=(int)($form['class_id']??$class);$formSubject=(int)($form['subject_id']??$subject);
 $form+=['class_id'=>$formClass,'subject_id'=>$formSubject,'visibility'=>$actor['school_id']===0?'public':'private','type'=>$examSection==='mcq'?'MCQ':'Short'];
 $examImportKinds=$examSection==='all'?['mcq'=>'MCQs','other'=>'Other Questions']:[$importKind=>$examSection==='mcq'?'MCQs':'Other Questions'];
@@ -131,6 +142,7 @@ $pageTitle=($view==='list'?'':ucfirst($view).' ').$sectionTitle;$activePage=$isE
 <?php if(!$isExamBank): ?><nav class="nav nav-pills gap-2 mb-3 no-print" aria-label="Question bank categories"><?php foreach(['all'=>'All questions','mcq'=>'Multiple Choice Questions','other'=>'Written questions'] as $categoryKey=>$categoryTitle): ?><a class="nav-link <?= ($returnQuery['category']??'all')===$categoryKey?'active':'' ?>" href="<?= sanitize($url(['category'=>$categoryKey,'view'=>'list','page'=>1])) ?>"><?= $categoryTitle ?></a><?php endforeach; ?></nav><?php endif; ?>
 <?php if($error): ?><div class="alert alert-danger" role="alert"><?= sanitize($error) ?></div><?php endif; ?>
 <?php if(in_array($view,['add','edit'],true)): ?>
+<?php if($catalogRepairNotice!==''): ?><div class="alert alert-warning" role="alert"><strong>Curriculum mapping needs repair.</strong> <?= sanitize($catalogRepairNotice) ?></div><?php endif; ?>
 <?php include __DIR__.'/exam_question_editor_form.php'; ?>
 <?php elseif($view==='import'): ?>
 <?php include __DIR__.'/exam_question_import_form.php'; ?>
