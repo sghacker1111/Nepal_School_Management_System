@@ -33,6 +33,10 @@ class WriterTests(unittest.TestCase):
         result,sql=self.export();mapping=result['schema_mappings']
         self.assertEqual(mapping['students']['columns']['id'],mapping['marks']['columns']['student_id'])
         self.assertIn('AUTO_INCREMENT=9001',sql);self.assertIn('DECIMAL(9,6)',sql)
+    def test_fractional_legacy_integer_values_are_widened_without_loss(self):
+        with closing(sqlite3.connect(self.dbfile)) as db:
+            db.execute('CREATE TABLE legacy_integer_marks(value INTEGER)');db.execute('INSERT INTO legacy_integer_marks VALUES(35.5),(-0.25)');db.commit()
+        result,sql=self.export();self.assertIn('DECIMAL(4,2)',sql);self.assertIn('35.5',sql);self.assertIn('-0.25',sql)
     def test_collation_collision_is_reported(self):
         from mysql_migration.snapshot import MigrationError
         with closing(sqlite3.connect(self.dbfile)) as db:db.execute("INSERT INTO texts(unique_key) VALUES('A'),('A ')");db.commit()

@@ -20,9 +20,16 @@ def _number(value):
 def _type(column,values,indexed):
     declaration=column['type'].upper().strip();items=(v for v in values if v is not None)
     if re.search(r'INT',declaration):
+        precision=1;scale=0;fractional=False;out_of_range=False
         for value in items:
             n=_number(value)
-            if n!=n.to_integral_value() or not -(2**63)<=n<=2**63-1:raise MigrationError('An integer column has a fractional or out-of-range value: '+column['name'])
+            if n!=n.to_integral_value():fractional=True
+            text=format(abs(n),'f');whole,_,fraction=text.partition('.');precision=max(precision,len(whole.lstrip('0')) or 1);scale=max(scale,len(fraction.rstrip('0')))
+            if not -(2**63)<=n<=2**63-1:out_of_range=True
+        if fractional:
+            if scale>30 or precision+scale>65:raise MigrationError('Fractional data in an integer column exceeds MySQL decimal capacity: '+column['name'])
+            return f'DECIMAL({max(precision+scale,scale+1)},{scale})'
+        if out_of_range:raise MigrationError('An integer column has an out-of-range value: '+column['name'])
         return 'BIGINT'
     dec=re.fullmatch(r'(?:DECIMAL|NUMERIC)(?:\((\d+)(?:\s*,\s*(\d+))?\))?',declaration)
     if dec:
