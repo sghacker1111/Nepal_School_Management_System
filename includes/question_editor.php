@@ -3,8 +3,8 @@
 if(!empty($schoolQuestionEditorLoaded))return;
 $schoolQuestionEditorLoaded=true;
 ?>
-<script src="https://cdn.jsdelivr.net/npm/tinymce@6/tinymce.min.js" referrerpolicy="origin"></script>
-<script src="<?= APP_URL ?>/assets/js/question-editor.js?v=<?= (int)filemtime(__DIR__.'/../assets/js/question-editor.js') ?>"></script>
+<?php $pageAssets[]="tinymce"; ?>
+
 <!-- Mathematics in TeX Dialog Modal -->
 <div class="modal fade" id="texModal" tabindex="-1" aria-hidden="true" style="z-index: 9999;">
     <div class="modal-dialog modal-dialog-centered">

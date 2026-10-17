@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const source = fs.readFileSync(path.join(__dirname, '../modules/learning/questions.php'), 'utf8');
+const source = fs.readFileSync(path.join(__dirname, '../frontend/pages/generated/learning-questions.js'), 'utf8');
 const declarations = source.indexOf('let chapterDropdownRequestVersion');
 const start = declarations >= 0 ? declarations : source.indexOf('function updateChaptersDropdown(');
 const code = source.slice(start, source.indexOf('function onChapterSelectChange()', start));

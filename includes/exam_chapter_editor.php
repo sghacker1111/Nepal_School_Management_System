@@ -18,4 +18,4 @@ $chapterValue=static fn($value,$fallback='0')=>is_scalar($value)?(string)$value:
     <p class="small text-muted mb-0">Up to 200 questions, 50 selected chapters and 1,000 marks. Questions keep their saved marks; the generator must find an exact match. Select Written + MCQs above for a mixed paper, or use Advanced grid for difficulty and K/U/A/HA quotas.</p>
     <?php endif; ?>
 </section>
-<script src="<?= APP_URL ?>/assets/js/exam-chapter-editor.js?v=<?= (int)filemtime(__DIR__.'/../assets/js/exam-chapter-editor.js') ?>"></script>
+<?php schoolPageModule("external-exam-chapter-editor"); ?>

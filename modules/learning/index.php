@@ -101,28 +101,11 @@ ob_start();
 </style>
 
 <!-- TinyMCE CDN for MS Word formatting and Full-screen editor -->
-<script src="https://cdn.jsdelivr.net/npm/tinymce@6/tinymce.min.js" referrerpolicy="origin"></script>
+<?php $pageAssets[]="tinymce"; ?>
 
 <!-- MathJax for rendering equations -->
-<script>
-window.MathJax = {
-    tex: {
-        inlineMath: [['\\(', '\\)'], ['$', '$']],
-        displayMath: [['\\[', '\\]']]
-    },
-    startup: {
-        ready: () => {
-            MathJax.startup.defaultReady();
-            MathJax.startup.promise.then(() => {
-                if (typeof fixDevanagariInMathJax === 'function') {
-                    fixDevanagariInMathJax(document);
-                }
-            });
-        }
-    }
-};
-</script>
-<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<?php $pageAssets[]="mathjax"; ?>
+<?php $pageAssets[]="mathjax"; ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="fas fa-book-open text-primary"></i> Learning Hub</h2>
@@ -130,7 +113,7 @@ window.MathJax = {
         <a href="<?= schoolRouteUrl('modules/learning/practice_mcqs.php') ?>" class="btn btn-success"><i class="fas fa-circle-check"></i> Practice MCQs</a>
         <?php if($is_admin&&(int)$school_id===0): ?><a href="?unassigned=1" class="btn btn-outline-warning">Review unassigned legacy notes</a><?php endif; ?>
         <?php if ($canCreateNote): ?>
-        <button class="btn btn-primary" onclick="showAddNoteModal()">
+        <button class="btn btn-primary" data-erp-click="learning-index-action-0" data-erp-click-args="<?= schoolPageActionArgs("learning-index",[]) ?>">
             <i class="fas fa-plus"></i> Add Study Note
         </button>
         <?php endif; ?>
@@ -152,7 +135,7 @@ window.MathJax = {
             <?php if($reviewLegacy): ?><input type="hidden" name="unassigned" value="1"><?php endif; ?>
             <div class="col-md-3">
                 <label class="form-label fw-bold">Class</label>
-                <select name="class_id" class="form-select" onchange="this.form.elements.subject_id.value='';this.form.elements.chapter.value='';this.form.submit();" required>
+                <select name="class_id" class="form-select" data-erp-change="learning-index-action-1" data-erp-change-args="<?= schoolPageActionArgs("learning-index",[]) ?>" required>
                     <option value="">Choose Class</option>
                     <?php foreach ($classes as $c): ?>
                     <option value="<?= $c['id'] ?>" <?= $class_id == $c['id'] ? 'selected' : '' ?>><?= sanitize($c['name']) ?></option>
@@ -162,7 +145,7 @@ window.MathJax = {
 
             <div class="col-md-3">
                 <label class="form-label fw-bold">Subject</label>
-                <select name="subject_id" class="form-select" onchange="this.form.elements.chapter.value='';this.form.submit();" required>
+                <select name="subject_id" class="form-select" data-erp-change="learning-index-action-2" data-erp-change-args="<?= schoolPageActionArgs("learning-index",[]) ?>" required>
                     <option value="">Choose Subject</option>
                     <?php foreach ($subjects as $s): ?>
                     <option value="<?= $s['id'] ?>" <?= $subject_id == $s['id'] ? 'selected' : '' ?>><?= sanitize($s['display_name']??$s['name_en']) ?></option>
@@ -172,16 +155,16 @@ window.MathJax = {
 
             <div class="col-md-6">
                 <label class="form-label fw-bold">Chapter / Unit</label>
-                <select name="chapter" class="form-select" onchange="document.getElementById('hubFilterForm').submit();">
+                <select name="chapter" class="form-select" data-erp-change="learning-index-action-3" data-erp-change-args="<?= schoolPageActionArgs("learning-index",[]) ?>">
                     <option value="">Choose Chapter</option>
                     <?php foreach ($chapters as $ch): ?>
                     <option value="<?= sanitize($ch) ?>" <?= $selected_chapter === $ch ? 'selected' : '' ?>><?= sanitize($ch) ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-md-6"><select name="source" class="form-select" onchange="this.form.submit()"><?php foreach(['all'=>'All content','shared'=>'Shared catalog','school'=>'This school','mine'=>'My content'] as $value=>$label): ?><option value="<?= $value ?>" <?= $filter_source===$value?'selected':'' ?>><?= $label ?></option><?php endforeach; ?></select></div>
-            <?php if($canCreateNote): ?><div class="col-md-6"><select name="archived" class="form-select" onchange="this.form.submit()"><option value="">Active notes</option><option value="1" <?= $filter_archived?'selected':'' ?>>My archived notes</option></select></div><?php endif; ?>
-            <div class="col-md-4"><label for="hubQuestionLanguage" class="form-label">Question language</label><select id="hubQuestionLanguage" name="language" class="form-select" onchange="this.form.submit()"><?php foreach(examQuestionLanguages() as $key=>$label): ?><option value="<?= $key ?>" <?= $questionLanguage===$key?'selected':'' ?>><?= $label ?></option><?php endforeach; ?></select></div>
+            <div class="col-md-6"><select name="source" class="form-select" data-erp-change="learning-index-action-4" data-erp-change-args="<?= schoolPageActionArgs("learning-index",[]) ?>"><?php foreach(['all'=>'All content','shared'=>'Shared catalog','school'=>'This school','mine'=>'My content'] as $value=>$label): ?><option value="<?= $value ?>" <?= $filter_source===$value?'selected':'' ?>><?= $label ?></option><?php endforeach; ?></select></div>
+            <?php if($canCreateNote): ?><div class="col-md-6"><select name="archived" class="form-select" data-erp-change="learning-index-action-5" data-erp-change-args="<?= schoolPageActionArgs("learning-index",[]) ?>"><option value="">Active notes</option><option value="1" <?= $filter_archived?'selected':'' ?>>My archived notes</option></select></div><?php endif; ?>
+            <div class="col-md-4"><label for="hubQuestionLanguage" class="form-label">Question language</label><select id="hubQuestionLanguage" name="language" class="form-select" data-erp-change="learning-index-action-6" data-erp-change-args="<?= schoolPageActionArgs("learning-index",[]) ?>"><?php foreach(examQuestionLanguages() as $key=>$label): ?><option value="<?= $key ?>" <?= $questionLanguage===$key?'selected':'' ?>><?= $label ?></option><?php endforeach; ?></select></div>
         </form>
     </div>
 </div>
@@ -230,9 +213,9 @@ window.MathJax = {
                                         <h6 class="fw-bold text-success mb-1"><?= sanitize($note['title']) ?><small class="d-block text-muted">Note #<?= (int)$note['id'] ?></small></h6>
                                         <?php if ($note['can_edit']&&$canCreateNote): ?>
                                         <div>
-                                            <button class="btn btn-xs btn-outline-warning py-0 px-1" onclick="editNote(<?= htmlspecialchars(json_encode($note)) ?>)" title="Edit"><i class="fas fa-edit fa-xs"></i></button>
+                                            <button class="btn btn-xs btn-outline-warning py-0 px-1" data-erp-click="learning-index-action-7" data-erp-click-args="<?= schoolPageActionArgs("learning-index",[(string)(htmlspecialchars(json_encode($note)))]) ?>" title="Edit"><i class="fas fa-edit fa-xs"></i></button>
                                             <form method="post" class="d-inline"><input type="hidden" name="action_note" value="<?= $filter_archived?'restore':'archive' ?>"><input type="hidden" name="note_id" value="<?= $note['id'] ?>"><button class="btn btn-sm btn-outline-danger"><?= $filter_archived?'Restore':'Archive' ?></button></form>
-                                            <?php if(!$filter_archived): ?><form method="post" class="d-inline" onsubmit="return confirm('Change note visibility? Public means within this school only.')"><input type="hidden" name="action_note" value="set_visibility"><input type="hidden" name="note_id" value="<?= $note['id'] ?>"><input type="hidden" name="visibility" value="<?= $note['visibility']==='private'?'public':'private' ?>"><button class="btn btn-sm btn-outline-primary"><?= $note['visibility']==='private'?'Publish':'Make private' ?></button></form><?php endif; ?>
+                                            <?php if(!$filter_archived): ?><form method="post" class="d-inline" data-erp-submit="learning-index-action-8" data-erp-submit-args="<?= schoolPageActionArgs("learning-index",[]) ?>"><input type="hidden" name="action_note" value="set_visibility"><input type="hidden" name="note_id" value="<?= $note['id'] ?>"><input type="hidden" name="visibility" value="<?= $note['visibility']==='private'?'public':'private' ?>"><button class="btn btn-sm btn-outline-primary"><?= $note['visibility']==='private'?'Publish':'Make private' ?></button></form><?php endif; ?>
                                         </div>
                                         <?php endif; ?>
                                     </div>
@@ -316,7 +299,7 @@ window.MathJax = {
 <?php if ($canCreateNote): ?>
 <div class="modal fade" id="noteModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg">
-        <form method="POST" action="" onsubmit="tinymce.triggerSave()">
+        <form method="POST" action="" data-erp-submit="learning-index-action-9" data-erp-submit-args="<?= schoolPageActionArgs("learning-index",[]) ?>">
             <input type="hidden" name="action_note" id="modalActionNote" value="add">
             <input type="hidden" name="note_id" id="modalNoteId">
             <?php foreach(['chapter_id','topic_id','catalog_chapter_id','catalog_topic_id'] as $ref): ?><input type="hidden" name="<?= $ref ?>" id="noteRef_<?= $ref ?>"><?php endforeach; ?>
@@ -329,8 +312,8 @@ window.MathJax = {
                     <div class="row g-3">
                         <input type="hidden" name="class_id" value="<?= $class_id ?>"><input type="hidden" name="subject_id" value="<?= $subject_id ?>">
                         <div class="col-12"><p class="text-muted"><?= sanitize($selected_class['name']) ?> · <?= sanitize($selected_subject['name_en']) ?></p></div>
-                        <div class="col-md-6"><label class="form-label">Chapter</label><select name="chapter" id="modalNoteChapter" class="form-select" required onchange="clearNoteReferences();document.getElementById('modalNoteTopic').value='';"><?php foreach($chapters as $ch): ?><option value="<?= sanitize($ch) ?>" <?= $selected_chapter===$ch?'selected':'' ?>><?= sanitize($ch) ?></option><?php endforeach; ?></select><div class="form-text">Select another chapter in the filter before adding notes for it.</div></div>
-                        <div class="col-md-6"><label class="form-label">Topic (optional)</label><select name="topic" id="modalNoteTopic" class="form-select" onchange="clearNoteReferences()"><option value="">No topic</option><?php foreach($noteTopics as $t): ?><option value="<?= sanitize($t['name']) ?>"><?= sanitize($t['name']) ?></option><?php endforeach; ?></select></div>
+                        <div class="col-md-6"><label class="form-label">Chapter</label><select name="chapter" id="modalNoteChapter" class="form-select" required data-erp-change="learning-index-action-10" data-erp-change-args="<?= schoolPageActionArgs("learning-index",[]) ?>"><?php foreach($chapters as $ch): ?><option value="<?= sanitize($ch) ?>" <?= $selected_chapter===$ch?'selected':'' ?>><?= sanitize($ch) ?></option><?php endforeach; ?></select><div class="form-text">Select another chapter in the filter before adding notes for it.</div></div>
+                        <div class="col-md-6"><label class="form-label">Topic (optional)</label><select name="topic" id="modalNoteTopic" class="form-select" data-erp-change="learning-index-action-11" data-erp-change-args="<?= schoolPageActionArgs("learning-index",[]) ?>"><option value="">No topic</option><?php foreach($noteTopics as $t): ?><option value="<?= sanitize($t['name']) ?>"><?= sanitize($t['name']) ?></option><?php endforeach; ?></select></div>
                         <div class="col-12"><label class="form-label">Visibility</label><select name="visibility" id="modalNoteVisibility" class="form-select"><option value="private">Private</option><option value="public"><?= $is_admin?'Shared catalog':'Public within this school' ?></option></select></div>
                         <div class="col-12">
                             <label class="form-label">Note Title *</label>
@@ -351,77 +334,9 @@ window.MathJax = {
     </div>
 </div>
 
-<script>
-let noteModalObj;
-$(document).ready(function() {
-    noteModalObj = new ErpUI.Modal(document.getElementById('noteModal'));
-
-    // Initialize TinyMCE on note content
-    tinymce.init({
-        selector: '#modalNoteContent',
-        height: 350,
-        plugins: 'advlist autolink lists link image charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime media table wordcount',
-        toolbar: 'undo redo | blocks fontfamily fontsize | bold italic underline forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | table | fullscreen code',
-        branding: false,
-        promotion: false,
-        setup: function (editor) {
-            editor.on('change keyup', function () {
-                editor.save();
-                if (window.MathJax && window.MathJax.typesetPromise) {
-                    window.MathJax.typesetPromise().then(() => {
-                        if (typeof fixDevanagariInMathJax === 'function') {
-                            fixDevanagariInMathJax();
-                        }
-                    });
-                }
-            });
-        }
-    });
-});
-
-function showAddNoteModal() {
-    clearNoteReferences();
-    document.getElementById('modalNoteVisibility').value=<?= json_encode($is_admin?'public':'private') ?>;
-    document.getElementById('modalActionNote').value = 'add';
-    document.getElementById('modalNoteId').value = '';
-    document.getElementById('modalNoteTitle').innerText = 'Add Study Note';
-
-    document.getElementById('modalNoteChapter').value = <?= json_encode($selected_chapter,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;
-    document.getElementById('modalNoteTopic').value = '';
-    document.getElementById('modalNoteTitleInput').value = '';
-
-    if (tinymce.get('modalNoteContent')) {
-        tinymce.get('modalNoteContent').setContent('');
-    } else {
-        document.getElementById('modalNoteContent').value = '';
-    }
-
-    noteModalObj.show();
-}
-
-function editNote(note) {
-    clearNoteReferences();
-    if(!note.needs_catalog_review)for(const key of ['chapter_id','topic_id','catalog_chapter_id','catalog_topic_id'])document.getElementById('noteRef_'+key).value=note[key]||'';
-    document.getElementById('modalNoteVisibility').value=note.visibility;
-    document.getElementById('modalActionNote').value = 'edit';
-    document.getElementById('modalNoteId').value = note.id;
-    document.getElementById('modalNoteTitle').innerText = 'Edit Study Note';
-
-    document.getElementById('modalNoteChapter').value = note.chapter;
-    if(note.needs_catalog_review)document.getElementById('modalNoteChapter').value=<?= json_encode($selected_chapter,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;
-    document.getElementById('modalNoteTopic').value = note.topic;
-    document.getElementById('modalNoteTitleInput').value = note.title;
-
-    if (tinymce.get('modalNoteContent')) {
-        tinymce.get('modalNoteContent').setContent(note.content || '');
-    } else {
-        document.getElementById('modalNoteContent').value = note.content || '';
-    }
-
-    noteModalObj.show();
-}
-function clearNoteReferences(){for(const key of ['chapter_id','topic_id','catalog_chapter_id','catalog_topic_id'])document.getElementById('noteRef_'+key).value='';}
-</script>
+<?php schoolPageModule("learning-index");schoolPageValue("learning-index-value-0",(string)(json_encode($is_admin?'public':'private')));
+schoolPageValue("learning-index-value-1",(string)(json_encode($selected_chapter,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT)));
+schoolPageValue("learning-index-value-2",(string)(json_encode($selected_chapter,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT))); ?>
 <?php endif; ?>
 
 <?php

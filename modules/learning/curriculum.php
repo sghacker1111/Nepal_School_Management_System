@@ -238,7 +238,7 @@ ob_start();
                     <!-- Class Filter -->
                     <div class="mb-3">
                         <label for="curriculumClass" class="form-label fw-bold text-muted small">Select Class</label>
-                        <select id="curriculumClass" class="form-select" onchange="onClassChange()">
+                        <select id="curriculumClass" class="form-select" data-erp-change="learning-curriculum-action-0" data-erp-change-args="<?= schoolPageActionArgs("learning-curriculum",[]) ?>">
                             <option value="">-- Choose Class --</option>
                             <?php foreach ($classes as $c): ?>
                             <option value="<?= $c['id'] ?>"><?= sanitize($c['name']) ?></option>
@@ -250,9 +250,9 @@ ob_start();
                     <div id="subjectSection" style="display: none;">
                         <div class="d-flex justify-content-between align-items-center mb-1">
                             <label for="curriculumSubject" class="form-label fw-bold text-muted small mb-0">Select Subject</label>
-                            <?php if($canManageCatalog): ?><button type="button" class="btn btn-link p-0 text-primary small text-decoration-none fw-bold" onclick="showMapSubjectModal()"><i class="fas fa-link"></i> Map Subject</button><?php endif; ?>
+                            <?php if($canManageCatalog): ?><button type="button" class="btn btn-link p-0 text-primary small text-decoration-none fw-bold" data-erp-click="learning-curriculum-action-1" data-erp-click-args="<?= schoolPageActionArgs("learning-curriculum",[]) ?>"><i class="fas fa-link"></i> Map Subject</button><?php endif; ?>
                         </div>
-                        <select id="curriculumSubject" class="form-select" onchange="onSubjectChange()">
+                        <select id="curriculumSubject" class="form-select" data-erp-change="learning-curriculum-action-2" data-erp-change-args="<?= schoolPageActionArgs("learning-curriculum",[]) ?>">
                             <option value="">-- Choose Subject --</option>
                         </select>
                     </div>
@@ -276,7 +276,7 @@ ob_start();
             <div class="card border-0 shadow-sm min-h-100" style="border-radius: 12px; background: #fff;">
                 <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
                     <h5 class="mb-0 fw-bold text-secondary" id="curriculumTreeTitle"><i class="fas fa-list-ol me-2 text-primary"></i> Syllabus Tree</h5>
-                    <div class="d-flex flex-wrap gap-2"><?php if($canManageCatalog): ?><button type="button" class="btn btn-outline-secondary btn-sm" onclick="showDeletedCurriculum()">Deleted curriculum</button><?php endif; ?><button type="button" class="btn btn-success btn-sm px-3 d-none" id="btnAddChapter" onclick="showAddChapterModal()">
+                    <div class="d-flex flex-wrap gap-2"><?php if($canManageCatalog): ?><button type="button" class="btn btn-outline-secondary btn-sm" data-erp-click="learning-curriculum-action-3" data-erp-click-args="<?= schoolPageActionArgs("learning-curriculum",[]) ?>">Deleted curriculum</button><?php endif; ?><button type="button" class="btn btn-success btn-sm px-3 d-none" id="btnAddChapter" data-erp-click="learning-curriculum-action-4" data-erp-click-args="<?= schoolPageActionArgs("learning-curriculum",[]) ?>">
                         <i class="fas fa-plus me-1"></i> Add Chapter
                     </button></div>
                 </div>
@@ -304,7 +304,7 @@ ob_start();
 <?php if($canManageCatalog): ?>
 <div class="modal fade" id="mapSubjectModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
-        <form class="modal-content border-0 shadow-lg" style="border-radius:16px;" onsubmit="mapSubjectSubmit(event)">
+        <form class="modal-content border-0 shadow-lg" style="border-radius:16px;" data-erp-submit="learning-curriculum-action-5" data-erp-submit-args="<?= schoolPageActionArgs("learning-curriculum",[]) ?>">
             <div class="modal-header bg-primary text-white border-0 py-3">
                 <h5 class="modal-title fw-bold"><i class="fas fa-link"></i> Map Subject to Class</h5>
                 <button type="button" class="btn-close btn-close-white" data-ui-dismiss="modal" aria-label="Close"></button>
@@ -328,7 +328,7 @@ ob_start();
 <!-- Add/Edit Chapter Modal -->
 <div class="modal fade" id="chapterModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
-        <form class="modal-content border-0 shadow-lg" style="border-radius:16px;" onsubmit="chapterSubmit(event)">
+        <form class="modal-content border-0 shadow-lg" style="border-radius:16px;" data-erp-submit="learning-curriculum-action-6" data-erp-submit-args="<?= schoolPageActionArgs("learning-curriculum",[]) ?>">
             <input type="hidden" id="chapterModalAction" value="add">
             <input type="hidden" id="chapterModalId">
             <div class="modal-header bg-success text-white border-0 py-3">
@@ -360,7 +360,7 @@ ob_start();
 <!-- Add/Edit Topic Modal -->
 <div class="modal fade" id="topicModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
-        <form class="modal-content border-0 shadow-lg" style="border-radius:16px;" onsubmit="topicSubmit(event)">
+        <form class="modal-content border-0 shadow-lg" style="border-radius:16px;" data-erp-submit="learning-curriculum-action-7" data-erp-submit-args="<?= schoolPageActionArgs("learning-curriculum",[]) ?>">
             <input type="hidden" id="topicModalAction" value="add">
             <input type="hidden" id="topicModalId">
             <input type="hidden" id="topicModalChapterId">
@@ -391,427 +391,10 @@ ob_start();
 </div>
 
 <?php endif; ?>
-<script src="<?= APP_URL ?>/assets/js/curriculum-delete.js?v=<?= (int)filemtime(__DIR__.'/../../assets/js/curriculum-delete.js') ?>"></script>
-<script>
-const canManageCatalog=<?= json_encode($canManageCatalog) ?>;
-let currentClassId = 0;
-let currentSubjectId = 0;
 
-function onClassChange() {
-    const classSelect = document.getElementById('curriculumClass');
-    currentClassId = parseInt(classSelect.value) || 0;
-    
-    const subjectSection = document.getElementById('subjectSection');
-    const subjectSelect = document.getElementById('curriculumSubject');
-    
-    if (currentClassId === 0) {
-        subjectSection.style.display = 'none';
-        resetTreeContainer();
-        return;
-    }
-    
-    // Load subjects for selected class
-    $.ajax({
-        url: window.location.pathname,
-        data: { action: 'get_subjects', class_id: currentClassId },
-        dataType: 'json',
-        success: function(res) {
-            if (res.success) {
-                subjectSelect.innerHTML = '<option value="">-- Choose Subject --</option>';
-                res.subjects.forEach(sub => {
-                    const opt = document.createElement('option');
-                    opt.value = sub.id;
-                    opt.textContent = sub.name_en + ' (' + sub.code + ')';
-                    subjectSelect.appendChild(opt);
-                });
-                subjectSection.style.display = 'block';
-                document.getElementById('curriculumInstructions').classList.remove('d-none');
-                resetTreeContainer();
-            } else {
-                alert("Error loading subjects: " + res.message);
-            }
-        }
-    });
-}
-
-function onSubjectChange() {
-    const subjectSelect = document.getElementById('curriculumSubject');
-    currentSubjectId = parseInt(subjectSelect.value) || 0;
-    
-    if (currentSubjectId === 0) {
-        resetTreeContainer();
-        return;
-    }
-    
-    loadChaptersTree();
-}
-
-function resetTreeContainer() {
-    document.getElementById('placeholderView').style.display = 'block';
-    document.getElementById('treeContainer').style.display = 'none';
-    document.getElementById('btnAddChapter').classList.add('d-none');
-}
-
-function loadChaptersTree() {
-    document.getElementById('placeholderView').style.display = 'none';
-    document.getElementById('treeContainer').style.display = 'block';
-    if(canManageCatalog)document.getElementById('btnAddChapter').classList.remove('d-none');
-    
-    const accordion = document.getElementById('chaptersAccordion');
-    accordion.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div></div>';
-    
-    $.ajax({
-        url: window.location.pathname,
-        data: { action: 'get_chapters', class_id: currentClassId, subject_id: currentSubjectId },
-        dataType: 'json',
-        success: function(res) {
-            if (res.success) {
-                if (res.chapters.length === 0) {
-                    accordion.innerHTML = `
-                        <div class="text-center text-muted py-5">
-                            <i class="fas fa-folder-open fa-2x mb-2"></i>
-                            <p class="mb-0">No chapters added yet for this subject.</p>
-                            ${canManageCatalog ? '<button class="btn btn-sm btn-outline-success mt-2" onclick="showAddChapterModal()">Add First Chapter</button>' : '<p>Ask super admin to add curriculum chapters.</p>'}
-                        </div>
-                    `;
-                    return;
-                }
-                
-                accordion.innerHTML = '';
-                res.chapters.forEach(ch => {
-                    const chapterItem = document.createElement('div');
-                    chapterItem.className = 'accordion-item border mb-3 rounded-3 overflow-hidden shadow-sm';
-                    chapterItem.innerHTML = `
-                        <h2 class="accordion-header" id="headingCh_${ch.id}">
-                            <div class="accordion-button collapsed bg-light d-flex justify-content-between align-items-center" type="button" data-ui-toggle="collapse" data-ui-target="#collapseCh_${ch.id}">
-                                <div class="d-flex align-items-center">
-                                    <i class="fas fa-folder text-warning me-2"></i>
-                                    <div>
-                                        <span class="fw-bold chapter-name"></span>
-                                        <span class="text-muted ms-2 chapter-name-np"></span>
-                                    </div>
-                                </div>
-                                <div class="ms-auto me-3 no-print d-flex gap-1" onclick="event.stopPropagation()">
-                                    <button class="btn btn-xs btn-outline-primary px-2 edit-chapter" title="Edit chapter">
-                                        <i class="fas fa-edit"></i>
-                                    </button>
-                                    <button class="btn btn-xs btn-outline-danger px-2" onclick="deleteChapter(${ch.id})" title="Delete chapter" aria-label="Delete chapter">
-                                        <i class="fas fa-trash"></i> Delete
-                                    </button>
-                                </div>
-                            </div>
-                        </h2>
-                        <div id="collapseCh_${ch.id}" class="accordion-collapse collapse" data-ui-parent="#chaptersAccordion">
-                            <div class="accordion-body bg-white" id="topicsContainer_${ch.id}">
-                                <div class="text-center py-2"><div class="spinner-border spinner-border-sm text-secondary" role="status"></div></div>
-                            </div>
-                        </div>
-                        <div class="p-2 border-top bg-light no-print">
-                            <button type="button" class="btn btn-sm btn-outline-success add-chapter-topic"><i class="fas fa-plus"></i> Add Topic</button>
-                        </div>
-                    `;
-                    chapterItem.querySelector('.chapter-name').textContent=ch.name;
-                    chapterItem.querySelector('.chapter-name-np').textContent=ch.name_np?'('+ch.name_np+')':'';
-                    chapterItem.querySelector('.edit-chapter').addEventListener('click',()=>showEditChapterModal(ch.id,ch.name,ch.name_np||'',ch.sort_order));
-                    chapterItem.querySelector('.add-chapter-topic').addEventListener('click',()=>showAddTopicModal(ch.id));
-                    if(!canManageCatalog){chapterItem.querySelector('.no-print').remove();chapterItem.querySelector('.add-chapter-topic').parentElement.remove();}
-                    chapterItem.querySelector('.accordion-collapse').addEventListener('show.erp.collapse',()=>loadTopicsList(ch.id));
-                    accordion.appendChild(chapterItem);
-                });
-            } else {
-                accordion.textContent = 'Error: ' + res.message;
-            }
-        }
-    });
-}
-
-function loadTopicsList(chapterId) {
-    const container = document.getElementById('topicsContainer_' + chapterId);
-    $.ajax({
-        url: window.location.pathname,
-        data: { action: 'get_topics', chapter_id: chapterId, class_id: currentClassId, subject_id: currentSubjectId },
-        dataType: 'json',
-        success: function(res) {
-            if (res.success) {
-                if (res.topics.length === 0) {
-                    container.innerHTML = `
-                        <div class="text-center text-muted py-3">
-                            <p class="mb-0 small">No topics added for this chapter.</p>
-                            ${canManageCatalog ? `<button class="btn btn-xs btn-outline-success mt-2" onclick="showAddTopicModal(${chapterId})">Add First Topic</button>` : ''}
-                        </div>
-                    `;
-                    return;
-                }
-                
-                const list=document.createElement('ul');list.className='list-group list-group-flush';
-                res.topics.forEach(t => {
-                    const item=document.createElement('li');item.className='list-group-item d-flex justify-content-between align-items-center py-2 px-1';
-                    item.innerHTML = `
-                            <div class="d-flex align-items-center">
-                                <i class="fas fa-file-alt text-info me-2 small"></i>
-                                <span class="topic-name"></span>
-                                <span class="text-muted ms-2 topic-name-np"></span>
-                            </div>
-                            <div class="no-print d-flex gap-1">
-                                <button class="btn btn-xs btn-link text-primary p-0 edit-topic" title="Edit Topic">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                                <button class="btn btn-xs btn-link text-danger p-0" onclick="deleteTopic(${t.id}, ${chapterId})" title="Delete Topic">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </div>
-                    `;
-                    item.querySelector('.topic-name').textContent=t.name;
-                    item.querySelector('.topic-name-np').textContent=t.name_np?'('+t.name_np+')':'';
-                    item.querySelector('.edit-topic').addEventListener('click',()=>showEditTopicModal(t.id,chapterId,t.name,t.name_np||'',t.sort_order));
-                    if(!canManageCatalog)item.querySelector('.no-print').remove();
-                    list.appendChild(item);
-                });
-                container.replaceChildren(list);
-            } else {
-                container.innerHTML = '<span class="text-danger small">Error loading topics.</span>';
-            }
-        }
-    });
-}
-
-// Modal Triggers & Submissions
-function showMapSubjectModal() {
-    $.ajax({
-        url: window.location.pathname,
-        data: { action: 'get_all_subjects' },
-        dataType: 'json',
-        success: function(res) {
-            if (res.success) {
-                const select = document.getElementById('modalMapSubjectSelect');
-                select.innerHTML = '';
-                res.subjects.forEach(sub => {
-                    const opt = document.createElement('option');
-                    opt.value = sub.id;
-                    opt.textContent = sub.name_en + ' (' + sub.code + ')';
-                    select.appendChild(opt);
-                });
-                const modal = new ErpUI.Modal(document.getElementById('mapSubjectModal'));
-                modal.show();
-            }
-        }
-    });
-}
-
-function mapSubjectSubmit(e) {
-    e.preventDefault();
-    const subjectId = document.getElementById('modalMapSubjectSelect').value;
-    $.ajax({
-        url: window.location.pathname,
-        type: 'POST',
-        data: {
-            action: 'map_subject',
-            class_id: currentClassId,
-            subject_id: subjectId
-        },
-        dataType: 'json',
-        success: function(res) {
-            ErpUI.Modal.getInstance(document.getElementById('mapSubjectModal')).hide();
-            if (res.success) {
-                Swal.fire('Success', 'Subject mapped successfully to class.', 'success');
-                onClassChange();
-            } else {
-                Swal.fire('Error', res.message, 'error');
-            }
-        }
-    });
-}
-
-// Chapter modals
-function showAddChapterModal() {
-    document.getElementById('chapterModalAction').value = 'add';
-    document.getElementById('chapterModalTitle').textContent = 'Add Chapter';
-    document.getElementById('modalChapterName').value = '';
-    document.getElementById('modalChapterNameNp').value = '';
-    document.getElementById('modalChapterSort').value = '0';
-    
-    const modal = new ErpUI.Modal(document.getElementById('chapterModal'));
-    modal.show();
-}
-
-function showEditChapterModal(id, name, nameNp, sortOrder) {
-    document.getElementById('chapterModalAction').value = 'edit';
-    document.getElementById('chapterModalId').value = id;
-    document.getElementById('chapterModalTitle').textContent = 'Edit Chapter';
-    document.getElementById('modalChapterName').value = name;
-    document.getElementById('modalChapterNameNp').value = nameNp;
-    document.getElementById('modalChapterSort').value = sortOrder;
-    
-    const modal = new ErpUI.Modal(document.getElementById('chapterModal'));
-    modal.show();
-}
-
-function chapterSubmit(e) {
-    e.preventDefault();
-    const action = document.getElementById('chapterModalAction').value;
-    const name = document.getElementById('modalChapterName').value;
-    const nameNp = document.getElementById('modalChapterNameNp').value;
-    const sort = document.getElementById('modalChapterSort').value;
-    const id = document.getElementById('chapterModalId').value;
-    
-    const postData = {
-        action: action === 'add' ? 'add_chapter' : 'edit_chapter',
-        class_id: currentClassId,
-        subject_id: currentSubjectId,
-        name: name,
-        name_np: nameNp,
-        sort_order: sort,
-        id: id
-    };
-    
-    $.ajax({
-        url: window.location.pathname,
-        type: 'POST',
-        data: postData,
-        dataType: 'json',
-        success: function(res) {
-            ErpUI.Modal.getInstance(document.getElementById('chapterModal')).hide();
-            if (res.success) {
-                loadChaptersTree();
-            } else {
-                Swal.fire('Error', res.message, 'error');
-            }
-        }
-    });
-}
-
-function deleteChapter(id) {
-    Swal.fire({
-        title: 'Delete Chapter',
-        text: 'Delete this chapter and its empty topics? Active questions, notes or paper grids will block deletion and show their locations. Deleted entries can be restored.',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#d33',
-        confirmButtonText: 'Yes, delete it'
-    }).then((result) => {
-        if (result.isConfirmed) {
-            $.ajax({
-                url: window.location.pathname,
-                type: 'POST',
-                data: { action: 'delete_chapter', id: id },
-                dataType: 'json',
-                success: function(res) {
-                    if (res.success) {
-                        loadChaptersTree();
-                        Swal.fire('Deleted',res.message,'success');
-                    } else {
-                        CurriculumDeleteUI.showBlocked(res,<?= json_encode(APP_URL) ?>);
-                    }
-                }
-            });
-        }
-    });
-}
-
-// Topic Modals
-function showAddTopicModal(chapterId) {
-    document.getElementById('topicModalAction').value = 'add';
-    document.getElementById('topicModalChapterId').value = chapterId;
-    document.getElementById('topicModalTitle').textContent = 'Add Topic';
-    document.getElementById('modalTopicName').value = '';
-    document.getElementById('modalTopicNameNp').value = '';
-    document.getElementById('modalTopicSort').value = '0';
-    
-    const modal = new ErpUI.Modal(document.getElementById('topicModal'));
-    modal.show();
-}
-
-function showEditTopicModal(id, chapterId, name, nameNp, sortOrder) {
-    document.getElementById('topicModalAction').value = 'edit';
-    document.getElementById('topicModalId').value = id;
-    document.getElementById('topicModalChapterId').value = chapterId;
-    document.getElementById('topicModalTitle').textContent = 'Edit Topic';
-    document.getElementById('modalTopicName').value = name;
-    document.getElementById('modalTopicNameNp').value = nameNp;
-    document.getElementById('modalTopicSort').value = sortOrder;
-    
-    const modal = new ErpUI.Modal(document.getElementById('topicModal'));
-    modal.show();
-}
-
-function topicSubmit(e) {
-    e.preventDefault();
-    const action = document.getElementById('topicModalAction').value;
-    const name = document.getElementById('modalTopicName').value;
-    const nameNp = document.getElementById('modalTopicNameNp').value;
-    const sort = document.getElementById('modalTopicSort').value;
-    const id = document.getElementById('topicModalId').value;
-    const chapterId = document.getElementById('topicModalChapterId').value;
-    
-    const postData = {
-        action: action === 'add' ? 'add_topic' : 'edit_topic',
-        class_id: currentClassId,
-        subject_id: currentSubjectId,
-        chapter_id: chapterId,
-        name: name,
-        name_np: nameNp,
-        sort_order: sort,
-        id: id
-    };
-    
-    $.ajax({
-        url: window.location.pathname,
-        type: 'POST',
-        data: postData,
-        dataType: 'json',
-        success: function(res) {
-            ErpUI.Modal.getInstance(document.getElementById('topicModal')).hide();
-            if (res.success) {
-                // Reload specific topics container
-                loadTopicsList(chapterId);
-                ErpUI.Collapse.getOrCreateInstance(document.getElementById('collapseCh_'+chapterId),{toggle:false}).show();
-            } else {
-                Swal.fire('Error', res.message, 'error');
-            }
-        }
-    });
-}
-
-function deleteTopic(id, chapterId) {
-    Swal.fire({
-        title: 'Delete Topic',
-        text: 'Delete this unused topic? Active linked content will block deletion and show its locations. You can restore deleted topics.',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#d33',
-        confirmButtonText: 'Yes, delete it'
-    }).then((result) => {
-        if (result.isConfirmed) {
-            $.ajax({
-                url: window.location.pathname,
-                type: 'POST',
-                data: { action: 'delete_topic', id: id },
-                dataType: 'json',
-                success: function(res) {
-                    if (res.success) {
-                        loadTopicsList(chapterId);
-                        Swal.fire('Deleted',res.message,'success');
-                    } else {
-                        CurriculumDeleteUI.showBlocked(res,<?= json_encode(APP_URL) ?>);
-                    }
-                }
-            });
-        }
-    });
-}
-function showDeletedCurriculum(){
-    if(!currentClassId||!currentSubjectId){Swal.fire('Choose class and subject','Select a class and subject first.','info');return;}
-    $.getJSON(window.location.pathname,{action:'get_deleted',class_id:currentClassId,subject_id:currentSubjectId},res=>{
-        if(!res.success){Swal.fire('Error',res.message,'error');return;}
-        CurriculumDeleteUI.showDeleted(res.items,(kind,id)=>{
-            $.ajax({url:window.location.pathname,type:'POST',dataType:'json',data:{action:kind==='chapters'?'restore_chapter':'restore_topic',id},success:result=>{
-                if(!result.success){Swal.fire('Cannot restore',result.message,'warning');return;}
-                loadChaptersTree();showDeletedCurriculum();
-            },error:()=>Swal.fire('Error','Could not restore this entry. Reload and try again.','error')});
-        });
-    }).fail(()=>Swal.fire('Error','Could not load deleted curriculum.','error'));
-}
-</script>
+<?php schoolPageModule("learning-curriculum");schoolPageValue("learning-curriculum-value-0",(string)(json_encode($canManageCatalog)));
+schoolPageValue("learning-curriculum-value-1",(string)(json_encode(APP_URL)));
+schoolPageValue("learning-curriculum-value-2",(string)(json_encode(APP_URL))); ?>
 
 <?php
 $content = ob_get_clean();

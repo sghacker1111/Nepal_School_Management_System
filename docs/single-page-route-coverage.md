@@ -38,19 +38,19 @@ All 78 existing controllers are explicitly registered. Enhanced routes have bund
 | `/exams` | `modules/exams/index.php` | page | Scoped adapter; automated HTTP/DOM coverage; browser pending |
 | `/exams/symbols` | `modules/exams/symbols.php` | page | Scoped adapter; automated HTTP/DOM coverage; browser pending |
 | `/exams/view` | `modules/exams/view.php` | page | Scoped adapter; automated HTTP/DOM coverage; browser pending |
-| `/learning/curriculum` | `modules/learning/curriculum.php` | mixed | Pending adapter and HTTP verification |
-| `/exam-mcqs` | `modules/learning/exam_mcqs.php` | mixed | Pending adapter and HTTP verification |
-| `/exam-paper-generator` | `modules/learning/exam_paper_generator.php` | mixed | Pending adapter and HTTP verification |
-| `/exam-questions` | `modules/learning/exam_questions.php` | mixed | Pending adapter and HTTP verification |
-| `/exam-paper-grids` | `modules/learning/exam_specification_grids.php` | mixed | Pending adapter and HTTP verification |
-| `/learning` | `modules/learning/index.php` | mixed | Pending adapter and HTTP verification |
-| `/learning/ocr-scanner` | `modules/learning/ocr_scanner.php` | mixed | Pending adapter and HTTP verification |
-| `/learning/paper-generator` | `modules/learning/paper_generator.php` | mixed | Pending adapter and HTTP verification |
-| `/learning/practice-mcqs` | `modules/learning/practice_mcqs.php` | mixed | Pending adapter and HTTP verification |
-| `/learning/question-corrections` | `modules/learning/question_corrections.php` | page | Pending adapter and HTTP verification |
-| `/learning/question-grid` | `modules/learning/question_grid.php` | page | Pending adapter and HTTP verification |
-| `/learning/question-bank` | `modules/learning/questions.php` | mixed | Pending adapter and HTTP verification |
-| `/learning/specification-grids` | `modules/learning/specification_grids.php` | mixed | Pending adapter and HTTP verification |
+| `/learning/curriculum` | `modules/learning/curriculum.php` | mixed | Scoped adapter; automated HTTP/DOM coverage; browser pending |
+| `/exam-mcqs` | `modules/learning/exam_mcqs.php` | mixed | Scoped adapter; automated HTTP/DOM coverage; browser pending |
+| `/exam-paper-generator` | `modules/learning/exam_paper_generator.php` | mixed | Scoped adapter; automated HTTP/DOM coverage; browser pending |
+| `/exam-questions` | `modules/learning/exam_questions.php` | mixed | Scoped adapter; automated HTTP/DOM coverage; browser pending |
+| `/exam-paper-grids` | `modules/learning/exam_specification_grids.php` | mixed | Scoped adapter; automated HTTP/DOM coverage; browser pending |
+| `/learning` | `modules/learning/index.php` | mixed | Scoped adapter; automated HTTP/DOM coverage; browser pending |
+| `/learning/ocr-scanner` | `modules/learning/ocr_scanner.php` | mixed | Scoped adapter; automated HTTP/DOM coverage; browser pending |
+| `/learning/paper-generator` | `modules/learning/paper_generator.php` | mixed | Scoped adapter; automated HTTP/DOM coverage; browser pending |
+| `/learning/practice-mcqs` | `modules/learning/practice_mcqs.php` | mixed | Scoped adapter; automated HTTP/DOM coverage; browser pending |
+| `/learning/question-corrections` | `modules/learning/question_corrections.php` | page | Scoped adapter; automated HTTP/DOM coverage; browser pending |
+| `/learning/question-grid` | `modules/learning/question_grid.php` | page | Scoped adapter; automated HTTP/DOM coverage; browser pending |
+| `/learning/question-bank` | `modules/learning/questions.php` | mixed | Scoped adapter; automated HTTP/DOM coverage; browser pending |
+| `/learning/specification-grids` | `modules/learning/specification_grids.php` | mixed | Scoped adapter; automated HTTP/DOM coverage; browser pending |
 | `/reports` | `modules/reports/index.php` | page | Scoped adapter; automated HTTP/DOM coverage; browser pending |
 | `/results` | `modules/results/index.php` | page | Scoped adapter; automated HTTP/DOM coverage; browser pending |
 | `/results/ledger` | `modules/results/ledger.php` | page | Scoped adapter; automated HTTP/DOM coverage; browser pending |
@@ -73,7 +73,7 @@ All 78 existing controllers are explicitly registered. Enhanced routes have bund
 | `/subjects/internal` | `modules/subjects/internal.php` | page | Scoped adapter; automated HTTP/DOM coverage; browser pending |
 | `/admin/exam-templates` | `modules/super_admin/exam_templates.php` | mixed | Scoped adapter; automated HTTP/DOM coverage; browser pending |
 | `/admin` | `modules/super_admin/index.php` | page | Scoped adapter; automated HTTP/DOM coverage; browser pending |
-| `/admin/question-corrections` | `modules/super_admin/question_corrections.php` | page | Pending adapter and HTTP verification |
+| `/admin/question-corrections` | `modules/super_admin/question_corrections.php` | page | Scoped adapter; automated HTTP/DOM coverage; browser pending |
 | `/admin/schools` | `modules/super_admin/schools.php` | page | Scoped adapter; automated HTTP/DOM coverage; browser pending |
 | `/admin/subjects` | `modules/super_admin/subjects.php` | mixed | Scoped adapter; automated HTTP/DOM coverage; browser pending |
 | `/admin/switch-school` | `modules/super_admin/switch_school.php` | auth | Native boundary/document; not boosted |

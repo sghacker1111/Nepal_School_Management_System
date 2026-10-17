@@ -41,9 +41,9 @@ try{
 }catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),$view==='list'?422:404);}
 $counts=questionCorrectionCounts($db,$actor);$formValues=array_filter($_POST,'is_string');ob_start();
 ?>
-<link rel="stylesheet" href="<?= APP_URL ?>/assets/css/exam-question-bank.css?v=<?= (int)filemtime(__DIR__.'/../assets/css/exam-question-bank.css') ?>">
-<link rel="stylesheet" href="<?= APP_URL ?>/assets/css/exam-question-language.css?v=<?= (int)filemtime(__DIR__.'/../assets/css/exam-question-language.css') ?>">
-<script>window.MathJax={tex:{inlineMath:[['\\(','\\)'],['$','$']],displayMath:[['\\[','\\]'],['$$','$$']],processEscapes:true}};</script><script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<?php $pageStyles[]="/assets/css/exam-question-bank.css"; ?>
+<?php $pageStyles[]="/assets/css/exam-question-language.css"; ?>
+<?php $pageAssets[]="mathjax"; ?><?php $pageAssets[]="mathjax"; ?>
 <div class="d-flex flex-wrap justify-content-between gap-2 mb-3"><div><h1 class="h2"><?= sanitize($pageTitle) ?></h1><p class="text-muted">Shared questions stay read-only. Reports are reviewed by the system administrator.</p></div><a class="btn btn-outline-secondary align-self-start" href="<?= sanitize($url()) ?>">All requests · <?= $counts['pending'] ?> pending<?= !$correctionAdmin?' · '.$counts['unread'].' unread replies':'' ?></a></div>
 <?php if($error): ?><div class="alert alert-danger" role="alert"><?= sanitize($error) ?></div><?php endif; ?>
 <?php if($view==='request'): ?>

@@ -13,6 +13,13 @@ import './pages/administration.js';
 import '../assets/js/attendance-controls.js';
 import './pages/attendance.js';
 import './pages/results.js';
+import '../assets/js/question-editor.js';
+import '../assets/js/exam-question-language.js';
+import './pages/learning.js';
+import './pages/questions.js';
+import './pages/papers.js';
+import './pages/curriculum.js';
+import './pages/practice.js';
 
 // CSP build: no new Function/eval required to operate the navigation.
 Alpine.data('workspace', () => ({

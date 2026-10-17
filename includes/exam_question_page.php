@@ -118,10 +118,10 @@ $form+=['class_id'=>$formClass,'subject_id'=>$formSubject,'visibility'=>$actor['
 $examImportKinds=$examSection==='all'?['mcq'=>'MCQs','other'=>'Other Questions']:[$importKind=>$examSection==='mcq'?'MCQs':'Other Questions'];
 $pageTitle=($view==='list'?'':ucfirst($view).' ').$sectionTitle;$activePage=$isExamBank?($examSection==='mcq'?'exam_mcqs':'exam_questions'):'questions';ob_start();
 ?>
-<link rel="stylesheet" href="<?= APP_URL ?>/assets/css/exam-question-bank.css?v=<?= (int)filemtime(__DIR__.'/../assets/css/exam-question-bank.css') ?>">
-<link rel="stylesheet" href="<?= APP_URL ?>/assets/css/exam-question-language.css?v=<?= (int)filemtime(__DIR__.'/../assets/css/exam-question-language.css') ?>">
-<script>window.MathJax={tex:{inlineMath:[['\\(','\\)'],['$','$']],displayMath:[['\\[','\\]'],['$$','$$']],processEscapes:true}};</script>
-<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<?php $pageStyles[]="/assets/css/exam-question-bank.css"; ?>
+<?php $pageStyles[]="/assets/css/exam-question-language.css"; ?>
+<?php $pageAssets[]="mathjax"; ?>
+<?php $pageAssets[]="mathjax"; ?>
 <?php if($view==='list')ob_start(); ?>
 <div class="d-flex flex-wrap justify-content-between gap-2 mb-3 exam-bank-toolbar"><div><h1 class="h2"><?= $sectionTitle ?></h1><p class="text-muted mb-0"><?= $isExamBank?($isStudent?'Only questions explicitly released for your class and subjects.':'Chapter-wide exam bank: staff-only by default. Normal Question Bank and student practice remain separate.'):'Topic-wise questions and MCQs for learning, practice and unit-test papers. School content keeps its existing private/public access rules.' ?></p></div>
 <div class="d-flex flex-wrap align-items-start gap-2">
@@ -134,7 +134,7 @@ $pageTitle=($view==='list'?'':ucfirst($view).' ').$sectionTitle;$activePage=$isE
 <?php include __DIR__.'/exam_question_editor_form.php'; ?>
 <?php elseif($view==='import'): ?>
 <?php include __DIR__.'/exam_question_import_form.php'; ?>
-<script src="<?= APP_URL ?>/assets/js/exam-questions.js?v=<?= (int)filemtime(__DIR__.'/../assets/js/exam-questions.js') ?>"></script>
+<?php schoolPageModule("external-exam-questions"); ?>
 <?php else: ?>
 <?php include __DIR__.'/exam_question_filters.php'; ?>
 <?php if($filters['record_id']!==''): ?><p class="small">Viewing a linked record. <a href="<?= sanitize($url(['record_id'=>''])) ?>">Show all questions</a></p><?php endif; ?>
@@ -162,6 +162,6 @@ if(($_SERVER['REQUEST_METHOD']??'GET')==='GET'&&($_SERVER['HTTP_HX_REQUEST']??''
 }
 echo $panel;
 ?>
-<script src="<?= APP_URL ?>/assets/js/exam-question-language.js?v=<?= (int)filemtime(__DIR__.'/../assets/js/exam-question-language.js') ?>"></script>
+
 <?php endif; ?>
 <?php $content=ob_get_clean();include __DIR__.'/header.php'; ?>

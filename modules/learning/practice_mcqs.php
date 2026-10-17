@@ -41,8 +41,8 @@ if(isset($_SESSION['mcq_practice'])){
 }
 $pageTitle='Practice MCQs';$activePage='practice_mcqs';$pageStyles=['/assets/css/mcq-practice.css?v='.(int)filemtime(__DIR__.'/../../assets/css/mcq-practice.css')];ob_start();
 ?>
-<script>window.MathJax={tex:{inlineMath:[['\\(','\\)'],['$','$']],displayMath:[['\\[','\\]'],['$$','$$']],processEscapes:true}};</script>
-<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<?php $pageAssets[]="mathjax"; ?>
+<?php $pageAssets[]="mathjax"; ?>
 <section id="practiceApp" class="mcq-practice" aria-label="MCQ practice">
  <header class="practice-heading"><div><span class="practice-eyebrow">LEARNING · ONE QUESTION AT A TIME</span><h1>Practice MCQs</h1><p>Choose your questions and get instant feedback.</p></div><div class="practice-tools"><button type="button" id="practiceSound" class="btn btn-outline-secondary" aria-pressed="true">Sound on</button><button type="button" id="practiceFullscreen" class="btn btn-outline-primary">Full screen</button></div></header>
  <div id="practiceError" class="practice-error" role="alert" hidden></div>
@@ -73,5 +73,5 @@ $pageTitle='Practice MCQs';$activePage='practice_mcqs';$pageStyles=['/assets/css
  <noscript><p class="alert alert-info">Enable JavaScript to use interactive MCQ practice.</p></noscript>
 </section>
 <script id="practiceBootstrap" type="application/json"><?= json_encode(['current'=>$current,'limit'=>MCQ_PRACTICE_LIMIT],JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_INVALID_UTF8_SUBSTITUTE) ?></script>
-<script defer src="<?= APP_URL ?>/assets/js/mcq-practice.js?v=<?= (int)filemtime(__DIR__.'/../../assets/js/mcq-practice.js') ?>"></script>
+<?php schoolPageModule("external-mcq-practice"); ?>
 <?php $content=ob_get_clean();include __DIR__.'/../../includes/header.php';

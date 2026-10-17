@@ -1,11 +1,7 @@
 'use strict';
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
-const source=fs.readFileSync('modules/learning/questions.php','utf8');
-let parsed=0;
-for(const match of source.replace(/<\?[\s\S]*?\?>/g,'null').matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)){
-    const code=match[1];
-    if(code.trim()){new vm.Script(code);parsed++;}
-}
+const source=fs.readFileSync('frontend/pages/generated/learning-questions.js','utf8');
+new vm.Script('('+source.replace('export default','')+')');
 function definition(name){const start=source.indexOf('function '+name+'('),end=source.indexOf('\n}',start);assert(start>=0&&end>start,name);return source.slice(start,end+2);}
 const nodes=new Map(),element=id=>{if(!nodes.has(id))nodes.set(id,{value:'',style:{},options:[{value:'MCQ',style:{}},{value:'Short',style:{}}],querySelectorAll:()=>[]});return nodes.get(id);};
 const links=[{href:'http://localhost/questions.php?type=mcq&format=xlsx'},{href:'http://localhost/questions.php?type=other&format=csv'}];let mode='normal';
@@ -24,4 +20,4 @@ context.showAddForm('other');assert.equal(element('modalType').value,'Short');as
 context.updateImportContentMode();assert(links.every(link=>new URL(link.href).searchParams.get('content_mode')==='normal'));
 mode='html';context.updateImportContentMode();assert(links.every(link=>new URL(link.href).searchParams.get('content_mode')==='html'));assert.match(element('importModeHelp').textContent,/LaTeX/);
 assert.match(element('importModeHelp').textContent,/unsafe attributes are removed/);
-console.log(`Question editor checks passed: ${parsed} inline scripts parse; saved weights, MCQ explanations, new-question defaults and mode-matched templates.`);
+console.log('Question editor checks passed: bundled controller parses; saved weights, MCQ explanations, new-question defaults and mode-matched templates.');

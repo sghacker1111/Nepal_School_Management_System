@@ -16,7 +16,7 @@ function schoolAppLocation(string $url): string {
 /** Server page styles become finite client asset IDs, never executable URLs. */
 function schoolPageAssetIds(array $styles): array {
     $allowed=['attendance.css'=>'attendance-css','result-ledger.css'=>'ledger-css','exam-paper.css'=>'exam-paper-css',
-        'exam-question-language.css'=>'question-language-css','mcq-practice.css'=>'practice-css','accounting.css'=>'accounting-css'];
+        'exam-question-language.css'=>'question-language-css','exam-question-bank.css'=>'question-bank-css','mcq-practice.css'=>'practice-css','accounting.css'=>'accounting-css'];
     $ids=[];
     foreach($styles as $style){
         if(!is_string($style)||!preg_match('~^/assets/css/[a-z-]+\.css(?:\?v=[0-9]+)?$~D',$style))throw new InvalidArgumentException('Unknown page stylesheet.');

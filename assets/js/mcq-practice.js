@@ -120,7 +120,13 @@
  function queueStageFit(){if(window.requestAnimationFrame)window.requestAnimationFrame(fitPracticeStage);else fitPracticeStage();}
  document.addEventListener('fullscreenchange',queueStageFit);
  window.addEventListener?.('resize',queueStageFit);
- if(window.ResizeObserver)new window.ResizeObserver(queueStageFit).observe(el('practiceStage'));
+ let resizeObserver;if(window.ResizeObserver){resizeObserver=new window.ResizeObserver(queueStageFit);resizeObserver.observe(el('practiceStage'));}
+ window.erpRegisterPageCleanup?.(()=>{
+  loadVersion++;resizeObserver?.disconnect();
+  if(audioContext&&audioContext.state!=='closed')audioContext.close?.().catch(()=>{});
+  root.getAnimations?.({subtree:true}).forEach(animation=>animation.cancel());
+  if(document.fullscreenElement===root)document.exitFullscreen?.().catch(()=>{});
+ });
  document.addEventListener('keydown',event=>{if(!current||current.complete||current.feedback||busy||event.altKey||event.ctrlKey||event.metaKey||/INPUT|SELECT|TEXTAREA/.test(event.target.tagName))return;const letter={'1':'A','2':'B','3':'C','4':'D'}[event.key];if(letter){event.preventDefault();answer(letter);}});
  soundLabel();if(el('practiceClass').value)loadSubjects();renderPractice(current,false);
 })();

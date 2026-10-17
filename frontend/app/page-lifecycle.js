@@ -8,6 +8,7 @@ const assets = Object.freeze({
     'exam-paper-css': '/assets/css/exam-paper.css',
     'question-language-css': '/assets/css/exam-question-language.css',
     'practice-css': '/assets/css/mcq-practice.css',
+    'question-bank-css': '/assets/css/exam-question-bank.css',
     'accounting-css': '/assets/css/accounting.css',
     tinymce: 'https://cdn.jsdelivr.net/npm/tinymce@6/tinymce.min.js',
     mathjax: 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js',
@@ -37,6 +38,7 @@ async function loadAsset(id, doc) {
     const win = doc.defaultView, path = assets[id];
     if ((id === 'tinymce' && win.tinymce) || (id === 'mathjax' && win.MathJax?.typesetPromise)
         || (id === 'tesseract' && win.Tesseract) || (id === 'pdfjs' && win.pdfjsLib)) return;
+    if(id==='mathjax')win.MathJax={tex:{inlineMath:[['\\(','\\)'],['$','$']],displayMath:[['\\[','\\]'],['$$','$$']],processEscapes:true}};
     const url = path.startsWith('/') ? new URL((win.APP_URL || win.location.origin).replace(/\/$/, '') + path).href : path;
     const css = path.endsWith('.css');
     const existing = [...doc.querySelectorAll(css ? 'link[rel="stylesheet"]' : 'script[src]')].find(node => (css ? node.href : node.src).split('?')[0] === url);
