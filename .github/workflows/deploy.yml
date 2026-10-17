@@ -1,9 +1,16 @@
-name: Deploy Website via FTP
+name: Validate and deploy Nepal ERP to InfinityFree
 
 on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: 'Deploy to InfinityFree after MySQL import and private configuration are ready'
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -14,9 +21,31 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  web-deploy:
-    name: Deploy to Hosting
+  validate:
+    name: Validate application and deployment boundaries
     runs-on: ubuntu-latest
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+    - name: Set up build-time Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+        cache: npm
+    - name: Verify deployment safeguards
+      run: python3 tests/deployment_test.py
+    - name: Build and verify frontend
+      run: |
+        npm ci --no-fund
+        npm run build
+        npm run test:ui
+
+  web-deploy:
+    name: Deploy to InfinityFree over TLS
+    needs: validate
+    if: github.ref == 'refs/heads/main' && (vars.FTP_DEPLOY_ENABLED == 'true' || (github.event_name == 'workflow_dispatch' && inputs.deploy))
+    runs-on: ubuntu-latest
+    environment: infinityfree-production
     steps:
     - name: Get latest code
       uses: actions/checkout@v4
@@ -34,6 +63,26 @@ jobs:
         npm run build
         npm run test:ui
     
+    - name: Validate hosting configuration
+      env:
+        FTP_SERVER: ${{ secrets.FTP_SERVER }}
+        FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+        FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        FTP_SERVER_DIR: ${{ vars.FTP_SERVER_DIR }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        for setting in FTP_SERVER FTP_USERNAME FTP_PASSWORD FTP_SERVER_DIR; do
+          if [[ -z "${!setting}" ]]; then
+            echo "::error::Set $setting in this repository's Actions settings before deployment."
+            exit 1
+          fi
+        done
+        if [[ "$FTP_SERVER_DIR" != 'school.my-board.org/htdocs/' ]]; then
+          echo '::error::FTP_SERVER_DIR must be the exact school.my-board.org/htdocs/ folder.'
+          exit 1
+        fi
+
     - name: Sync files to FTP
       uses: SamKirkland/FTP-Deploy-Action@v4.3.4
       with:
@@ -41,6 +90,8 @@ jobs:
         username: ${{ secrets.FTP_USERNAME }}
         password: ${{ secrets.FTP_PASSWORD }}
         server-dir: school.my-board.org/htdocs/ # Subdomain folder for school.my-board.org
+        protocol: ftps
+        port: 21
         # Exclusions apply to uploads AND deletions from the previous sync state.
         # These files belong to the running school, not the source repository.
         dangerous-clean-slate: false

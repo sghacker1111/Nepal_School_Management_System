@@ -17,6 +17,8 @@ PHP school administration application using MySQL, locally built Tailwind CSS, A
 
 See [INSTALL.md](INSTALL.md) for safe setup and [the MySQL migration guide](docs/mysql-migration.md) for private export/import steps and verification limits.
 
+Source repository: [sghacker1111/Nepal_ERP](https://github.com/sghacker1111/Nepal_ERP). See [InfinityFree deployment setup](docs/infinityfree-deployment.md) for GitHub Actions secrets, the FTP destination, and first deployment steps.
+
 ## Learning content ownership and visibility
 
 The super-admin shared catalog is read-only to school users. Only super admin adds or renames chapters/topics; school questions, imports and notes must select existing catalog entries. Nepali, English and Mathematics use canonical application names; CDC source snapshots and optional-subject identities remain unchanged.

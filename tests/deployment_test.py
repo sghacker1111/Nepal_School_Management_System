@@ -25,6 +25,14 @@ assert re.search(r'^  cancel-in-progress: false$', workflow, re.M), 'Never inter
 assert re.search(r'^  group: school-ftp-production$', workflow, re.M), 'Serialize deployment to this site'
 assert 'server-dir: school.my-board.org/htdocs/' in workflow, 'Do not broaden the FTP destination'
 assert 'branches:\n      - main' in workflow, 'Only main should deploy to production'
+assert 'workflow_dispatch:' in workflow and 'default: false' in workflow, 'A manual deployment must be an explicit choice'
+assert "vars.FTP_DEPLOY_ENABLED == 'true'" in workflow, 'New repository pushes must not deploy before hosting is configured'
+assert "github.ref == 'refs/heads/main'" in workflow, 'Manual branch runs must not deploy feature branches'
+assert 'needs: validate' in workflow, 'Production must wait for successful validation'
+assert 'environment: infinityfree-production' in workflow, 'Hosting secrets belong to the production environment/repository'
+assert 'protocol: ftps' in workflow and 'port: 21' in workflow, 'Use explicit TLS for InfinityFree FTP'
+assert 'for setting in FTP_SERVER FTP_USERNAME FTP_PASSWORD FTP_SERVER_DIR' in workflow, 'Missing credentials must fail before FTP writes'
+assert '"$FTP_SERVER_DIR" != \'school.my-board.org/htdocs/\'' in workflow, 'Reject a broader FTP directory'
 for secret in ('FTP_SERVER', 'FTP_USERNAME', 'FTP_PASSWORD'):
     assert '${{ secrets.' + secret + ' }}' in workflow, f'Use the configured {secret} secret'
 # Keep source migrations available; the real database itself must remain excluded.
