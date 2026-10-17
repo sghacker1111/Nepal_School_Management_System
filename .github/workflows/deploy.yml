@@ -64,6 +64,7 @@ jobs:
         npm run test:ui
     
     - name: Validate hosting configuration
+      id: hosting
       env:
         FTP_SERVER: ${{ secrets.FTP_SERVER }}
         FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
@@ -78,10 +79,16 @@ jobs:
             exit 1
           fi
         done
+        FTP_SERVER_DIR="${FTP_SERVER_DIR#"${FTP_SERVER_DIR%%[![:space:]]*}"}"
+        FTP_SERVER_DIR="${FTP_SERVER_DIR%"${FTP_SERVER_DIR##*[![:space:]]}"}"
+        FTP_SERVER_DIR="$(printf '%s' "$FTP_SERVER_DIR" | tr '\134' '/')"
+        FTP_SERVER_DIR="${FTP_SERVER_DIR%/}/"
         if [[ ! "$FTP_SERVER_DIR" =~ ^/?([A-Za-z0-9_-][A-Za-z0-9._-]*/)*htdocs/$ ]]; then
-          echo '::error::FTP_SERVER_DIR must be an explicit website htdocs/ folder with a trailing slash; root, URLs and parent traversal are refused.'
+          echo '::error::FTP_SERVER_DIR must name the website htdocs folder; root, URLs and parent traversal are refused.'
           exit 1
         fi
+        printf '::add-mask::%s\n' "$FTP_SERVER_DIR"
+        printf 'directory=%s\n' "$FTP_SERVER_DIR" >> "$GITHUB_OUTPUT"
 
     - name: Sync files to FTP
       uses: SamKirkland/FTP-Deploy-Action@v4.3.4
@@ -89,7 +96,7 @@ jobs:
         server: ${{ secrets.FTP_SERVER }}
         username: ${{ secrets.FTP_USERNAME }}
         password: ${{ secrets.FTP_PASSWORD }}
-        server-dir: ${{ secrets.FTP_SERVER_DIR }}
+        server-dir: ${{ steps.hosting.outputs.directory }}
         protocol: ftps
         port: 21
         # Exclusions apply to uploads AND deletions from the previous sync state.

@@ -25,7 +25,7 @@ The repository variables are configured as:
 | --- | --- |
 | `FTP_DEPLOY_ENABLED` | `false` |
 
-The workflow uses the `FTP_SERVER_DIR` secret for both validation and FTP transfer. It accepts an explicit website folder ending in `htdocs/` and refuses a filesystem root, URL or parent traversal. It uses explicit FTPS on port 21, serializes transfers, and leaves destructive clean-slate mode disabled. The old website's folder is not a fallback destination.
+The workflow uses the `FTP_SERVER_DIR` secret for both validation and FTP transfer. It trims surrounding whitespace, normalizes folder separators and adds a missing trailing slash before validating the exact destination. It accepts an explicit website folder ending in `htdocs/` and refuses a filesystem root, URL or parent traversal. Only that validated folder is passed to FTP. It uses explicit FTPS on port 21, serializes transfers, and leaves destructive clean-slate mode disabled. The old website's folder is not a fallback destination.
 
 ## Prepare the hosted MySQL application
 
