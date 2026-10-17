@@ -28,6 +28,7 @@ config/*.local.php
 *.sqlite3
 *.db
 school_erp_mysql*.sql*
+*.sql.statements.jsonl
 migration-manifest*.json
 migration-report*.md
 /exports/
