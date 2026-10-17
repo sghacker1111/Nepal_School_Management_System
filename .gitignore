@@ -21,3 +21,14 @@ __pycache__/
 # Build tools are local/CI-only. Generated public bundles are committed.
 node_modules/
 frontend/generated-utilities.css
+
+# Private MySQL configuration and migration packages are not source code.
+config/*.local.php
+*.sqlite
+*.sqlite3
+*.db
+school_erp_mysql*.sql*
+migration-manifest*.json
+migration-report*.md
+/exports/
+/private-migration/
