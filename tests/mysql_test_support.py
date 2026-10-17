@@ -4,7 +4,7 @@ from contextlib import closing
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/'tools'))
 class MysqlImportFixture:
-    def __init__(self,clean_accounting=False):self.clean_accounting=clean_accounting
+    def __init__(self,clean_accounting=False,legacy_marks=False):self.clean_accounting=clean_accounting;self.legacy_marks=legacy_marks
     def __enter__(self):
         from mysql_migration.snapshot import capture_snapshot
         from mysql_migration.projection import build_blueprint,project_snapshot
@@ -48,6 +48,12 @@ class MysqlImportFixture:
         source_dir=self.root/'source';source_dir.mkdir();self.source=source_dir/'source.sqlite';env={**os.environ,'ERP_RUNTIME':'test','ERP_TEST_SQLITE':'1','ERP_DB_TYPE':'sqlite','ERP_DB_PATH':str(self.source)}
         subprocess.run([os.environ.get('ERP_TEST_PHP','php'),'tests/schema7_fixture.php'],cwd=ROOT,env=env,check=True,capture_output=True)
         with closing(sqlite3.connect(self.source)) as db:
+            if self.legacy_marks:
+                sql=db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='marks'").fetchone()[0]
+                legacy=re.sub(r'(\b(?:theory_obtained|practical_obtained)`?\s+)decimal\(5,2\)',r'\1INTEGER',sql,flags=re.I)
+                if legacy==sql:raise AssertionError('Synthetic legacy marks declaration was not changed.')
+                db.execute('ALTER TABLE marks RENAME TO old_fixture_marks');db.execute(legacy)
+                db.execute('INSERT INTO marks SELECT * FROM old_fixture_marks');db.execute('DROP TABLE old_fixture_marks')
             db.execute("UPDATE subjects SET name_en='Compulsory Nepali' WHERE id=(SELECT MIN(id) FROM subjects)")
             db.execute("UPDATE users SET password='SYNTHETIC_HASH_DO_NOT_REPLACE' WHERE id=1")
             if clean_accounting:
@@ -89,4 +95,3 @@ class MysqlImportFixture:
         if result.returncode:raise AssertionError('Read-only readiness failed.')
         after=self.command('inspect')
         if after.returncode or json.loads(before.stdout)['actual']!=json.loads(after.stdout)['actual']:raise AssertionError('Readiness changed the imported MySQL data or schema.')
-

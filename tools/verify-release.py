@@ -11,7 +11,7 @@ commands.extend(('lint '+str(p.relative_to(root)),[php,'-l',str(p)]) for p in ph
 groups={'PHP':sorted(root.glob('tests/*_test.php')),'JavaScript':sorted(root.glob('tests/*_test.js')),'App lifecycle':sorted(root.glob('tests/*_test.mjs')),'HTTP':sorted(root.glob('tests/*_http_test.py'))}
 for kind,files in groups.items():
     for p in files:
-        if p.name=='upgrade_test.php':continue
+        if p.name=='upgrade_test.php' or kind=='HTTP' and p.name.startswith('mysql_'):continue
         runtime=php if kind=='PHP' else 'node' if kind in ('JavaScript','App lifecycle') else os.sys.executable
         commands.append((str(p.relative_to(root)),[runtime]+(['--test'] if kind=='App lifecycle' else [])+[str(p)]))
 commands.extend([('legacy HTTP',[os.sys.executable,'tests/http_test.py']),('deployment safety',[os.sys.executable,'tests/deployment_test.py']),('correction concurrency',[os.sys.executable,'tests/question_correction_concurrency_test.py'])])

@@ -1,7 +1,7 @@
 """Add structural requirements without invoking historical row-rewriting upgrades."""
 from collections import Counter
 from contextlib import closing
-from dataclasses import dataclass
+from dataclasses import dataclass,field
 import os,sqlite3,subprocess,tempfile
 from pathlib import Path
 from .snapshot import ROOT,Snapshot,MigrationError,inspect_database,qi,canonical_row,json_text
@@ -13,6 +13,7 @@ class Projection:
     original_manifest:dict
     additions:list
     known_anomalies:list
+    runtime_types:dict=field(default_factory=dict)
 
 def build_blueprint(php_binary:str,directory:Path)->Path:
     directory=Path(directory);directory.mkdir(parents=True,mode=0o700,exist_ok=False)
@@ -88,4 +89,5 @@ def project_snapshot(snapshot:Snapshot,blueprint:Path,output:Path)->Projection:
         actual={c['name'] for c in manifest['tables'][table]['columns']}
         if {c['name'] for c in meta['columns']}-actual:raise MigrationError('Projection omitted required schema columns.')
     assert_preserved(snapshot.path,output)
-    return Projection(output,manifest,original,additions,original['foreign_key_violations'])
+    runtime_types={table:{column['name']:column['type'] for column in meta['columns']} for table,meta in current['tables'].items()}
+    return Projection(output,manifest,original,additions,original['foreign_key_violations'],runtime_types)

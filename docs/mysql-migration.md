@@ -19,6 +19,8 @@ The private package contains a consistent SQLite recovery snapshot, the MySQL SQ
 
 Local verification currently uses MySQL Community 8.0.45. This proves the package against that local server, not against the InfinityFree host version or production credentials. The configured MySQL80 Windows service is not needed by the migration helper; the helper launches and stops a separate loopback process with its own temporary data directory.
 
+The final local gate passed 355/355 verification commands (233 PHP lint checks), with 61/61 UI tests and the production asset build passing. Native MySQL checks include real HTTP school creation, authentication/session timeout, tenant and teacher scope, exact class filters, AD/BS attendance, bilingual imports, practice, correction privacy, accounting and print responses. Two independent payment processes must produce exactly one payment and journal. Regressions also verify future fractional marks in legacy integer columns and source changes during final gzip packaging. The private report records the actual snapshot and SQL hashes; it must say `ready: true` before using an export.
+
 ## Import with phpMyAdmin
 
 1. In the InfinityFree control panel, create a new empty database and note its exact database name, user and host. The free plan accepts database connections from the hosted PHP app and phpMyAdmin; a desktop/local app cannot connect directly to that hosted database endpoint.

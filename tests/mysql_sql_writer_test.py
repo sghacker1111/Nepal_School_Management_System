@@ -37,6 +37,15 @@ class WriterTests(unittest.TestCase):
         with closing(sqlite3.connect(self.dbfile)) as db:
             db.execute('CREATE TABLE legacy_integer_marks(value INTEGER)');db.execute('INSERT INTO legacy_integer_marks VALUES(35.5),(-0.25)');db.commit()
         result,sql=self.export();self.assertIn('DECIMAL(4,2)',sql);self.assertIn('35.5',sql);self.assertIn('-0.25',sql)
+    def test_runtime_decimal_capacity_does_not_depend_on_observed_marks(self):
+        for index,values in enumerate(([],[35],[35.5])):
+            with self.subTest(values=values),closing(sqlite3.connect(self.dbfile)) as db:
+                db.execute('CREATE TABLE marks_capacity_'+str(index)+'(score INTEGER)')
+                db.executemany('INSERT INTO marks_capacity_'+str(index)+' VALUES(?)',[(value,) for value in values]);db.commit()
+                m=self.inspect(self.dbfile);p=self.Projection(self.dbfile,m,m,[],[])
+                p.runtime_types={'marks_capacity_'+str(index):{'score':'DECIMAL(5,2)'}}
+                result=self.write(p,self.root/('capacity-'+str(index)+'.sql'))
+                self.assertEqual(result['schema_mappings']['marks_capacity_'+str(index)]['columns']['score'],'DECIMAL(5,2)')
     def test_collation_collision_is_reported(self):
         from mysql_migration.snapshot import MigrationError
         with closing(sqlite3.connect(self.dbfile)) as db:db.execute("INSERT INTO texts(unique_key) VALUES('A'),('A ')");db.commit()

@@ -87,7 +87,18 @@ def _value(value,mysql_type):
     if isinstance(value,bytes):return "X'"+value.hex()+"'"
     return "CONVERT(X'"+str(value).encode('utf-8').hex()+"' USING utf8mb4)"
 
-def _compile_table(db,name,meta):
+def _runtime_column(column,required_type):
+    # Current decimal fields must accept future valid marks/credits even when the
+    # legacy snapshot is empty or contains only whole-number values.
+    required=re.fullmatch(r'(?:DECIMAL|NUMERIC)\((\d+),\s*(\d+)\)',required_type.upper().strip())
+    original=column['type'].upper().strip()
+    if not required or not re.search(r'INT|DECIMAL|NUMERIC',original):return column
+    digits=int(required[1])-int(required[2]);scale=int(required[2])
+    old=re.fullmatch(r'(?:DECIMAL|NUMERIC)\((\d+),\s*(\d+)\)',original)
+    if old:digits=max(digits,int(old[1])-int(old[2]));scale=max(scale,int(old[2]))
+    return {**column,'type':f'DECIMAL({digits+scale},{scale})'}
+
+def _compile_table(db,name,meta,runtime_types=None):
     if re.search(r'\bCHECK\s*\(',meta['sql'] or '',re.I):raise MigrationError('CHECK constraints require an explicit compatible conversion: '+name)
     columns=meta['columns'];types={};indexed=set(meta['primary_key'])
     for index in meta['indexes']:
@@ -96,7 +107,8 @@ def _compile_table(db,name,meta):
     for key in meta['foreign_keys']:indexed.add(key['from'])
     # Column-at-a-time bounded scans avoid retaining complete rich-text tables.
     for column in columns:
-        types[column['name']]=_type(column,(r[0] for r in db.execute('SELECT '+qi(column['name'])+' FROM '+qi(name))),column['name'] in indexed)
+        runtime_column=_runtime_column(column,(runtime_types or {}).get(column['name'],''))
+        types[column['name']]=_type(runtime_column,(r[0] for r in db.execute('SELECT '+qi(column['name'])+' FROM '+qi(name))),column['name'] in indexed)
     pk=meta['primary_key'];auto=pk[0] if len(pk)==1 and types[pk[0]]=='BIGINT' and 'WITHOUT ROWID' not in (meta['sql'] or '').upper() else None
     definitions=[]
     for column in columns:
@@ -161,7 +173,7 @@ def write_mysql_dump(projection,destination:Path,max_statement_bytes:int=1048576
     mapping={};ddl=[];lengths=[]
     with closing(sqlite3.connect(projection.path.as_uri()+'?mode=ro',uri=True)) as db:
         for table,meta in projection.manifest['tables'].items():
-            statement,mapping[table]=_compile_table(db,table,meta);ddl.append(statement)
+            statement,mapping[table]=_compile_table(db,table,meta,projection.runtime_types.get(table,{}));ddl.append(statement)
         if any(len(s.encode('utf-8'))+2>max_statement_bytes for s in header+ddl+footer):raise MigrationError('A schema statement exceeds the configured limit.')
         with destination.open('x',encoding='utf-8',newline='\n') as sql,sidecar.open('x',encoding='utf-8',newline='\n') as control:
             sql.write('-- School ERP confidential export. Import into a NEW EMPTY database only.\n')

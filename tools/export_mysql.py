@@ -49,8 +49,13 @@ def main():
         if not source_matches(snapshot) or digest_file(source)!=source_hash:
             report['verification_error']='Source data changed during conversion; this package is not ready for cutover.';private_json(output/'migration-report.json',report)
             raise MigrationError('Source changed during conversion; take a new snapshot during a maintenance window.')
-        report.update({'ready':True,'verified':True,'new_violations':result['new_violations'],'known_orphans':result['known_orphans'],'engine':result['engine'],'mysql_rows':sum(v['row_count'] for v in result['actual']['tables'].values()),'sql_sha256':dump['sha256'],'sql_bytes':dump['bytes'],'gzip_sha256':None,'gzip_bytes':None,'statements_sha256':manifest['statements_sha256'],'uploaded_files_included':False})
+        report.update({'ready':False,'verified':True,'new_violations':result['new_violations'],'known_orphans':result['known_orphans'],'engine':result['engine'],'mysql_rows':sum(v['row_count'] for v in result['actual']['tables'].values()),'sql_sha256':dump['sha256'],'sql_bytes':dump['bytes'],'gzip_sha256':None,'gzip_bytes':None,'statements_sha256':manifest['statements_sha256'],'uploaded_files_included':False})
         gzip_path=output/'school_erp_mysql.sql.gz';gzip_file(sql_path,gzip_path);report['gzip_sha256']=digest_file(gzip_path);report['gzip_bytes']=gzip_path.stat().st_size
+        instructions=output/'IMPORT-INSTRUCTIONS.md';shutil.copyfile(ROOT/'docs/mysql-migration.md',instructions);os.chmod(instructions,0o600)
+        if not source_matches(snapshot) or digest_file(source)!=source_hash:
+            report['verification_error']='Source data changed while finalizing the package; this package is not ready for cutover.';private_json(output/'migration-report.json',report)
+            raise MigrationError('Source changed while finalizing the package; take a new snapshot during a maintenance window.')
+        report['ready']=True
         manifest['ready']=True;manifest['local_verification']={'engine':result['engine'],'known_orphans':result['known_orphans'],'new_violations':result['new_violations'],'preserved':result['preserved']};private_json(output/'migration-manifest.json',manifest)
         private_json(output/'migration-report.json',report)
         print(json.dumps({'output':str(output),'ready':True,'table_count':report['table_count'],'source_rows':report['source_rows'],'known_orphans':report['known_orphans'],'new_violations':report['new_violations'],'engine':report['engine'],'sql_sha256':report['sql_sha256'],'gzip_sha256':report['gzip_sha256']}))

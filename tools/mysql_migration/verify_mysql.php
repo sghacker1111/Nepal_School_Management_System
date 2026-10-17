@@ -8,7 +8,7 @@ function mysqlPdo(): PDO {
     $env = ['ERP_DB_TYPE'=>getenv('ERP_DB_TYPE') ?: 'mysql','ERP_DB_HOST'=>getenv('ERP_DB_HOST') ?: '', 'ERP_DB_PORT'=>getenv('ERP_DB_PORT') ?: '3306','ERP_DB_NAME'=>getenv('ERP_DB_NAME') ?: '', 'ERP_DB_USER'=>getenv('ERP_DB_USER') ?: '', 'ERP_DB_PASS'=>getenv('ERP_DB_PASS') ?: ''];
     $settings = schoolDatabaseSettings($env);
     if ($settings['host'] !== '127.0.0.1' || !str_starts_with($settings['database'], 'erp_migration_test_')) fail('Verification is restricted to loopback and a disposable test database.');
-    return new PDO('mysql:host=127.0.0.1;port='.$settings['port'].';dbname='.$settings['database'].';charset=utf8mb4', $settings['username'], $settings['password'], [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_NUM,PDO::ATTR_EMULATE_PREPARES=>false,PDO::MYSQL_ATTR_USE_BUFFERED_QUERY=>false]);
+    return new PDO('mysql:host=127.0.0.1;port='.$settings['port'].';dbname='.$settings['database'].';charset=utf8mb4', $settings['username'], $settings['password'], [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_NUM,PDO::ATTR_EMULATE_PREPARES=>false,PDO::MYSQL_ATTR_USE_BUFFERED_QUERY=>false,PDO::MYSQL_ATTR_MULTI_STATEMENTS=>false]);
 }
 function readPackage(string $dir): array {
     $root=realpath($dir); if (!$root || !is_dir($root)) fail('Migration package directory is unavailable.');
@@ -58,7 +58,15 @@ try {
         $existing=(int)$db->query("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE()")->fetchColumn();
         if ($existing!==0) fail('Target database is not empty; import was refused before any writes.');
         $phase='import';foreach ($statements as $index=>$statement) {
-            try { $db->exec($statement); }
+            try {
+                $db->exec($statement);
+                // SHOW WARNINGS itself cannot use the native prepare protocol.
+                // This fixed diagnostic query contains no values or placeholders.
+                $db->setAttribute(PDO::ATTR_EMULATE_PREPARES,true);
+                try{$warnings=$db->query('SHOW WARNINGS');$warning=$warnings->fetch();$warnings->closeCursor();}
+                finally{$db->setAttribute(PDO::ATTR_EMULATE_PREPARES,false);}
+                if($warning)throw new RuntimeException('MySQL emitted storage warning '.(int)$warning[1].' at statement '.$index.'; verification stopped without exposing row values.');
+            }
             catch (PDOException $error) {
                 $details=['statement_index'=>$index,'statement_kind'=>strtok($statement," \n"),'table'=>preg_match('/^(?:CREATE TABLE|INSERT INTO) `([^`]+)/i',$statement,$match)?$match[1]:null,'sql_state'=>$error->errorInfo[0]??(string)$error->getCode(),'driver_code'=>$error->errorInfo[1]??null];
                 @file_put_contents($root.'/verification-error.json',json_encode($details,JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR),LOCK_EX);@chmod($root.'/verification-error.json',0600);throw $error;
