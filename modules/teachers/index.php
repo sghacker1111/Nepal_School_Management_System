@@ -56,7 +56,7 @@ if (isset($_GET['delete']) && Auth::hasRole(['super_admin', 'school_admin'])) {
             if ($db->inTransaction()) {
                 $db->rollBack();
             }
-            redirect(schoolRouteUrl('modules/teachers/index.php'), 'Error archiving teacher: ' . $e->getMessage(), 'error');
+            redirect(schoolRouteUrl('modules/teachers/index.php'), schoolPublicError($e), 'error');
         }
     } else {
         redirect(schoolRouteUrl('modules/teachers/index.php'), 'Teacher not found or unauthorized', 'error');

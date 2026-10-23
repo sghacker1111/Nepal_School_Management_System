@@ -9,7 +9,10 @@ export function formSnapshot(form) {
         if (field.type === 'file') return [key, 'files', [...(field.files || [])].map(file => [file.name, file.size, file.type, file.lastModified])];
         if (field.type === 'checkbox' || field.type === 'radio') return [key, field.value, field.checked];
         if (field.multiple && field.options) return [key, [...field.selectedOptions].map(option => option.value)];
-        return [key, win.tinymce?.get?.(field.id)?.getContent?.() ?? field.value];
+        const editor=win.tinymce?.get?.(field.id);
+        // TinyMCE registers its instance before loading its initial document.
+        // Its transient empty getContent() must not become the draft baseline.
+        return [key, editor?.initialized ? (editor.getContent?.() ?? field.value) : field.value];
     }));
 }
 const snapshot=formSnapshot;

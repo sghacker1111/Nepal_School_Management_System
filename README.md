@@ -68,7 +68,9 @@ Generation is bounded to 200 items, 50 allocation rows and 2,000 **matching** el
 
 ## Quick local start
 
-Requires PHP 8.1+ with PDO MySQL, DOM, fileinfo and mbstring. SQLite is limited to isolated tests and offline conversion; normal requests require configured MySQL.
+Requires a supported, security-patched PHP release with PDO MySQL, DOM, fileinfo, mbstring and ZipArchive. The October 21, 2026 baseline is **PHP 8.2.35 / 8.3.36 / 8.4.27 / 8.5.12**, or a later patched release in the same supported branch. PHP 8.1 is no longer supported upstream. SQLite is limited to isolated tests and offline conversion; normal requests require configured MySQL.
+
+See [the October 23 security review](docs/security-review-2026-10-23.md) for verified fixes, retained editor risks and the separate InfinityFree PHP-engine patch requirement. System administration shows the actual web runtime reported PHP version; a successful FTP deployment does not update the host PHP interpreter.
 
 Configure `config/database.local.php` from the credential-free example or set `ERP_DB_*` values for a disposable MySQL server. Start the local PHP server with:
 

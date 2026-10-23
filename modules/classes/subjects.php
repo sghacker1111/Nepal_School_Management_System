@@ -32,6 +32,8 @@ if (!$class) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array($_POST['action'], ['toggle_optional', 'toggle_subject_status'])) {
     $mapping_id = (int)($_POST['mapping_id'] ?? 0);
     $is_active = !empty($_POST['is_active']) ? 1 : 0;
+    $is_ajax = strtolower($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'xmlhttprequest'
+        || ($_POST['is_ajax'] ?? '') === '1';
     
     try {
         $stmt = $db->prepare("UPDATE class_subjects SET is_active = ? WHERE id = ? AND class_id = ?");
@@ -49,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
     } catch (PDOException $e) {
         if ($is_ajax) {
             header('Content-Type: application/json');
-            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+            echo json_encode(['success' => false, 'error' => schoolPublicError($e)]);
             exit;
         }
         $error = schoolPublicError($e);

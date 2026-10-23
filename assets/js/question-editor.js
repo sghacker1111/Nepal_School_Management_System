@@ -108,11 +108,12 @@ function init(selector,root=document,context={}){
             min_height: 380,
             toolbar_mode: 'wrap',
             font_family_formats: 'Arial=arial,helvetica,sans-serif; Kokila=Kokila,Noto Sans Devanagari,Kalimati,sans-serif; Courier New=courier new,courier; Georgia=georgia,palatino; Tahoma=tahoma,arial,helvetica,sans-serif; Times New Roman=times new roman,times; Trebuchet MS=trebuchet ms,geneva; Verdana=verdana,geneva',
-            plugins: 'advlist autolink lists link image charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime media table wordcount',
+            plugins: 'advlist autolink lists link image charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime table wordcount',
             toolbar: 'undo redo | blocks fontfamily fontsize | bold italic underline forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | table | math_tex | fullscreen code',
             branding: false,
             promotion: false,
             extended_valid_elements: 'span[class|style|lang|title|contenteditable|data-tex|data-mode]',
+            invalid_elements: 'script,style,svg,math,iframe,object,embed,video,audio,source,form,input,button,textarea,select,meta,link,base',
             // Styling inside editor iframe to support Arial for English, Kokila for Nepali, and locked TeX equations
             content_style: `
                 @font-face {
@@ -174,7 +175,12 @@ function init(selector,root=document,context={}){
                 if(disposed){editor.remove?.();return;}owned.add(editor);
                 // When content is loaded, wrap LaTeX with span so it can render inside iframe
                 editor.on('BeforeSetContent', function (e) {
-                    e.content = convertLatexToSpan(e.content);
+                    if(!window.SchoolEditorSecurity?.sanitize)throw new Error('Editor security could not load. Reload the page.');
+                    e.content = convertLatexToSpan(window.SchoolEditorSecurity.sanitize(e.content));
+                });
+                editor.on('PastePreProcess', function (e) {
+                    if(!window.SchoolEditorSecurity?.sanitize)throw new Error('Editor security could not load. Reload the page.');
+                    e.content = window.SchoolEditorSecurity.sanitize(e.content);
                 });
 
                 // When retrieving content, strip MathJax HTML markup and restore clean LaTeX tags
@@ -215,6 +221,8 @@ function init(selector,root=document,context={}){
                     const configScript = doc.createElement('script');
                     configScript.text = `
                         window.MathJax = {
+                            loader: {load: ['ui/safe']},
+                            options: {safeOptions: {allow: {URLs: 'none', classes: 'safe', cssIDs: 'none', styles: 'safe'}}},
                             tex: {
                                 inlineMath: [['\\\\(', '\\\\)'], ['$', '$']],
                                 displayMath: [['\\\\[', '\\\\]'], ['$$', '$$']],

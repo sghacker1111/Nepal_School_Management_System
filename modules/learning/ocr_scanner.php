@@ -20,13 +20,13 @@ $activePage = 'ocr_scanner';
 ob_start();
 ?>
 
-<!-- TinyMCE CDN for MS Word formatting and Full-screen editor -->
+<!-- Locally packaged editor -->
 <?php $pageAssets[]="tinymce"; ?>
 
 <!-- Tesseract OCR CDN -->
 <?php $pageAssets[]="tesseract"; ?>
 
-<!-- PDF.js CDN for PDF rendering client-side -->
+<!-- Locally packaged PDF.js and matching worker -->
 <?php $pageAssets[]="pdfjs"; ?>
 <?php schoolPageModule("learning-ocr-scanner"); ?>
 

@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- PHP 8.1+ with PDO MySQL, DOM, fileinfo and mbstring.
+- Supported patched PHP: at least 8.2.35, 8.3.36, 8.4.27 or 8.5.12 in the corresponding branch, with PDO MySQL, DOM, fileinfo, mbstring and ZipArchive. See the [October security review](docs/security-review-2026-10-23.md). The host must install PHP engine updates separately from FTP application releases.
 - A MySQL database already created by the database host or phpMyAdmin.
 - HTTPS and a web server that blocks private source/configuration and SQL files; Apache can use the supplied `.htaccess`.
 - Node.js only for local/CI asset builds, not for the PHP hosting runtime.

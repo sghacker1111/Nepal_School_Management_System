@@ -1,5 +1,6 @@
 import Alpine from '@alpinejs/csp';
 import htmx from 'htmx.org';
+import './app/editor-security.js';
 import '../assets/js/dynamic-workspace.js';
 import * as lifecycle from './app/page-lifecycle.js';
 import * as dirtyForms from './app/dirty-forms.js';

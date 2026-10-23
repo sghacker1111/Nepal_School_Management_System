@@ -21,7 +21,7 @@ class RemoteCode:
 class RuntimeTests(unittest.TestCase):
     def test_public_code_only_and_complete(self):
         paths=subject.runtime_paths();remote=RemoteCode()
-        self.assertEqual(subject.verify(remote,paths),(len(paths),12))
+        self.assertEqual(subject.verify(remote,paths),(len(paths),29))
         self.assertTrue(any('/plugins/code/' in path for path in paths))
         self.assertTrue(any('/fonts/woff-v2/' in path for path in paths))
         self.assertFalse(any(path.startswith(('uploads/','tests/','scratch/','frontend/')) or '.local.php' in path or '.sqlite' in path or path.endswith('.sql') for path in remote.calls))
@@ -30,6 +30,8 @@ class RuntimeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'size differs'):subject.verify(RemoteCode(missing=font),paths)
     def test_corrupt_bundle_stops_release(self):
         with self.assertRaisesRegex(ValueError,'content differs'):subject.verify(RemoteCode(corrupt='assets/dist/workspace.js'),subject.runtime_paths())
+    def test_corrupt_security_helper_stops_release(self):
+        with self.assertRaisesRegex(ValueError,'content differs'):subject.verify(RemoteCode(corrupt='includes/auth.php'),subject.runtime_paths())
     def test_unsafe_destination_refused_before_connection(self):
         for folder in ('/','../htdocs/','https://school.example/htdocs/','htdocs/../'):
             with patch.dict(subject.os.environ,{'FTP_SERVER':'example.test','FTP_USERNAME':'synthetic','FTP_PASSWORD':'synthetic','FTP_SERVER_DIR':folder}),patch.object(subject.ftplib,'FTP_TLS') as connect:

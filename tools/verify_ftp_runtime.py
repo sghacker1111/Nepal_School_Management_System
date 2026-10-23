@@ -15,8 +15,10 @@ def runtime_paths(root=ROOT):
            'includes/exam_question_editor_form.php','includes/question_editor.php',
            'includes/learning_content_service.php','modules/learning/questions.php',
            'modules/learning/exam_questions.php','modules/learning/exam_mcqs.php',
-           'assets/js/question-editor.js']
-    for folder in ('assets/dist','assets/vendor/tinymce-6.8.6','assets/vendor/mathjax-3.2.2'):
+           'assets/js/question-editor.js','includes/auth.php','includes/xlsx_helper.php',
+           'includes/runtime_security.php','includes/password_security.php','includes/attendance_service.php','modules/auth/change_password.php',
+           'modules/auth/verify_password.php','modules/super_admin/index.php','assets/js/pdfjs-runtime.mjs']
+    for folder in ('assets/dist','assets/vendor/tinymce-6.8.6','assets/vendor/mathjax-3.2.2','assets/vendor/pdfjs-6.4.299'):
         directory=root/folder
         if not directory.is_dir():raise ValueError('Build required public runtime assets before verification.')
         names.extend(path.relative_to(root).as_posix() for path in directory.rglob('*') if path.is_file())
@@ -36,7 +38,13 @@ def verify(ftp,paths,root=ROOT):
               'assets/vendor/tinymce-6.8.6/tinymce.min.js',
               'assets/vendor/tinymce-6.8.6/models/dom/model.min.js',
               'assets/vendor/tinymce-6.8.6/themes/silver/theme.min.js',
-              'assets/vendor/mathjax-3.2.2/tex-mml-chtml.js']
+              'assets/vendor/mathjax-3.2.2/tex-mml-chtml.js',
+              'includes/auth.php','includes/xlsx_helper.php','includes/runtime_security.php',
+              'modules/auth/change_password.php','modules/auth/verify_password.php',
+              'modules/super_admin/index.php','modules/students/index.php',
+              'modules/teachers/index.php','modules/classes/subjects.php','modules/settings/years.php',
+              'includes/password_security.php','includes/attendance_service.php','modules/classes/index.php','modules/classes/routine.php',
+              'assets/js/pdfjs-runtime.mjs','assets/vendor/pdfjs-6.4.299/pdf.min.mjs','assets/vendor/pdfjs-6.4.299/pdf.worker.min.mjs']
     for name in critical:
         digest=hashlib.sha256()
         ftp.retrbinary('RETR '+name,digest.update)

@@ -23,7 +23,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'&&in_array($_POST['action']??'', ['remove_
         $globalAdmin=Auth::getRole()==='super_admin';
         $q=$db->prepare('SELECT password FROM users WHERE id=? AND status=1'.($globalAdmin?" AND role='super_admin'":' AND school_id=?'));
         $q->execute($globalAdmin?[Auth::getUserId()]:[Auth::getUserId(),$school_id]);
-        if(!is_string($_POST['password']??null)||!password_verify($_POST['password'],$q->fetchColumn()?:''))throw new InvalidArgumentException('Enter your current administrator password.');
+        if(!$q->fetchColumn()||!schoolVerifySensitivePassword($db,(int)Auth::getUserId(),$_POST['password']??null))throw new InvalidArgumentException('Enter your current administrator password.');
         $db->beginTransaction();catalogWriteLock($db,(int)$school_id);$id=(int)($_POST['class_id']??0);
         if($_POST['action']==='remove_legacy_seven'){
             if(($_POST['confirm_cleanup']??'')!=='1')throw new InvalidArgumentException('Confirm removal of the legacy class from active lists.');

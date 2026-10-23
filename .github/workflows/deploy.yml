@@ -34,6 +34,16 @@ jobs:
         cache: npm
     - name: Verify deployment safeguards
       run: python3 tests/deployment_test.py
+    - name: Set up PHP with the October 2026 security fixes
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.3.36'
+        extensions: pdo_sqlite, pdo_mysql, mbstring, dom, zip
+        coverage: none
+    - name: Verify PHP runtime and application security
+      run: |
+        php -r 'require "includes/runtime_security.php"; if (!schoolRuntimeSecurity()["patched"]) { fwrite(STDERR, "PHP security baseline not met\n"); exit(1); }'
+        python3 tools/verify-security.py
     - name: Build and verify frontend
       run: |
         npm ci --no-fund

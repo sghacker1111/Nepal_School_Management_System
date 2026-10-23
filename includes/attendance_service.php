@@ -58,6 +58,10 @@ function attendanceStudents(PDO $db,int $school,int $class,int $section,string $
 }
 /** Atomic daily/multi-day saves; a blank cell preserves history, never deletes it. */
 function saveStudentAttendance(PDO $db,int $school,int $actor,string $role,array $input,array $period,array $visibleStudents,array $visibleDates):int {
+    require_once __DIR__.'/password_security.php';
+    attendanceClass($db,$school,$actor,$role,(int)($input['class_id']??0),true);
+    // Persist failed re-authentication attempts outside the attendance transaction.
+    $passwordConfirmed = !empty($input['edit_password']) && schoolVerifySensitivePassword($db,$actor,$input['edit_password']);
     $db->beginTransaction();
     try {
         $class=(int)($input['class_id']??0);attendanceClass($db,$school,$actor,$role,$class,true);
@@ -93,8 +97,7 @@ function saveStudentAttendance(PDO $db,int $school,int $actor,string $role,array
             }
         }
         if($needsPassword){
-            $q=$db->prepare('SELECT password FROM users WHERE id=? AND status=1');$q->execute([$actor]);$hash=$q->fetchColumn();
-            if(!$hash||!is_string($input['edit_password']??null)||!password_verify($input['edit_password'],$hash))throw new InvalidArgumentException('Your current password is required to correct saved attendance; no records were changed.');
+            if(!$passwordConfirmed)throw new InvalidArgumentException('Your current password is required to correct saved attendance; no records were changed.');
         }
         $update=$db->prepare('UPDATE attendances SET status=?,date_bs=? WHERE student_id=? AND date_ad=?');
         $insert=$db->prepare('INSERT INTO attendances(status,date_bs,student_id,date_ad) VALUES(?,?,?,?)');

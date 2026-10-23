@@ -8,7 +8,7 @@ root=Path(__file__).resolve().parents[1]
 with tempfile.TemporaryDirectory(prefix='erp-db-runtime-') as temp:
     sandbox=Path(temp)
     for name in ('includes','config','modules/auth'):
-        shutil.copytree(root/name,sandbox/name)
+        shutil.copytree(root/name,sandbox/name,ignore=shutil.ignore_patterns('*.local.php','local.php'))
     for name in ('app.php','index.php','router.php'):
         shutil.copy2(root/name,sandbox/name)
     # A persisted old FTP-excluded config must not control new shipped entrypoints.

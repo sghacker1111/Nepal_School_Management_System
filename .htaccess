@@ -1,4 +1,8 @@
 Options -Indexes
+<IfModule mod_mime.c>
+    AddType text/javascript .mjs
+    AddType application/wasm .wasm
+</IfModule>
 <FilesMatch "(?i)\.(sqlite3?(-[a-z]+)?|db(-[a-z]+)?|sql(\.gz)?|log|env|bak|bat|md|py|ps1|sh|ini|toml|ya?ml)$">
     Require all denied
 </FilesMatch>
