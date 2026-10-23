@@ -21,6 +21,9 @@ function provisionSchool(PDO $db, int $schoolId): void {
     $version = $check->fetchColumn();
     if ($version === false) return;
     $schemaVersion=(int)$db->query("SELECT meta_value FROM app_meta WHERE meta_key='workflow_schema'")->fetchColumn();
+    // Provisioning is an explicit create/upgrade operation. MySQL web startup
+    // performs only readiness reads, so load these definitions here as needed.
+    if($schemaVersion>=8&&$schemaVersion<=SCHOOL_SCHEMA_VERSION)require_once __DIR__.'/accounting_schema.php';
     $financeReady=function_exists('provisionSchoolAccounting')&&$schemaVersion>=8&&$schemaVersion<=SCHOOL_SCHEMA_VERSION;
     if ((int)$version >= 2) {if($financeReady)provisionSchoolAccounting($db,$schoolId);return;}
     $ownTransaction = !$db->inTransaction();

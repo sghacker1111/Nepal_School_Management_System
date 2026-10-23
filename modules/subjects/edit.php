@@ -2,7 +2,7 @@
 /**
  * Subject Management - Edit Page
  */
-require_once __DIR__ . '/../../config/config.php';
+require_once __DIR__ . '/../../config/bootstrap.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
@@ -25,7 +25,7 @@ $stmt->execute([$id, $school_id]);
 $subject = $stmt->fetch();
 
 if (!$subject) {
-    redirect(APP_URL . '/modules/subjects/index.php', 'Subject not found', 'error');
+    redirect(schoolRouteUrl('modules/subjects/index.php'), 'Subject not found', 'error');
 }
 
 // Fetch current class mapping
@@ -150,7 +150,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $db->commit();
                 
                 Auth::logActivity(Auth::getUserId(), 'Edit Subject and Class Mapping', 'subjects', $id);
-                redirect(APP_URL . '/modules/subjects/index.php', 'Subject and Theory/Internal components updated successfully');
+                redirect(schoolRouteUrl('modules/subjects/index.php'), 'Subject and Theory/Internal components updated successfully');
             } catch (PDOException|InvalidArgumentException $e) {
                 if ($db->inTransaction()) {
                     $db->rollBack();
@@ -175,8 +175,8 @@ ob_start();
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="fas fa-edit"></i> Edit Subject</h2>
-    <?php if($mapping&&(float)($mapping['in_full_marks']??0)>0): ?><a class="btn btn-outline-primary" href="<?= APP_URL ?>/modules/subjects/internal.php?mapping=<?= (int)$mapping['id'] ?>">Edit Internal Assessment (IN)</a><?php endif; ?>
-    <a href="<?= APP_URL ?>/modules/subjects/index.php" class="btn btn-secondary">
+    <?php if($mapping&&(float)($mapping['in_full_marks']??0)>0): ?><a class="btn btn-outline-primary" href="<?= schoolRouteUrl('modules/subjects/internal.php') ?>?mapping=<?= (int)$mapping['id'] ?>">Edit Internal Assessment (IN)</a><?php endif; ?>
+    <a href="<?= schoolRouteUrl('modules/subjects/index.php') ?>" class="btn btn-secondary">
         <i class="fas fa-arrow-left"></i> Back to List
     </a>
 </div>
@@ -238,16 +238,16 @@ ob_start();
                         <div class="card-body p-3 bg-light">
                             <div class="mb-2">
                                 <label for="th_credit_hours" class="form-label small fw-bold">Theory Credit Hours (TH) *</label>
-                                <input type="number" step="0.01" class="form-control" id="th_credit_hours" name="th_credit_hours" value="<?= sanitize($subject['th_credit_hours'] !== null ? $subject['th_credit_hours'] : '3.00') ?>" min="0" max="10" required oninput="calcTotals()">
+                                <input type="number" step="0.01" class="form-control" id="th_credit_hours" name="th_credit_hours" value="<?= sanitize($subject['th_credit_hours'] !== null ? $subject['th_credit_hours'] : '3.00') ?>" min="0" max="10" required data-erp-input="subjects-edit-action-0" data-erp-input-args="<?= schoolPageActionArgs("subjects-edit",[]) ?>">
                             </div>
                             <div class="row g-2">
                                 <div class="col-6">
                                     <label for="th_full_marks" class="form-label small fw-bold">Theory Full Marks *</label>
-                                    <input type="number" step="0.01" class="form-control" id="th_full_marks" name="th_full_marks" value="<?= sanitize($subject['th_full_marks'] !== null ? $subject['th_full_marks'] : '75.00') ?>" min="0" max="100" required oninput="calcTotals()">
+                                    <input type="number" step="0.01" class="form-control" id="th_full_marks" name="th_full_marks" value="<?= sanitize($subject['th_full_marks'] !== null ? $subject['th_full_marks'] : '75.00') ?>" min="0" max="100" required data-erp-input="subjects-edit-action-1" data-erp-input-args="<?= schoolPageActionArgs("subjects-edit",[]) ?>">
                                 </div>
                                 <div class="col-6">
                                     <label for="th_pass_marks" class="form-label small fw-bold">Theory Pass Marks *</label>
-                                    <input type="number" step="0.01" class="form-control" id="th_pass_marks" name="th_pass_marks" value="<?= sanitize($subject['th_pass_marks'] !== null ? $subject['th_pass_marks'] : '26.25') ?>" min="0" max="100" required oninput="calcTotals()">
+                                    <input type="number" step="0.01" class="form-control" id="th_pass_marks" name="th_pass_marks" value="<?= sanitize($subject['th_pass_marks'] !== null ? $subject['th_pass_marks'] : '26.25') ?>" min="0" max="100" required data-erp-input="subjects-edit-action-2" data-erp-input-args="<?= schoolPageActionArgs("subjects-edit",[]) ?>">
                                 </div>
                             </div>
                         </div>
@@ -263,16 +263,16 @@ ob_start();
                         <div class="card-body p-3 bg-light">
                             <div class="mb-2">
                                 <label for="in_credit_hours" class="form-label small fw-bold">Internal Credit Hours (IN) *</label>
-                                <input type="number" step="0.01" class="form-control" id="in_credit_hours" name="in_credit_hours" value="<?= sanitize($subject['in_credit_hours'] !== null ? $subject['in_credit_hours'] : '1.00') ?>" min="0" max="10" required oninput="calcTotals()">
+                                <input type="number" step="0.01" class="form-control" id="in_credit_hours" name="in_credit_hours" value="<?= sanitize($subject['in_credit_hours'] !== null ? $subject['in_credit_hours'] : '1.00') ?>" min="0" max="10" required data-erp-input="subjects-edit-action-3" data-erp-input-args="<?= schoolPageActionArgs("subjects-edit",[]) ?>">
                             </div>
                             <div class="row g-2">
                                 <div class="col-6">
                                     <label for="in_full_marks" class="form-label small fw-bold">Internal Full Marks *</label>
-                                    <input type="number" step="0.01" class="form-control" id="in_full_marks" name="in_full_marks" value="<?= sanitize($subject['in_full_marks'] !== null ? $subject['in_full_marks'] : '25.00') ?>" min="0" max="100" required oninput="calcTotals()">
+                                    <input type="number" step="0.01" class="form-control" id="in_full_marks" name="in_full_marks" value="<?= sanitize($subject['in_full_marks'] !== null ? $subject['in_full_marks'] : '25.00') ?>" min="0" max="100" required data-erp-input="subjects-edit-action-4" data-erp-input-args="<?= schoolPageActionArgs("subjects-edit",[]) ?>">
                                 </div>
                                 <div class="col-6">
                                     <label for="in_pass_marks" class="form-label small fw-bold">Internal Pass Marks *</label>
-                                    <input type="number" step="0.01" class="form-control" id="in_pass_marks" name="in_pass_marks" value="<?= sanitize($subject['in_pass_marks'] !== null ? $subject['in_pass_marks'] : '10.00') ?>" min="0" max="100" required oninput="calcTotals()">
+                                    <input type="number" step="0.01" class="form-control" id="in_pass_marks" name="in_pass_marks" value="<?= sanitize($subject['in_pass_marks'] !== null ? $subject['in_pass_marks'] : '10.00') ?>" min="0" max="100" required data-erp-input="subjects-edit-action-5" data-erp-input-args="<?= schoolPageActionArgs("subjects-edit",[]) ?>">
                                 </div>
                             </div>
                         </div>
@@ -343,41 +343,10 @@ ob_start();
     </div>
 </div>
 
-<script>
-function calcTotals() {
-    if(<?= json_encode(($subject['assessment_method']??'')==='THEMATIC_CONTINUOUS') ?>) return;
-    var th_ch = parseFloat(document.getElementById('th_credit_hours').value) || 0;
-    var in_ch = parseFloat(document.getElementById('in_credit_hours').value) || 0;
-    document.getElementById('total_credit_hours').value = (th_ch + in_ch).toFixed(2);
-
-    var th_fm = parseFloat(document.getElementById('th_full_marks').value) || 0;
-    var in_fm = parseFloat(document.getElementById('in_full_marks').value) || 0;
-    document.getElementById('total_full_marks').value = (th_fm + in_fm).toFixed(2);
-
-    var th_pm = parseFloat(document.getElementById('th_pass_marks').value) || 0;
-    var in_pm = parseFloat(document.getElementById('in_pass_marks').value) || 0;
-    document.getElementById('total_pass_marks').value = (th_pm + in_pm).toFixed(2);
-}
-
-// Bootstrap form validation
-<?php if(($subject['assessment_method']??'')==='THEMATIC_CONTINUOUS'):?>
-['th_credit_hours','in_credit_hours','th_full_marks','in_full_marks','th_pass_marks','in_pass_marks'].forEach(id=>{const el=document.getElementById(id);el.value='';el.disabled=true;el.required=false;el.placeholder='Not specified (achievement assessment)';});
-<?php endif;?>
-(function () {
-  'use strict'
-  var forms = document.querySelectorAll('.needs-validation')
-  Array.prototype.slice.call(forms)
-    .forEach(function (form) {
-      form.addEventListener('submit', function (event) {
-        if (!form.checkValidity()) {
-          event.preventDefault()
-          event.stopPropagation()
-        }
-        form.classList.add('was-validated')
-      }, false)
-    })
-})()
-</script>
+<?php schoolPageModule("subjects-edit");schoolPageValue("subjects-edit-value-0",(string)(json_encode(($subject['assessment_method']??'')==='THEMATIC_CONTINUOUS')));
+schoolPageValue("subjects-edit-value-1",(($subject['assessment_method']??'')==='THEMATIC_CONTINUOUS')?'true':'false');
+if(($subject['assessment_method']??'')==='THEMATIC_CONTINUOUS'):
+endif; ?>
 
 <?php
 $content = ob_get_clean();

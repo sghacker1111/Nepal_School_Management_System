@@ -5,7 +5,7 @@ const nodes=new Map();
 const element=id=>{if(!nodes.has(id))nodes.set(id,{value:'',listeners:{},addEventListener(e,f){this.listeners[e]=f;}});return nodes.get(id);};
 let config,shown=0,hidden=0;
 const modal={show(){shown++;},hide(){hidden++;}};
-const editorMap=new Map(),context={window:{APP_URL:'http://localhost',tinymce:{init(c){config=c;},get:id=>editorMap.get(id)}},bootstrap:{Modal:class{constructor(){return modal;}}},document:{readyState:'complete',getElementById:element,createElement:()=>({textContent:'',style:{}})}};
+const editorMap=new Map(),context={window:{APP_URL:'http://localhost',tinymce:{init(c){config=c;},get:id=>editorMap.get(id)}},ErpUI:{Modal:class{constructor(){return modal;}}},document:{readyState:'complete',getElementById:element,createElement:()=>({textContent:'',style:{}})}};
 vm.runInNewContext(fs.readFileSync(sharedPath,'utf8'),context);
 context.window.SchoolQuestionEditor.init('.exam-rich');
 assert.equal(config.selector,'.exam-rich');
@@ -48,4 +48,8 @@ assert(config.extended_valid_elements.includes('data-tex'),'TinyMCE must retain 
 assert.match(fs.readFileSync('modules/learning/questions.php','utf8'),/includes\/question_editor\.php/,'Normal bank loads the shared editor');
 assert.match(fs.readFileSync('includes/exam_question_editor_form.php','utf8'),/question_editor\.php/,'Both separate exam pages load the same complete editor component');
 assert(!fs.readFileSync('assets/js/exam-questions.js','utf8').includes('tinymce.init('),'No separate reduced exam editor remains');
+let submitHook,removed=0,synchronized=0;const form={};
+const dispose=context.window.SchoolQuestionEditor.init('.exam-rich',context.document,{onBeforeSubmit:fn=>submitHook=fn});
+const owned=editor('owned_page_editor','question_text',false).e;owned.getElement=()=>({form});owned.remove=()=>removed++;owned.save=()=>synchronized++;
+submitHook(form);assert.equal(synchronized,1);dispose();dispose();assert.equal(removed,1,'Page-owned editors are disposed once');
 console.log('Shared question editor passed: full toolbar, English/Nepali parity, source/fullscreen/TeX, and safe formula insertion.');

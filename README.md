@@ -1,6 +1,6 @@
 # Nepal School ERP
 
-PHP school administration application with SQLite or MySQL, Bootstrap, and Nepali/English content.
+PHP school administration application using MySQL, locally built Tailwind CSS, Alpine.js, HTMX, and Nepali/English content.
 
 ## Supported workflows
 
@@ -15,7 +15,9 @@ PHP school administration application with SQLite or MySQL, Bootstrap, and Nepal
 - Interactive Practice MCQs with question selection, instant feedback, sounds, optional full screen and answer review.
 - Searchable, role-aware navigation with mobile offcanvas and responsive forms.
 
-See [INSTALL.md](INSTALL.md) for safe setup, migration, and production precautions, and [the repair report](docs/repair-report-2026-10-09.md) for verified coverage and remaining limits.
+See [INSTALL.md](INSTALL.md) for safe setup and [the MySQL migration guide](docs/mysql-migration.md) for private export/import steps and verification limits.
+
+Source repository: [sghacker1111/Nepal_ERP](https://github.com/sghacker1111/Nepal_ERP). See [InfinityFree deployment setup](docs/infinityfree-deployment.md) for GitHub Actions secrets, the FTP destination, and first deployment steps.
 
 ## Learning content ownership and visibility
 
@@ -23,7 +25,7 @@ The super-admin shared catalog is read-only to school users. Only super admin ad
 
 Teachers and school admins create and edit their own content only. New school content is **Private**, readable by its creator, assigned class-subject teachers and school administrators. **Public means within the creating school**, including enrolled students in permitted subjects, never other schools or anonymous visitors. Shared public content is available through validated matching school classes/subjects. My content and archive filters expose creator controls; archive/restore keeps record IDs. Legacy local content with no known creator stays read-only; no author is invented.
 
-Question Bank, Learning Hub, all paper generators and Practice MCQs enforce the same ownership/tenant policy. Exam Questions additionally require explicit student release and cannot enter the normal learning/practice pool. Practice sessions are revalidated on every request and cleared if content becomes private, archived, hidden or otherwise inaccessible. Subscriptions, CSRF, student enrollment/electives and school-preview read-only rules remain in force. Schema 15 established shared-content ownership; schema 16 adds the separate exam bank and grids, with an additive pre-upgrade SQLite backup. Verify MySQL on staging before production migration.
+Question Bank, Learning Hub, all paper generators and Practice MCQs enforce the same ownership/tenant policy. Exam Questions additionally require explicit student release and cannot enter the normal learning/practice pool. Practice sessions are revalidated on every request and cleared if content becomes private, archived, hidden or otherwise inaccessible. Subscriptions, CSRF, student enrollment/electives and school-preview read-only rules remain in force. Schema 15 established shared-content ownership; schema 16 adds the separate exam bank and grids. School data migration stays offline and requires a private verified MySQL export.
 
 ### Shared question corrections and exam access
 
@@ -66,15 +68,15 @@ Generation is bounded to 200 items, 50 allocation rows and 2,000 **matching** el
 
 ## Quick local start
 
-Requires PHP 8.1+ with PDO SQLite, DOM, fileinfo and mbstring. This revision was tested with PHP 8.5.1 and SQLite. MySQL needs its PDO driver and a separate staging verification.
+Requires PHP 8.1+ with PDO MySQL, DOM, fileinfo and mbstring. SQLite is limited to isolated tests and offline conversion; normal requests require configured MySQL.
 
-For an existing database, back it up before running. Start the local server with:
+Configure `config/database.local.php` from the credential-free example or set `ERP_DB_*` values for a disposable MySQL server. Start the local PHP server with:
 
 ```powershell
 php -S 127.0.0.1:8000 router.php
 ```
 
-A fresh database has a **disabled** administrator, not a shared password. Set a private `ERP_ADMIN_PASSWORD` environment value (at least 12 characters), then run `php config/setup_admin.php`. Remove that environment value afterward. Existing administrator passwords are never reset by setup.
+A fresh MySQL database has a **disabled** administrator, not a shared password. Set a private `ERP_ADMIN_PASSWORD` environment value (at least 12 characters), then run `php config/setup_admin.php`. Remove that environment value afterward. Existing administrator passwords are never reset by setup.
 
 ## School setup order
 

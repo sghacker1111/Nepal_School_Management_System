@@ -2,7 +2,7 @@
 /**
  * Auth Module - View / Edit Own Profile
  */
-require_once __DIR__ . '/../../config/config.php';
+require_once __DIR__ . '/../../config/bootstrap.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
@@ -20,7 +20,7 @@ $stmt->execute([$user_id]);
 $user = $stmt->fetch();
 
 if (!$user) {
-    redirect(APP_URL . '/modules/auth/logout.php');
+    redirect(schoolRouteUrl('modules/auth/logout.php'));
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

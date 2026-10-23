@@ -3,7 +3,7 @@
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 $password=getenv('ERP_ADMIN_PASSWORD')?:'';
 if(strlen($password)<12) { fwrite(STDERR,"Set ERP_ADMIN_PASSWORD to a private password of at least 12 characters, then run this command again.\n");exit(1); }
-require_once __DIR__.'/config.php';
+require_once __DIR__.'/bootstrap.php';
 require_once __DIR__.'/../includes/database.php';
 $db=getDB();
 $q=$db->query("SELECT id,status,password FROM users WHERE username='admin' AND role='super_admin'");$admin=$q->fetch();

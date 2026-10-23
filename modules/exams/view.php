@@ -2,7 +2,7 @@
 /**
  * Exam Management - View / Configure Page
  */
-require_once __DIR__ . '/../../config/config.php';
+require_once __DIR__ . '/../../config/bootstrap.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
@@ -23,7 +23,7 @@ $stmt->execute([$exam_id, $school_id]);
 $exam = $stmt->fetch();
 
 if (!$exam) {
-    redirect(APP_URL . '/modules/exams/index.php', 'Exam not found', 'error');
+    redirect(schoolRouteUrl('modules/exams/index.php'), 'Exam not found', 'error');
 }
 
 $automaticExam=($exam['creation_mode']??'manual')==='automatic';
@@ -128,7 +128,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['map_subject']) && Aut
                 if(!$form_edit_id)$config['internal_components']=$catalogScheme['internal_components']??null;
                 $savedId=saveExamMapping($db,(int)$school_id,$exam_id,$config,$form_edit_id,(int)Auth::getUserId(),$_POST);
                 Auth::logActivity(Auth::getUserId(),$form_edit_id?'Updated Exam Subject Configuration':'Mapped Exam Subject','exam_subjects',$savedId);
-                redirect(APP_URL."/modules/exams/view.php?id=$exam_id",$form_edit_id?'Subject configuration updated; saved results recalculated successfully.':'Subject mapped successfully!');
+                redirect(schoolRouteUrl('modules/exams/view.php') . "?id=$exam_id",$form_edit_id?'Subject configuration updated; saved results recalculated successfully.':'Subject mapped successfully!');
             } catch (InvalidArgumentException $e) {
                 $error = $e->getMessage();
             } catch (PDOException $e) {
@@ -222,7 +222,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['initialize_defaults']
 // Handle deleting mapping
 if (isset($_GET['delete_mapping']) && Auth::hasRole(['super_admin', 'school_admin', 'exam_officer'])) {
     if ($configurationFrozen) {
-        redirect(APP_URL . "/modules/exams/view.php?id=$exam_id", "Reopen this locked or published exam before changing subjects.", 'error');
+        redirect(schoolRouteUrl('modules/exams/view.php') . "?id=$exam_id", "Reopen this locked or published exam before changing subjects.", 'error');
     } else {
         $mapping_id = (int)$_GET['delete_mapping'];
         try {
@@ -234,14 +234,14 @@ if (isset($_GET['delete_mapping']) && Auth::hasRole(['super_admin', 'school_admi
             ");
             $chk_marks->execute([$mapping_id,$exam_id]);
             if ($chk_marks->fetchColumn() > 0) {
-                redirect(APP_URL . "/modules/exams/view.php?id=$exam_id", "Cannot remove subject configuration: student marks have already been recorded for this subject.", 'error');
+                redirect(schoolRouteUrl('modules/exams/view.php') . "?id=$exam_id", "Cannot remove subject configuration: student marks have already been recorded for this subject.", 'error');
             } else {
                 $db->prepare("DELETE FROM exam_subjects WHERE id = ? AND exam_id = ?")->execute([$mapping_id, $exam_id]);
                 Auth::logActivity(Auth::getUserId(), 'Removed Exam Subject Configuration', 'exam_subjects', $mapping_id);
-                redirect(APP_URL . "/modules/exams/view.php?id=$exam_id", "Subject configuration removed");
+                redirect(schoolRouteUrl('modules/exams/view.php') . "?id=$exam_id", "Subject configuration removed");
             }
         } catch (PDOException $e) {
-            redirect(APP_URL . "/modules/exams/view.php?id=$exam_id", "Error: " . $e->getMessage(), 'error');
+            redirect(schoolRouteUrl('modules/exams/view.php') . "?id=$exam_id", "Error: " . $e->getMessage(), 'error');
         }
     }
 }
@@ -313,7 +313,7 @@ ob_start();
         <h2><i class="fas fa-cog text-primary"></i> Configure Exam Subjects</h2>
         <h5 class="text-muted"><?= sanitize($exam['name']) ?></h5>
     </div>
-    <a href="<?= APP_URL ?>/modules/exams/index.php" class="btn btn-secondary">
+    <a href="<?= schoolRouteUrl('modules/exams/index.php') ?>" class="btn btn-secondary">
         <i class="fas fa-arrow-left"></i> Back to List
     </a>
 </div>
@@ -434,7 +434,7 @@ ob_start();
                     </button>
                     
                     <?php if ($edit_mapping): ?>
-                    <a href="<?= APP_URL ?>/modules/exams/view.php?id=<?= $exam_id ?>" class="btn btn-secondary w-100 mt-2">
+                    <a href="<?= schoolRouteUrl('modules/exams/view.php') ?>?id=<?= $exam_id ?>" class="btn btn-secondary w-100 mt-2">
                         <i class="fas fa-times"></i> Cancel Edit
                     </a>
                     <?php endif; ?>
@@ -466,7 +466,7 @@ ob_start();
         </div>
         <?php endif; ?>
 
-        <a class="btn btn-outline-primary w-100 mb-3" href="<?= APP_URL ?>/modules/exams/symbols.php?exam_id=<?= $exam_id ?>">Manage Exam Symbol Numbers</a>
+        <a class="btn btn-outline-primary w-100 mb-3" href="<?= schoolRouteUrl('modules/exams/symbols.php') ?>?exam_id=<?= $exam_id ?>">Manage Exam Symbol Numbers</a>
         <!-- Print Admit Cards Card -->
         <div class="card mb-4 shadow-sm border-start border-info border-3">
             <div class="card-header bg-info bg-opacity-10 text-info-emphasis py-3">
@@ -483,7 +483,7 @@ ob_start();
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <button type="button" onclick="printAdmitCards()" class="btn btn-info text-white w-100 fw-bold">
+                <button type="button" data-erp-click="exams-view-action-0" data-erp-click-args="<?= schoolPageActionArgs("exams-view",[]) ?>" class="btn btn-info text-white w-100 fw-bold">
                     <i class="fas fa-id-card"></i> Generate & Print Cards
                 </button>
             </div>
@@ -565,7 +565,7 @@ ob_start();
                                     <tr>
                                         <td>
                                             <strong><?= sanitize($m['subject_name']) ?></strong> 
-                                            <?php if(!$configurationFrozen&&!empty($exam['has_internal'])&&(float)$m['practical_full']>0): ?><a class="d-block small" href="<?= APP_URL ?>/modules/subjects/internal.php?exam=<?= (int)$exam_id ?>&mapping=<?= (int)$m['id'] ?>">Edit IN fields & allocation</a><?php endif; ?>
+                                            <?php if(!$configurationFrozen&&!empty($exam['has_internal'])&&(float)$m['practical_full']>0): ?><a class="d-block small" href="<?= schoolRouteUrl('modules/subjects/internal.php') ?>?exam=<?= (int)$exam_id ?>&mapping=<?= (int)$m['id'] ?>">Edit IN fields & allocation</a><?php endif; ?>
                                             <span class="text-muted font-monospace small">(<?= sanitize($m['subject_code']) ?>)</span>
                                         </td>
                                         <?php if ($exam['type'] === 'unit'): ?>
@@ -595,11 +595,11 @@ ob_start();
                                         <?php if (Auth::hasRole(['super_admin', 'school_admin', 'exam_officer']) && !$configurationFrozen): ?>
                                         <td class="text-end">
                                             <div class="btn-group btn-group-sm">
-                                                <a href="<?= APP_URL ?>/modules/exams/view.php?id=<?= $exam_id ?>&edit_mapping_id=<?= $m['id'] ?>" 
+                                                <a href="<?= schoolRouteUrl('modules/exams/view.php') ?>?id=<?= $exam_id ?>&edit_mapping_id=<?= $m['id'] ?>"
                                                    class="btn btn-sm btn-outline-warning" title="Edit Configuration">
                                                     <i class="fas fa-edit"></i> Edit
                                                 </a>
-                                                <a href="<?= APP_URL ?>/modules/exams/view.php?id=<?= $exam_id ?>&delete_mapping=<?= $m['id'] ?>" 
+                                                <a href="<?= schoolRouteUrl('modules/exams/view.php') ?>?id=<?= $exam_id ?>&delete_mapping=<?= $m['id'] ?>"
                                                    class="btn btn-sm btn-outline-danger" title="Remove Subject">
                                                     <i class="fas fa-times-circle"></i> Remove
                                                 </a>
@@ -624,90 +624,10 @@ ob_start();
     </div>
 </div>
 
-<script>
-function printAdmitCards() {
-    const classId = document.getElementById('print_class_id').value;
-    if (!classId) {
-        Swal.fire('Error', 'Please select a class first.', 'error');
-        return;
-    }
-    window.open('<?= APP_URL ?>/modules/exams/admit_cards.php?exam_id=<?= $exam_id ?>&class_id=' + classId, '_blank');
-}
-
-// Dynamic class-subject dropdown filtering
-const classSubjectsMap = <?= json_encode($class_subjects_json,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;
-const editMapping = <?= $edit_mapping ? json_encode($edit_mapping) : 'null' ?>;
-
-document.addEventListener('DOMContentLoaded', function() {
-    const classSelect = document.getElementById('class_id');
-    const subjectSelect = document.getElementById('subject_id');
-    const creditHoursInput = document.getElementById('credit_hours');
-    const intCreditInput = document.getElementById('internal_credit_hours');
-    const extCreditInput = document.getElementById('external_credit_hours');
-    const thFullInput = document.getElementById('form_theory_full');
-    const thPassInput = document.getElementById('form_theory_pass');
-    const inFullInput = document.getElementById('form_practical_full');
-    const inPassInput = document.getElementById('form_practical_pass');
-    
-    function updateSubjects() {
-        const classId = classSelect.value;
-        const selectedSubjectId = editMapping ? editMapping.subject_id : '';
-        
-        if (classId) {
-            subjectSelect.innerHTML = '<option value="">Choose Subject</option>';
-            if (classSubjectsMap[classId]) {
-                classSubjectsMap[classId].forEach(sub => {
-                    const opt = document.createElement('option');
-                    opt.value = sub.id;
-                    opt.textContent = sub.name;
-                    opt.dataset.thCredit = sub.th_credit ?? '';
-                    opt.dataset.inCredit = sub.in_credit ?? '';
-                    opt.dataset.thFull = sub.th_full ?? '';
-                    opt.dataset.thPass = sub.th_pass ?? '';
-                    opt.dataset.inFull = sub.in_full ?? '';
-                    opt.dataset.inPass = sub.in_pass ?? '';
-                    if (sub.id == selectedSubjectId) {
-                        opt.selected = true;
-                    }
-                    subjectSelect.appendChild(opt);
-                });
-            } else {
-                subjectSelect.innerHTML = '<option value="">No Subjects Mapped to Class</option>';
-            }
-        } else {
-            subjectSelect.innerHTML = '<option value="">Choose Class First</option>';
-        }
-    }
-
-    function onSubjectChange() {
-        if (editMapping) return; // Do not overwrite when explicitly editing an existing mapping
-        const selectedOpt = subjectSelect.options[subjectSelect.selectedIndex];
-        if (selectedOpt && selectedOpt.value) {
-            const thCr = parseFloat(selectedOpt.dataset.thCredit) || 0;
-            const inCr = parseFloat(selectedOpt.dataset.inCredit) || 0;
-            if (extCreditInput) extCreditInput.value = selectedOpt.dataset.thCredit || '';
-            if (intCreditInput) intCreditInput.value = selectedOpt.dataset.inCredit || '';
-            if (creditHoursInput) {
-                creditHoursInput.value = (thCr + inCr > 0) ? (thCr + inCr) : '';
-            }
-            if (thFullInput && selectedOpt.dataset.thFull) thFullInput.value = selectedOpt.dataset.thFull;
-            if (thPassInput && selectedOpt.dataset.thPass) thPassInput.value = selectedOpt.dataset.thPass;
-            if (inFullInput && selectedOpt.dataset.inFull) inFullInput.value = selectedOpt.dataset.inFull;
-            if (inPassInput && selectedOpt.dataset.inPass) inPassInput.value = selectedOpt.dataset.inPass;
-        }
-    }
-    
-    if (classSelect) {
-        classSelect.addEventListener('change', updateSubjects);
-        // Pre-fill / trigger on page load (essential for edit states)
-        updateSubjects();
-    }
-
-    if (subjectSelect) {
-        subjectSelect.addEventListener('change', onSubjectChange);
-    }
-});
-</script>
+<?php schoolPageModule("exams-view");schoolPageValue("exams-view-value-0",(string)(schoolRouteUrl('modules/exams/admit_cards.php')));
+schoolPageValue("exams-view-value-1",(string)($exam_id));
+schoolPageValue("exams-view-value-2",(string)(json_encode($class_subjects_json,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT)));
+schoolPageValue("exams-view-value-3",(string)($edit_mapping ? json_encode($edit_mapping) : 'null')); ?>
 
 <?php
 $content = ob_get_clean();

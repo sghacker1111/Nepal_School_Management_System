@@ -1,6 +1,6 @@
 'use strict';
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
-const context={schoolConvertDate:(value,from,to)=>{if(value==='bad')throw new Error('bad date');return from===to?value:'2083-06-24';},schoolNotify:()=>{}};
+const context={window:{},schoolConvertDate:(value,from,to)=>{if(value==='bad')throw new Error('bad date');return from===to?value:'2083-06-24';},schoolNotify:()=>{}};
 vm.runInNewContext(fs.readFileSync(require.resolve('../assets/js/attendance-controls.js'),'utf8'),context);
 const makeForm=elements=>({elements,submitted:false,submit(){this.submitted=true;}});
 let form=makeForm({date_input:{value:'2026-10-10',type:'date'}}),select={dataset:{previous:'AD'},value:'BS',form};

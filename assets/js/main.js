@@ -3,9 +3,14 @@
  * Nepal School ERP
  */
 
-document.addEventListener('DOMContentLoaded', function() {
+const schoolControlScopes=new WeakMap();
+window.initSchoolControls=function(root=document,context={}) {
+    schoolControlScopes.get(root)?.();
+    const controller=new AbortController(),signal=controller.signal;
+    context.signal?.addEventListener('abort',()=>controller.abort(),{once:true});
+    const components=[];
     // Keep automatic GET filters from submitting an old section with a new class.
-    document.addEventListener('change', event => {
+    root.addEventListener('change', event => {
         if (!['class','class_id'].includes(event.target.name)) return;
         const form=event.target.closest('form');
         if (!form || form.method.toLowerCase()!=='get') return;
@@ -13,28 +18,28 @@ document.addEventListener('DOMContentLoaded', function() {
         if(section)section.value='';
         const subject=form.querySelector('[name="subject"], [name="subject_id"]');
         if(subject)subject.value='';
-    }, true);
+    }, {capture:true,signal});
     // Older forms used visible labels without associations. Link them for keyboards and readers.
-    document.querySelectorAll('label.form-label:not([for])').forEach((label,index)=>{
+    root.querySelectorAll('label.form-label:not([for])').forEach((label,index)=>{
         const control=label.parentElement.querySelector('input:not([type="hidden"]),select,textarea');
         if(control){if(!control.id)control.id='erp-field-'+index;label.htmlFor=control.id;}
     });
-    document.querySelectorAll('input[name$="_drive_path"]').forEach(input=>{input.disabled=true;input.placeholder='Use the file upload button above';});
+    root.querySelectorAll('input[name$="_drive_path"]').forEach(input=>{input.disabled=true;input.placeholder='Use the file upload button above';});
     
     // Initialize tooltips
-    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    const tooltipTriggerList = [].slice.call(root.querySelectorAll('[data-ui-toggle="tooltip"]'));
     tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
+        components.push(ErpUI.Tooltip.getOrCreateInstance(tooltipTriggerEl));
     });
     
     // Initialize popovers
-    const popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
+    const popoverTriggerList = [].slice.call(root.querySelectorAll('[data-ui-toggle="popover"]'));
     popoverTriggerList.map(function (popoverTriggerEl) {
-        return new bootstrap.Popover(popoverTriggerEl);
+        components.push(ErpUI.Popover.getOrCreateInstance(popoverTriggerEl));
     });
 
-    // Auto-enable bootstrap validation on forms with 'needs-validation'
-    const forms = document.querySelectorAll('.needs-validation');
+    // Native constraint validation with the shared Tailwind component styles.
+    const forms = root.querySelectorAll('.needs-validation');
     Array.from(forms).forEach(form => {
         form.addEventListener('submit', event => {
             if (!form.checkValidity()) {
@@ -42,9 +47,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 event.stopPropagation();
             }
             form.classList.add('was-validated');
-        }, false);
+        }, {signal});
     });
-});
+    const dispose=()=>{controller.abort();components.forEach(component=>component.dispose());schoolControlScopes.delete(root);};
+    schoolControlScopes.set(root,dispose);return dispose;
+};
+document.addEventListener('DOMContentLoaded',()=>window.initSchoolControls(document.querySelector('#main-content')||document));
 
 // Confirm delete with SweetAlert2
 function confirmDelete(url, message = 'Are you sure?') {
@@ -114,20 +122,23 @@ function printElement(elementId) {
     const printWindow = window.open('', '', 'height=600,width=800');
     
     printWindow.document.write('<html><head><title>Print</title>');
-    printWindow.document.write('<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">');
+    const stylesheet = document.createElement('link');
+    stylesheet.rel = 'stylesheet';
+    stylesheet.href = (window.APP_URL || '') + '/assets/dist/app.css';
+    printWindow.document.head.appendChild(stylesheet);
     printWindow.document.write('</head><body>');
     printWindow.document.write(element.innerHTML);
     printWindow.document.write('</body></html>');
     
     printWindow.document.close();
-    printWindow.print();
+    stylesheet.addEventListener('load', () => printWindow.print(), {once: true});
 }
 
 // Auto-dismiss alerts after 5 seconds
 setTimeout(function() {
     const alerts = document.querySelectorAll('.alert-dismissible');
     alerts.forEach(function(alert) {
-        const bsAlert = new bootstrap.Alert(alert);
+        const bsAlert = new ErpUI.Alert(alert);
         bsAlert.close();
     });
 }, 5000);
@@ -251,7 +262,7 @@ function verifyPasswordAndProceed(onSuccess, title = 'Security Verification', te
                 Swal.showValidationMessage('Password is required');
                 return false;
             }
-            return fetch(`${appUrl}/modules/auth/verify_password.php`, {
+            return fetch(`${appUrl}/account/verify-password`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

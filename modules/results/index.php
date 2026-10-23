@@ -2,7 +2,7 @@
 /**
  * Result Management - Overview Page
  */
-require_once __DIR__ . '/../../config/config.php';
+require_once __DIR__ . '/../../config/bootstrap.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
@@ -112,13 +112,13 @@ ob_start();
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="fas fa-poll"></i> Student Exam Results</h2>
     <div class="d-flex gap-2">
-        <a href="<?= APP_URL ?>/modules/results/ledger.php?<?= htmlspecialchars(http_build_query(['exam'=>$exam_id,'class'=>$class_id,'section'=>$section_id])) ?>" class="btn btn-outline-info">
+        <a href="<?= schoolRouteUrl('modules/results/ledger.php') ?>?<?= htmlspecialchars(http_build_query(['exam'=>$exam_id,'class'=>$class_id,'section'=>$section_id])) ?>" class="btn btn-outline-info">
             <i class="fas fa-poll-h"></i> Ledger Grid
         </a>
-        <a href="<?= APP_URL ?>/modules/results/print_bulk.php" class="btn btn-outline-success">
+        <a href="<?= schoolRouteUrl('modules/results/print_bulk.php') ?>" class="btn btn-outline-success">
             <i class="fas fa-print"></i> Bulk Print Cards
         </a>
-        <a href="<?= APP_URL ?>/modules/results/marks_entry.php?<?= htmlspecialchars(http_build_query(['exam'=>$exam_id,'class'=>$class_id,'section'=>$section_id])) ?>" class="btn btn-primary">
+        <a href="<?= schoolRouteUrl('modules/results/marks_entry.php') ?>?<?= htmlspecialchars(http_build_query(['exam'=>$exam_id,'class'=>$class_id,'section'=>$section_id])) ?>" class="btn btn-primary">
             <i class="fas fa-edit"></i> Marks Entry
         </a>
     </div>
@@ -130,7 +130,7 @@ ob_start();
         <form method="GET" action="" class="row g-3">
             <div class="col-md-4">
                 <label class="form-label">Select Exam</label>
-                <select name="exam" class="form-select" required onchange="this.form.submit()">
+                <select name="exam" class="form-select" required data-erp-change="results-index-action-0" data-erp-change-args="<?= schoolPageActionArgs("results-index",[]) ?>">
                     <option value="">Select Exam</option>
                     <?php foreach ($exams as $e): ?>
                     <option value="<?= $e['id'] ?>" <?= $exam_id == $e['id'] ? 'selected' : '' ?>>
@@ -142,7 +142,7 @@ ob_start();
             
             <div class="col-md-3">
                 <label class="form-label">Class</label>
-                <select name="class" class="form-select" required onchange="this.form.submit()">
+                <select name="class" class="form-select" required data-erp-change="results-index-action-1" data-erp-change-args="<?= schoolPageActionArgs("results-index",[]) ?>">
                     <option value="">Select Class</option>
                     <?php foreach ($classes as $c): ?>
                     <option value="<?= $c['id'] ?>" <?= $class_id == $c['id'] ? 'selected' : '' ?>>
@@ -154,7 +154,7 @@ ob_start();
             
             <div class="col-md-3">
                 <label class="form-label">Section</label>
-                <select name="section" class="form-select" onchange="this.form.submit()">
+                <select name="section" class="form-select" data-erp-change="results-index-action-2" data-erp-change-args="<?= schoolPageActionArgs("results-index",[]) ?>">
                     <option value="">All Sections</option>
                     <?php foreach ($sections as $s): ?>
                     <option value="<?= $s['id'] ?>" <?= $section_id == $s['id'] ? 'selected' : '' ?>>
@@ -215,7 +215,7 @@ ob_start();
                             </td>
                             <td class="text-end">
                                 <?php if ($student['total_obtained'] !== null): ?>
-                                    <a href="<?= APP_URL ?>/modules/results/report_card.php?student=<?= $student['id'] ?>&exam=<?= $exam_id ?>" 
+                                    <a href="<?= schoolRouteUrl('modules/results/report_card.php') ?>?student=<?= $student['id'] ?>&exam=<?= $exam_id ?>"
                                        class="btn btn-sm btn-outline-success" target="_blank">
                                         <i class="fas fa-file-invoice"></i> Report Card
                                     </a>
@@ -248,14 +248,7 @@ ob_start();
 </div>
 <?php endif; ?>
 
-<script>
-$(document).ready(function() {
-    if(document.getElementById('resultsTable')) $('#resultsTable').DataTable({
-        pageLength: 25,
-        order: [[0, 'asc']]
-    });
-});
-</script>
+<?php schoolPageModule("results-index"); ?>
 
 <?php
 $content = ob_get_clean();

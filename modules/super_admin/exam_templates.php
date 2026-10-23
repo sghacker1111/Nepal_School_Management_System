@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__.'/../../config/config.php';
+require_once __DIR__.'/../../config/bootstrap.php';
 require_once __DIR__.'/../../includes/database.php';
 require_once __DIR__.'/../../includes/auth.php';
 require_once __DIR__.'/../../includes/functions.php';
@@ -14,7 +14,7 @@ if($_SERVER['REQUEST_METHOD']==='POST')try{
     if(($_POST['action']??'')!=='save_template'||examTemplateId($_POST['template_id']??0)!==$id)throw new InvalidArgumentException('Choose a valid exam template action.');
     saveExamTemplate($db,(int)Auth::getUserId(),$id,$_POST);
     Auth::logActivity(Auth::getUserId(),'Update default exam template','exam_templates',$id);
-    redirect(APP_URL.'/modules/super_admin/exam_templates.php?'.http_build_query(['template_id'=>$id,'filter_class'=>$class]),'Default exam template saved successfully. Existing exams are unchanged.');
+    redirect(schoolRouteUrl('modules/super_admin/exam_templates.php') . '?'.http_build_query(['template_id'=>$id,'filter_class'=>$class]),'Default exam template saved successfully. Existing exams are unchanged.');
 }catch(InvalidArgumentException $e){$error=$e->getMessage();}catch(Throwable $e){error_log($e->getMessage());$error='The defaults could not be saved. Existing exams are unchanged.';}
 $catalog=examTemplateCatalog($db);$schemes=examTemplateSchemes($db,$selected);
 $classes=$db->query('SELECT id,name FROM classes WHERE school_id=0 AND is_active=1 ORDER BY id')->fetchAll();
@@ -23,8 +23,8 @@ $pageTitle='Default Exam Templates';$activePage='super_admin_exams';ob_start(); 
 <h2>Default Exam Templates</h2>
 <p class="text-muted">Set First, Second and Third / Final term defaults. Automatic school exams use a read-only snapshot; manual exams start from these defaults and can be customized. Changing or deactivating a default never changes an existing exam.</p>
 <?php if($error): ?><div class="alert alert-danger" role="alert"><?= sanitize($error) ?></div><?php endif; ?>
-<form method="GET" class="row g-3 mb-4"><div class="col-md-6"><label for="templateChoice" class="form-label">Exam template</label><select id="templateChoice" name="template_id" class="form-select" onchange="this.form.submit()"><?php foreach($templates as $t): ?><option value="<?= (int)$t['id'] ?>" <?= $id===(int)$t['id']?'selected':'' ?>><?= sanitize($t['name']) ?><?= $t['is_active']?'':' (Inactive)' ?></option><?php endforeach; ?></select></div>
-<div class="col-md-6"><label for="templateClass" class="form-label">Class subject settings</label><select id="templateClass" name="filter_class" class="form-select" onchange="this.form.submit()"><option value="">Choose class to edit TH / IN defaults</option><?php foreach($classes as $c): ?><option value="<?= (int)$c['id'] ?>" <?= $class===(int)$c['id']?'selected':'' ?>><?= sanitize($c['name']) ?></option><?php endforeach; ?></select></div></form>
+<form method="GET" class="row g-3 mb-4"><div class="col-md-6"><label for="templateChoice" class="form-label">Exam template</label><select id="templateChoice" name="template_id" class="form-select" data-erp-change="super-admin-exam-templates-action-0" data-erp-change-args="<?= schoolPageActionArgs("super-admin-exam-templates",[]) ?>"><?php foreach($templates as $t): ?><option value="<?= (int)$t['id'] ?>" <?= $id===(int)$t['id']?'selected':'' ?>><?= sanitize($t['name']) ?><?= $t['is_active']?'':' (Inactive)' ?></option><?php endforeach; ?></select></div>
+<div class="col-md-6"><label for="templateClass" class="form-label">Class subject settings</label><select id="templateClass" name="filter_class" class="form-select" data-erp-change="super-admin-exam-templates-action-1" data-erp-change-args="<?= schoolPageActionArgs("super-admin-exam-templates",[]) ?>"><option value="">Choose class to edit TH / IN defaults</option><?php foreach($classes as $c): ?><option value="<?= (int)$c['id'] ?>" <?= $class===(int)$c['id']?'selected':'' ?>><?= sanitize($c['name']) ?></option><?php endforeach; ?></select></div></form>
 <form method="POST" class="card card-body"><input type="hidden" name="action" value="save_template"><input type="hidden" name="template_id" value="<?= $id ?>"><input type="hidden" name="revision" value="<?= (int)$selected['revision'] ?>">
 <div class="row g-3 mb-3"><div class="col-md-6"><label for="templateName" class="form-label">Default exam name</label><input id="templateName" name="name" class="form-control" maxlength="150" required value="<?= sanitize($form['name']) ?>"></div>
 <div class="col-md-3"><label for="termNo" class="form-label">Term</label><select id="termNo" name="term_no" class="form-select"><?php foreach([1=>'First',2=>'Second',3=>'Third / Final'] as $v=>$label): ?><option value="<?= $v ?>" <?= (int)$form['term_no']===$v?'selected':'' ?>><?= $label ?></option><?php endforeach; ?></select></div>

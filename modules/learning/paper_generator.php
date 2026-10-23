@@ -5,7 +5,7 @@ if(!isset($_POST['action_save_grid'])&&!isset($_POST['action_generate'])&&($_POS
 /**
  * Normal Paper Generator and school-defined allocation grids.
  */
-require_once __DIR__ . '/../../config/config.php';
+require_once __DIR__ . '/../../config/bootstrap.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
@@ -247,6 +247,7 @@ if ($subject_id) {
     $selected_subject = $stmt->fetch();
 }
 
+$error=$error_msg;$pageMutationOutcome=$generated?'preview':null;
 $pageTitle = 'Normal Paper Generator';
 $activePage = 'paper_generator';
 $pageStyles=['/assets/css/exam-question-language.css?v='.(int)filemtime(__DIR__.'/../../assets/css/exam-question-language.css')];
@@ -388,34 +389,17 @@ ob_start();
 </style>
 
 <!-- MathJax support for LaTeX -->
-<script>
-window.MathJax = {
-    tex: {
-        inlineMath: [['\\(', '\\)']],
-        displayMath: [['\\[', '\\]']]
-    },
-    startup: {
-        ready: () => {
-            MathJax.startup.defaultReady();
-            MathJax.startup.promise.then(() => {
-                if (typeof fixDevanagariInMathJax === 'function') {
-                    fixDevanagariInMathJax(document);
-                }
-            });
-        }
-    }
-};
-</script>
-<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<?php $pageAssets[]="mathjax"; ?>
+<?php $pageAssets[]="mathjax"; ?>
 
 <!-- Tesseract OCR CDN -->
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<?php $pageAssets[]="tesseract"; ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4 no-print">
     <h2><i class="fas fa-file-invoice text-primary"></i> Normal Paper Generator</h2>
-    <?php if(in_array(Auth::getRole(),['super_admin','school_admin','teacher'],true)&&Auth::hasAccess('exam_paper_generator')): ?><a class="btn btn-outline-primary" href="<?= APP_URL ?>/modules/learning/exam_paper_generator.php">Open separate Exam Paper Generator</a><?php endif; ?>
+    <?php if(in_array(Auth::getRole(),['super_admin','school_admin','teacher'],true)&&Auth::hasAccess('exam_paper_generator')): ?><a class="btn btn-outline-primary" href="<?= schoolRouteUrl('modules/learning/exam_paper_generator.php') ?>">Open separate Exam Paper Generator</a><?php endif; ?>
     <div>
-        <a href="<?= APP_URL ?>/index.php" class="btn btn-secondary">
+        <a href="<?= schoolRouteUrl('index.php') ?>" class="btn btn-secondary">
             <i class="fas fa-arrow-left"></i> Dashboard
         </a>
     </div>
@@ -441,7 +425,7 @@ window.MathJax = {
                 <form id="paramForm" method="GET" action=""><input type="hidden" name="language" value="<?= $questionLanguage ?>">
                     <div class="mb-3">
                         <label class="form-label fw-semibold">1. Select Target Class *</label>
-                        <select name="class_id" class="form-select" onchange="document.getElementById('paramForm').submit();" required>
+                        <select name="class_id" class="form-select" data-erp-change="learning-paper-generator-action-0" data-erp-change-args="<?= schoolPageActionArgs("learning-paper-generator",[]) ?>" required>
                             <option value="">Choose Class</option>
                             <?php foreach ($classes as $c): ?>
                             <option value="<?= $c['id'] ?>" <?= $class_id == $c['id'] ? 'selected' : '' ?>><?= sanitize($c['name']) ?></option>
@@ -451,7 +435,7 @@ window.MathJax = {
 
                     <div class="mb-3">
                         <label class="form-label fw-semibold">2. Select Subject *</label>
-                        <select name="subject_id" class="form-select" onchange="document.getElementById('paramForm').submit();" required>
+                        <select name="subject_id" class="form-select" data-erp-change="learning-paper-generator-action-1" data-erp-change-args="<?= schoolPageActionArgs("learning-paper-generator",[]) ?>" required>
                             <option value="">Choose Subject</option>
                             <?php foreach ($subjects as $s): ?>
                             <option value="<?= $s['id'] ?>" <?= $subject_id == $s['id'] ? 'selected' : '' ?>><?= sanitize($s['display_name']??$s['name_en']) ?></option>
@@ -461,14 +445,14 @@ window.MathJax = {
 
                     <div class="mb-3">
                         <label class="form-label fw-semibold">3. Filter by Chapter</label>
-                        <select name="chapter" id="chapterFilterSelect" class="form-select" onchange="document.getElementById('paramForm').submit();">
+                        <select name="chapter" id="chapterFilterSelect" class="form-select" data-erp-change="learning-paper-generator-action-2" data-erp-change-args="<?= schoolPageActionArgs("learning-paper-generator",[]) ?>">
                             <option value="">All Chapters (Full Syllabus)</option>
                         </select>
                     </div>
 
                     <div class="mb-3">
                         <label class="form-label fw-semibold">4. Select Examination Context</label>
-                        <select name="exam_id" class="form-select" onchange="document.getElementById('paramForm').submit();">
+                        <select name="exam_id" class="form-select" data-erp-change="learning-paper-generator-action-3" data-erp-change-args="<?= schoolPageActionArgs("learning-paper-generator",[]) ?>">
                             <option value="">Choose Exam (Optional)</option>
                             <?php foreach ($exams as $e): ?>
                             <option value="<?= $e['id'] ?>" <?= $exam_id == $e['id'] ? 'selected' : '' ?>><?= sanitize($e['name']) ?> (<?= sanitize($e['type'] ?? '-') ?>)</option>
@@ -479,13 +463,13 @@ window.MathJax = {
                     <div class="mb-4">
                         <label class="form-label fw-semibold">4. Selection Workflow</label>
                         <div class="btn-group-vertical w-100 gap-2" role="group">
-                            <input type="radio" class="btn-check" name="generation_mode" id="modeAuto" value="auto" <?= $generation_mode === 'auto' ? 'checked' : '' ?> onchange="document.getElementById('paramForm').submit();">
+                            <input type="radio" class="btn-check" name="generation_mode" id="modeAuto" value="auto" <?= $generation_mode === 'auto' ? 'checked' : '' ?> data-erp-change="learning-paper-generator-action-4" data-erp-change-args="<?= schoolPageActionArgs("learning-paper-generator",[]) ?>">
                             <label class="btn btn-outline-primary text-start px-3 py-2 fw-semibold" for="modeAuto"><i class="fas fa-magic me-2"></i> Automatic (Normal Grid)</label>
 
-                            <input type="radio" class="btn-check" name="generation_mode" id="modeManual" value="manual" <?= $generation_mode === 'manual' ? 'checked' : '' ?> onchange="document.getElementById('paramForm').submit();">
+                            <input type="radio" class="btn-check" name="generation_mode" id="modeManual" value="manual" <?= $generation_mode === 'manual' ? 'checked' : '' ?> data-erp-change="learning-paper-generator-action-5" data-erp-change-args="<?= schoolPageActionArgs("learning-paper-generator",[]) ?>">
                             <label class="btn btn-outline-primary text-start px-3 py-2 fw-semibold" for="modeManual"><i class="fas fa-hand-pointer me-2"></i> Manual Selection</label>
                             
-                            <input type="radio" class="btn-check" name="generation_mode" id="modeOcr" value="ocr" <?= $generation_mode === 'ocr' ? 'checked' : '' ?> onchange="document.getElementById('paramForm').submit();">
+                            <input type="radio" class="btn-check" name="generation_mode" id="modeOcr" value="ocr" <?= $generation_mode === 'ocr' ? 'checked' : '' ?> data-erp-change="learning-paper-generator-action-6" data-erp-change-args="<?= schoolPageActionArgs("learning-paper-generator",[]) ?>">
                             <label class="btn btn-outline-primary text-start px-3 py-2 fw-semibold" for="modeOcr"><i class="fas fa-camera me-2"></i> OCR Paper Scanner</label>
                         </div>
                     </div>
@@ -514,14 +498,14 @@ window.MathJax = {
                     <div class="d-flex align-items-center gap-2">
                         <div class="input-group input-group-sm" style="max-width: 230px;">
                             <label class="input-group-text bg-light text-muted small" for="loadGridSelect">Load Grid</label>
-                            <select id="loadGridSelect" class="form-select" onchange="loadGridLayout(this)">
+                            <select id="loadGridSelect" class="form-select" data-erp-change="learning-paper-generator-action-7" data-erp-change-args="<?= schoolPageActionArgs("learning-paper-generator",[]) ?>">
                                 <option value="">-- Saved Grids --</option>
                                 <?php foreach ($saved_grids as $sg): ?>
                                     <option value="<?= htmlspecialchars($sg['config_json']) ?>"><?= sanitize($sg['name']) ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
-                        <button type="button" class="btn btn-sm btn-outline-success fw-semibold" onclick="saveGridLayout()" title="Save Current Grid Config"><i class="fas fa-save"></i> Save Layout</button>
+                        <button type="button" class="btn btn-sm btn-outline-success fw-semibold" data-erp-click="learning-paper-generator-action-8" data-erp-click-args="<?= schoolPageActionArgs("learning-paper-generator",[]) ?>" title="Save Current Grid Config"><i class="fas fa-save"></i> Save Layout</button>
                         <div class="badge bg-primary fs-6 p-2 shadow-sm">
                             Live Full Marks: <span id="lblLiveMarks">0</span>
                         </div>
@@ -554,7 +538,7 @@ window.MathJax = {
                                                        class="form-control text-center grid-count" 
                                                        value="<?= $info['count'] ?>" 
                                                        min="0" 
-                                                       oninput="calculateLiveMarks()">
+                                                       data-erp-input="learning-paper-generator-action-9" data-erp-input-args="<?= schoolPageActionArgs("learning-paper-generator",[]) ?>">
                                             </td>
                                             <td>
                                                 <input type="number" 
@@ -562,7 +546,7 @@ window.MathJax = {
                                                        class="form-control text-center grid-marks" 
                                                        value="<?= $info['marks'] ?>" 
                                                        min="1" 
-                                                       oninput="calculateLiveMarks()">
+                                                       data-erp-input="learning-paper-generator-action-10" data-erp-input-args="<?= schoolPageActionArgs("learning-paper-generator",[]) ?>">
                                             </td>
                                             <td class="fw-bold text-primary font-monospace">
                                                 <span class="grid-subtotal">0</span>
@@ -612,7 +596,7 @@ window.MathJax = {
                                                    name="manual_questions[]" 
                                                    value="<?= $q['id'] ?>" 
                                                    class="form-check-input manual-check" 
-                                                   onchange="updateManualCount()">
+                                                   data-erp-change="learning-paper-generator-action-11" data-erp-change-args="<?= schoolPageActionArgs("learning-paper-generator",[]) ?>">
                                         </td>
                                         <td>
                                             <span class="badge bg-secondary"><?= sanitize($q['type']) ?></span>
@@ -680,8 +664,8 @@ window.MathJax = {
                             <textarea id="ocrOutputText" class="form-control mb-3 font-monospace" rows="12" placeholder="Extracted text will appear here..." style="font-size:0.9rem;"></textarea>
                             
                             <div class="d-flex gap-2">
-                                <button type="button" class="btn btn-outline-success w-50" onclick="navigator.clipboard.writeText(document.getElementById('ocrOutputText').value); alert('OCR text copied to clipboard!');"><i class="fas fa-copy"></i> Copy Text</button>
-                                <a href="questions.php" class="btn btn-primary w-50"><i class="fas fa-plus"></i> Go to Question Bank</a>
+                                <button type="button" class="btn btn-outline-success w-50" data-erp-click="learning-paper-generator-action-12" data-erp-click-args="<?= schoolPageActionArgs("learning-paper-generator",[]) ?>"><i class="fas fa-copy"></i> Copy Text</button>
+                                <a href="<?= schoolRouteUrl('modules/learning/questions.php') ?>" class="btn btn-primary w-50"><i class="fas fa-plus"></i> Go to Question Bank</a>
                             </div>
                         </div>
                     </div>
@@ -707,7 +691,7 @@ window.MathJax = {
     <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
         <h5 class="mb-0 text-success fw-bold"><i class="fas fa-print"></i> Printable Paper Preview</h5>
         <div>
-            <button class="btn btn-outline-secondary me-2" onclick="exportToWord()"><i class="fas fa-file-word text-primary"></i> Export to Word (.doc)</button>
+            <button class="btn btn-outline-secondary me-2" data-erp-click="learning-paper-generator-action-13" data-erp-click-args="<?= schoolPageActionArgs("learning-paper-generator",[]) ?>"><i class="fas fa-file-word text-primary"></i> Export to Word (.doc)</button>
             <label for="legacyPrintLanguage" class="form-label">Print language</label><select id="legacyPrintLanguage" class="form-select d-inline-block w-auto" data-exam-language-control><?php foreach(examQuestionLanguages() as $key=>$label): ?><option value="<?= $key ?>" <?= $questionLanguage===$key?'selected':'' ?>><?= $label ?></option><?php endforeach; ?></select><button type="button" class="btn btn-success" data-exam-print="questions"><i class="fas fa-print"></i> Print / Save PDF</button>
         </div>
     </div>
@@ -815,235 +799,15 @@ window.MathJax = {
 </div>
 <?php endif; ?>
 
-<script src="<?= APP_URL ?>/assets/js/paper-chapters.js"></script>
-<script>
-// Live Calculation of custom Grid Marks
-function calculateLiveMarks() {
-    let total = 0;
-    const rows = document.querySelectorAll('.grid-row');
-    rows.forEach(row => {
-        const countInput = row.querySelector('.grid-count');
-        const marksInput = row.querySelector('.grid-marks');
-        const subtotalSpan = row.querySelector('.grid-subtotal');
-        
-        const count = parseInt(countInput.value) || 0;
-        const marks = parseInt(marksInput.value) || 0;
-        const subtotal = count * marks;
-        
-        subtotalSpan.textContent = subtotal;
-        total += subtotal;
-    });
-    
-    const marksBadge = document.getElementById('lblLiveMarks');
-    if (marksBadge) {
-        marksBadge.textContent = total;
-    }
-}
+<?php schoolPageModule("external-paper-chapters"); ?>
+<?php schoolPageModule("learning-paper-generator");schoolPageValue("learning-paper-generator-value-0",(string)(htmlspecialchars($class_id)));
+schoolPageValue("learning-paper-generator-value-1",(string)(htmlspecialchars($subject_id)));
+schoolPageValue("learning-paper-generator-value-2",(string)(htmlspecialchars($class_id)));
+schoolPageValue("learning-paper-generator-value-3",(string)(htmlspecialchars($subject_id)));
+schoolPageValue("learning-paper-generator-value-4",(string)(json_encode($chapter_filter,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT)));
+schoolPageValue("learning-paper-generator-value-5",(string)(json_encode(schoolRouteUrl('modules/learning/questions.php')))); ?>
 
-// Live Calculation of manual questions count
-function updateManualCount() {
-    const checked = document.querySelectorAll('.manual-check:checked').length;
-    const badge = document.getElementById('lblManualCount');
-    if (badge) {
-        badge.textContent = checked;
-    }
-}
 
-// Client Side Word Document Export
-function exportToWord() {
-    const headerHTML = "<html xmlns:o='urn:schemas-microsoft-com:office:office' "+
-            "xmlns:w='urn:schemas-microsoft-com:office:word' "+
-            "xmlns='http://www.w3.org/TR/REC-html40'>"+
-            "<head><title>Export HTML to Word</title><meta charset='utf-8'><style>"+
-            "body {font-family:'Times New Roman',serif;font-size:12pt;}"+
-            ".school-name-print {font-size:16pt;font-weight:bold;text-transform:uppercase;}"+
-            ".paper-title {font-size:14pt;font-weight:bold;text-transform:uppercase;}"+
-            ".metadata-table {width:100%;border-bottom:1px solid #000;margin-bottom:15px;}"+
-            ".question-group-title {font-weight:bold;margin-top:15px;margin-bottom:5px;text-transform:uppercase;border-bottom:1px solid #000;}"+
-            ".question-item {margin-bottom:10px;}"+
-            ".question-marks {float:right;font-weight:bold;}"+
-            ".mcq-options-grid {margin-left:20px;}"+
-            "</style></head><body>";
-    const footerHTML = "</body></html>";
-    const paperClone=document.getElementById('printArea').cloneNode(true);paperClone.querySelectorAll('[data-exam-language-view][hidden]').forEach(node=>node.remove());
-    const sourceHTML = headerHTML + paperClone.innerHTML + footerHTML;
-    
-    const source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(sourceHTML);
-    const fileDownload = document.createElement("a");
-    document.body.appendChild(fileDownload);
-    fileDownload.href = source;
-    fileDownload.download = 'exam_paper.doc';
-    fileDownload.click();
-    document.body.removeChild(fileDownload);
-}
-
-// Client-Side OCR scanner using Tesseract.js (safely check if button exists)
-const btnRunOCR = document.getElementById('btnRunOCR');
-if (btnRunOCR) {
-    btnRunOCR.addEventListener('click', function(e) {
-        e.preventDefault();
-        const fileInput = document.getElementById('ocrImageFile');
-        const statusDiv = document.getElementById('ocrStatus');
-        const progressDiv = document.getElementById('ocrProgress');
-        const progressBar = document.getElementById('ocrProgressBar');
-        const outputArea = document.getElementById('ocrOutputText');
-        
-        if (fileInput.files.length === 0) {
-            alert('Please select an image file first!');
-            return;
-        }
-        
-        const file = fileInput.files[0];
-        statusDiv.style.display = 'block';
-        progressDiv.style.display = 'flex';
-        statusDiv.textContent = 'Initializing Tesseract OCR Engine...';
-        progressBar.style.width = '5%';
-        progressBar.textContent = '5%';
-        
-        Tesseract.recognize(
-            file,
-            'eng+nep', // Supports both English and Nepali OCR extraction!
-            { 
-                logger: m => {
-                    if (m.status === 'recognizing text') {
-                        const pct = Math.round(m.progress * 100);
-                        progressBar.style.width = pct + '%';
-                        progressBar.textContent = pct + '%';
-                        statusDiv.textContent = 'Extracting Text: ' + pct + '%';
-                    }
-                } 
-            }
-        ).then(({ data: { text } }) => {
-            outputArea.value = text;
-            statusDiv.textContent = 'Extraction complete!';
-            progressBar.style.width = '100%';
-            progressBar.textContent = 'Done!';
-            
-            // Render equations if MathJax was found in OCR output (optional)
-            if (window.MathJax && window.MathJax.typesetPromise) {
-                MathJax.typesetPromise().then(() => {
-                    if (typeof fixDevanagariInMathJax === 'function') {
-                        fixDevanagariInMathJax();
-                    }
-                });
-            }
-        }).catch(err => {
-            console.error(err);
-            statusDiv.textContent = 'OCR Error: ' + err.message;
-            progressBar.classList.add('bg-danger');
-        });
-    });
-}
-
-// Save Current Grid Layout via AJAX
-function saveGridLayout() {
-    const gridName = prompt("Enter a name for this customized grid layout (e.g., 'First Term Standard Grid'):");
-    if (!gridName) return;
-    
-    const classId = "<?= htmlspecialchars($class_id) ?>";
-    const subjectId = "<?= htmlspecialchars($subject_id) ?>";
-    
-    if (!classId || !subjectId) {
-        alert("Please select Class and Subject first.");
-        return;
-    }
-    
-    // Build grid data JSON
-    const gridData = {};
-    const rows = document.querySelectorAll('.grid-row');
-    rows.forEach(row => {
-        const countInput = row.querySelector('.grid-count');
-        const marksInput = row.querySelector('.grid-marks');
-        const type = countInput.name.replace('count_', '').replace(/_/g, ' ');
-        
-        gridData[type] = {
-            count: parseInt(countInput.value) || 0,
-            marks: parseInt(marksInput.value) || 0
-        };
-    });
-    
-    $.ajax({
-        url: window.location.pathname + window.location.search,
-        type: 'POST',
-        data: {
-            action_save_grid: 1,
-            grid_name: gridName,
-            class_id: classId,
-            subject_id: subjectId,
-            grid_data: JSON.stringify(gridData)
-        },
-        dataType: 'json',
-        success: function(response) {
-            if (response.success) {
-                alert("Grid layout saved successfully!");
-                // Append to load grid dropdown
-                const select = document.getElementById('loadGridSelect');
-                const opt = document.createElement('option');
-                opt.value = JSON.stringify(gridData);
-                opt.textContent = response.name;
-                opt.selected = true;
-                select.appendChild(opt);
-            } else {
-                alert("Error saving grid: " + response.message);
-            }
-        },
-        error: function() {
-            alert("An error occurred while saving the grid.");
-        }
-    });
-}
-
-// Load Selected Grid Layout Config
-function loadGridLayout(selectEl) {
-    const val = selectEl.value;
-    if (!val) return;
-    
-    try {
-        const gridData = JSON.parse(val);
-        for (const type in gridData) {
-            const safeType = type.replace(/ /g, '_');
-            const countInput = document.querySelector('input[name="count_' + safeType + '"]');
-            const marksInput = document.querySelector('input[name="marks_' + safeType + '"]');
-            
-            if (countInput) countInput.value = gridData[type].count;
-            if (marksInput) marksInput.value = gridData[type].marks;
-        }
-        calculateLiveMarks();
-    } catch (e) {
-        console.error("Failed to parse grid data:", e);
-    }
-}
-
-$(document).ready(function() {
-    calculateLiveMarks();
-    updateManualCount();
-    
-    // Fetch chapters for chapter selector dropdown
-    const classId = "<?= htmlspecialchars($class_id) ?>";
-    const subjectId = "<?= htmlspecialchars($subject_id) ?>";
-    const selectedChapter = <?= json_encode($chapter_filter,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;
-    
-    if (classId && subjectId) {
-        $.ajax({
-            url: '../learning/questions.php',
-            data: {
-                action_get_chapters: 1,
-                class_id: classId,
-                subject_id: subjectId
-            },
-            dataType: 'json',
-            success: function(chapters) {
-                const select = document.getElementById('chapterFilterSelect');
-                if (select) {
-                    renderPaperChapters(select,chapters,selectedChapter);
-                }
-            }
-        });
-    }
-});
-</script>
-
-<script src="<?= APP_URL ?>/assets/js/exam-question-language.js?v=<?= (int)filemtime(__DIR__.'/../../assets/js/exam-question-language.js') ?>"></script>
 <?php
 $content = ob_get_clean();
 include __DIR__ . '/../../includes/header.php';

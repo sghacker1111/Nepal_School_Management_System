@@ -2,7 +2,7 @@
 /**
  * Login Page
  */
-require_once __DIR__ . '/../../config/config.php';
+require_once __DIR__ . '/../../config/bootstrap.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
@@ -11,8 +11,7 @@ Auth::startSession();
 
 // If already logged in, redirect to dashboard
 if (Auth::isLoggedIn()) {
-    header("Location: " . APP_URL . "/index.php");
-    exit;
+    schoolAppRedirect(schoolRouteUrl('index.php'));
 }
 
 $error = '';
@@ -27,8 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Please enter both username and password';
     } else {
         if (Auth::login($username, $password)) {
-            header("Location: " . APP_URL . "/index.php");
-            exit;
+            schoolAppRedirect(schoolRouteUrl('index.php'));
         } else {
             $error = 'Invalid username or password';
         }
@@ -41,8 +39,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - <?= APP_NAME ?></title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <?php require_once __DIR__.'/../../includes/frontend.php'; ?>
+    <link href="<?= schoolAsset('app.css') ?>" rel="stylesheet">
+    <link href="<?= schoolAsset('icons.css') ?>" rel="stylesheet">
     <style>
         body {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -127,6 +126,5 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </div>
     
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

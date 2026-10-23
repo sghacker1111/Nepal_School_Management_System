@@ -9,6 +9,7 @@ if(($_SERVER['REQUEST_METHOD']??'GET')==='POST'){
     elseif($id)acHandle(function()use($ac,$id){if(($_POST['action']??'')!=='update')throw new InvalidArgumentException('Choose preview or save draft changes.');$ac->updateInvoiceDraft($id,$_POST,(string)($_POST['revision']??''));},'invoice',['id'=>$id]);
     else acHandle(function()use($ac){if(!in_array($_POST['action']??'',['draft','issue'],true))throw new InvalidArgumentException('Choose preview, save draft or issue bill.');return $ac->createInvoice($_POST,$_POST['action']==='issue');},'invoice');
 }
+$pageMutationOutcome=$preview?'preview':null;
 $catalog=$ac->rows('SELECT id,name,rate_minor,tax_basis_points,discount_eligible FROM ac_items WHERE school_id=? AND is_active=1 ORDER BY name',[$school]);$catalog=array_map(fn($r)=>$r+['rate'=>acAmount((int)$r['rate_minor']),'tax_percent'=>acAmount((int)$r['tax_basis_points'])],$catalog);
 $years=$ac->rows('SELECT id,year_bs name FROM academic_years WHERE school_id=? ORDER BY is_active DESC,id DESC',[$school]);
 $defaults=['student_id'=>$draft['student_id']??($_GET['student']??0),'customer_name'=>$draft['customer_name']??'','customer_type'=>$draft['customer_type']??'external','bill_date'=>$draft['bill_date']??date('Y-m-d'),'due_date'=>$draft['due_date']??date('Y-m-d',strtotime('+'.$ac->settings['due_days'].' days')),'academic_year_id'=>$draft['academic_year_id']??($years[0]['id']??''),'bill_discount'=>'0.00','billing_period'=>$draft['billing_period']??''];

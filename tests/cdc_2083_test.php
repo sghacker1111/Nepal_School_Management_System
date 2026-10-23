@@ -1,7 +1,7 @@
 <?php
 // Every write goes to a disposable database, never a real school database.
-$path=tempnam(sys_get_temp_dir(),'cdc-2083-test-');putenv('ERP_DB_TYPE=sqlite');putenv('ERP_DB_PATH='.$path);
-require_once __DIR__.'/../config/config.php';require_once __DIR__.'/../includes/database.php';require_once __DIR__.'/../includes/grading.php';
+$path=tempnam(sys_get_temp_dir(),'cdc-2083-test-');putenv('ERP_RUNTIME=test');putenv('ERP_TEST_SQLITE=1');putenv('ERP_DB_TYPE=sqlite');putenv('ERP_DB_PATH='.$path);
+require_once __DIR__.'/../config/bootstrap.php';require_once __DIR__.'/../includes/database.php';require_once __DIR__.'/../includes/grading.php';
 $db=getDB();$checks=0;
 function cdcCheck(bool $ok,string $message): void {global $checks;$checks++;if(!$ok)throw new RuntimeException($message);}
 cdcCheck((int)$db->query("SELECT COUNT(*) FROM cdc_reference WHERE category='CLASS_SUBJECTS'")->fetchColumn()===76,'All workbook rows, including uncertain rows, must be stored');

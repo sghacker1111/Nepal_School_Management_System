@@ -1,7 +1,11 @@
 (function () {
     'use strict';
-    const form = document.querySelector('[data-routine-editor]');
+    const scopes=new WeakMap();
+    window.initRoutineControls=function(root=document,context={}){
+    scopes.get(root)?.();const listeners=[];
+    const form = root.querySelector('[data-routine-editor]');
     if (!form) return;
+    const listen=(type,fn,options=false)=>{form.addEventListener(type,fn,options);listeners.push(()=>form.removeEventListener(type,fn,options));};
     function refresh() {
         const manual = form.querySelector('[name="mode"]').value === 'manual';
         form.querySelectorAll('.routine-manual').forEach(cell => { cell.hidden = !manual; });
@@ -24,7 +28,7 @@
             });
         });
     }
-    form.addEventListener('change', event => {
+    listen('change', event => {
         if (event.target.matches('.routine-subject')) {
             const row = event.target.closest('[data-period]');
             const teacher = row.querySelector('.routine-teacher');
@@ -34,12 +38,14 @@
         }
         refresh();
     });
-    form.addEventListener('submit', event => {
+    listen('submit', event => {
         if (event.submitter?.hasAttribute('data-confirm-activation') && !window.confirm('Activate this weekly routine? The previous timetable will be retained in history. Teacher time conflicts will cancel this change.')) event.preventDefault();
     });
-    form.addEventListener('invalid', event => {
+    listen('invalid', event => {
         const day = event.target.closest('.routine-day');
         if (day) day.open = true;
     }, true);
     refresh();
+    const dispose=()=>{listeners.splice(0).forEach(fn=>fn());scopes.delete(root);};scopes.set(root,dispose);context.signal?.addEventListener('abort',dispose,{once:true});return dispose;
+    };
 })();

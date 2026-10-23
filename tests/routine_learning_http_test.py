@@ -97,6 +97,6 @@ with ERPHttpFixture() as app:
     headers,body=app.request_bytes('/modules/auth/logout.php');assert b'Sign out?' in body and headers['X-Frame-Options']=='DENY' and headers['X-Content-Type-Options']=='nosniff'
     app.request('/modules/super_admin/index.php') # GET logout has not logged out.
     app.request('/modules/auth/logout.php',{},status=419,csrf=False)
-    for path in ['/database.sqlite3','/database.sqlite-journal','/database.db-wal','/config/config.php','/tests/http_fixture.php','/backups/data.sqlite','/.git/config','/uploads/payload.phtml']:
+    for path in ['/database.sqlite3','/database.sqlite-journal','/database.db-wal','/config/bootstrap.php','/tests/http_fixture.php','/backups/data.sqlite','/.git/config','/uploads/payload.phtml']:
         app.request(path,status=404)
     print(f'Routine, learning, print and security HTTP passed: {app.count} requests.')

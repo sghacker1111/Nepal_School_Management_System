@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__.'/../../config/config.php';
+require_once __DIR__.'/../../config/bootstrap.php';
 require_once __DIR__.'/../../includes/database.php';
 require_once __DIR__.'/../../includes/auth.php';
 require_once __DIR__.'/../../includes/functions.php';
@@ -34,9 +34,9 @@ $student_chunks=array_chunk($students,4);$pageTitle='Print Admit Cards'.($class?
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= sanitize($pageTitle) ?></title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Font Awesome -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <?php require_once __DIR__.'/../../includes/frontend.php'; ?>
+    <link href="<?= schoolAsset('app.css') ?>" rel="stylesheet">
+    <link href="<?= schoolAsset('icons.css') ?>" rel="stylesheet">
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -330,8 +330,8 @@ $student_chunks=array_chunk($students,4);$pageTitle='Print Admit Cards'.($class?
 
 <section class="no-print bg-white p-3 mb-3">
 <h2>Generate & Print Admit Cards — <?= sanitize($exam['name']) ?></h2>
-<a href="view.php?id=<?= $exam_id ?>" class="btn btn-secondary">Back to Exam</a>
-<?php if($class): ?><a href="symbols.php?exam_id=<?= $exam_id ?>&class_id=<?= $class_id ?>" class="btn btn-secondary">Manage Symbol Numbers</a><?php endif; ?>
+<a href="<?= schoolRouteUrl('modules/exams/view.php') ?>?id=<?= $exam_id ?>" class="btn btn-secondary">Back to Exam</a>
+<?php if($class): ?><a href="<?= schoolRouteUrl('modules/exams/symbols.php') ?>?exam_id=<?= $exam_id ?>&class_id=<?= $class_id ?>" class="btn btn-secondary">Manage Symbol Numbers</a><?php endif; ?>
 <?php if($error): ?><div class="alert alert-danger mt-3"><?= sanitize($error) ?></div><?php endif; ?>
 <form method="GET" id="admit_selector" class="row g-3 mt-1">
 <input type="hidden" name="exam_id" value="<?= $exam_id ?>"><div id="selected_ids"></div>

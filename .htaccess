@@ -1,7 +1,16 @@
 Options -Indexes
-<FilesMatch "(?i)\.(sqlite3?(-[a-z]+)?|db(-[a-z]+)?|sql|log|env|bak|bat|md|py|ps1|sh|ini|toml|ya?ml)$">
+<FilesMatch "(?i)\.(sqlite3?(-[a-z]+)?|db(-[a-z]+)?|sql(\.gz)?|log|env|bak|bat|md|py|ps1|sh|ini|toml|ya?ml)$">
     Require all denied
 </FilesMatch>
 RewriteEngine On
-RewriteRule (^|/)(\.[^/]+|config|includes|scratch|tests|docs|backups)(/|$) - [F,L]
+RewriteRule (^|/)(\.[^/]+|config|includes|scratch|tests|docs|backups|frontend|tools|node_modules|private-migration)(/|$) - [F,L]
+RewriteRule (^|/)(migration|source|projected)-manifest[^/]*\.json$ - [F,L,NC]
+RewriteRule (^|/)(migration-report[^/]*\.json|verification-error\.json|statements\.jsonl)$ - [F,L,NC]
+RewriteRule ^package(-lock)?\.json$ - [F,L,NC]
 RewriteRule ^uploads/.*\.(php[0-9]*|phtml|phar)$ - [F,L,NC]
+
+# Existing assets and legacy controllers remain available. All clean page paths
+# go through the finite PHP registry; unknown routes return 404, not a dashboard.
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ app.php [QSA,L]

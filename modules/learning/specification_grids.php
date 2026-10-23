@@ -2,7 +2,7 @@
 /**
  * Specification Grids Management Section
  */
-require_once __DIR__ . '/../../config/config.php';
+require_once __DIR__ . '/../../config/bootstrap.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
@@ -29,7 +29,7 @@ if (isset($_GET['delete'])) {
             $stmt->execute([$delete_id, $school_id]);
         }
         Auth::logActivity(Auth::getUserId(), 'Delete Specification Grid', 'specification_grids', $delete_id);
-        redirect(APP_URL . '/modules/learning/specification_grids.php', 'Specification grid deleted successfully.', 'success');
+        redirect(schoolRouteUrl('modules/learning/specification_grids.php'), 'Specification grid deleted successfully.', 'success');
     } catch (PDOException $e) {
         $error = schoolPublicError($e);
     }
@@ -43,7 +43,7 @@ if (isset($_GET['make_universal'])) {
         $stmt = $db->prepare("UPDATE specification_grids SET school_id = 0 WHERE id = ?");
         $stmt->execute([$id]);
         Auth::logActivity(Auth::getUserId(), 'Make Grid Universal', 'specification_grids', $id);
-        redirect(APP_URL . '/modules/learning/specification_grids.php', 'Specification grid is now universal for all schools.', 'success');
+        redirect(schoolRouteUrl('modules/learning/specification_grids.php'), 'Specification grid is now universal for all schools.', 'success');
     } catch (PDOException $e) {
         $error = schoolPublicError($e);
     }
@@ -83,7 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $stmt->execute([$grid_school_id, $class_id, $subject_id, $grid_name, $config_json]);
                 $grid_id = $db->lastInsertId();
                 Auth::logActivity(Auth::getUserId(), 'Create Specification Grid', 'specification_grids', $grid_id);
-                redirect(APP_URL . '/modules/learning/specification_grids.php', 'Specification grid created successfully.', 'success');
+                redirect(schoolRouteUrl('modules/learning/specification_grids.php'), 'Specification grid created successfully.', 'success');
             } elseif ($action === 'edit') {
                 $grid_id = (int)($_POST['grid_id'] ?? 0);
                 if ($is_admin) {
@@ -102,7 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $stmt->execute([$grid_name, $class_id, $subject_id, $config_json, $grid_id, $school_id]);
                 }
                 Auth::logActivity(Auth::getUserId(), 'Update Specification Grid', 'specification_grids', $grid_id);
-                redirect(APP_URL . '/modules/learning/specification_grids.php', 'Specification grid updated successfully.', 'success');
+                redirect(schoolRouteUrl('modules/learning/specification_grids.php'), 'Specification grid updated successfully.', 'success');
             }
         } catch (PDOException $e) {
             $error = schoolPublicError($e);
@@ -154,7 +154,7 @@ ob_start();
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="fas fa-border-all text-primary"></i> Saved Specification Grids</h2>
     <div>
-        <button class="btn btn-primary" onclick="showAddForm()">
+        <button class="btn btn-primary" data-erp-click="learning-specification-grids-action-0" data-erp-click-args="<?= schoolPageActionArgs("learning-specification-grids",[]) ?>">
             <i class="fas fa-plus"></i> Create New Grid Layout
         </button>
     </div>
@@ -215,18 +215,18 @@ ob_start();
                                 <?php endif; ?>
                                 <td><span class="badge bg-primary fs-6"><?= $total_marks ?> Marks</span></td>
                                 <td class="text-end">
-                                    <a href="<?= APP_URL ?>/modules/learning/paper_generator.php?class_id=<?= $g['class_id'] ?>&subject_id=<?= $g['subject_id'] ?>&generation_mode=auto" class="btn btn-sm btn-outline-success" title="Generate Paper using this Grid">
+                                    <a href="<?= schoolRouteUrl('modules/learning/paper_generator.php') ?>?class_id=<?= $g['class_id'] ?>&subject_id=<?= $g['subject_id'] ?>&generation_mode=auto" class="btn btn-sm btn-outline-success" title="Generate Paper using this Grid">
                                         <i class="fas fa-magic"></i> Use Grid
                                     </a>
                                     <?php if ($is_admin || $g['school_id'] == $school_id): ?>
-                                    <button onclick='editGrid(<?= htmlspecialchars(json_encode($g),ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8') ?>)' class="btn btn-sm btn-outline-warning" title="Edit">
+                                    <button data-erp-click="learning-specification-grids-action-1" data-erp-click-args="<?= schoolPageActionArgs("learning-specification-grids",[(string)(htmlspecialchars(json_encode($g),ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8'))]) ?>" class="btn btn-sm btn-outline-warning" title="Edit">
                                         <i class="fas fa-edit"></i>
                                     </button>
-                                    <a href="?delete=<?= $g['id'] ?>" class="btn btn-sm btn-outline-danger" title="Delete" onclick="return confirm('Are you sure you want to delete this specification grid layout?');">
+                                    <a href="?delete=<?= $g['id'] ?>" class="btn btn-sm btn-outline-danger" title="Delete" data-erp-click="learning-specification-grids-action-2" data-erp-click-args="<?= schoolPageActionArgs("learning-specification-grids",[]) ?>">
                                         <i class="fas fa-trash"></i>
                                     </a>
                                     <?php if ($is_admin && $g['school_id'] > 0): ?>
-                                    <a href="?make_universal=<?= $g['id'] ?>" class="btn btn-sm btn-outline-info" title="Approve & Make Universal Grid" onclick="return confirm('Are you sure you want to approve and make this grid layout universal for all schools?');">
+                                    <a href="?make_universal=<?= $g['id'] ?>" class="btn btn-sm btn-outline-info" title="Approve & Make Universal Grid" data-erp-click="learning-specification-grids-action-3" data-erp-click-args="<?= schoolPageActionArgs("learning-specification-grids",[]) ?>">
                                         <i class="fas fa-globe"></i> Make Universal
                                     </a>
                                     <?php endif; ?>
@@ -252,7 +252,7 @@ ob_start();
 <div id="gridsFormSection" class="card border-0 shadow-sm p-4 mt-2" style="display:none; min-height: 80vh; background: #ffffff; border-radius: 16px;">
     <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
         <h3 class="text-primary mb-0 fw-bold" id="formTitle">Create Specification Grid</h3>
-        <button type="button" class="btn btn-outline-secondary" onclick="hideForm()"><i class="fas fa-times"></i> Cancel & Return</button>
+        <button type="button" class="btn btn-outline-secondary" data-erp-click="learning-specification-grids-action-4" data-erp-click-args="<?= schoolPageActionArgs("learning-specification-grids",[]) ?>"><i class="fas fa-times"></i> Cancel & Return</button>
     </div>
     
     <form method="POST" action="" class="needs-validation" novalidate>
@@ -266,7 +266,7 @@ ob_start();
             </div>
             <div class="col-md-4">
                 <label class="form-label fw-semibold">Target Class *</label>
-                <select name="class_id" id="modalClass" class="form-select" required onchange="updateGridSubjects()">
+                <select name="class_id" id="modalClass" class="form-select" required data-erp-change="learning-specification-grids-action-5" data-erp-change-args="<?= schoolPageActionArgs("learning-specification-grids",[]) ?>">
                     <option value="">Choose Class</option>
                     <?php foreach ($classes as $c): ?>
                     <option value="<?= $c['id'] ?>"><?= sanitize($c['name']) ?></option>
@@ -330,71 +330,7 @@ ob_start();
     </form>
 </div>
 
-<script>
-const gridSubjectsByClass=<?= json_encode($subjectsByClass,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;
-function updateGridSubjects(selected='') {
-    const field=document.getElementById('modalSubject');
-    const rows=gridSubjectsByClass[document.getElementById('modalClass').value]||[];
-    field.replaceChildren(new Option(rows.length?'Choose Subject':'No assigned subjects for this class',''));
-    rows.forEach(subject=>field.add(new Option(subject.name_en+(subject.code?' ('+subject.code+')':''),subject.id)));
-    field.disabled=rows.length===0;
-    field.value=String(selected);
-}
-function showAddForm() {
-    document.getElementById('gridsListSection').style.display = 'none';
-    document.getElementById('gridsFormSection').style.display = 'block';
-    
-    document.getElementById('modalAction').value = 'add';
-    document.getElementById('modalGridId').value = '';
-    document.getElementById('formTitle').innerText = 'Create Specification Grid';
-    document.getElementById('modalGridName').value = '';
-    document.getElementById('modalClass').value = '';
-    updateGridSubjects();
-    
-    // Reset inputs
-    document.querySelectorAll('.count-input').forEach(i => i.value = 0);
-    document.querySelectorAll('.marks-input').forEach(i => i.value = 1);
-}
-
-function editGrid(g) {
-    document.getElementById('gridsListSection').style.display = 'none';
-    document.getElementById('gridsFormSection').style.display = 'block';
-    
-    document.getElementById('modalAction').value = 'edit';
-    document.getElementById('modalGridId').value = g.id;
-    document.getElementById('formTitle').innerText = 'Edit Specification Grid Blueprint';
-    document.getElementById('modalGridName').value = g.name;
-    document.getElementById('modalClass').value = g.class_id;
-    updateGridSubjects(g.subject_id);
-    
-    // Parse config JSON
-    let config = {};
-    try {
-        config = JSON.parse(g.config_json);
-    } catch(e) {}
-    
-    const types = {
-        'MCQ': 'MCQ',
-        'Very Short': 'Very_Short',
-        'Short': 'Short',
-        'Long': 'Long',
-        'Reasoning': 'Reasoning',
-        'Difference Between': 'Difference_Between'
-    };
-    
-    for (let type in types) {
-        let key = types[type];
-        let val = config[type] || { count: 0, marks: 1 };
-        document.getElementById('count_' + key).value = val.count || 0;
-        document.getElementById('marks_' + key).value = val.marks || 1;
-    }
-}
-
-function hideForm() {
-    document.getElementById('gridsListSection').style.display = 'block';
-    document.getElementById('gridsFormSection').style.display = 'none';
-}
-</script>
+<?php schoolPageModule("learning-specification-grids");schoolPageValue("learning-specification-grids-value-0",(string)(json_encode($subjectsByClass,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT))); ?>
 
 <?php
 $content = ob_get_clean();

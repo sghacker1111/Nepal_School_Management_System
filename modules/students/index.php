@@ -2,7 +2,7 @@
 /**
  * Student Management - List Page
  */
-require_once __DIR__ . '/../../config/config.php';
+require_once __DIR__ . '/../../config/bootstrap.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
@@ -26,12 +26,12 @@ if (isset($_GET['delete']) && Auth::hasRole(['super_admin', 'school_admin'])) {
         
         $db->commit();
         Auth::logActivity(Auth::getUserId(), 'Archive Student', 'students', $id);
-        redirect(APP_URL . '/modules/students/index.php', 'Student archived; marks and attendance retained.');
+        redirect(schoolRouteUrl('modules/students/index.php'), 'Student archived; marks and attendance retained.');
     } catch (PDOException $e) {
         if ($db->inTransaction()) {
             $db->rollBack();
         }
-        redirect(APP_URL . '/modules/students/index.php', 'Error archiving student: ' . $e->getMessage(), 'error');
+        redirect(schoolRouteUrl('modules/students/index.php'), 'Error archiving student: ' . $e->getMessage(), 'error');
     }
 }
 
@@ -74,10 +74,10 @@ ob_start();
     <h2><i class="fas fa-user-graduate"></i> Student Management</h2>
     <?php if (Auth::hasRole(['super_admin', 'school_admin'])): ?>
     <div>
-        <a href="<?= APP_URL ?>/modules/students/import_export.php" class="btn btn-outline-primary me-2">
+        <a href="<?= schoolRouteUrl('modules/students/import_export.php') ?>" class="btn btn-outline-primary me-2">
             <i class="fas fa-file-import"></i> EMIS Import/Export
         </a>
-        <a href="<?= APP_URL ?>/modules/students/add.php" class="btn btn-primary">
+        <a href="<?= schoolRouteUrl('modules/students/add.php') ?>" class="btn btn-primary">
             <i class="fas fa-plus"></i> Add New Student
         </a>
     </div>
@@ -90,7 +90,7 @@ ob_start();
         <form method="GET" class="row g-3" id="studentFilters">
             <div class="col-md-3">
                 <label for="filter_class" class="form-label small fw-bold">Filter By Class</label>
-                <select id="filter_class" name="class" class="form-select form-select-sm" onchange="this.form.elements.section.value='';this.form.submit()">
+                <select id="filter_class" name="class" class="form-select form-select-sm" data-erp-change="students-index-action-0" data-erp-change-args="<?= schoolPageActionArgs("students-index",[]) ?>">
                     <option value="">All Classes</option>
                     <?php foreach ($classes as $class): ?>
                     <option value="<?= (int)$class['id'] ?>" <?= $class_id===(int)$class['id']?'selected':'' ?>>
@@ -101,14 +101,14 @@ ob_start();
             </div>
             <div class="col-md-2">
                 <label for="filter_section" class="form-label small fw-bold">Section</label>
-                <select id="filter_section" name="section" class="form-select form-select-sm" onchange="this.form.submit()">
+                <select id="filter_section" name="section" class="form-select form-select-sm" data-erp-change="students-index-action-1" data-erp-change-args="<?= schoolPageActionArgs("students-index",[]) ?>">
                     <option value="">All Sections</option>
                     <?php foreach($sections as $section): ?><option value="<?= (int)$section['id'] ?>" <?= $section_id===(int)$section['id']?'selected':'' ?>><?= sanitize($section['name']) ?></option><?php endforeach; ?>
                 </select>
             </div>
             <div class="col-md-2">
                 <label for="filter_status" class="form-label small fw-bold">Filter By Status</label>
-                <select id="filter_status" name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+                <select id="filter_status" name="status" class="form-select form-select-sm" data-erp-change="students-index-action-2" data-erp-change-args="<?= schoolPageActionArgs("students-index",[]) ?>">
                     <option value="">All Statuses</option>
                     <?php foreach(['active'=>'Active','transferred'=>'Transferred','dropout'=>'Dropout','passed'=>'Passed Out','inactive'=>'Inactive'] as $value=>$label): ?><option value="<?= $value ?>" <?= $status_filter===$value?'selected':'' ?>><?= $label ?></option><?php endforeach; ?>
                 </select>
@@ -118,7 +118,7 @@ ob_start();
                 <div class="input-group input-group-sm">
                     <input type="search" name="search" id="filter_search" class="form-control" maxlength="100" value="<?= sanitize($search) ?>" placeholder="Name, roll, student ID or EMIS">
                     <button type="submit" class="btn btn-primary">Search</button>
-                    <a id="btn_reset" href="<?= APP_URL ?>/modules/students/index.php" class="btn btn-secondary">Reset</a>
+                    <a id="btn_reset" href="<?= schoolRouteUrl('modules/students/index.php') ?>" class="btn btn-secondary">Reset</a>
                 </div>
             </div>
         </form>
@@ -183,16 +183,16 @@ ob_start();
                             </td>
                             <td>
                                 <div class="btn-group btn-group-sm">
-                                    <a href="<?= APP_URL ?>/modules/students/view.php?id=<?= $student['id'] ?>" 
+                                    <a href="<?= schoolRouteUrl('modules/students/view.php') ?>?id=<?= $student['id'] ?>"
                                        class="btn btn-info" title="View">
                                         <i class="fas fa-eye"></i>
                                     </a>
                                     <?php if (Auth::hasRole(['super_admin', 'school_admin'])): ?>
-                                    <a href="<?= APP_URL ?>/modules/students/edit.php?id=<?= $student['id'] ?>" 
+                                    <a href="<?= schoolRouteUrl('modules/students/edit.php') ?>?id=<?= $student['id'] ?>"
                                        class="btn btn-warning" title="Edit">
                                         <i class="fas fa-edit"></i>
                                     </a>
-                                    <button onclick="confirmDeleteStudent(<?= $student['id'] ?>)" 
+                                    <button data-erp-click="students-index-action-3" data-erp-click-args="<?= schoolPageActionArgs("students-index",[(string)($student['id'])]) ?>"
                                              class="btn btn-danger" title="Archive">
                                         <i class="fas fa-trash"></i>
                                     </button>
@@ -208,10 +208,10 @@ ob_start();
         
         <?php if (count($students) > 0): ?>
         <div class="mt-3">
-            <button onclick="exportToExcel('studentTable')" class="btn btn-success btn-sm">
+            <button data-erp-click="students-index-action-4" data-erp-click-args="<?= schoolPageActionArgs("students-index",[]) ?>" class="btn btn-success btn-sm">
                 <i class="fas fa-file-excel"></i> Export to Excel
             </button>
-            <button onclick="window.print()" class="btn btn-secondary btn-sm">
+            <button data-erp-click="students-index-action-5" data-erp-click-args="<?= schoolPageActionArgs("students-index",[]) ?>" class="btn btn-secondary btn-sm">
                 <i class="fas fa-print"></i> Print
             </button>
         </div>
@@ -219,45 +219,7 @@ ob_start();
     </div>
 </div>
 
-<script>
-$(document).ready(function() {
-    $('#studentTable').DataTable({
-        pageLength: 25,
-        order: [[0, 'desc']],
-        language: {
-            emptyTable: "No students found"
-        },
-        dom: 'rtip'
-    });
-
-});
-
-function confirmDeleteStudent(id) {
-    verifyPasswordAndProceed(function() {
-        window.location.href = '<?= APP_URL ?>/modules/students/index.php?delete=' + id;
-    }, 'Confirm Deletion', 'Please enter your administrator password to permanently archive this student:');
-}
-
-function exportToExcel(tableId) {
-    // Simple table to CSV export
-    let downloadLink;
-    const dataType = 'application/vnd.ms-excel';
-    const tableSelect = document.getElementById(tableId);
-    const tableHTML = tableSelect.outerHTML.replace(/ /g, '%20');
-    
-    downloadLink = document.createElement("a");
-    document.body.appendChild(downloadLink);
-    
-    if(navigator.msSaveOrOpenBlob){
-        var blob = new Blob(['\ufeff', tableHTML], { type: dataType });
-        navigator.msSaveOrOpenBlob(blob, 'students_list.xls');
-    } else {
-        downloadLink.href = 'data:' + dataType + ', ' + tableHTML;
-        downloadLink.download = 'students_list.xls';
-        downloadLink.click();
-    }
-}
-</script>
+<?php schoolPageModule("students-index");schoolPageValue("students-index-value-0",(string)(schoolRouteUrl('modules/students/index.php'))); ?>
 
 <?php
 $content = ob_get_clean();

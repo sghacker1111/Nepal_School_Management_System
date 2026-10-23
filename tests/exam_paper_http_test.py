@@ -2,6 +2,7 @@
 import json,re
 from http_support import ERPHttpFixture
 from learning_sharing_support import extend_learning
+from app_response_http_test import config as app_config
 with ERPHttpFixture() as app:
     f=extend_learning(app);cls,sub=f['class'],f['subject'];questions='/modules/learning/exam_mcqs.php';grids='/modules/learning/exam_specification_grids.php';generator='/modules/learning/exam_paper_generator.php'
     chapter=app.db.execute("INSERT INTO chapters(school_id,class_id,subject_id,name) VALUES(1,?,?,'Printed exam unit')",(cls,sub)).lastrowid;app.db.commit()
@@ -21,7 +22,8 @@ with ERPHttpFixture() as app:
     app.request(generator+'?grid_id='+str(gid),{**generate,'class_id':0},status=404)
     failed={**config,'full_marks':2}
     body=app.request(grids+'?edit_grid_id='+str(gid),{**saved,'grid_id':gid,'revision':revision,'name':'Preserve attempted edit','config_json':json.dumps(failed)},status=422)
-    assert 'value="Preserve attempted edit"' in body and '"initial":'+json.dumps(failed,separators=(',',':')) in body,'Failed edits retain their submitted name and grid, not the old GET defaults'
+    editor_data=json.loads(app_config(body.encode())['values']['shared-exam-grid-editor-value-0'])
+    assert 'value="Preserve attempted edit"' in body and editor_data['initial']==failed,'Failed edits retain their submitted name and grid, not the old GET defaults'
     app.request(generator,generate,csrf=False,status=419)
     bad={**config,'rows':[{**config['rows'][0],'count':2,'total_marks':2,'domains':{'K':2}}],'full_marks':2}
     body=app.request(generator,{**generate,'config_json':json.dumps(bad)},status=422);assert 'needs 2' in body and 'id="examQuestionSheet"' not in body

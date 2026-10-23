@@ -3,6 +3,7 @@
  * Authentication & Session Management
  */
 require_once __DIR__.'/http_security.php';
+require_once __DIR__.'/routes.php';
 
 class Auth {
     
@@ -71,8 +72,7 @@ class Auth {
             setcookie(session_name(), '', ['expires'=>time()-42000, 'path'=>$cookie['path'], 'secure'=>$cookie['secure'], 'httponly'=>true, 'samesite'=>'Lax']);
         }
         session_destroy();
-        header("Location: " . APP_URL . "/index.php");
-        exit;
+        schoolAppUnauthenticated();
     }
     
     /**
@@ -120,7 +120,7 @@ class Auth {
     public static function isReadOnly() {
         self::startSession();
         if (self::getRole() === 'super_admin' && !empty($_SESSION['viewing_school_id'])) {
-            $script = $_SERVER['SCRIPT_NAME'] ?? '';
+            $script = schoolControllerPath();
             if (strpos($script, '/modules/super_admin/') !== false) {
                 return false;
             }
@@ -155,8 +155,7 @@ class Auth {
         static $checked = false;
         if ($checked) return;
         if (!self::isLoggedIn()) {
-            header("Location: " . APP_URL . "/modules/auth/login.php");
-            exit;
+            schoolAppUnauthenticated();
         }
         self::checkTimeout();
         $stmt = getDB()->prepare('SELECT id, role, school_id, full_name, status FROM users WHERE id=?');
@@ -167,6 +166,7 @@ class Auth {
         unset($_SESSION['school_subscription_type']);
         require_once __DIR__ . '/request_guard.php';
         guardSchoolRequest();
+        schoolRedirectLegacyDocument();
         $checked = true;
     }
     
@@ -176,8 +176,7 @@ class Auth {
     public static function requireRole($roles) {
         self::requireLogin();
         if (!self::hasRole($roles)) {
-            http_response_code(403);
-            die("Access denied. You don't have permission to access this page.");
+            denySchoolRequest("Access denied. You don't have permission to access this page.");
         }
     }
     

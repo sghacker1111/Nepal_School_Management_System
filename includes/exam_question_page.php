@@ -1,13 +1,14 @@
 <?php
 $bankKind=$questionBankKind??'exam';$isExamBank=$bankKind==='exam';$needsTopics=!$isExamBank;
 if(!in_array($bankKind,['exam','learning'],true)||!isset($examSection)||!in_array($examSection,$isExamBank?['written','mcq']:['all','written','mcq'],true)){http_response_code(404);exit;}
-require_once __DIR__.'/../config/config.php';
+require_once __DIR__.'/../config/bootstrap.php';
 require_once __DIR__.'/database.php';
 require_once __DIR__.'/auth.php';
 require_once __DIR__.'/functions.php';
 require_once __DIR__.'/learning_content_service.php';
 require_once __DIR__.'/exam_question_import.php';
 require_once __DIR__.'/exam_question_language.php';
+require_once __DIR__.'/frontend.php';
 Auth::requireRole($isExamBank?['super_admin','school_admin','teacher','student']:['super_admin','school_admin','principal','teacher','exam_officer']);Auth::requireAccess($isExamBank?'exam_questions':'questions');
 $db=getDB();$actor=learningActor($db,(int)Auth::getUserId(),(int)Auth::getSchoolId(),Auth::isReadOnly());
 $isStudent=$actor['role']==='student';$purpose=$isExamBank?($isStudent?'exam_view':'exam_bank'):'bank';
@@ -18,7 +19,7 @@ try{$pagination=learningQuestionPagination($_GET['page']??1,$_GET['per_page']??1
 try{$questionLanguage=examQuestionLanguage($_GET['language']??'both');}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
 $class=(int)($_POST['class_id']??$_GET['class_id']??0);$subject=(int)($_POST['subject_id']??$_GET['subject_id']??0);
 $classes=$isExamBank?examReadClasses($db,$actor):learningReadClasses($db,$actor);if($isStudent&&!$class)$class=(int)($classes[0]['id']??0);
-$subjects=$isExamBank?examReadSubjects($db,$actor,$class):learningReadSubjects($db,$actor,$class);$chapters=[];$topicRows=[];$error='';$edit=null;
+$subjects=$isExamBank?examReadSubjects($db,$actor,$class):learningReadSubjects($db,$actor,$class);$chapters=[];$topicRows=[];$error='';$edit=null;$catalogRepairNotice='';
 if($isExamBank&&$actor['role']==='teacher'){
     foreach([[$class,$subject],[(int)($_POST['import_class_id']??$_GET['import_class_id']??0),(int)($_POST['import_subject_id']??$_GET['import_subject_id']??0)]] as [$scopeClass,$scopeSubject]){
         if(($scopeClass&&!in_array($scopeClass,array_map('intval',array_column($classes,'id')),true))||($scopeClass&&$scopeSubject&&!examContentScopeAllowed($db,$actor,['class_id'=>$scopeClass,'subject_id'=>$scopeSubject])))denySchoolRequest('You may access exam questions only for your assigned class subjects.',403);
@@ -56,7 +57,7 @@ $returnQuery=['class_id'=>$class,'subject_id'=>$subject,'chapter'=>$chapterFilte
 $returnQuery['language']=$questionLanguage;
 if(!$isExamBank)$returnQuery+=['category'=>$examSection==='mcq'?'mcq':($examSection==='written'?'other':'all'),'bank_ui'=>'1','cognitive_domain'=>$_GET['cognitive_domain']??''];
 if($filters['record_id']!=='')$returnQuery['record_id']=$filters['record_id'];
-$url=static fn(array $changes=[])=>APP_URL.'/modules/learning/'.$route.'?'.http_build_query(array_replace($returnQuery,$changes));
+$url=static fn(array $changes=[])=>schoolRouteUrl('modules/learning/'.$route,array_replace($returnQuery,$changes));
 $listUrl=$url();
 if($_SERVER['REQUEST_METHOD']==='POST'){
     try{
@@ -97,11 +98,20 @@ if($view==='edit'){
         $edit=learningContentRecord($db,$actor,'questions',learningId($editId),$isExamBank?'exam_bank':'bank',true);
         if(!$edit['can_edit']||$edit['archived_at'])throw new InvalidArgumentException('Restore your archived question before editing, or choose your own question.');
         if($examSection!=='all'&&($edit['type']==='MCQ')!==($examSection==='mcq')){
-            if(isset($_GET['edit_question_id'])&&$_SERVER['REQUEST_METHOD']==='GET')redirect(APP_URL.'/modules/learning/'.($edit['type']==='MCQ'?'exam_mcqs.php':'exam_questions.php').'?view=edit&question_id='.$edit['id']);
+            if(isset($_GET['edit_question_id'])&&$_SERVER['REQUEST_METHOD']==='GET')redirect(schoolRouteUrl('modules/learning/'.($edit['type']==='MCQ'?'exam_mcqs.php':'exam_questions.php'),['view'=>'edit','question_id'=>$edit['id']]));
             throw new InvalidArgumentException('This question belongs to the other question section.');
         }
     }catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),404);}
-    $class=(int)$edit['class_id'];$subject=(int)$edit['subject_id'];$subjects=$isExamBank?examReadSubjects($db,$actor,$class):learningReadSubjects($db,$actor,$class);$chapters=learningCatalogChapters($db,$actor,$class,$subject);
+    $class=(int)$edit['class_id'];$subject=(int)$edit['subject_id'];
+    try{$subjects=$isExamBank?examReadSubjects($db,$actor,$class):learningReadSubjects($db,$actor,$class);$chapters=learningCatalogChapters($db,$actor,$class,$subject);}
+    catch(InvalidArgumentException $e){
+        // Shared records can outlive an inactive or removed class-subject mapping.
+        // Super-admins may repair the scope in the editor; saves still pass the
+        // normal active class/subject/chapter validation in learningSaveQuestion().
+        if($actor['role']!=='super_admin'||$actor['school_id']!==0)denySchoolRequest($e->getMessage(),422);
+        $catalogRepairNotice='This question’s saved class or subject is no longer active in the curriculum. Choose a valid class, subject, chapter'.($needsTopics?' and topic':'').' before saving. The question text and answers are preserved.';
+        $class=0;$subject=0;$subjects=[];$chapters=[];
+    }
 }
 $questions=[];
 if($view==='list'){
@@ -111,28 +121,32 @@ if($view==='list'){
     try{$questions=learningContentList($db,$actor,'questions',$filters,$purpose,$pagination);}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
     $returnQuery['page']=$pagination['page'];
 }
-$form=$error&&in_array($_POST['action']??'',['add','edit'],true)?$_POST:($edit??[]);$form=array_filter($form,static fn($v)=>is_scalar($v)||$v===null);
+$form=$error&&in_array($_POST['action']??'',['add','edit'],true)?$_POST:($edit??[]);
+if($catalogRepairNotice!==''){$form['class_id']=0;$form['subject_id']=0;$form['chapter']='';$form['topic_id']='';$form['catalog_topic_id']='';}
+$form=array_filter($form,static fn($v)=>is_scalar($v)||$v===null);
 $formClass=(int)($form['class_id']??$class);$formSubject=(int)($form['subject_id']??$subject);
 $form+=['class_id'=>$formClass,'subject_id'=>$formSubject,'visibility'=>$actor['school_id']===0?'public':'private','type'=>$examSection==='mcq'?'MCQ':'Short'];
 $examImportKinds=$examSection==='all'?['mcq'=>'MCQs','other'=>'Other Questions']:[$importKind=>$examSection==='mcq'?'MCQs':'Other Questions'];
 $pageTitle=($view==='list'?'':ucfirst($view).' ').$sectionTitle;$activePage=$isExamBank?($examSection==='mcq'?'exam_mcqs':'exam_questions'):'questions';ob_start();
 ?>
-<link rel="stylesheet" href="<?= APP_URL ?>/assets/css/exam-question-bank.css?v=<?= (int)filemtime(__DIR__.'/../assets/css/exam-question-bank.css') ?>">
-<link rel="stylesheet" href="<?= APP_URL ?>/assets/css/exam-question-language.css?v=<?= (int)filemtime(__DIR__.'/../assets/css/exam-question-language.css') ?>">
-<script>window.MathJax={tex:{inlineMath:[['\\(','\\)'],['$','$']],displayMath:[['\\[','\\]'],['$$','$$']],processEscapes:true}};</script>
-<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<?php $pageStyles[]="/assets/css/exam-question-bank.css"; ?>
+<?php $pageStyles[]="/assets/css/exam-question-language.css"; ?>
+<?php $pageAssets[]="mathjax"; ?>
+<?php $pageAssets[]="mathjax"; ?>
+<?php if($view==='list')ob_start(); ?>
 <div class="d-flex flex-wrap justify-content-between gap-2 mb-3 exam-bank-toolbar"><div><h1 class="h2"><?= $sectionTitle ?></h1><p class="text-muted mb-0"><?= $isExamBank?($isStudent?'Only questions explicitly released for your class and subjects.':'Chapter-wide exam bank: staff-only by default. Normal Question Bank and student practice remain separate.'):'Topic-wise questions and MCQs for learning, practice and unit-test papers. School content keeps its existing private/public access rules.' ?></p></div>
 <div class="d-flex flex-wrap align-items-start gap-2">
 <?php if($view!=='list'): ?><a class="btn btn-outline-secondary" href="<?= sanitize($listUrl) ?>">Back to <?= $sectionTitle ?></a>
 <?php elseif($canCreate): ?><a class="btn btn-primary" href="<?= sanitize($url(['view'=>'add'])) ?>">Add <?= $itemTitle ?></a><a class="btn btn-outline-primary" href="<?= sanitize($url(['view'=>'import'])) ?>">Import <?= $examSection==='mcq'?'MCQs':'Questions' ?></a><?php endif; ?>
-<?php if(!$isStudent&&$view==='list'): ?><a class="btn btn-outline-secondary" href="<?= APP_URL ?>/modules/learning/<?= $isExamBank?'exam_paper_generator.php':'paper_generator.php' ?>"><?= $isExamBank?'Exam Paper Generator':'Test Paper Generator' ?></a><?php endif; ?></div></div>
+<?php if(!$isStudent&&$view==='list'): ?><a class="btn btn-outline-secondary" href="<?= schoolRouteUrl('modules/learning/'.($isExamBank?'exam_paper_generator.php':'paper_generator.php')) ?>"><?= $isExamBank?'Exam Paper Generator':'Test Paper Generator' ?></a><?php endif; ?></div></div>
 <?php if(!$isExamBank): ?><nav class="nav nav-pills gap-2 mb-3 no-print" aria-label="Question bank categories"><?php foreach(['all'=>'All questions','mcq'=>'Multiple Choice Questions','other'=>'Written questions'] as $categoryKey=>$categoryTitle): ?><a class="nav-link <?= ($returnQuery['category']??'all')===$categoryKey?'active':'' ?>" href="<?= sanitize($url(['category'=>$categoryKey,'view'=>'list','page'=>1])) ?>"><?= $categoryTitle ?></a><?php endforeach; ?></nav><?php endif; ?>
 <?php if($error): ?><div class="alert alert-danger" role="alert"><?= sanitize($error) ?></div><?php endif; ?>
 <?php if(in_array($view,['add','edit'],true)): ?>
+<?php if($catalogRepairNotice!==''): ?><div class="alert alert-warning" role="alert"><strong>Curriculum mapping needs repair.</strong> <?= sanitize($catalogRepairNotice) ?></div><?php endif; ?>
 <?php include __DIR__.'/exam_question_editor_form.php'; ?>
 <?php elseif($view==='import'): ?>
 <?php include __DIR__.'/exam_question_import_form.php'; ?>
-<script src="<?= APP_URL ?>/assets/js/exam-questions.js?v=<?= (int)filemtime(__DIR__.'/../assets/js/exam-questions.js') ?>"></script>
+<?php schoolPageModule("external-exam-questions"); ?>
 <?php else: ?>
 <?php include __DIR__.'/exam_question_filters.php'; ?>
 <?php if($filters['record_id']!==''): ?><p class="small">Viewing a linked record. <a href="<?= sanitize($url(['record_id'=>''])) ?>">Show all questions</a></p><?php endif; ?>
@@ -147,10 +161,19 @@ $pageTitle=($view==='list'?'':ucfirst($view).' ').$sectionTitle;$activePage=$isE
 <?php if($q['type']==='MCQ'): $options=json_decode($q['options']??'{}',true)?:[];$np=json_decode($q['options_np']??'{}',true)?:[]; ?><div class="row g-3 mt-1"><?php foreach(['A','B','C','D'] as $o): ?><div class="col-lg-6"><div class="exam-bank-option border rounded p-3"><strong><?= $o ?>.</strong><div class="exam-bank-rich"><?= examQuestionRich($options[$o]??'',$np[$o]??'',$questionLanguage) ?></div></div></div><?php endforeach; ?></div><?php endif; ?>
 <details class="exam-bank-answer mt-3"><summary>Model answer<?= $q['type']==='MCQ'?' / correct option':'' ?></summary><?php if($q['type']==='MCQ'): ?><p class="fw-bold mt-2">Correct: <?= sanitize($q['correct_option']) ?></p><?php endif; ?><div class="exam-bank-rich"><?= examQuestionRich($q['answer']??'',$q['answer_np']??'',$questionLanguage) ?></div></details></article><?php endforeach; ?>
 </section>
-<script src="<?= APP_URL ?>/assets/js/exam-question-language.js?v=<?= (int)filemtime(__DIR__.'/../assets/js/exam-question-language.js') ?>"></script>
-<?php if($pagination['pages']>1): ?><nav aria-label="Question pages"><ul class="pagination flex-wrap gap-1">
+<?php if($pagination['pages']>1): ?><nav aria-label="Question pages" hx-boost="true" hx-target="#questionBankPanel" hx-swap="outerHTML" hx-indicator="#erpProgress" hx-sync="#questionBankPanel:replace"><ul class="pagination flex-wrap gap-1">
 <?php if($pagination['page']>1): ?><li class="page-item"><a class="page-link" href="<?= sanitize($url(['page'=>1])) ?>">First</a></li><li class="page-item"><a class="page-link" rel="prev" href="<?= sanitize($url(['page'=>$pagination['page']-1])) ?>">Previous</a></li><?php endif; ?>
 <?php for($p=max(1,$pagination['page']-2);$p<=min($pagination['pages'],$pagination['page']+2);$p++): ?><li class="page-item <?= $p===$pagination['page']?'active':'' ?>"><?php if($p===$pagination['page']): ?><span class="page-link" aria-current="page"><?= $p ?></span><?php else: ?><a class="page-link" aria-label="Page <?= $p ?>" href="<?= sanitize($url(['page'=>$p])) ?>"><?= $p ?></a><?php endif; ?></li><?php endfor; ?>
 <?php if($pagination['page']<$pagination['pages']): ?><li class="page-item"><a class="page-link" rel="next" href="<?= sanitize($url(['page'=>$pagination['page']+1])) ?>">Next</a></li><li class="page-item"><a class="page-link" href="<?= sanitize($url(['page'=>$pagination['pages']])) ?>">Last</a></li><?php endif; ?></ul></nav><?php endif; ?>
+<?php
+$panel='<section id="questionBankPanel" aria-label="Filtered questions">'.schoolProtectForms(ob_get_clean(),Auth::generateCSRFToken()).'</section>';
+if(($_SERVER['REQUEST_METHOD']??'GET')==='GET'&&($_SERVER['HTTP_HX_REQUEST']??'')==='true'&&($_SERVER['HTTP_HX_TARGET']??'')==='questionBankPanel'){
+    ob_end_clean();
+    header('Content-Type: text/html; charset=UTF-8');header('X-ERP-Fragment: question-list');header('X-ERP-Context: '.schoolAppContextVersion());header('Vary: HX-Request, HX-Target');
+    header('Cache-Control: no-store, private');echo $panel;exit;
+}
+echo $panel;
+?>
+
 <?php endif; ?>
 <?php $content=ob_get_clean();include __DIR__.'/header.php'; ?>

@@ -2,7 +2,7 @@
 /**
  * View Student Details Page
  */
-require_once __DIR__ . '/../../config/config.php';
+require_once __DIR__ . '/../../config/bootstrap.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
@@ -26,7 +26,7 @@ $stmt->execute([$id, $school_id]);
 $student = $stmt->fetch();
 
 if (!$student) {
-    redirect(APP_URL . '/modules/students/index.php', 'Student not found', 'error');
+    redirect(schoolRouteUrl('modules/students/index.php'), 'Student not found', 'error');
 }
 
 $pageTitle = 'Student Profile: ' . $student['first_name_en'] . ' ' . $student['last_name_en'];
@@ -38,15 +38,15 @@ ob_start();
 <div class="d-flex justify-content-between align-items-center mb-4 no-print">
     <h2><i class="fas fa-user-graduate"></i> Student Profile</h2>
     <div>
-        <a href="<?= APP_URL ?>/modules/students/index.php" class="btn btn-secondary me-2">
+        <a href="<?= schoolRouteUrl('modules/students/index.php') ?>" class="btn btn-secondary me-2">
             <i class="fas fa-arrow-left"></i> Back to List
         </a>
         <?php if (Auth::hasRole(['super_admin', 'school_admin'])): ?>
-        <a href="<?= APP_URL ?>/modules/students/edit.php?id=<?= $student['id'] ?>" class="btn btn-warning me-2">
+        <a href="<?= schoolRouteUrl('modules/students/edit.php') ?>?id=<?= $student['id'] ?>" class="btn btn-warning me-2">
             <i class="fas fa-edit"></i> Edit Profile
         </a>
         <?php endif; ?>
-        <button onclick="window.print()" class="btn btn-dark">
+        <button data-erp-click="students-view-action-0" data-erp-click-args="<?= schoolPageActionArgs("students-view",[]) ?>" class="btn btn-dark">
             <i class="fas fa-print"></i> Print
         </button>
     </div>
@@ -111,12 +111,12 @@ ob_start();
             <div class="card-header bg-white py-3">
                 <ul class="nav nav-tabs card-header-tabs" id="profileTab" role="tablist">
                     <li class="nav-item">
-                        <button class="nav-link active" id="personal-tab" data-bs-toggle="tab" data-bs-target="#personal" type="button" role="tab">
+                        <button class="nav-link active" id="personal-tab" data-ui-toggle="tab" data-ui-target="#personal" type="button" role="tab">
                             Personal & Demographics
                         </button>
                     </li>
                     <li class="nav-item">
-                        <button class="nav-link" id="address-tab" data-bs-toggle="tab" data-bs-target="#address" type="button" role="tab">
+                        <button class="nav-link" id="address-tab" data-ui-toggle="tab" data-ui-target="#address" type="button" role="tab">
                             Address & Guardian
                         </button>
                     </li>

@@ -2,7 +2,7 @@
 /**
  * Result Management - Marks Entry Page (CDC Compliant Wide Grid)
  */
-require_once __DIR__ . '/../../config/config.php';
+require_once __DIR__ . '/../../config/bootstrap.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
@@ -31,7 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if(($_POST['marks_complete']??'')!=='1')throw new InvalidArgumentException('The marks form was incomplete or exceeded the server limit. Nothing was saved. Reload this page or select one subject and try again.');
         saveExamMarks($db, (int)Auth::getSchoolId(), (int)Auth::getUserId(), Auth::getRole(), $_POST);
         Auth::logActivity(Auth::getUserId(), 'Save exam marks', 'exams', (int)$_POST['exam_id']);
-        redirect(APP_URL.'/modules/results/marks_entry.php?'.http_build_query(['exam'=>(int)$_POST['exam_id'],'class'=>(int)$_POST['class_id'],'section'=>(int)($_POST['section_id']??0),'subject'=>$filter_subject_id,'page'=>$marks_page,'student_search'=>$student_search]), 'Marks and attendance saved successfully.');
+        redirect(schoolRouteUrl('modules/results/marks_entry.php') . '?'.http_build_query(['exam'=>(int)$_POST['exam_id'],'class'=>(int)$_POST['class_id'],'section'=>(int)($_POST['section_id']??0),'subject'=>$filter_subject_id,'page'=>$marks_page,'student_search'=>$student_search]), 'Marks and attendance saved successfully.');
     } catch (InvalidArgumentException $e) { $message=$e->getMessage();$message_type='error'; }
     catch (PDOException $e) { error_log($e->getMessage());$message='Marks could not be saved. Please try again.';$message_type='error'; }
 }
@@ -184,8 +184,8 @@ ob_start();
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="fas fa-edit text-primary"></i> Class-Wide Marks Entry Sheet</h2>
     <?php if($exam_id&&$class_id&&$subjects): ?><div class="d-flex gap-2">
-        <?php if(Auth::getRole()!=='teacher'||$teacherIsClassTeacher): ?><a class="btn btn-outline-info" href="<?= APP_URL ?>/modules/results/ledger.php?<?= htmlspecialchars(http_build_query(['exam'=>$exam_id,'class'=>$class_id,'section'=>$section_id])) ?>"><i class="fas fa-print"></i> Full-class ledger</a><?php endif; ?>
-        <a class="btn btn-outline-primary" href="<?= APP_URL ?>/modules/results/ledger.php?<?= htmlspecialchars(http_build_query(['exam'=>$exam_id,'class'=>$class_id,'section'=>$section_id,'subject'=>$filter_subject_id?:reset($subjects)['subject_id']])) ?>"><i class="fas fa-print"></i> Subject ledger</a>
+        <?php if(Auth::getRole()!=='teacher'||$teacherIsClassTeacher): ?><a class="btn btn-outline-info" href="<?= schoolRouteUrl('modules/results/ledger.php') ?>?<?= htmlspecialchars(http_build_query(['exam'=>$exam_id,'class'=>$class_id,'section'=>$section_id])) ?>"><i class="fas fa-print"></i> Full-class ledger</a><?php endif; ?>
+        <a class="btn btn-outline-primary" href="<?= schoolRouteUrl('modules/results/ledger.php') ?>?<?= htmlspecialchars(http_build_query(['exam'=>$exam_id,'class'=>$class_id,'section'=>$section_id,'subject'=>$filter_subject_id?:reset($subjects)['subject_id']])) ?>"><i class="fas fa-print"></i> Subject ledger</a>
     </div><?php endif; ?>
 </div>
 <?php if(Auth::getRole()==='teacher'&&$class_id): ?><div class="alert alert-info no-print"><?= $teacherIsClassTeacher?'Class teacher access: view and correct all configured subjects in this class. Locked or published exams remain view-only.':'Subject teacher access: view and enter marks for your assigned subjects and sections only.' ?></div><?php endif; ?>
@@ -203,7 +203,7 @@ ob_start();
             <div class="col-md-3"><label class="form-label" for="studentSearch">Student name, ID, roll or symbol</label><input id="studentSearch" name="student_search" class="form-control" value="<?= sanitize($student_search) ?>" placeholder="Search this class"></div>
             <div class="col-md-2">
                 <label class="form-label fw-bold">Exam</label>
-                <select name="exam" class="form-select" required onchange="this.form.elements.subject.value='';this.form.submit()">
+                <select name="exam" class="form-select" required data-erp-change="results-marks-entry-action-0" data-erp-change-args="<?= schoolPageActionArgs("results-marks-entry",[]) ?>">
                     <option value="">Select Exam</option>
                     <?php foreach ($exams as $e): ?>
                     <option value="<?= $e['id'] ?>" <?= $exam_id == $e['id'] ? 'selected' : '' ?>>
@@ -215,7 +215,7 @@ ob_start();
             
             <div class="col-md-2">
                 <label class="form-label fw-bold">Class</label>
-                <select name="class" class="form-select" required onchange="this.form.elements.section.value='';this.form.elements.subject.value='';this.form.submit()">
+                <select name="class" class="form-select" required data-erp-change="results-marks-entry-action-1" data-erp-change-args="<?= schoolPageActionArgs("results-marks-entry",[]) ?>">
                     <option value="">Select Class</option>
                     <?php foreach ($classes as $c): ?>
                     <option value="<?= $c['id'] ?>" <?= $class_id == $c['id'] ? 'selected' : '' ?>>
@@ -227,7 +227,7 @@ ob_start();
             
             <div class="col-md-2">
                 <label class="form-label fw-bold">Section</label>
-                <select name="section" class="form-select" onchange="this.form.elements.subject.value='';this.form.submit()">
+                <select name="section" class="form-select" data-erp-change="results-marks-entry-action-2" data-erp-change-args="<?= schoolPageActionArgs("results-marks-entry",[]) ?>">
                     <option value="">All Sections</option>
                     <?php foreach ($sections as $s): ?>
                     <option value="<?= $s['id'] ?>" <?= $section_id == $s['id'] ? 'selected' : '' ?>>
@@ -239,7 +239,7 @@ ob_start();
 
             <div class="col-md-3">
                 <label class="form-label fw-bold">Subject (Optional)</label>
-                <select name="subject" class="form-select" onchange="this.form.submit()">
+                <select name="subject" class="form-select" data-erp-change="results-marks-entry-action-3" data-erp-change-args="<?= schoolPageActionArgs("results-marks-entry",[]) ?>">
                     <option value="">All Subjects</option>
                     <?php foreach ($all_subjects as $sub): ?>
                     <option value="<?= $sub['subject_id'] ?>" <?= $filter_subject_id == $sub['subject_id'] ? 'selected' : '' ?>>
@@ -395,7 +395,7 @@ ob_start();
                 <a class="btn btn-outline-primary btn-sm ms-2" href="?<?= sanitize(http_build_query(array_replace($_GET,['page'=>$number]))) ?>"><?= $label ?></a>
             <?php endforeach; ?>
         </nav><?php endif; ?>
-        <script>document.querySelectorAll('.elective-select').forEach(box=>box.addEventListener('change',()=>{document.querySelectorAll('input[type="number"][data-elective="'+box.dataset.elective+'"]').forEach(field=>field.disabled=!box.checked);}));</script>
+        <?php schoolPageModule("results-marks-entry"); ?>
     </div>
 </div>
 <?php else: ?>
@@ -418,45 +418,7 @@ ob_start();
     }
 </style>
 
-<script>
-$(document).ready(function() {
-    // Disable scrolling changing value
-    $('table').on('wheel', 'input[type="number"]', function(e) {
-        $(this).blur();
-    });
-
-    // Keyboard navigation
-    $('table').on('keydown', 'input[type="number"]', function(e) {
-        var key = e.which || e.keyCode;
-        
-        // 38 = Arrow Up, 40 = Arrow Down, 13 = Enter
-        if (key === 38 || key === 40 || key === 13) {
-            e.preventDefault();
-            
-            var $rows = $('table tbody tr');
-            var $currentRow = $(this).closest('tr');
-            var rowIndex = $rows.index($currentRow);
-            
-            var $rowInputs = $currentRow.find('input[type="number"]');
-            var colIndex = $rowInputs.index(this);
-            
-            var targetRowIndex = rowIndex;
-            if (key === 38) {
-                targetRowIndex = rowIndex - 1; // Up
-            } else {
-                targetRowIndex = rowIndex + 1; // Down (Arrow Down or Enter)
-            }
-            
-            if (targetRowIndex >= 0 && targetRowIndex < $rows.length) {
-                var $targetRowInputs = $rows.eq(targetRowIndex).find('input[type="number"]');
-                if ($targetRowInputs.length > colIndex) {
-                    $targetRowInputs.eq(colIndex).focus().select();
-                }
-            }
-        }
-    });
-});
-</script>
+<?php schoolPageModule("results-marks-entry"); ?>
 
 <?php
 $content = ob_get_clean();

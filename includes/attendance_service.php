@@ -41,7 +41,7 @@ function attendanceWindow(array $period,int $page=1):array {
     for($i=0;$i<32;$i++){$date=$first->modify('+'.$i.' days')->format('Y-m-d');if($date>$period['end'])break;$dates[]=$date;}
     return ['page'=>$page,'pages'=>$pages,'dates'=>$dates];
 }
-function attendanceUrl(array $filters,array $change=[]):string {return APP_URL.'/modules/attendance/index.php?'.http_build_query(array_replace($filters,$change));}
+function attendanceUrl(array $filters,array $change=[]):string {return schoolRouteUrl('modules/attendance/index.php') . '?'.http_build_query(array_replace($filters,$change));}
 function attendanceClass(PDO $db,int $school,int $actor,string $role,int $class,bool $write=false):array {
     $record=schoolRecord($db,'classes',$class,$school,$write);
     if(!$record['is_active'])throw new InvalidArgumentException('Choose an active attendance class.');

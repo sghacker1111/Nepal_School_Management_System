@@ -2,7 +2,7 @@
 /**
  * Subject Management - List Page
  */
-require_once __DIR__ . '/../../config/config.php';
+require_once __DIR__ . '/../../config/bootstrap.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
@@ -27,13 +27,13 @@ if (isset($_GET['toggle_hide']) && Auth::hasRole(['super_admin', 'school_admin']
         $stmt_up->execute([$new_state, $id, $school_id]);
         
         $msg = $new_state ? ("Subject '" . htmlspecialchars($curr['name_en']) . "' is now hidden from lists and student forms.") : ("Subject '" . htmlspecialchars($curr['name_en']) . "' is now visible and active.");
-        redirect(APP_URL . '/modules/subjects/index.php', $msg);
+        redirect(schoolRouteUrl('modules/subjects/index.php'), $msg);
     }
 }
 
 // Disallow hard delete to protect exams and marks data integrity
 if (isset($_GET['delete'])) {
-    redirect(APP_URL . '/modules/subjects/index.php', 'Permanent deletion is disabled to protect existing marks, exams, and student result history. Please use the Hide option instead.', 'error');
+    redirect(schoolRouteUrl('modules/subjects/index.php'), 'Permanent deletion is disabled to protect existing marks, exams, and student result history. Please use the Hide option instead.', 'error');
 }
 
 $show_hidden = isset($_GET['show_hidden']) && $_GET['show_hidden'] == '1';
@@ -78,7 +78,7 @@ ob_start();
             <i class="fas <?= $show_hidden ? 'fa-eye-slash' : 'fa-eye' ?>"></i> <?= $show_hidden ? 'Hide Inactive Subjects' : 'Show Hidden Subjects' ?>
         </a>
         <?php if (Auth::hasRole(['super_admin', 'school_admin'])): ?>
-        <a href="<?= APP_URL ?>/modules/subjects/add.php" class="btn btn-primary">
+        <a href="<?= schoolRouteUrl('modules/subjects/add.php') ?>" class="btn btn-primary">
             <i class="fas fa-plus"></i> Add New Subject
         </a>
         <?php endif; ?>
@@ -95,7 +95,7 @@ ob_start();
             </div>
             <div class="col-md-4">
                 <label for="filter_class" class="form-label small fw-bold">Filter By Class</label>
-                <form method="GET"><input type="hidden" name="show_hidden" value="<?= $show_hidden?1:0 ?>"><select class="form-select form-select-sm" id="filter_class" name="class" onchange="this.form.submit()">
+                <form method="GET"><input type="hidden" name="show_hidden" value="<?= $show_hidden?1:0 ?>"><select class="form-select form-select-sm" id="filter_class" name="class" data-erp-change="subjects-index-action-0" data-erp-change-args="<?= schoolPageActionArgs("subjects-index",[]) ?>">
                     <option value="">All Classes</option>
                     <?php foreach ($all_classes_filter as $c): ?>
                     <option value="<?= (int)$c['id'] ?>" <?= $filter_class===(int)$c['id']?'selected':'' ?>><?= sanitize($c['name']) ?></option>
@@ -193,7 +193,7 @@ ob_start();
                             </td>
                             <?php if (Auth::hasRole(['super_admin', 'school_admin'])): ?>
                             <td class="text-end text-nowrap">
-                                <a href="<?= APP_URL ?>/modules/subjects/edit.php?id=<?= $subject['id'] ?>" class="btn btn-sm btn-outline-warning me-1" title="Edit Subject Details">
+                                <a href="<?= schoolRouteUrl('modules/subjects/edit.php') ?>?id=<?= $subject['id'] ?>" class="btn btn-sm btn-outline-warning me-1" title="Edit Subject Details">
                                     <i class="fas fa-edit"></i> Edit
                                 </a>
                                 <?php if (!empty($subject['is_hidden'])): ?>
@@ -201,7 +201,7 @@ ob_start();
                                     <i class="fas fa-eye"></i> Show
                                 </a>
                                 <?php else: ?>
-                                <a href="?toggle_hide=<?= $subject['id'] ?>" class="btn btn-sm btn-outline-secondary" title="Hide subject from list" onclick="return confirm('Hide this subject from student forms and exam lists? Historical marks remain safe.');">
+                                <a href="?toggle_hide=<?= $subject['id'] ?>" class="btn btn-sm btn-outline-secondary" title="Hide subject from list" data-erp-click="subjects-index-action-1" data-erp-click-args="<?= schoolPageActionArgs("subjects-index",[]) ?>">
                                     <i class="fas fa-eye-slash"></i> Hide
                                 </a>
                                 <?php endif; ?>
@@ -216,26 +216,7 @@ ob_start();
     </div>
 </div>
 
-<script>
-$(document).ready(function() {
-    var table = $('#subjectTable').DataTable({
-        pageLength: 25,
-        order: [[2, 'asc'], [0, 'asc']],
-        language: {
-            emptyTable: "No subjects configured."
-        },
-        dom: 'rtip'
-    });
-
-    $('#filter_subject').on('keyup change', function() {
-        table.search(this.value).draw();
-    });
-    
-    $('#filter_teacher').on('change', function() {
-        table.column(3).search(this.value).draw();
-    });
-});
-</script>
+<?php schoolPageModule("subjects-index"); ?>
 
 <?php
 $content = ob_get_clean();

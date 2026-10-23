@@ -2,7 +2,7 @@
 /**
  * Add New Student Form
  */
-require_once __DIR__ . '/../../config/config.php';
+require_once __DIR__ . '/../../config/bootstrap.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
@@ -99,7 +99,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $studentId_db = $db->lastInsertId();
                 Auth::logActivity(Auth::getUserId(), 'Add Student', 'students', $studentId_db);
                 
-                redirect(APP_URL . '/modules/students/view.php?id=' . $studentId_db, 'Student added successfully!');
+                redirect(schoolRouteUrl('modules/students/view.php') . '?id=' . $studentId_db, 'Student added successfully!');
                 
             } catch (PDOException $e) {
                 $errors[] = schoolPublicError($e);
@@ -129,7 +129,7 @@ ob_start();
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="fas fa-user-plus"></i> Add New Student</h2>
-    <a href="<?= APP_URL ?>/modules/students/index.php" class="btn btn-secondary">
+    <a href="<?= schoolRouteUrl('modules/students/index.php') ?>" class="btn btn-secondary">
         <i class="fas fa-arrow-left"></i> Back to List
     </a>
 </div>
@@ -226,7 +226,7 @@ ob_start();
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Class <span class="text-danger">*</span></label>
-                    <select name="class_id" id="classSelect" class="form-select" required onchange="loadSections()">
+                    <select name="class_id" id="classSelect" class="form-select" required data-erp-change="students-add-action-0" data-erp-change-args="<?= schoolPageActionArgs("students-add",[]) ?>">
                         <option value="">Select Class</option>
                         <?php foreach ($classes as $class): ?>
                         <option value="<?= $class['id'] ?>" <?= ($_POST['class_id'] ?? '') == $class['id'] ? 'selected' : '' ?>>

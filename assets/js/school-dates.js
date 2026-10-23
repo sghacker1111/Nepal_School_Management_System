@@ -12,20 +12,27 @@ window.schoolConvertDate=function(value,from,to){
  if(to==='BS')return [date.getYear(),date.getMonth()+1,date.getDate()].map((n,i)=>String(n).padStart(i===0?4:2,'0')).join('-');
  const ad=date.toJsDate();return [ad.getFullYear(),ad.getMonth()+1,ad.getDate()].map((n,i)=>String(n).padStart(i===0?4:2,'0')).join('-');
 };
-document.addEventListener('DOMContentLoaded',()=>{
- document.querySelectorAll('input[type="date"]').forEach(input=>{
+const schoolDateScopes=new WeakMap();
+window.initSchoolDates=(root=document,context={})=>{
+ schoolDateScopes.get(root)?.();const cleanups=[];
+ const listen=(node,type,callback)=>{node.addEventListener(type,callback);cleanups.push(()=>node.removeEventListener?.(type,callback));};
+ root.querySelectorAll('input[type="date"]').forEach(input=>{
   const partnerName=input.name.replace(/_ad$/,'_bs');
   if(!input.name||input.dataset.dateAd||input.dataset.calendar||(partnerName!==input.name&&input.form?.querySelector('[name="'+partnerName+'"]')))return;
   if(!['date','date_ad','dob_ad','join_date','perm_issue_date','temp_issue_date','start_date','end_date','bill_date','due_date','payment_date','expense_date','effective_from','effective_to','from','to','subscription_start','subscription_end'].includes(input.name))return;
   const select=document.createElement('select');select.name='calendar_fields['+input.name+']';select.className='form-select form-select-sm mt-1';select.setAttribute('aria-label','Calendar for '+input.name.replaceAll('_',' '));
   ['AD','BS'].forEach(cal=>{const option=document.createElement('option');option.value=cal;option.textContent=cal==='AD'?'AD (English date)':'BS (नेपाली मिति)';select.append(option);});
-  let calendar='AD';select.addEventListener('change',()=>{try{const value=window.schoolConvertDate(input.value,calendar,select.value);input.type=select.value==='AD'?'date':'text';input.value=value;calendar=select.value;input.placeholder='YYYY-MM-DD';}catch(error){select.value=calendar;window.schoolNotify?schoolNotify(error.message,'error'):window.alert(error.message);}});
+  let calendar='AD';listen(select,'change',()=>{try{const value=window.schoolConvertDate(input.value,calendar,select.value);input.type=select.value==='AD'?'date':'text';input.value=value;calendar=select.value;input.placeholder='YYYY-MM-DD';}catch(error){select.value=calendar;window.schoolNotify?schoolNotify(error.message,'error'):window.alert(error.message);}});
   input.after(select);
+  cleanups.push(()=>{if(calendar==='BS'&&input.value){input.value=window.schoolConvertDate(input.value,'BS','AD');input.type='date';}select.remove?.();});
  });
- document.querySelectorAll('[data-date-ad],[data-date-bs]').forEach(input=>input.addEventListener('change',()=>{
+ root.querySelectorAll('[data-date-ad],[data-date-bs]').forEach(input=>listen(input,'change',()=>{
   const isAd=!!input.dataset.dateAd;const field=input.dataset.dateAd||input.dataset.dateBs;
-  const partner=document.querySelector('[data-date-'+(isAd?'bs':'ad')+'="'+field+'"]');
-  try{partner.value=window.schoolConvertDate(input.value,isAd?'AD':'BS',isAd?'BS':'AD');input.setCustomValidity('');}
+  const partner=root.querySelector('[data-date-'+(isAd?'bs':'ad')+'="'+field+'"]');
+  try{if(partner)partner.value=window.schoolConvertDate(input.value,isAd?'AD':'BS',isAd?'BS':'AD');input.setCustomValidity('');}
   catch(e){input.setCustomValidity(e.message);input.reportValidity();}
- }));
-});
+}));
+ const dispose=()=>{cleanups.splice(0).reverse().forEach(fn=>fn());schoolDateScopes.delete(root);};
+ schoolDateScopes.set(root,dispose);context.signal?.addEventListener('abort',dispose,{once:true});return dispose;
+};
+document.addEventListener('DOMContentLoaded',()=>window.initSchoolDates(document.querySelector?.('#main-content')||document));

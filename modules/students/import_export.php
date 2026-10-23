@@ -2,7 +2,7 @@
 /**
  * Student Management - EMIS CSV Import & Export
  */
-require_once __DIR__ . '/../../config/config.php';
+require_once __DIR__ . '/../../config/bootstrap.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
@@ -353,7 +353,7 @@ ob_start();
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="fas fa-file-import text-primary"></i> EMIS Student Import & Export</h2>
-    <a href="<?= APP_URL ?>/modules/students/index.php" class="btn btn-secondary">
+    <a href="<?= schoolRouteUrl('modules/students/index.php') ?>" class="btn btn-secondary">
         <i class="fas fa-arrow-left"></i> Back to Students List
     </a>
 </div>
@@ -361,14 +361,14 @@ ob_start();
 <?php if ($success): ?>
 <div class="alert alert-success alert-dismissible fade show mb-4">
     <i class="fas fa-check-circle me-2"></i> <?= $success ?>
-    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    <button type="button" class="btn-close" data-ui-dismiss="alert"></button>
 </div>
 <?php endif; ?>
 
 <?php if ($error): ?>
 <div class="alert alert-danger alert-dismissible fade show mb-4">
     <i class="fas fa-exclamation-circle me-2"></i> <?= $error ?>
-    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    <button type="button" class="btn-close" data-ui-dismiss="alert"></button>
 </div>
 <?php endif; ?>
 

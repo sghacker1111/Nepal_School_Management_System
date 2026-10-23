@@ -1,6 +1,6 @@
 <?php
 if(PHP_SAPI!=='cli')exit(1);
-putenv('ERP_DB_TYPE=sqlite');putenv('ERP_DB_PATH='.tempnam(sys_get_temp_dir(),'erp-exam-workflows-'));
+putenv('ERP_RUNTIME=test');if(getenv('ERP_TEST_MYSQL')!=='1'){putenv('ERP_TEST_SQLITE=1');putenv('ERP_DB_TYPE=sqlite');putenv('ERP_DB_PATH='.tempnam(sys_get_temp_dir(),'erp-exam-workflows-'));}
 ob_start();require __DIR__.'/http_fixture.php';$f=json_decode(ob_get_clean(),true,512,JSON_THROW_ON_ERROR);
 require_once __DIR__.'/../includes/exam_mapping_service.php';
 require_once __DIR__.'/../includes/symbol_service.php';
@@ -88,5 +88,5 @@ $preview=previousContributionPreview($db,1,$third,$cid,[$target],examSymbolStude
 wfCheck($preview['values'][$sid][$sub]['previous_exam']===4.24,'Third terminal aggregates sources with differing full marks');
 $dates=['join_date'=>'2083-06-24','calendar_fields'=>['join_date'=>'BS']];schoolNormalizeDateFields($dates);
 wfCheck($dates['join_date']==='2026-10-10','Generic teacher dates normalize BS to AD');
-wfCheck($db->query('PRAGMA integrity_check')->fetchColumn()==='ok','Database integrity');
+wfCheck(DB_TYPE==='mysql'?$db->query('SELECT 1')->fetchColumn()===1:$db->query('PRAGMA integrity_check')->fetchColumn()==='ok','Database integrity');
 echo "Exam workflows passed ($checks checks): calendars, symbols, audit, guarded mapping edits and converted IN previews.\n";

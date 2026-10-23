@@ -2,7 +2,7 @@
 /**
  * Exam Management - List Page
  */
-require_once __DIR__ . '/../../config/config.php';
+require_once __DIR__ . '/../../config/bootstrap.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
@@ -22,12 +22,12 @@ foreach (['publish','lock','reopen','delete'] as $action) {
     try {
         changeExamState($db,(int)$school_id,$id,$action);
         Auth::logActivity(Auth::getUserId(),ucfirst($action).' Exam','exams',$id);
-        redirect(APP_URL.'/modules/exams/index.php', $action==='reopen' ? 'Results withdrawn and marks reopened for correction.' : 'Exam action completed successfully.');
+        redirect(schoolRouteUrl('modules/exams/index.php'), $action==='reopen' ? 'Results withdrawn and marks reopened for correction.' : 'Exam action completed successfully.');
     } catch (InvalidArgumentException $e) {
-        redirect(APP_URL.'/modules/exams/index.php',$e->getMessage(),'error');
+        redirect(schoolRouteUrl('modules/exams/index.php'),$e->getMessage(),'error');
     } catch (PDOException $e) {
         error_log($e->getMessage());
-        redirect(APP_URL.'/modules/exams/index.php','The exam could not be updated. Please try again.','error');
+        redirect(schoolRouteUrl('modules/exams/index.php'),'The exam could not be updated. Please try again.','error');
     }
 }
 
@@ -61,7 +61,7 @@ ob_start();
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="fas fa-file-alt"></i> Exam Management</h2>
     <?php if (Auth::hasRole(['super_admin', 'school_admin', 'exam_officer'])): ?>
-    <a href="<?= APP_URL ?>/modules/exams/add.php" class="btn btn-primary">
+    <a href="<?= schoolRouteUrl('modules/exams/add.php') ?>" class="btn btn-primary">
         <i class="fas fa-plus"></i> Create New Exam
     </a>
     <?php endif; ?>
@@ -126,32 +126,32 @@ ob_start();
                             </td>
                             <td class="text-end">
                                 <div class="btn-group btn-group-sm">
-                                    <a href="<?= APP_URL ?>/modules/exams/view.php?id=<?= $exam['id'] ?>" class="btn btn-primary" title="Configure Subjects">
+                                    <a href="<?= schoolRouteUrl('modules/exams/view.php') ?>?id=<?= $exam['id'] ?>" class="btn btn-primary" title="Configure Subjects">
                                         <i class="fas fa-cog"></i> Config
                                     </a>
                                     <?php if (Auth::hasRole(['super_admin', 'school_admin', 'exam_officer']) && !$exam['is_locked'] && ($exam['creation_mode']??'manual')!=='automatic'): ?>
-                                    <a href="<?= APP_URL ?>/modules/exams/edit.php?id=<?= $exam['id'] ?>" class="btn btn-warning" title="Edit Exam Details">
+                                    <a href="<?= schoolRouteUrl('modules/exams/edit.php') ?>?id=<?= $exam['id'] ?>" class="btn btn-warning" title="Edit Exam Details">
                                         <i class="fas fa-edit"></i> Edit
                                     </a>
                                     <?php endif; ?>
                                     
                                     <?php if (Auth::hasRole(['super_admin', 'school_admin', 'exam_officer'])): ?>
                                         <?php if (!$exam['is_locked'] && !$exam['is_published']): ?>
-                                            <a href="<?= APP_URL ?>/modules/exams/index.php?lock=<?= $exam['id'] ?>" class="btn btn-warning" title="Lock Marks Entry">
+                                            <a href="<?= schoolRouteUrl('modules/exams/index.php') ?>?lock=<?= $exam['id'] ?>" class="btn btn-warning" title="Lock Marks Entry">
                                                 <i class="fas fa-lock"></i> Lock
                                             </a>
                                         <?php endif; ?>
                                         
                                         <?php if ($exam['is_locked'] && !$exam['is_published']): ?>
-                                            <a href="<?= APP_URL ?>/modules/exams/index.php?publish=<?= $exam['id'] ?>" class="btn btn-success" title="Publish Results">
+                                            <a href="<?= schoolRouteUrl('modules/exams/index.php') ?>?publish=<?= $exam['id'] ?>" class="btn btn-success" title="Publish Results">
                                                 <i class="fas fa-share-square"></i> Publish
                                             </a>
                                         <?php endif; ?>
                                         
                                         <?php if (($exam['is_locked'] || $exam['is_published']) && Auth::hasRole(['super_admin','school_admin'])): ?>
-                                        <a href="<?= APP_URL ?>/modules/exams/index.php?reopen=<?= $exam['id'] ?>" class="btn btn-outline-warning" title="Withdraw results and reopen marks"><i class="fas fa-unlock"></i> Reopen marks</a>
+                                        <a href="<?= schoolRouteUrl('modules/exams/index.php') ?>?reopen=<?= $exam['id'] ?>" class="btn btn-outline-warning" title="Withdraw results and reopen marks"><i class="fas fa-unlock"></i> Reopen marks</a>
                                         <?php endif; ?>
-                                        <button onclick="confirmDeleteExam(<?= $exam['id'] ?>)" class="btn btn-danger" title="Delete Exam">
+                                        <button data-erp-click="exams-index-action-0" data-erp-click-args="<?= schoolPageActionArgs("exams-index",[(string)($exam['id'])]) ?>" class="btn btn-danger" title="Delete Exam">
                                             <i class="fas fa-trash"></i>
                                         </button>
                                     <?php endif; ?>
@@ -166,32 +166,7 @@ ob_start();
     </div>
 </div>
 
-<script>
-$(document).ready(function() {
-    var table = $('#examsTable').DataTable({
-        pageLength: 10,
-        order: [[2, 'desc'], [0, 'asc']],
-        language: {
-            emptyTable: "No exams created yet."
-        },
-        dom: 'rtip'
-    });
-
-    $('#filter_exam_name').on('keyup change', function() {
-        table.column(0).search(this.value).draw();
-    });
-    
-    $('#filter_year').on('change', function() {
-        table.column(2).search(this.value).draw();
-    });
-});
-
-function confirmDeleteExam(id) {
-    verifyPasswordAndProceed(function() {
-        window.location.href = '<?= APP_URL ?>/modules/exams/index.php?delete=' + id;
-    }, 'Confirm Deletion', 'Please enter your administrator password to permanently delete this exam (all marks and configurations will be lost):');
-}
-</script>
+<?php schoolPageModule("exams-index");schoolPageValue("exams-index-value-0",(string)(schoolRouteUrl('modules/exams/index.php'))); ?>
 
 <?php
 $content = ob_get_clean();

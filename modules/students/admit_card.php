@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__.'/../../config/config.php';
+require_once __DIR__.'/../../config/bootstrap.php';
 require_once __DIR__.'/../../includes/database.php';
 require_once __DIR__.'/../../includes/auth.php';
 require_once __DIR__.'/../../includes/functions.php';
@@ -12,7 +12,7 @@ if(!empty($_GET['exam_id'])){
  if(!$chosen)denySchoolRequest('Choose an exam configured for this student’s class and year.',422);
  $query=['exam_id'=>$chosen['id'],'class_id'=>$student['class_id'],'student_mode'=>'choose','selected'=>[$student['id']],'render'=>'1'];
  foreach(['issue_date_mode','issue_date','issue_calendar','display_calendar','date_format'] as $key)if(isset($_GET[$key]))$query[$key]=$_GET[$key];
- redirect(APP_URL.'/modules/exams/admit_cards.php?'.http_build_query($query));
+ redirect(schoolRouteUrl('modules/exams/admit_cards.php') . '?'.http_build_query($query));
 }
 $pageTitle='Student Admit Card';$activePage='students';ob_start();?>
 <h2>Admit Card — <?= sanitize($student['first_name_en'].' '.$student['last_name_en']) ?></h2>

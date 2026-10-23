@@ -2,7 +2,7 @@
 /**
  * Result Management - Bulk Progress Report Card Printing
  */
-require_once __DIR__ . '/../../config/config.php';
+require_once __DIR__ . '/../../config/bootstrap.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
@@ -109,7 +109,7 @@ ob_start();
     <div>
         <a href="?exam=<?= $exam_id ?>&class=<?= $class_id ?>&section=<?= $section_id ?>&system=gpa&<?= sanitize($issueQuery) ?>" class="btn btn-<?= $grading_system === 'gpa' ? 'primary' : 'outline-primary' ?> me-2">GPA Format</a>
         <a href="?exam=<?= $exam_id ?>&class=<?= $class_id ?>&section=<?= $section_id ?>&system=percentage&<?= sanitize($issueQuery) ?>" class="btn btn-<?= $grading_system === 'percentage' ? 'primary' : 'outline-primary' ?> me-2">Percentage Format</a>
-        <a href="<?= APP_URL ?>/modules/results/index.php" class="btn btn-secondary me-2">
+        <a href="<?= schoolRouteUrl('modules/results/index.php') ?>" class="btn btn-secondary me-2">
             <i class="fas fa-arrow-left"></i> Back
         </a>
         <?php if (!empty($students)): ?>
@@ -127,7 +127,7 @@ ob_start();
             <input type="hidden" name="system" value="<?= htmlspecialchars($grading_system) ?>">
             <div class="col-md-4">
                 <label class="form-label">Select Exam</label>
-                <select name="exam" class="form-select" required onchange="this.form.submit()">
+                <select name="exam" class="form-select" required data-erp-change="results-print-bulk-action-0" data-erp-change-args="<?= schoolPageActionArgs("results-print-bulk",[]) ?>">
                     <option value="">Choose Exam</option>
                     <?php foreach ($exams as $e): ?>
                     <option value="<?= $e['id'] ?>" <?= $exam_id == $e['id'] ? 'selected' : '' ?>>
@@ -138,7 +138,7 @@ ob_start();
             </div>
             <div class="col-md-3">
                 <label class="form-label">Select Class</label>
-                <select name="class" class="form-select" required onchange="this.form.submit()">
+                <select name="class" class="form-select" required data-erp-change="results-print-bulk-action-1" data-erp-change-args="<?= schoolPageActionArgs("results-print-bulk",[]) ?>">
                     <option value="">Choose Class</option>
                     <?php foreach ($classes as $c): ?>
                     <option value="<?= $c['id'] ?>" <?= $class_id == $c['id'] ? 'selected' : '' ?>>
@@ -149,7 +149,7 @@ ob_start();
             </div>
             <div class="col-md-3">
                 <label class="form-label">Select Section (Optional)</label>
-                <select name="section" class="form-select" onchange="this.form.submit()">
+                <select name="section" class="form-select" data-erp-change="results-print-bulk-action-2" data-erp-change-args="<?= schoolPageActionArgs("results-print-bulk",[]) ?>">
                     <option value="">All Sections</option>
                     <?php foreach ($sections as $s): ?>
                     <option value="<?= $s['id'] ?>" <?= $section_id == $s['id'] ? 'selected' : '' ?>>

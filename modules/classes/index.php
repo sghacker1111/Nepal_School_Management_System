@@ -2,7 +2,7 @@
 /**
  * Classes & Sections Management - List Page
  */
-require_once __DIR__ . '/../../config/config.php';
+require_once __DIR__ . '/../../config/bootstrap.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
@@ -34,7 +34,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'&&in_array($_POST['action']??'', ['remove_
             $db->prepare('UPDATE classes SET is_active=1 WHERE id=? AND school_id=?')->execute([$id,$school_id]);$message='Class restored successfully.';
             Auth::logActivity(Auth::getUserId(),'Restore archived class','classes',$id);
         }
-        $db->commit();redirect(APP_URL.'/modules/classes/index.php',$message,'success');
+        $db->commit();redirect(schoolRouteUrl('modules/classes/index.php'),$message,'success');
     }catch(Throwable $e){if($db->inTransaction())$db->rollBack();$cleanupError=$e instanceof InvalidArgumentException?$e->getMessage():schoolPublicError($e);}
 }
 
@@ -44,17 +44,17 @@ if (isset($_GET['delete_class']) && Auth::hasRole(['super_admin', 'school_admin'
     $stmt = $db->prepare("UPDATE classes SET is_active=0 WHERE id = ? AND school_id = ?");
     $stmt->execute([$id, $school_id]);
     Auth::logActivity(Auth::getUserId(), 'Archive Class', 'classes', $id);
-    redirect(APP_URL . '/modules/classes/index.php', 'Class archived. Its records are retained.');
+    redirect(schoolRouteUrl('modules/classes/index.php'), 'Class archived. Its records are retained.');
 }
 
 if (isset($_GET['delete_section']) && Auth::hasRole(['super_admin', 'school_admin'])) {
     $id = (int)$_GET['delete_section'];
     $used=$db->prepare('SELECT COUNT(*) FROM students WHERE section_id=? AND school_id=?');$used->execute([$id,$school_id]);
-    if($used->fetchColumn())redirect(APP_URL.'/modules/classes/index.php','This section has student records and cannot be deleted.','error');
+    if($used->fetchColumn())redirect(schoolRouteUrl('modules/classes/index.php'),'This section has student records and cannot be deleted.','error');
     $stmt = $db->prepare("DELETE FROM sections WHERE id = ? AND school_id = ?");
     $stmt->execute([$id, $school_id]);
     Auth::logActivity(Auth::getUserId(), 'Delete Section', 'sections', $id);
-    redirect(APP_URL . '/modules/classes/index.php', 'Section deleted successfully');
+    redirect(schoolRouteUrl('modules/classes/index.php'), 'Section deleted successfully');
 }
 
 // Fetch classes
@@ -85,7 +85,7 @@ ob_start();
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="fas fa-school"></i> Class & Section Management</h2>
     <?php if (Auth::hasRole(['super_admin', 'school_admin'])): ?>
-    <a href="<?= APP_URL ?>/modules/classes/add.php" class="btn btn-primary">
+    <a href="<?= schoolRouteUrl('modules/classes/add.php') ?>" class="btn btn-primary">
         <i class="fas fa-plus"></i> Add Class / Section
     </a>
     <?php endif; ?>
@@ -94,7 +94,7 @@ ob_start();
 <div class="row">
     <?php if($cleanupError): ?><div class="alert alert-danger" role="alert"><?= sanitize($cleanupError) ?></div><?php endif; ?>
     <?php if(Auth::hasRole(['super_admin','school_admin'])): ?><div class="mb-3"><a href="?show_archived=<?= $showArchived?'0':'1' ?>" class="btn btn-outline-secondary"><?= $showArchived?'Hide archived classes':'Show archived classes' ?></a></div><?php endif; ?>
-    <?php foreach($legacyClasses as $legacyId): ?><div class="col-12 mb-3"><div class="alert alert-warning"><h5>Remove legacy class “7” (ID <?= (int)$legacyId ?>)</h5><p>This school contains teacher sgsunil. Remove this incorrect class from active lists without deleting its students, marks, fees, subjects or history.</p><form method="POST" onsubmit="return confirm('Remove only this class named exactly 7 from active lists? Its linked records will be retained.')"><input type="hidden" name="action" value="remove_legacy_seven"><input type="hidden" name="class_id" value="<?= (int)$legacyId ?>"><label class="d-block mb-2"><input type="checkbox" name="confirm_cleanup" value="1" required> Confirm this is the incorrect class</label><label>Current administrator password<input class="form-control" type="password" name="password" autocomplete="current-password" required></label><button class="btn btn-danger ms-2">Remove legacy class 7</button></form></div></div><?php endforeach; ?>
+    <?php foreach($legacyClasses as $legacyId): ?><div class="col-12 mb-3"><div class="alert alert-warning"><h5>Remove legacy class “7” (ID <?= (int)$legacyId ?>)</h5><p>This school contains teacher sgsunil. Remove this incorrect class from active lists without deleting its students, marks, fees, subjects or history.</p><form method="POST" data-erp-submit="classes-index-action-0" data-erp-submit-args="<?= schoolPageActionArgs("classes-index",[]) ?>"><input type="hidden" name="action" value="remove_legacy_seven"><input type="hidden" name="class_id" value="<?= (int)$legacyId ?>"><label class="d-block mb-2"><input type="checkbox" name="confirm_cleanup" value="1" required> Confirm this is the incorrect class</label><label>Current administrator password<input class="form-control" type="password" name="password" autocomplete="current-password" required></label><button class="btn btn-danger ms-2">Remove legacy class 7</button></form></div></div><?php endforeach; ?>
     <!-- Classes Column -->
     <div class="col-md-7 mb-4">
         <div class="card h-100 shadow-sm border-0">
@@ -140,14 +140,14 @@ ob_start();
                                     </td>
                                      <?php if (Auth::hasRole(['super_admin', 'school_admin'])): ?>
                                      <td class="text-end">
-                                         <a href="<?= APP_URL ?>/modules/classes/edit.php?class_id=<?= $class['id'] ?>" class="btn btn-sm btn-outline-warning me-1" title="Edit Class Details">
+                                         <a href="<?= schoolRouteUrl('modules/classes/edit.php') ?>?class_id=<?= $class['id'] ?>" class="btn btn-sm btn-outline-warning me-1" title="Edit Class Details">
                                              <i class="fas fa-edit"></i> Edit
                                          </a>
-                                         <a href="<?= APP_URL ?>/modules/classes/subjects.php?class_id=<?= $class['id'] ?>" class="btn btn-sm btn-outline-primary me-1" title="Configure Subjects">
+                                         <a href="<?= schoolRouteUrl('modules/classes/subjects.php') ?>?class_id=<?= $class['id'] ?>" class="btn btn-sm btn-outline-primary me-1" title="Configure Subjects">
                                              <i class="fas fa-book"></i> Subjects
                                          </a>
                                          <?php if(!$class['is_active']): ?><details class="d-inline-block"><summary class="btn btn-sm btn-outline-success">Restore</summary><form method="POST"><input type="hidden" name="action" value="restore_class"><input type="hidden" name="class_id" value="<?= (int)$class['id'] ?>"><label>Current administrator password<input type="password" class="form-control" name="password" autocomplete="current-password" required></label><button class="btn btn-sm btn-success">Confirm restore</button></form></details><?php else: ?>
-                                         <button onclick="confirmDeleteClass(<?= $class['id'] ?>)" class="btn btn-sm btn-outline-danger" title="Archive class">
+                                         <button data-erp-click="classes-index-action-1" data-erp-click-args="<?= schoolPageActionArgs("classes-index",[(string)($class['id'])]) ?>" class="btn btn-sm btn-outline-danger" title="Archive class">
                                              <i class="fas fa-trash"></i>
                                          </button>
                                          <?php endif; ?>
@@ -196,7 +196,7 @@ ob_start();
                                     <td><small class="text-muted"><i class="fas fa-user-tie"></i> <?= sanitize($section['teacher_name'] ?? 'Not Assigned') ?></small></td>
                                     <?php if (Auth::hasRole(['super_admin', 'school_admin'])): ?>
                                     <td class="text-end">
-                                        <button onclick="confirmDeleteSection(<?= $section['id'] ?>)" class="btn btn-sm btn-outline-danger" title="Delete">
+                                        <button data-erp-click="classes-index-action-2" data-erp-click-args="<?= schoolPageActionArgs("classes-index",[(string)($section['id'])]) ?>" class="btn btn-sm btn-outline-danger" title="Delete">
                                             <i class="fas fa-trash"></i>
                                         </button>
                                     </td>
@@ -216,19 +216,8 @@ ob_start();
     </div>
 </div>
 
-<script>
-function confirmDeleteClass(id) {
-    verifyPasswordAndProceed(function() {
-        window.location.href = '<?= APP_URL ?>/modules/classes/index.php?delete_class=' + id;
-    }, 'Confirm Archive', 'Please enter your administrator password to archive this class. Its students, marks and all linked records will be retained:');
-}
-
-function confirmDeleteSection(id) {
-    verifyPasswordAndProceed(function() {
-        window.location.href = '<?= APP_URL ?>/modules/classes/index.php?delete_section=' + id;
-    }, 'Confirm Deletion', 'Please enter your administrator password to permanently delete this section:');
-}
-</script>
+<?php schoolPageModule("classes-index");schoolPageValue("classes-index-value-0",(string)(schoolRouteUrl('modules/classes/index.php')));
+schoolPageValue("classes-index-value-1",(string)(schoolRouteUrl('modules/classes/index.php'))); ?>
 
 <?php
 $content = ob_get_clean();

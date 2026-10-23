@@ -1,9 +1,9 @@
 <?php
 // Never use the configured school database for regression tests.
 $path = tempnam(sys_get_temp_dir(), 'erp-test-');
-putenv('ERP_DB_TYPE=sqlite');
+putenv('ERP_RUNTIME=test');putenv('ERP_TEST_SQLITE=1');putenv('ERP_DB_TYPE=sqlite');
 putenv('ERP_DB_PATH='.$path);
-require_once __DIR__.'/../config/config.php';
+require_once __DIR__.'/../config/bootstrap.php';
 require_once __DIR__.'/../includes/database.php';
 require_once __DIR__.'/../includes/school_validation.php';
 $db=getDB();

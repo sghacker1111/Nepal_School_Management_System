@@ -10,4 +10,4 @@ function learningSharingFixture(PDO $db,array $f):array {
     $f['ids']['super_admin']=(int)$db->query("SELECT id FROM users WHERE role='super_admin' LIMIT 1")->fetchColumn();$f['ids']['other_admin']=$f['otherUser'];
     return $f;
 }
-if(PHP_SAPI==='cli'&&realpath($_SERVER['SCRIPT_FILENAME']??'')===__FILE__){require __DIR__.'/../config/config.php';require __DIR__.'/../includes/database.php';$f=json_decode($argv[1],true,512,JSON_THROW_ON_ERROR);echo json_encode(learningSharingFixture(getDB(),$f));}
+if(PHP_SAPI==='cli'&&realpath($_SERVER['SCRIPT_FILENAME']??'')===__FILE__){require __DIR__.'/../config/bootstrap.php';require __DIR__.'/../includes/database.php';$f=json_decode($argv[1],true,512,JSON_THROW_ON_ERROR);echo json_encode(learningSharingFixture(getDB(),$f));}

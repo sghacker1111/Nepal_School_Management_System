@@ -2,7 +2,7 @@
 /**
  * Learning Portal - Question Paper Generator
  */
-require_once __DIR__ . '/../../config/config.php';
+require_once __DIR__ . '/../../config/bootstrap.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
@@ -84,13 +84,13 @@ $pageStyles=['/assets/css/exam-question-language.css?v='.(int)filemtime(__DIR__.
 
 ob_start();
 ?>
-<script>window.MathJax={tex:{inlineMath:[['\\(','\\)'],['$','$']],displayMath:[['\\[','\\]'],['$$','$$']],processEscapes:true}};</script>
-<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<?php $pageAssets[]="mathjax"; ?>
+<?php $pageAssets[]="mathjax"; ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4 no-print">
     <h2><i class="fas fa-file-alt text-primary"></i> Question Paper Generator</h2>
     <div>
-        <a href="<?= APP_URL ?>/modules/learning/index.php" class="btn btn-secondary me-2">
+        <a href="<?= schoolRouteUrl('modules/learning/index.php') ?>" class="btn btn-secondary me-2">
             <i class="fas fa-arrow-left"></i> Back
         </a>
         <?php if ($generated): ?>
@@ -115,7 +115,7 @@ ob_start();
             
             <div class="col-md-3">
                 <label class="form-label">Select Class *</label>
-                <select name="class" id="classSelect" class="form-select" required onchange="this.form.elements.subject.value='';this.form.submit()">
+                <select name="class" id="classSelect" class="form-select" required data-erp-change="learning-question-grid-action-0" data-erp-change-args="<?= schoolPageActionArgs("learning-question-grid",[]) ?>">
                     <option value="">Choose Class</option>
                     <?php foreach ($classes as $c): ?>
                     <option value="<?= $c['id'] ?>" <?= $class_id == $c['id'] ? 'selected' : '' ?>><?= sanitize($c['name']) ?></option>
@@ -125,7 +125,7 @@ ob_start();
             
             <div class="col-md-3">
                 <label class="form-label">Select Subject *</label>
-                <select name="subject" class="form-select" required onchange="this.form.submit()">
+                <select name="subject" class="form-select" required data-erp-change="learning-question-grid-action-1" data-erp-change-args="<?= schoolPageActionArgs("learning-question-grid",[]) ?>">
                     <option value="">Choose Subject</option>
                     <?php foreach ($subjects as $s): ?>
                     <option value="<?= $s['id'] ?>" <?= $subject_id == $s['id'] ? 'selected' : '' ?>><?= sanitize($s['display_name']??$s['name_en']) ?></option>
@@ -152,16 +152,16 @@ ob_start();
             <div class="col-md-12 my-2">
                 <label class="form-label d-block fw-bold text-muted small"><i class="fas fa-magic"></i> CDC Exam Grid Presets</label>
                 <div class="d-flex flex-wrap gap-2">
-                    <button type="button" class="btn btn-outline-success btn-sm" onclick="applyPreset(11, 8, 4, 'CDC Mathematics Grid (75 Marks)')">
+                    <button type="button" class="btn btn-outline-success btn-sm" data-erp-click="learning-question-grid-action-2" data-erp-click-args="<?= schoolPageActionArgs("learning-question-grid",[]) ?>">
                         <i class="fas fa-calculator"></i> Mathematics (11 MCQ, 8 Short, 4 Long)
                     </button>
-                    <button type="button" class="btn btn-outline-success btn-sm" onclick="applyPreset(15, 10, 5, 'CDC Science Grid (75 Marks)')">
+                    <button type="button" class="btn btn-outline-success btn-sm" data-erp-click="learning-question-grid-action-3" data-erp-click-args="<?= schoolPageActionArgs("learning-question-grid",[]) ?>">
                         <i class="fas fa-flask"></i> Science & Tech (15 MCQ, 10 Short, 5 Long)
                     </button>
-                    <button type="button" class="btn btn-outline-success btn-sm" onclick="applyPreset(15, 10, 5, 'CDC Language/Social Grid (75 Marks)')">
+                    <button type="button" class="btn btn-outline-success btn-sm" data-erp-click="learning-question-grid-action-4" data-erp-click-args="<?= schoolPageActionArgs("learning-question-grid",[]) ?>">
                         <i class="fas fa-globe-asia"></i> Social/Languages (15 MCQ, 10 Short, 5 Long)
                     </button>
-                    <button type="button" class="btn btn-outline-success btn-sm" onclick="applyPreset(10, 5, 2, 'Standard CDC Grid (50 Marks)')">
+                    <button type="button" class="btn btn-outline-success btn-sm" data-erp-click="learning-question-grid-action-5" data-erp-click-args="<?= schoolPageActionArgs("learning-question-grid",[]) ?>">
                         <i class="fas fa-file-invoice"></i> Standard Grid (10 MCQ, 5 Short, 2 Long)
                     </button>
                 </div>
@@ -176,28 +176,7 @@ ob_start();
     </div>
 </div>
 
-<script>
-function applyPreset(mcq, short, long, title) {
-    document.getElementsByName('mcq_count')[0].value = mcq;
-    document.getElementsByName('short_count')[0].value = short;
-    document.getElementsByName('long_count')[0].value = long;
-    
-    const titleInput = document.getElementsByName('exam_title')[0];
-    if (titleInput.value.includes('Terminal') || titleInput.value.includes('Examination') || titleInput.value === '') {
-        titleInput.value = title;
-    }
-    
-    Swal.fire({
-        toast: true,
-        position: 'top-end',
-        icon: 'success',
-        title: 'CDC Preset Applied',
-        text: 'Exam parameters populated.',
-        showConfirmButton: false,
-        timer: 1500
-    });
-}
-</script>
+<?php schoolPageModule("learning-question-grid"); ?>
 
 <?php if ($message): ?>
 <div class="alert alert-warning no-print mb-4"><i class="fas fa-info-circle"></i> <?= sanitize($message) ?></div>
@@ -332,7 +311,7 @@ function applyPreset(mcq, short, long, title) {
 </style>
 <?php endif; ?>
 
-<script src="<?= APP_URL ?>/assets/js/exam-question-language.js?v=<?= (int)filemtime(__DIR__.'/../../assets/js/exam-question-language.js') ?>"></script>
+
 <?php
 $content = ob_get_clean();
 include __DIR__ . '/../../includes/header.php';

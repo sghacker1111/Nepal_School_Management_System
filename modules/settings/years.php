@@ -2,7 +2,7 @@
 /**
  * Settings - Academic Years Management
  */
-require_once __DIR__ . '/../../config/config.php';
+require_once __DIR__ . '/../../config/bootstrap.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
@@ -62,7 +62,7 @@ if (isset($_GET['toggle_hidden'])) {
             $stmt->execute([$new_hidden, $id, $school_id]);
             Auth::logActivity(Auth::getUserId(), 'Toggle Hidden Academic Year', 'academic_years', $id);
             $success = $new_hidden ? 'Academic Year hidden successfully.' : 'Academic Year shown successfully.';
-            redirect(APP_URL . '/modules/settings/years.php', $success, 'success');
+            redirect(schoolRouteUrl('modules/settings/years.php'), $success, 'success');
         }
     } catch (PDOException $e) {
         $error = schoolPublicError($e);
@@ -112,7 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             
             $db->commit();
             Auth::logActivity(Auth::getUserId(), 'Change Active Academic Year', 'academic_years', $id);
-            redirect(APP_URL . '/modules/settings/years.php', 'Active academic year switched successfully!');
+            redirect(schoolRouteUrl('modules/settings/years.php'), 'Active academic year switched successfully!');
         } catch (PDOException $e) {
             if ($db->inTransaction()) {
                 $db->rollBack();
@@ -183,17 +183,17 @@ ob_start();
                                 </td>
                                 <td class="text-end">
                                     <?php if ($yr['is_active'] == 0): ?>
-                                        <button onclick="switchYear(<?= $yr['id'] ?>, '<?= sanitize($yr['year_bs']) ?> / <?= sanitize($yr['year_ad']) ?>')" 
+                                        <button data-erp-click="settings-years-action-0" data-erp-click-args="<?= schoolPageActionArgs("settings-years",[(string)($yr['id']),(string)(sanitize($yr['year_bs'])),(string)(sanitize($yr['year_ad']))]) ?>"
                                                 class="btn btn-sm btn-success" title="Set Active">
                                             <i class="fas fa-toggle-on"></i> Set Active
                                         </button>
                                         <?php if ($yr['is_hidden'] == 1): ?>
-                                            <button onclick="toggleHiddenYear(<?= $yr['id'] ?>, false)" 
+                                            <button data-erp-click="settings-years-action-1" data-erp-click-args="<?= schoolPageActionArgs("settings-years",[(string)($yr['id'])]) ?>"
                                                     class="btn btn-sm btn-outline-success" title="Show Academic Year">
                                                 <i class="fas fa-eye"></i> Show
                                             </button>
                                         <?php else: ?>
-                                            <button onclick="toggleHiddenYear(<?= $yr['id'] ?>, true)" 
+                                            <button data-erp-click="settings-years-action-2" data-erp-click-args="<?= schoolPageActionArgs("settings-years",[(string)($yr['id'])]) ?>"
                                                     class="btn btn-sm btn-outline-warning" title="Hide Academic Year">
                                                 <i class="fas fa-eye-slash"></i> Hide
                                             </button>
@@ -246,46 +246,7 @@ ob_start();
     <input type="hidden" name="password" id="activeYearPassword">
 </form>
 
-<script>
-function switchYear(id, label) {
-    Swal.fire({
-        title: 'Confirm Year Switch',
-        text: 'Are you sure you want to switch the active academic year to ' + label + '? All modules will display data for this year.',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#28a745',
-        cancelButtonColor: '#3085d6',
-        confirmButtonText: 'Yes, proceed'
-    }).then((result) => {
-        if (result.isConfirmed) {
-            // Prompt for password verification
-            verifyPasswordAndProceed(function(password) {
-                document.getElementById('activeYearId').value = id;
-                document.getElementById('activeYearPassword').value = password;
-                document.getElementById('setActiveYearForm').submit();
-            }, 'Verify Administrator Password', 'Please enter your password to authorize this academic year switch:');
-        }
-    });
-}
-
-function toggleHiddenYear(id, hide) {
-    const actionText = hide ? 'hide' : 'show';
-    const confirmBtnText = hide ? 'Yes, hide it' : 'Yes, show it';
-    Swal.fire({
-        title: (hide ? 'Hide' : 'Show') + ' Academic Year',
-        text: 'Are you sure you want to ' + actionText + ' this academic year?',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: hide ? '#e0a800' : '#28a745',
-        cancelButtonColor: '#3085d6',
-        confirmButtonText: confirmBtnText
-    }).then((result) => {
-        if (result.isConfirmed) {
-            window.location.href = '<?= APP_URL ?>/modules/settings/years.php?toggle_hidden=' + id;
-        }
-    });
-}
-</script>
+<?php schoolPageModule("settings-years");schoolPageValue("settings-years-value-0",(string)(schoolRouteUrl('modules/settings/years.php'))); ?>
 
 <?php
 $content = ob_get_clean();

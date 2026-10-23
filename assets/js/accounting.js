@@ -78,7 +78,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Accounting
             if (search.value.trim().length < 2) return;
             timer = setTimeout(async () => {
                 try {
-                    const response = await fetch(window.APP_URL + '/modules/accounting/search.php?q=' + encodeURIComponent(search.value.trim()), { headers: { Accept: 'application/json' } });
+                    const response = await fetch(window.APP_URL + '/accounting/search?q=' + encodeURIComponent(search.value.trim()), { headers: { Accept: 'application/json' } });
                     if (!response.ok) throw new Error('Student search failed.');
                     const rows = await response.json();
                     if (current !== revision) return;

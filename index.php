@@ -2,7 +2,7 @@
 /**
  * Dashboard - Main landing page after login
  */
-require_once __DIR__ . '/config/config.php';
+require_once __DIR__ . '/config/bootstrap.php';
 require_once __DIR__ . '/includes/database.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/functions.php';
@@ -11,12 +11,11 @@ Auth::requireLogin();
 if(Auth::getRole()==='student'){
     $studentPage=Auth::hasAccess('learning')?'/modules/learning/index.php':(Auth::hasAccess('exam_questions')?'/modules/learning/exam_questions.php':null);
     if($studentPage===null)denySchoolRequest('No student learning section is enabled for this school. Contact your school administrator.');
-    header('Location: '.APP_URL.$studentPage);exit;
+    schoolAppRedirect(APP_URL.$studentPage);
 }
 
 if (Auth::getRole() === 'super_admin' && !Auth::isReadOnly()) {
-    header("Location: " . APP_URL . "/modules/super_admin/index.php");
-    exit;
+    schoolAppRedirect(schoolRouteUrl('modules/super_admin/index.php'));
 }
 
 $db = getDB();
@@ -154,53 +153,53 @@ ob_start();
         <div class="row g-3">
             <?php if (Auth::hasRole(['super_admin', 'school_admin'])): ?>
             <div class="col-md-2">
-                <a href="<?= APP_URL ?>/modules/students/add.php" class="btn btn-outline-primary w-100">
+                <a href="<?= schoolRouteUrl('modules/students/add.php') ?>" class="btn btn-outline-primary w-100">
                     <i class="fas fa-user-plus"></i><br>Add Student
                 </a>
             </div>
             <div class="col-md-2">
-                <a href="<?= APP_URL ?>/modules/exams/add.php" class="btn btn-outline-success w-100">
+                <a href="<?= schoolRouteUrl('modules/exams/add.php') ?>" class="btn btn-outline-success w-100">
                     <i class="fas fa-file-alt"></i><br>Create Exam
                 </a>
             </div>
             <div class="col-md-2">
-                <a href="<?= APP_URL ?>/modules/attendance/index.php" class="btn btn-outline-info w-100">
+                <a href="<?= schoolRouteUrl('modules/attendance/index.php') ?>" class="btn btn-outline-info w-100">
                     <i class="fas fa-calendar-check"></i><br>Take Attendance
                 </a>
             </div>
             <div class="col-md-2">
-                <a href="<?= APP_URL ?>/modules/results/marks_entry.php" class="btn btn-outline-warning w-100">
+                <a href="<?= schoolRouteUrl('modules/results/marks_entry.php') ?>" class="btn btn-outline-warning w-100">
                     <i class="fas fa-edit"></i><br>Enter Marks
                 </a>
             </div>
             <div class="col-md-2">
-                <a href="<?= APP_URL ?>/modules/reports/index.php" class="btn btn-outline-danger w-100">
+                <a href="<?= schoolRouteUrl('modules/reports/index.php') ?>" class="btn btn-outline-danger w-100">
                     <i class="fas fa-chart-bar"></i><br>View Reports
                 </a>
             </div>
             <div class="col-md-2">
-                <a href="<?= APP_URL ?>/modules/learning/index.php" class="btn btn-outline-secondary w-100">
+                <a href="<?= schoolRouteUrl('modules/learning/index.php') ?>" class="btn btn-outline-secondary w-100">
                     <i class="fas fa-book-open"></i><br>Learning Hub
                 </a>
             </div>
             <?php else: ?>
             <div class="col-md-3">
-                <a href="<?= APP_URL ?>/modules/attendance/index.php" class="btn btn-outline-info w-100">
+                <a href="<?= schoolRouteUrl('modules/attendance/index.php') ?>" class="btn btn-outline-info w-100">
                     <i class="fas fa-calendar-check"></i><br>Attendance
                 </a>
             </div>
             <div class="col-md-3">
-                <a href="<?= APP_URL ?>/modules/results/index.php" class="btn btn-outline-warning w-100">
+                <a href="<?= schoolRouteUrl('modules/results/index.php') ?>" class="btn btn-outline-warning w-100">
                     <i class="fas fa-poll"></i><br>Results
                 </a>
             </div>
             <div class="col-md-3">
-                <a href="<?= APP_URL ?>/modules/learning/index.php" class="btn btn-outline-secondary w-100">
+                <a href="<?= schoolRouteUrl('modules/learning/index.php') ?>" class="btn btn-outline-secondary w-100">
                     <i class="fas fa-laptop-code"></i><br>Learning
                 </a>
             </div>
             <div class="col-md-3">
-                <a href="<?= APP_URL ?>/modules/reports/index.php" class="btn btn-outline-danger w-100">
+                <a href="<?= schoolRouteUrl('modules/reports/index.php') ?>" class="btn btn-outline-danger w-100">
                     <i class="fas fa-chart-bar"></i><br>Reports
                 </a>
             </div>
@@ -241,7 +240,7 @@ ob_start();
                             <?php endif; ?>
                         </td>
                         <td>
-                            <a href="<?= APP_URL ?>/modules/exams/view.php?id=<?= $exam['id'] ?>" class="btn btn-sm btn-primary">
+                            <a href="<?= schoolRouteUrl('modules/exams/view.php') ?>?id=<?= $exam['id'] ?>" class="btn btn-sm btn-primary">
                                 <i class="fas fa-eye"></i> View
                             </a>
                         </td>

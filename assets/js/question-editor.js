@@ -1,7 +1,8 @@
 /* Shared Question Bank / Exam Questions editor: formatting and portable TeX. */
 (function(){
 'use strict';
-let activeEditorId='',texModalObj,activeTexSpan=null;
+let activeEditorId='',texModalObj,activeTexSpan=null,activeTexBookmark=null;
+const editorScopes=new WeakMap();
 function escapeHtml(text) {
     return text
         .replace(/&/g, "&amp;")
@@ -71,26 +72,38 @@ function mathSource(span) {
     return null;
 }
 
-function init(selector){
+function init(selector,root=document,context={}){
+ editorScopes.get(root)?.();
+ const owned=new Set(),removers=[];let disposed=false;
+ const listen=(node,event,handler)=>{node.addEventListener(event,handler);removers.push(()=>node.removeEventListener?.(event,handler));};
+ const dispose=()=>{
+  if(disposed)return;disposed=true;removers.splice(0).forEach(fn=>fn());
+  owned.forEach(editor=>editor.remove?.());owned.clear();texModalObj?.dispose?.();
+  activeEditorId='';activeTexSpan=null;activeTexBookmark=null;editorScopes.delete(root);
+ };
+ editorScopes.set(root,dispose);context.signal?.addEventListener('abort',dispose,{once:true});
+ context.onBeforeSubmit?.(form=>{for(const editor of owned)if(editor.getElement?.()?.form===form)editor.save();});
  const start=()=>{
+    if(disposed)return;
 
     // Initialize TeX Modal
-    texModalObj = new bootstrap.Modal(document.getElementById('texModal'));
+    const modal=document.getElementById('texModal');if(!modal)return;
+    texModalObj = ErpUI.Modal.getOrCreateInstance?ErpUI.Modal.getOrCreateInstance(modal):new ErpUI.Modal(modal);
 
     // Clear activeTexSpan when modal hidden
-    document.getElementById('texModal').addEventListener('hidden.bs.modal', function () {
-        activeTexSpan = null;
+    listen(modal,'hidden.erp.modal', function () {
+        activeTexSpan = null;activeTexBookmark=null;
     });
 
     // Event listeners for live MathJax TeX preview
-    document.getElementById('texInput').addEventListener('input', updateTexPreview);
-    document.getElementById('texDisplayMode').addEventListener('change', updateTexPreview);
-    document.getElementById('btnInsertTex').addEventListener('click', insertTexIntoEditor);
+    listen(document.getElementById('texInput'),'input',updateTexPreview);
+    listen(document.getElementById('texDisplayMode'),'change',updateTexPreview);
+    listen(document.getElementById('btnInsertTex'),'click',insertTexIntoEditor);
 
     // Initialize TinyMCE editors
     if (window.tinymce) {
         window.tinymce.init({
-            selector,
+            selector:root===document?selector:'#'+CSS.escape(root.id)+' '+selector.split(',').join(',#'+CSS.escape(root.id)+' '),
             height: 420,
             min_height: 380,
             toolbar_mode: 'wrap',
@@ -158,6 +171,7 @@ function init(selector){
                 }
             `,
             setup: function (editor) {
+                if(disposed){editor.remove?.();return;}owned.add(editor);
                 // When content is loaded, wrap LaTeX with span so it can render inside iframe
                 editor.on('BeforeSetContent', function (e) {
                     e.content = convertLatexToSpan(e.content);
@@ -179,6 +193,7 @@ function init(selector){
 
                 // Load MathJax inside the editor iframe dynamically and configure English/Nepali base font
                 editor.on('init', function () {
+                    if(disposed){editor.remove?.();return;}
                     const doc = editor.getDoc();
                     const win = editor.getWin();
 
@@ -213,7 +228,7 @@ function init(selector){
                     doc.head.appendChild(configScript);
 
                     const script = doc.createElement('script');
-                    script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
+                    script.src = (window.APP_URL || window.location.origin).replace(/\/$/, '') + '/assets/vendor/mathjax-3.2.2/tex-mml-chtml.js';
                     script.async = true;
                     script.onload = function() {
                         if (win.MathJax && win.MathJax.typesetPromise) {
@@ -266,11 +281,15 @@ function init(selector){
         });
     }
  };
- if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
+ if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',start,{once:true});removers.push(()=>document.removeEventListener?.('DOMContentLoaded',start));}else start();
+ return dispose;
 }
 function openTexModal(editorId, targetSpan = null) {
     activeEditorId = editorId;
     const editor=window.tinymce?.get(editorId);
+    const body=editor?.getBody?.(),range=editor?.selection.getRng?.();
+    if(body&&(!range||!body.contains(range.startContainer))){editor.selection.select(body,true);editor.selection.collapse(false);}
+    activeTexBookmark=editor?.selection.getBookmark?.(2,true)||null;
     activeTexSpan = targetSpan || editor?.selection.getNode?.()?.closest?.('span.math-tex') || null;
 
     let initialText = '';
@@ -357,6 +376,10 @@ function insertTexIntoEditor() {
 
         if (window.tinymce && window.tinymce.get(activeEditorId)) {
             const editor = window.tinymce.get(activeEditorId);
+            // A toolbar dialog moves focus out of the iframe. Restore the
+            // editor selection before inserting, including on a brand-new field.
+            editor.focus?.();
+            if(activeTexBookmark)editor.selection.moveToBookmark?.(activeTexBookmark);
 
             if (activeTexSpan) {
                 // Update existing locked math span

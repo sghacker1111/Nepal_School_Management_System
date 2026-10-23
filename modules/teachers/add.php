@@ -2,7 +2,7 @@
 /**
  * Teacher Management - Add Page
  */
-require_once __DIR__ . '/../../config/config.php';
+require_once __DIR__ . '/../../config/bootstrap.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
@@ -88,7 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $db->commit();
                 
                 Auth::logActivity(Auth::getUserId(), 'Add Teacher', 'users', $new_id);
-                redirect(APP_URL . '/modules/teachers/index.php', 'Teacher added successfully');
+                redirect(schoolRouteUrl('modules/teachers/index.php'), 'Teacher added successfully');
             }
         } catch (PDOException $e) {
             if ($db->inTransaction()) {
@@ -107,7 +107,7 @@ ob_start();
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="fas fa-plus-circle"></i> Add New Teacher</h2>
-    <a href="<?= APP_URL ?>/modules/teachers/index.php" class="btn btn-secondary">
+    <a href="<?= schoolRouteUrl('modules/teachers/index.php') ?>" class="btn btn-secondary">
         <i class="fas fa-arrow-left"></i> Back to List
     </a>
 </div>
@@ -264,7 +264,7 @@ ob_start();
                     <button type="submit" class="btn btn-primary w-100 py-2 mb-2">
                         <i class="fas fa-save"></i> Save Teacher
                     </button>
-                    <a href="<?= APP_URL ?>/modules/teachers/index.php" class="btn btn-outline-secondary w-100 py-2">
+                    <a href="<?= schoolRouteUrl('modules/teachers/index.php') ?>" class="btn btn-outline-secondary w-100 py-2">
                         Cancel
                     </a>
                 </div>

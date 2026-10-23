@@ -26,7 +26,7 @@
                 const row = element('tr');
                 row.append(element('td', '#' + item.id), element('td', `${item.school} · ${item.class} · ${item.subject}`), element('td', item.owner));
                 const action = element('td');
-                if (typeof item.url === 'string' && item.url.startsWith('/modules/') && !item.url.includes('://')) {
+                if (typeof item.url === 'string' && /^\/(?:modules\/learning\/|learning(?:\/|\?)|exam-(?:questions|mcqs|paper-grids)\?)/.test(item.url) && !/[\\\x00-\x20]/.test(item.url) && !item.url.includes('://')) {
                     const link = element('a', 'Open section');
                     link.href = baseUrl + item.url; link.target = '_blank'; link.rel = 'noopener'; action.append(link);
                 } else action.textContent = 'Ask the creator / school administrator';

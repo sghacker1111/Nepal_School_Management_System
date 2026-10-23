@@ -2,7 +2,7 @@
 /**
  * Subject Management - Add Page with Auto-Class-Mapping
  */
-require_once __DIR__ . '/../../config/config.php';
+require_once __DIR__ . '/../../config/bootstrap.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
@@ -109,7 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $db->commit();
                 
                 Auth::logActivity(Auth::getUserId(), 'Add Subject and Class Mapping', 'subjects', $new_subject_id);
-                redirect(APP_URL . '/modules/subjects/index.php', 'Subject added and mapped successfully with Theory & Internal evaluation components.');
+                redirect(schoolRouteUrl('modules/subjects/index.php'), 'Subject added and mapped successfully with Theory & Internal evaluation components.');
             } catch (PDOException|InvalidArgumentException $e) {
                 if ($db->inTransaction()) {
                     $db->rollBack();
@@ -134,7 +134,7 @@ ob_start();
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="fas fa-plus-circle"></i> Add New Subject</h2>
-    <a href="<?= APP_URL ?>/modules/subjects/index.php" class="btn btn-secondary">
+    <a href="<?= schoolRouteUrl('modules/subjects/index.php') ?>" class="btn btn-secondary">
         <i class="fas fa-arrow-left"></i> Back to List
     </a>
 </div>
@@ -193,16 +193,16 @@ ob_start();
                         <div class="card-body p-3 bg-light">
                             <div class="mb-2">
                                 <label for="th_credit_hours" class="form-label small fw-bold">Theory Credit Hours (TH) *</label>
-                                <input type="number" step="0.01" class="form-control" id="th_credit_hours" name="th_credit_hours" value="3.00" min="0" max="10" required oninput="calcTotals()">
+                                <input type="number" step="0.01" class="form-control" id="th_credit_hours" name="th_credit_hours" value="3.00" min="0" max="10" required data-erp-input="subjects-add-action-0" data-erp-input-args="<?= schoolPageActionArgs("subjects-add",[]) ?>">
                             </div>
                             <div class="row g-2">
                                 <div class="col-6">
                                     <label for="th_full_marks" class="form-label small fw-bold">Theory Full Marks *</label>
-                                    <input type="number" step="0.01" class="form-control" id="th_full_marks" name="th_full_marks" value="75.00" min="0" max="100" required oninput="calcTotals()">
+                                    <input type="number" step="0.01" class="form-control" id="th_full_marks" name="th_full_marks" value="75.00" min="0" max="100" required data-erp-input="subjects-add-action-1" data-erp-input-args="<?= schoolPageActionArgs("subjects-add",[]) ?>">
                                 </div>
                                 <div class="col-6">
                                     <label for="th_pass_marks" class="form-label small fw-bold">Theory Pass Marks *</label>
-                                    <input type="number" step="0.01" class="form-control" id="th_pass_marks" name="th_pass_marks" value="26.25" min="0" max="100" required oninput="calcTotals()">
+                                    <input type="number" step="0.01" class="form-control" id="th_pass_marks" name="th_pass_marks" value="26.25" min="0" max="100" required data-erp-input="subjects-add-action-2" data-erp-input-args="<?= schoolPageActionArgs("subjects-add",[]) ?>">
                                 </div>
                             </div>
                         </div>
@@ -218,16 +218,16 @@ ob_start();
                         <div class="card-body p-3 bg-light">
                             <div class="mb-2">
                                 <label for="in_credit_hours" class="form-label small fw-bold">Internal Credit Hours (IN) *</label>
-                                <input type="number" step="0.01" class="form-control" id="in_credit_hours" name="in_credit_hours" value="1.00" min="0" max="10" required oninput="calcTotals()">
+                                <input type="number" step="0.01" class="form-control" id="in_credit_hours" name="in_credit_hours" value="1.00" min="0" max="10" required data-erp-input="subjects-add-action-3" data-erp-input-args="<?= schoolPageActionArgs("subjects-add",[]) ?>">
                             </div>
                             <div class="row g-2">
                                 <div class="col-6">
                                     <label for="in_full_marks" class="form-label small fw-bold">Internal Full Marks *</label>
-                                    <input type="number" step="0.01" class="form-control" id="in_full_marks" name="in_full_marks" value="25.00" min="0" max="100" required oninput="calcTotals()">
+                                    <input type="number" step="0.01" class="form-control" id="in_full_marks" name="in_full_marks" value="25.00" min="0" max="100" required data-erp-input="subjects-add-action-4" data-erp-input-args="<?= schoolPageActionArgs("subjects-add",[]) ?>">
                                 </div>
                                 <div class="col-6">
                                     <label for="in_pass_marks" class="form-label small fw-bold">Internal Pass Marks *</label>
-                                    <input type="number" step="0.01" class="form-control" id="in_pass_marks" name="in_pass_marks" value="10.00" min="0" max="100" required oninput="calcTotals()">
+                                    <input type="number" step="0.01" class="form-control" id="in_pass_marks" name="in_pass_marks" value="10.00" min="0" max="100" required data-erp-input="subjects-add-action-5" data-erp-input-args="<?= schoolPageActionArgs("subjects-add",[]) ?>">
                                 </div>
                             </div>
                         </div>
@@ -298,37 +298,7 @@ ob_start();
     </div>
 </div>
 
-<script>
-function calcTotals() {
-    var th_ch = parseFloat(document.getElementById('th_credit_hours').value) || 0;
-    var in_ch = parseFloat(document.getElementById('in_credit_hours').value) || 0;
-    document.getElementById('total_credit_hours').value = (th_ch + in_ch).toFixed(2);
-
-    var th_fm = parseFloat(document.getElementById('th_full_marks').value) || 0;
-    var in_fm = parseFloat(document.getElementById('in_full_marks').value) || 0;
-    document.getElementById('total_full_marks').value = (th_fm + in_fm).toFixed(2);
-
-    var th_pm = parseFloat(document.getElementById('th_pass_marks').value) || 0;
-    var in_pm = parseFloat(document.getElementById('in_pass_marks').value) || 0;
-    document.getElementById('total_pass_marks').value = (th_pm + in_pm).toFixed(2);
-}
-
-// Bootstrap form validation
-(function () {
-  'use strict'
-  var forms = document.querySelectorAll('.needs-validation')
-  Array.prototype.slice.call(forms)
-    .forEach(function (form) {
-      form.addEventListener('submit', function (event) {
-        if (!form.checkValidity()) {
-          event.preventDefault()
-          event.stopPropagation()
-        }
-        form.classList.add('was-validated')
-      }, false)
-    })
-})()
-</script>
+<?php schoolPageModule("subjects-add"); ?>
 
 <?php
 $content = ob_get_clean();

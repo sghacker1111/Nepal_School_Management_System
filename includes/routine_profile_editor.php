@@ -16,4 +16,3 @@
 <?php endfor; ?></tbody></table></div></details><?php endforeach; ?>
 <div class="row g-3"><div class="col-md-5"><label class="form-label" for="routinePassword">Current administrator password</label><input id="routinePassword" class="form-control" type="password" name="password" autocomplete="current-password" required></div><div class="col-md-7 align-self-end d-flex gap-2 flex-wrap"><button class="btn btn-outline-primary" name="intent" value="save">Save profile only</button><button class="btn btn-primary" name="intent" value="activate" data-confirm-activation>Save &amp; activate</button><?php if($selectedProfile): ?><button class="btn btn-outline-secondary" name="save_as_new" value="1">Save as new profile</button><?php endif; ?></div></div>
 </form></details>
-<script src="<?= APP_URL ?>/assets/js/routine-controls.js" defer></script>

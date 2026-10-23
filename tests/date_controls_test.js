@@ -22,7 +22,7 @@ console.log('Date calendar controls passed: standalone AD/BS selectors, paired c
 
 const fields=Object.fromEntries(['modalSubscriptionMode','modalSubscriptionStart','modalSubscriptionEnd','modalSubscriptionEnabled','subscriptionStartControl','subscriptionEndControl'].map(id=>[id,{value:'',parentElement:{querySelector:()=>null}}]));
 const subscriptionContext={document:{getElementById:id=>fields[id]},window:{},Date,Event:function(){}};
-const schoolScript=fs.readFileSync(require.resolve('../modules/super_admin/schools.php'),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1].split('$(document).ready')[0].replace(/^const schoolToday=.*$/m,"const schoolToday='2026-10-10';");
+const schoolScript=fs.readFileSync(require.resolve('../frontend/pages/generated/super-admin-schools.js'),'utf8').split('let schoolModalObj;')[1].split('$(document).ready')[0].replace(/^const schoolToday=.*$/m,"const schoolToday='2026-10-10';");
 vm.runInNewContext(schoolScript,subscriptionContext);
 fields.modalSubscriptionMode.value='yearly';fields.modalSubscriptionStart.value='2026-10-10';
 subscriptionContext.updateSubscriptionDates();assert.equal(fields.modalSubscriptionEnd.value,'2027-10-09');assert.equal(fields.modalSubscriptionEnd.readOnly,true);

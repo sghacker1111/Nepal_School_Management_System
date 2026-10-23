@@ -11,7 +11,7 @@ if(!$legacyBankRequest){
 /**
  * Learning Portal - Question Bank CRUD
  */
-require_once __DIR__ . '/../../config/config.php';
+require_once __DIR__ . '/../../config/bootstrap.php';
 require_once __DIR__ . '/../../includes/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
@@ -54,7 +54,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'request_permission' && $schoo
         $stmt = $db->prepare("UPDATE schools SET question_permission_status = 'requested' WHERE id = ?");
         $stmt->execute([$school_id]);
         Auth::logActivity(Auth::getUserId(), 'Request Question Creation Permission', 'schools', $school_id);
-        redirect(APP_URL . '/modules/learning/questions.php', 'Question creation permission requested successfully.', 'success');
+        redirect(schoolRouteUrl('modules/learning/questions.php'), 'Question creation permission requested successfully.', 'success');
     }
 }
 
@@ -64,7 +64,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'request_view_permission' && $
         $stmt = $db->prepare("UPDATE schools SET question_view_permission = 'requested' WHERE id = ?");
         $stmt->execute([$school_id]);
         Auth::logActivity(Auth::getUserId(), 'Request Question View Permission', 'schools', $school_id);
-        redirect(APP_URL . '/modules/learning/questions.php', 'Question view permission requested successfully.', 'success');
+        redirect(schoolRouteUrl('modules/learning/questions.php'), 'Question view permission requested successfully.', 'success');
     }
 }
 
@@ -224,7 +224,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_import_excel']
                         $db->commit();$importTransactionOwned=false;
                         // One import outcome, and GET after POST prevents refresh from importing again.
                         unset($_SESSION['action_notice']);
-                        redirect(APP_URL.'/modules/learning/questions.php?category=all','Successfully imported '.$importedCount.' questions into the Question Bank.'.$skipDetails,$skippedCount>0?'warning':'success');
+                        redirect(schoolRouteUrl('modules/learning/questions.php') . '?category=all','Successfully imported '.$importedCount.' questions into the Question Bank.'.$skipDetails,$skippedCount>0?'warning':'success');
                     }
                 }
             } catch (Throwable $e) {
@@ -318,26 +318,8 @@ ob_start();
 ?>
 
 <!-- MathJax Configuration & Script for LaTeX Equation Rendering -->
-<script>
-window.MathJax = {
-    tex: {
-        inlineMath: [['\\(', '\\)'],['$','$']],
-        displayMath: [['\\[', '\\]'],['$$','$$']],
-        processEscapes: true
-    },
-    startup: {
-        ready: () => {
-            MathJax.startup.defaultReady();
-            MathJax.startup.promise.then(() => {
-                if (typeof fixDevanagariInMathJax === 'function') {
-                    fixDevanagariInMathJax(document);
-                }
-            });
-        }
-    }
-};
-</script>
-<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<?php $pageAssets[]="mathjax"; ?>
+<?php $pageAssets[]="mathjax"; ?>
 
 <style>
 /* Kokila Nepali / Devanagari Unicode Text & MathJax Support */
@@ -391,17 +373,17 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
         <span class="text-muted small">Manage Multiple Choice and Subjective questions aligned with CDC Nepal curriculum</span>
     </div>
     <div class="d-flex gap-2 flex-wrap">
-        <a href="<?= APP_URL ?>/modules/learning/index.php" class="btn btn-secondary">
+        <a href="<?= schoolRouteUrl('modules/learning/index.php') ?>" class="btn btn-secondary">
             <i class="fas fa-arrow-left"></i> Back to Portal
         </a>
         <?php if ($canCreateContent): ?>
-        <button class="btn btn-primary fw-bold shadow-sm" onclick="showAddForm('MCQ')">
+        <button class="btn btn-primary fw-bold shadow-sm" data-erp-click="learning-questions-action-0" data-erp-click-args="<?= schoolPageActionArgs("learning-questions",[]) ?>">
             <i class="fas fa-list-ol me-1"></i> Add Multiple Choice Questions
         </button>
-        <button class="btn btn-success fw-bold shadow-sm" onclick="showAddForm('other')">
+        <button class="btn btn-success fw-bold shadow-sm" data-erp-click="learning-questions-action-1" data-erp-click-args="<?= schoolPageActionArgs("learning-questions",[]) ?>">
             <i class="fas fa-pen-nib me-1"></i> Add Questions
         </button>
-        <button class="btn btn-info text-white fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#importExcelModal">
+        <button class="btn btn-info text-white fw-bold shadow-sm" data-ui-toggle="modal" data-ui-target="#importExcelModal">
             <i class="fas fa-file-excel me-1"></i> Import Excel / CSV
         </button>
         <?php endif; ?>
@@ -455,17 +437,17 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
 <!-- Category Tabs (All / MCQ / Other) -->
 <ul class="nav nav-pills mb-3 bg-white p-2 rounded shadow-sm border">
     <li class="nav-item">
-        <a class="nav-link fw-bold <?= $filter_category === 'all' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/questions.php?category=all<?= $filter_class ? '&class='.$filter_class : '' ?><?= $filter_subject ? '&subject='.$filter_subject : '' ?><?= $filter_cognitive ? '&cognitive_domain='.$filter_cognitive : '' ?>">
+        <a class="nav-link fw-bold <?= $filter_category === 'all' ? 'active' : '' ?>" href="<?= schoolRouteUrl('modules/learning/questions.php') ?>?category=all<?= $filter_class ? '&class='.$filter_class : '' ?><?= $filter_subject ? '&subject='.$filter_subject : '' ?><?= $filter_cognitive ? '&cognitive_domain='.$filter_cognitive : '' ?>">
             <i class="fas fa-layer-group me-1"></i> All Questions
         </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link fw-bold <?= $filter_category === 'mcq' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/questions.php?category=mcq<?= $filter_class ? '&class='.$filter_class : '' ?><?= $filter_subject ? '&subject='.$filter_subject : '' ?><?= $filter_cognitive ? '&cognitive_domain='.$filter_cognitive : '' ?>">
+        <a class="nav-link fw-bold <?= $filter_category === 'mcq' ? 'active' : '' ?>" href="<?= schoolRouteUrl('modules/learning/questions.php') ?>?category=mcq<?= $filter_class ? '&class='.$filter_class : '' ?><?= $filter_subject ? '&subject='.$filter_subject : '' ?><?= $filter_cognitive ? '&cognitive_domain='.$filter_cognitive : '' ?>">
             <i class="fas fa-list-ol me-1"></i> Multiple Choice Questions (MCQ)
         </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link fw-bold <?= $filter_category === 'other' ? 'active' : '' ?>" href="<?= APP_URL ?>/modules/learning/questions.php?category=other<?= $filter_class ? '&class='.$filter_class : '' ?><?= $filter_subject ? '&subject='.$filter_subject : '' ?><?= $filter_cognitive ? '&cognitive_domain='.$filter_cognitive : '' ?>">
+        <a class="nav-link fw-bold <?= $filter_category === 'other' ? 'active' : '' ?>" href="<?= schoolRouteUrl('modules/learning/questions.php') ?>?category=other<?= $filter_class ? '&class='.$filter_class : '' ?><?= $filter_subject ? '&subject='.$filter_subject : '' ?><?= $filter_cognitive ? '&cognitive_domain='.$filter_cognitive : '' ?>">
             <i class="fas fa-pen-alt me-1"></i> Other Questions (Subjective)
         </a>
     </li>
@@ -478,7 +460,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
             <input type="hidden" name="category" value="<?= htmlspecialchars($filter_category) ?>">
             <div class="col-md-4">
                 <label class="form-label fw-bold">Filter Class</label>
-                <select name="class" class="form-select" onchange="this.form.elements.subject.value='';this.form.submit()">
+                <select name="class" class="form-select" data-erp-change="learning-questions-action-2" data-erp-change-args="<?= schoolPageActionArgs("learning-questions",[]) ?>">
                     <option value="">All Classes</option>
                     <?php foreach ($classes as $c): ?>
                     <option value="<?= $c['id'] ?>" <?= $filter_class == $c['id'] ? 'selected' : '' ?>><?= sanitize($c['name']) ?></option>
@@ -487,7 +469,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
             </div>
             <div class="col-md-4">
                 <label class="form-label fw-bold">Filter Subject</label>
-                <select name="subject" class="form-select" <?= !$filter_class?'disabled':'' ?> onchange="this.form.submit()">
+                <select name="subject" class="form-select" <?= !$filter_class?'disabled':'' ?> data-erp-change="learning-questions-action-3" data-erp-change-args="<?= schoolPageActionArgs("learning-questions",[]) ?>">
                     <option value=""><?= $filter_class?'All class subjects':'Choose a class first' ?></option>
                     <?php foreach ($subjects as $s): ?>
                     <option value="<?= $s['id'] ?>" <?= $filter_subject == $s['id'] ? 'selected' : '' ?>><?= sanitize($s['display_name']??$s['name_en']) ?></option>
@@ -496,7 +478,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
             </div>
             <div class="col-md-2">
                 <label class="form-label fw-bold">Cognitive Level</label>
-                <select name="cognitive_domain" class="form-select" onchange="this.form.submit()">
+                <select name="cognitive_domain" class="form-select" data-erp-change="learning-questions-action-4" data-erp-change-args="<?= schoolPageActionArgs("learning-questions",[]) ?>">
                     <option value="">All Levels</option>
                     <option value="Knowledge" <?= $filter_cognitive === 'Knowledge' ? 'selected' : '' ?>>Knowledge (K)</option>
                     <option value="Understanding" <?= $filter_cognitive === 'Understanding' ? 'selected' : '' ?>>Understanding (U)</option>
@@ -505,7 +487,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                 </select>
             </div>
             <div class="col-md-2 d-flex align-items-end">
-                <a href="<?= APP_URL ?>/modules/learning/questions.php" class="btn btn-secondary w-100">Reset</a>
+                <a href="<?= schoolRouteUrl('modules/learning/questions.php') ?>" class="btn btn-secondary w-100">Reset</a>
             </div>
         </form>
     </div>
@@ -595,13 +577,13 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                                 $can_modify = $q['can_edit'];
                                 if ($can_modify): 
                                 ?>
-                                <button onclick="editQuestion(<?= htmlspecialchars(json_encode($q)) ?>)" class="btn btn-sm btn-outline-warning" title="Edit">
+                                <button data-erp-click="learning-questions-action-5" data-erp-click-args="<?= schoolPageActionArgs("learning-questions",[(string)(htmlspecialchars(json_encode($q)))]) ?>" class="btn btn-sm btn-outline-warning" title="Edit">
                                     <i class="fas fa-edit"></i>
                                 </button>
-                                <form method="post" class="d-inline" onsubmit="return confirm('<?= $filter_archived?'Restore this question?':'Archive this question? It can be restored.' ?>')">
+                                <form method="post" class="d-inline" data-erp-submit="learning-questions-action-6" data-erp-submit-args="<?= schoolPageActionArgs("learning-questions",[(string)($filter_archived?'Restore this question?':'Archive this question? It can be restored.')]) ?>">
                                     <input type="hidden" name="action" value="<?= $filter_archived?'restore':'archive' ?>"><input type="hidden" name="question_id" value="<?= $q['id'] ?>"><button class="btn btn-sm btn-outline-danger"><?= $filter_archived?'Restore':'Archive' ?></button>
                                 </form>
-                                <?php if(!$filter_archived): ?><form method="post" class="d-inline" onsubmit="return confirm('<?= $q['visibility']==='private'?'Publish within this school? Shared catalog publishing is available to eligible schools.':'Make this question private?' ?>')"><input type="hidden" name="action" value="set_visibility"><input type="hidden" name="question_id" value="<?= $q['id'] ?>"><input type="hidden" name="visibility" value="<?= $q['visibility']==='private'?'public':'private' ?>"><button class="btn btn-sm btn-outline-primary"><?= $q['visibility']==='private'?'Publish':'Make private' ?></button></form><?php endif; ?>
+                                <?php if(!$filter_archived): ?><form method="post" class="d-inline" data-erp-submit="learning-questions-action-7" data-erp-submit-args="<?= schoolPageActionArgs("learning-questions",[(string)($q['visibility']==='private'?'Publish within this school? Shared catalog publishing is available to eligible schools.':'Make this question private?')]) ?>"><input type="hidden" name="action" value="set_visibility"><input type="hidden" name="question_id" value="<?= $q['id'] ?>"><input type="hidden" name="visibility" value="<?= $q['visibility']==='private'?'public':'private' ?>"><button class="btn btn-sm btn-outline-primary"><?= $q['visibility']==='private'?'Publish':'Make private' ?></button></form><?php endif; ?>
                                 <?php else: ?>
                                 <button class="btn btn-sm btn-outline-secondary" disabled title="No edit permission"><i class="fas fa-lock"></i></button>
                                 <?php endif; ?>
@@ -625,10 +607,10 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
 <div id="questionsFormSection" class="card border-0 shadow-sm p-4 mt-2" style="display:none; min-height: 80vh; background: #ffffff; border-radius: 16px;">
     <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
         <h3 class="text-primary mb-0 fw-bold" id="formTitle">Add New Question</h3>
-        <button type="button" class="btn btn-outline-secondary" onclick="hideForm()"><i class="fas fa-times"></i> Cancel & Return</button>
+        <button type="button" class="btn btn-outline-secondary" data-erp-click="learning-questions-action-8" data-erp-click-args="<?= schoolPageActionArgs("learning-questions",[]) ?>"><i class="fas fa-times"></i> Cancel & Return</button>
     </div>
     
-    <form method="POST" action="" class="needs-validation" onsubmit="tinymce.triggerSave()" novalidate>
+    <form method="POST" action="" class="needs-validation" data-erp-submit="learning-questions-action-9" data-erp-submit-args="<?= schoolPageActionArgs("learning-questions",[]) ?>" novalidate>
         <input type="hidden" name="action" id="modalAction" value="add">
         <input type="hidden" name="question_id" id="modalQuestionId">
         <input type="hidden" name="catalog_topic_id" id="modalCatalogTopicId">
@@ -639,7 +621,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                             <div class="d-flex justify-content-between align-items-center mb-1">
                                 <label class="form-label mb-0 fw-bold">Class *</label>
                             </div>
-                            <select name="class_id" id="modalClass" class="form-select" required onchange="onModalClassChange()">
+                            <select name="class_id" id="modalClass" class="form-select" required data-erp-change="learning-questions-action-10" data-erp-change-args="<?= schoolPageActionArgs("learning-questions",[]) ?>">
                                 <option value="">-- Choose Class --</option>
                                 <?php foreach ($classes as $c): ?>
                                 <option value="<?= $c['id'] ?>"><?= sanitize($c['name']) ?> (<?= sanitize($c['level']) ?> Level)</option>
@@ -650,7 +632,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                             <div class="d-flex justify-content-between align-items-center mb-1">
                                 <label class="form-label mb-0 fw-bold">Subject *</label>
                             </div>
-                            <select name="subject_id" id="modalSubject" class="form-select" required onchange="updateChaptersDropdown('')">
+                            <select name="subject_id" id="modalSubject" class="form-select" required data-erp-change="learning-questions-action-11" data-erp-change-args="<?= schoolPageActionArgs("learning-questions",[]) ?>">
                                 <option value="">-- First Select a Class --</option>
                                 <?php foreach ($subjects as $s): ?>
                                 <option value="<?= $s['id'] ?>"><?= sanitize($s['display_name']??$s['name_en']) ?></option>
@@ -660,15 +642,15 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                         </div>
                         <div class="col-md-3">
                             <label class="form-label fw-bold">Chapter / Unit *</label>
-                            <select id="modalChapterSelect" class="form-select" onchange="onChapterSelectChange()">
+                            <select id="modalChapterSelect" class="form-select" data-erp-change="learning-questions-action-12" data-erp-change-args="<?= schoolPageActionArgs("learning-questions",[]) ?>">
                                 <!-- Populated dynamically -->
                             </select>
                             <input type="hidden" name="chapter" id="modalChapter">
-                            <input type="text" id="modalChapterCustom" class="form-control mt-2" placeholder="Type custom chapter..." style="display:none;" oninput="updateChapterHidden()">
+                            <input type="text" id="modalChapterCustom" class="form-control mt-2" placeholder="Type custom chapter..." style="display:none;" data-erp-input="learning-questions-action-13" data-erp-input-args="<?= schoolPageActionArgs("learning-questions",[]) ?>">
                         </div>
                         <div class="col-md-3">
                             <label class="form-label fw-bold">Topic</label>
-                            <select id="modalTopicSelect" class="form-select" onchange="syncCatalogTopic()">
+                            <select id="modalTopicSelect" class="form-select" data-erp-change="learning-questions-action-14" data-erp-change-args="<?= schoolPageActionArgs("learning-questions",[]) ?>">
                                 <option value="">Choose Topic</option>
                             </select>
                         </div>
@@ -677,7 +659,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                             <div id="typeBadgeContainer" style="display:none;" class="mb-1">
                                 <span class="badge bg-primary fs-6 px-3 py-2"><i class="fas fa-check-square me-1"></i> Multiple Choice (MCQ)</span>
                             </div>
-                            <select name="type" id="modalType" class="form-select" onchange="toggleMCQFields()" required>
+                            <select name="type" id="modalType" class="form-select" data-erp-change="learning-questions-action-15" data-erp-change-args="<?= schoolPageActionArgs("learning-questions",[]) ?>" required>
                                 <option value="MCQ">Multiple Choice (MCQ)</option>
                                 <option value="Very Short">Very Short Answer</option>
                                 <option value="Short">Short Answer</option>
@@ -741,8 +723,8 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                                 </div>
 
                                 <!-- Center Tick Mark Box for Correct Answer -->
-                                <div class="correct-tick-badge px-3 py-1 bg-white border rounded-pill shadow-sm d-flex align-items-center gap-2" onclick="selectCorrectOption('A')">
-                                    <input type="radio" name="correct_option" id="correctOpt_A" value="A" class="form-check-input m-0 correct-radio" style="cursor: pointer; width: 1.15em; height: 1.15em;" onchange="onCorrectOptionChange('A')" checked>
+                                <div class="correct-tick-badge px-3 py-1 bg-white border rounded-pill shadow-sm d-flex align-items-center gap-2" data-erp-click="learning-questions-action-16" data-erp-click-args="<?= schoolPageActionArgs("learning-questions",[]) ?>">
+                                    <input type="radio" name="correct_option" id="correctOpt_A" value="A" class="form-check-input m-0 correct-radio" style="cursor: pointer; width: 1.15em; height: 1.15em;" data-erp-change="learning-questions-action-17" data-erp-change-args="<?= schoolPageActionArgs("learning-questions",[]) ?>" checked>
                                     <label for="correctOpt_A" class="form-check-label fw-bold text-success m-0" style="cursor: pointer; font-size: 0.88rem;">
                                         <i class="fas fa-check-circle"></i> Correct Answer
                                     </label>
@@ -772,8 +754,8 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                                 </div>
 
                                 <!-- Center Tick Mark Box for Correct Answer -->
-                                <div class="correct-tick-badge px-3 py-1 bg-white border rounded-pill shadow-sm d-flex align-items-center gap-2" onclick="selectCorrectOption('B')">
-                                    <input type="radio" name="correct_option" id="correctOpt_B" value="B" class="form-check-input m-0 correct-radio" style="cursor: pointer; width: 1.15em; height: 1.15em;" onchange="onCorrectOptionChange('B')">
+                                <div class="correct-tick-badge px-3 py-1 bg-white border rounded-pill shadow-sm d-flex align-items-center gap-2" data-erp-click="learning-questions-action-18" data-erp-click-args="<?= schoolPageActionArgs("learning-questions",[]) ?>">
+                                    <input type="radio" name="correct_option" id="correctOpt_B" value="B" class="form-check-input m-0 correct-radio" style="cursor: pointer; width: 1.15em; height: 1.15em;" data-erp-change="learning-questions-action-19" data-erp-change-args="<?= schoolPageActionArgs("learning-questions",[]) ?>">
                                     <label for="correctOpt_B" class="form-check-label fw-bold text-success m-0" style="cursor: pointer; font-size: 0.88rem;">
                                         <i class="fas fa-check-circle"></i> Correct Answer
                                     </label>
@@ -803,8 +785,8 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                                 </div>
 
                                 <!-- Center Tick Mark Box for Correct Answer -->
-                                <div class="correct-tick-badge px-3 py-1 bg-white border rounded-pill shadow-sm d-flex align-items-center gap-2" onclick="selectCorrectOption('C')">
-                                    <input type="radio" name="correct_option" id="correctOpt_C" value="C" class="form-check-input m-0 correct-radio" style="cursor: pointer; width: 1.15em; height: 1.15em;" onchange="onCorrectOptionChange('C')">
+                                <div class="correct-tick-badge px-3 py-1 bg-white border rounded-pill shadow-sm d-flex align-items-center gap-2" data-erp-click="learning-questions-action-20" data-erp-click-args="<?= schoolPageActionArgs("learning-questions",[]) ?>">
+                                    <input type="radio" name="correct_option" id="correctOpt_C" value="C" class="form-check-input m-0 correct-radio" style="cursor: pointer; width: 1.15em; height: 1.15em;" data-erp-change="learning-questions-action-21" data-erp-change-args="<?= schoolPageActionArgs("learning-questions",[]) ?>">
                                     <label for="correctOpt_C" class="form-check-label fw-bold text-success m-0" style="cursor: pointer; font-size: 0.88rem;">
                                         <i class="fas fa-check-circle"></i> Correct Answer
                                     </label>
@@ -834,8 +816,8 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                                 </div>
 
                                 <!-- Center Tick Mark Box for Correct Answer -->
-                                <div class="correct-tick-badge px-3 py-1 bg-white border rounded-pill shadow-sm d-flex align-items-center gap-2" onclick="selectCorrectOption('D')">
-                                    <input type="radio" name="correct_option" id="correctOpt_D" value="D" class="form-check-input m-0 correct-radio" style="cursor: pointer; width: 1.15em; height: 1.15em;" onchange="onCorrectOptionChange('D')">
+                                <div class="correct-tick-badge px-3 py-1 bg-white border rounded-pill shadow-sm d-flex align-items-center gap-2" data-erp-click="learning-questions-action-22" data-erp-click-args="<?= schoolPageActionArgs("learning-questions",[]) ?>">
+                                    <input type="radio" name="correct_option" id="correctOpt_D" value="D" class="form-check-input m-0 correct-radio" style="cursor: pointer; width: 1.15em; height: 1.15em;" data-erp-change="learning-questions-action-23" data-erp-change-args="<?= schoolPageActionArgs("learning-questions",[]) ?>">
                                     <label for="correctOpt_D" class="form-check-label fw-bold text-success m-0" style="cursor: pointer; font-size: 0.88rem;">
                                         <i class="fas fa-check-circle"></i> Correct Answer
                                     </label>
@@ -858,7 +840,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                     </div>
             
             <div class="mt-4 pt-3 border-top d-flex justify-content-end gap-2">
-                <button type="button" class="btn btn-secondary px-4 btn-lg" onclick="hideForm()">Cancel & Close</button>
+                <button type="button" class="btn btn-secondary px-4 btn-lg" data-erp-click="learning-questions-action-24" data-erp-click-args="<?= schoolPageActionArgs("learning-questions",[]) ?>">Cancel & Close</button>
                 <button type="submit" class="btn btn-primary px-5 btn-lg shadow-sm"><i class="fas fa-save"></i> Save Question</button>
             </div>
         </form>
@@ -874,7 +856,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                 <h5 class="modal-title fw-bold" id="importExcelModalLabel">
                     <i class="fas fa-file-excel me-2"></i> Import Questions from Excel / CSV
                 </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close btn-close-white" data-ui-dismiss="modal" aria-label="Close"></button>
             </div>
             <form method="POST" action="" enctype="multipart/form-data">
                 <input type="hidden" name="action_import_excel" value="1"><label class="form-label">Imported content visibility</label><select name="import_visibility" class="form-select mb-3"><option value="private" <?= !$is_admin?'selected':'' ?>>Private</option><option value="public" <?= $is_admin?'selected':'' ?>><?= $is_admin?'Shared catalog':'Public within this school' ?></option></select>
@@ -924,7 +906,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                     </div>
                 </div>
                 <div class="modal-footer bg-light">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-secondary" data-ui-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-primary fw-bold px-4 shadow-sm">
                         <i class="fas fa-upload me-1"></i> Upload & Import Questions
                     </button>
@@ -934,422 +916,12 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
     </div>
 </div>
 
-<script src="<?= APP_URL ?>/assets/js/question-import-context.js?v=1" defer></script>
-<script>
-const canManageCatalog=<?= json_encode($canManageCatalog) ?>;
-const classesMap = <?= json_encode(array_column($classes, 'name', 'id'),JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;
-const subjectsMap = <?= json_encode(array_column($subjects, 'name_en', 'id'),JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;
-const classSubjectsMap = <?= json_encode($class_subjects_map,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;
-const cdcCurriculum = <?= json_encode(require __DIR__ . '/../../config/cdc_curriculum.php') ?>;
-
-window.SchoolQuestionEditor.init('#modalQuestionText, #modalQuestionTextNp, #modalAnswer, #modalAnswerNp, #modalOptA, #modalOptB, #modalOptC, #modalOptD, #modalOptANp, #modalOptBNp, #modalOptCNp, #modalOptDNp');
-
-function updateImportContentMode(){
- const mode=document.querySelector('input[name="import_content_mode"]:checked')?.value||'normal';
- document.querySelectorAll('[data-import-template]').forEach(link=>{
-  const url=new URL(link.href,window.location.href);url.searchParams.set('content_mode',mode);link.href=url.href;
- });
- const help=document.getElementById('importModeHelp');
- if(help)help.textContent=mode==='html'
-  ?'HTML Source: supported HTML formatting and LaTeX in questions, options and model answers are saved. Scripts and unsafe attributes are removed. Use \\( ... \\), \\[ ... \\], $ ... $ or $$ ... $$ for maths. The templates below contain HTML examples.'
-  :'Normal Text: questions, options and model answers are imported as plain text with line breaks. LaTeX is supported; HTML tags are displayed as text. The templates below contain normal-text examples.';
-}
-document.addEventListener('DOMContentLoaded',()=>{
- document.querySelectorAll('input[name="import_content_mode"]').forEach(radio=>radio.addEventListener('change',updateImportContentMode));
- updateImportContentMode();
-});
-function onModalClassChange(selectedSubjectId = '', selectedChapterValue = '', selectedTopicId = '') {
-    const classId = document.getElementById('modalClass').value;
-    const subjectSelect = document.getElementById('modalSubject');
-    subjectSelect.innerHTML = '';
-    
-    if (!classId) {
-        subjectSelect.innerHTML = '<option value="">-- First Select a Class --</option>';
-        updateChaptersDropdown('');
-        return;
-    }
-    
-    // Filter active class-subject mappings
-    const available = classSubjectsMap.filter(cs => cs.class_id == classId);
-    if (available.length > 0) {
-        subjectSelect.innerHTML = '<option value="">-- Choose Subject --</option>';
-        available.forEach(s => {
-            const opt = document.createElement('option');
-            opt.value = s.subject_id;
-            opt.textContent = `[${s.code || 'SUB'}] ${s.name_en} (${s.name_np || ''})${s.is_optional == 1 ? ' [Optional]' : ''}`;
-            subjectSelect.appendChild(opt);
-        });
-    } else {
-        subjectSelect.innerHTML = '<option value="">No assigned subjects in this class</option>';
-    }
-    
-    if (selectedSubjectId) {
-        subjectSelect.value = selectedSubjectId;
-    }
-    
-    updateChaptersDropdown(selectedChapterValue, selectedTopicId);
-}
-
-function showAddForm(category = 'MCQ') {
-    document.getElementById('modalVisibility').value=canManageCatalog?'public':'private';
-    document.getElementById('modalCatalogTopicId').value='';document.getElementById('modalLocalTopicId').value='';
-    document.getElementById('questionsListSection').style.display = 'none';
-    document.getElementById('questionsFormSection').style.display = 'block';
-    
-    document.getElementById('modalAction').value = 'add';
-    document.getElementById('modalQuestionId').value = '';
-    
-    const typeSelect = document.getElementById('modalType');
-    const typeBadge = document.getElementById('typeBadgeContainer');
-    
-    if (category === 'MCQ') {
-        document.getElementById('formTitle').innerHTML = '<i class="fas fa-list-ol text-primary me-2"></i> Add Multiple Choice Question (MCQ)';
-        typeSelect.value = 'MCQ';
-        typeSelect.style.display = 'none';
-        if (typeBadge) typeBadge.style.display = 'block';
-    } else {
-        document.getElementById('formTitle').innerHTML = '<i class="fas fa-pen-nib text-success me-2"></i> Add Question (Subjective / Theory)';
-        typeSelect.style.display = 'block';
-        if (typeBadge) typeBadge.style.display = 'none';
-        
-        // Default to Short answer and hide MCQ option
-        if (typeSelect.value === 'MCQ') {
-            typeSelect.value = 'Short';
-        }
-        for (let i = 0; i < typeSelect.options.length; i++) {
-            if (typeSelect.options[i].value === 'MCQ') {
-                typeSelect.options[i].style.display = 'none';
-            } else {
-                typeSelect.options[i].style.display = '';
-            }
-        }
-    }
-    
-    document.getElementById('modalClass').value = '';
-    onModalClassChange();
-    document.getElementById('modalChapter').value = '';
-    document.getElementById('modalTopicSelect').innerHTML = '<option value="">Choose Topic</option>';
-    document.getElementById('modalMarks').value = (category === 'MCQ') ? '1' : '5';
-    if (document.getElementById('modalCognitiveDomain')) {
-        document.getElementById('modalCognitiveDomain').value = 'Knowledge';
-    }
-    
-    // Clear editors safely
-    if (window.tinymce && tinymce.get('modalQuestionText')) {
-        tinymce.get('modalQuestionText').setContent('');
-    } else {
-        document.getElementById('modalQuestionText').value = '';
-    }
-    if (window.tinymce && tinymce.get('modalQuestionTextNp')) {
-        tinymce.get('modalQuestionTextNp').setContent('');
-    } else {
-        document.getElementById('modalQuestionTextNp').value = '';
-    }
-    if (window.tinymce && tinymce.get('modalAnswer')) {
-        tinymce.get('modalAnswer').setContent('');
-    } else {
-        document.getElementById('modalAnswer').value = '';
-    }
-    if (window.tinymce && tinymce.get('modalAnswerNp')) {
-        tinymce.get('modalAnswerNp').setContent('');
-    } else {
-        document.getElementById('modalAnswerNp').value = '';
-    }
-    // Clear options safely using helper
-    setOptionVal('modalOptA', '');
-    setOptionVal('modalOptANp', '');
-    setOptionVal('modalOptB', '');
-    setOptionVal('modalOptBNp', '');
-    setOptionVal('modalOptC', '');
-    setOptionVal('modalOptCNp', '');
-    setOptionVal('modalOptD', '');
-    setOptionVal('modalOptDNp', '');
-    selectCorrectOption('A');
-    
-    toggleMCQFields();
-    
-    // Scroll to top
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-function selectCorrectOption(opt) {
-    opt = (opt || 'A').toUpperCase();
-    const radio = document.getElementById('correctOpt_' + opt);
-    if (radio) {
-        radio.checked = true;
-    }
-    onCorrectOptionChange(opt);
-}
-
-function onCorrectOptionChange(opt) {
-    opt = (opt || 'A').toUpperCase();
-    ['A', 'B', 'C', 'D'].forEach(o => {
-        const container = document.getElementById('optContainer_' + o);
-        const radio = document.getElementById('correctOpt_' + o);
-        const badge = container ? container.querySelector('.correct-tick-badge') : null;
-        
-        if (container && radio) {
-            if (o === opt) {
-                radio.checked = true;
-                container.style.borderColor = '#198754';
-                container.style.backgroundColor = 'rgba(25, 135, 84, 0.05)';
-                container.classList.add('shadow');
-                if (badge) {
-                    badge.classList.remove('bg-white');
-                    badge.classList.add('bg-success', 'border-success');
-                    const label = badge.querySelector('label');
-                    if (label) label.className = 'form-check-label fw-bold text-white m-0';
-                }
-            } else {
-                radio.checked = false;
-                container.style.borderColor = '#dee2e6';
-                container.style.backgroundColor = '#f8f9fa';
-                container.classList.remove('shadow');
-                if (badge) {
-                    badge.classList.remove('bg-success', 'border-success');
-                    badge.classList.add('bg-white');
-                    const label = badge.querySelector('label');
-                    if (label) label.className = 'form-check-label fw-bold text-success m-0';
-                }
-            }
-        }
-    });
-    
-    const hidden = document.getElementById('modalCorrect');
-    if (hidden) hidden.value = opt;
-}
-
-function setOptionVal(id, val) {
-    if (window.tinymce && tinymce.get(id)) {
-        tinymce.get(id).setContent(val || '');
-    } else {
-        const el = document.getElementById(id);
-        if (el) el.value = val || '';
-    }
-}
-
-function editQuestion(q) {
-    document.getElementById('modalVisibility').value=q.visibility;
-    document.getElementById('modalCatalogTopicId').value=q.catalog_topic_id||'';
-    document.getElementById('questionsListSection').style.display = 'none';
-    document.getElementById('questionsFormSection').style.display = 'block';
-    
-    document.getElementById('modalAction').value = 'edit';
-    document.getElementById('modalQuestionId').value = q.id;
-    
-    const typeSelect = document.getElementById('modalType');
-    const typeBadge = document.getElementById('typeBadgeContainer');
-    
-    // Ensure all options are visible during edit
-    for (let i = 0; i < typeSelect.options.length; i++) {
-        typeSelect.options[i].style.display = '';
-    }
-    
-    if (q.type === 'MCQ') {
-        document.getElementById('formTitle').innerHTML = '<i class="fas fa-list-ol text-primary me-2"></i> Edit Multiple Choice Question (MCQ)';
-        typeSelect.style.display = 'none';
-        if (typeBadge) typeBadge.style.display = 'block';
-    } else {
-        document.getElementById('formTitle').innerHTML = '<i class="fas fa-edit text-warning me-2"></i> Edit Question Details';
-        typeSelect.style.display = 'block';
-        if (typeBadge) typeBadge.style.display = 'none';
-    }
-    
-    document.getElementById('modalClass').value = q.class_id;
-    onModalClassChange(q.subject_id, q.chapter, q.topic_id||q.catalog_topic_id);
-    document.getElementById('modalType').value = q.type;
-    document.getElementById('modalMarks').value = q.marks;
-    if (document.getElementById('modalCognitiveDomain')) {
-        document.getElementById('modalCognitiveDomain').value = q.cognitive_domain || 'Knowledge';
-    }
-    
-    // Populate editors safely
-    setOptionVal('modalQuestionText', q.question_text);
-    setOptionVal('modalQuestionTextNp', q.question_text_np);
-    setOptionVal('modalAnswer', q.answer);
-    setOptionVal('modalAnswerNp', q.answer_np);
-    
-    if (q.type === 'MCQ') {
-        const opts = JSON.parse(q.options || '{}');
-        setOptionVal('modalOptA', opts.A || '');
-        setOptionVal('modalOptB', opts.B || '');
-        setOptionVal('modalOptC', opts.C || '');
-        setOptionVal('modalOptD', opts.D || '');
-        
-        const optsNp = JSON.parse(q.options_np || '{}');
-        setOptionVal('modalOptANp', optsNp.A || '');
-        setOptionVal('modalOptBNp', optsNp.B || '');
-        setOptionVal('modalOptCNp', optsNp.C || '');
-        setOptionVal('modalOptDNp', optsNp.D || '');
-        
-        selectCorrectOption(q.correct_option || 'A');
-    } else {
-        setOptionVal('modalOptA', '');
-        setOptionVal('modalOptANp', '');
-        setOptionVal('modalOptB', '');
-        setOptionVal('modalOptBNp', '');
-        setOptionVal('modalOptC', '');
-        setOptionVal('modalOptCNp', '');
-        setOptionVal('modalOptD', '');
-        setOptionVal('modalOptDNp', '');
-    }
-    
-    toggleMCQFields();
-    // Type-change defaults apply to new questions, not an existing saved weight.
-    document.getElementById('modalMarks').value = q.marks;
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-function hideForm() {
-    document.getElementById('questionsListSection').style.display = 'block';
-    document.getElementById('questionsFormSection').style.display = 'none';
-}
-
-let chapterDropdownRequestVersion = 0;
-let topicDropdownRequestVersion = 0;
-
-function updateChaptersDropdown(selectedChapterValue = '', selectedTopicId = '') {
-    const requestVersion=++chapterDropdownRequestVersion;
-    ++topicDropdownRequestVersion;
-    document.getElementById('modalTopicSelect').innerHTML='<option value="">Choose Topic</option>';
-    const classId=document.getElementById('modalClass').value;
-    const subjectId=document.getElementById('modalSubject').value;
-    const select=document.getElementById('modalChapterSelect');
-    const customInput=document.getElementById('modalChapterCustom');
-    const hiddenInput=document.getElementById('modalChapter');
-    select.innerHTML='';customInput.style.display='none';hiddenInput.value='';
-    const addCustom=()=>{if(!canManageCatalog)return;const opt=document.createElement('option');opt.value='__custom__';opt.textContent='Other / Custom Chapter';select.appendChild(opt);};
-    if(!classId||!subjectId){updateTopicsDropdown(0,'');return;}
-    $.ajax({url:window.location.pathname,data:{action_get_chapters:1,class_id:classId,subject_id:subjectId},dataType:'json',success:function(chapters){
-        if(requestVersion!==chapterDropdownRequestVersion)return;
-        select.innerHTML='';
-        for(const ch of chapters||[]){const opt=document.createElement('option');opt.value=ch.name;opt.textContent=ch.name;opt.setAttribute('data-id',ch.id);select.appendChild(opt);}
-        addCustom();
-        const matched=(chapters||[]).find(c=>c.name===selectedChapterValue);
-        if(selectedChapterValue&&matched){select.value=matched.name;}
-        else if(selectedChapterValue&&canManageCatalog){select.value='__custom__';customInput.style.display='block';customInput.value=selectedChapterValue;}
-        else if(chapters?.length){select.value=chapters[0].name;}
-        else if(canManageCatalog){select.value='__custom__';customInput.style.display='block';customInput.value=selectedChapterValue;}
-        hiddenInput.value=select.value==='__custom__'?customInput.value:select.value;
-        const chosen=(chapters||[]).find(c=>c.name===select.value);
-        updateTopicsDropdown(chosen?.id||0,hiddenInput.value,selectedTopicId);
-    },error:function(){if(requestVersion!==chapterDropdownRequestVersion)return;select.innerHTML='';addCustom();hiddenInput.value='';}});
-}
-
-function updateTopicsDropdown(chapterId, chapterName, selectedTopicId = '') {
-    const requestVersion = ++topicDropdownRequestVersion;
-    const classId = document.getElementById('modalClass').value;
-    const subjectId = document.getElementById('modalSubject').value;
-    const select = document.getElementById('modalTopicSelect');
-    
-    select.innerHTML = '<option value="">Choose Topic</option>';
-    if (!classId || !subjectId || (!chapterId && !chapterName)) return;
-    
-    $.ajax({
-        url: window.location.pathname,
-        data: {
-            action_get_topics: 1,
-            chapter_id: chapterId,
-            chapter_name: chapterName,
-            class_id: classId,
-            subject_id: subjectId
-        },
-        dataType: 'json',
-        success: function(topics) {
-            if (requestVersion !== topicDropdownRequestVersion) return;
-            select.innerHTML = '<option value="">Choose Topic</option>';
-            if (Array.isArray(topics) && topics.length > 0) {
-                const choices = new Map();
-                topics.forEach(t => {
-                    const key = String(t.name).trim().replace(/\s+/g, ' ').toLowerCase();
-                    if (!key) return;
-                    const aliases = [t.id, ...(Array.isArray(t.alias_ids) ? t.alias_ids : [])].map(String);
-                    const isSelected = selectedTopicId !== '' && aliases.includes(String(selectedTopicId));
-                    if (!choices.has(key)) choices.set(key, {topic: t, value: t.id});
-                    if (isSelected) choices.get(key).value = selectedTopicId;
-                });
-                choices.forEach(({topic, value}) => {
-                    const opt = document.createElement('option');
-                    opt.value = value;
-                    opt.textContent = topic.name;
-                    const alias=(topic.aliases||[]).find(a=>String(a.id)===String(value));
-                    opt.setAttribute('data-scope',alias?.scope||topic.scope||'local');
-                    select.appendChild(opt);
-                });
-                if (selectedTopicId) {
-                    select.value = selectedTopicId;
-                }
-            }
-            syncCatalogTopic();
-        }
-    });
-}
-
-function syncCatalogTopic(){
-    const select=document.getElementById('modalTopicSelect');
-    const global=document.getElementById('modalCatalogTopicId');
-    const local=document.getElementById('modalLocalTopicId');
-    if(!global||!local)return;
-    const scope=select.options[select.selectedIndex]?.getAttribute('data-scope');
-    global.value=scope==='shared'?select.value:'';local.value=scope==='shared'?'':select.value;
-}
-
-function onChapterSelectChange() {
-    const select = document.getElementById('modalChapterSelect');
-    const customInput = document.getElementById('modalChapterCustom');
-    const hiddenInput = document.getElementById('modalChapter');
-    
-    if (select.value === '__custom__') {
-        customInput.style.display = 'block';
-        hiddenInput.value = customInput.value;
-        updateTopicsDropdown(0, '', '');
-    } else {
-        customInput.style.display = 'none';
-        hiddenInput.value = select.value;
-        const selectedOpt = select.options[select.selectedIndex];
-        const dbChapterId = selectedOpt ? parseInt(selectedOpt.getAttribute('data-id')) || 0 : 0;
-        updateTopicsDropdown(dbChapterId, select.value, '');
-    }
-}
-
-function updateChapterHidden() {
-    const customInput = document.getElementById('modalChapterCustom');
-    const hiddenInput = document.getElementById('modalChapter');
-    hiddenInput.value = customInput.value;
-}
-
-function toggleMCQFields() {
-    const type = document.getElementById('modalType').value;
-    const mcqDiv = document.getElementById('mcqDetails');
-    const ansDiv = document.getElementById('answerDetails');
-    const marksField = document.getElementById('modalMarks');
-    const mcqInputs = mcqDiv.querySelectorAll('.mcq-field');
-    
-    if (type === 'MCQ') {
-        mcqDiv.style.display = 'block';
-        ansDiv.style.display = 'block';
-        mcqInputs.forEach(i => i.setAttribute('required', 'required'));
-        marksField.value = '1';
-    } else {
-        mcqDiv.style.display = 'none';
-        ansDiv.style.display = 'block';
-        mcqInputs.forEach(i => i.removeAttribute('required'));
-        
-        if (type === 'Very Short') {
-            marksField.value = '1';
-        } else if (type === 'Short') {
-            marksField.value = '5';
-        } else if (type === 'Long') {
-            marksField.value = '8';
-        } else if (type === 'Reasoning') {
-            marksField.value = '4';
-        } else if (type === 'Difference Between') {
-            marksField.value = '4';
-        }
-    }
-}
-
-</script>
+<?php schoolPageModule("external-question-import-context"); ?>
+<?php schoolPageModule("learning-questions");schoolPageValue("learning-questions-value-0",(string)(json_encode($canManageCatalog)));
+schoolPageValue("learning-questions-value-1",(string)(json_encode(array_column($classes, 'name', 'id'),JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT)));
+schoolPageValue("learning-questions-value-2",(string)(json_encode(array_column($subjects, 'name_en', 'id'),JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT)));
+schoolPageValue("learning-questions-value-3",(string)(json_encode($class_subjects_map,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT)));
+schoolPageValue("learning-questions-value-4",(string)(json_encode(require __DIR__ . '/../../config/cdc_curriculum.php'))); ?>
 
 <?php endif; ?>
 

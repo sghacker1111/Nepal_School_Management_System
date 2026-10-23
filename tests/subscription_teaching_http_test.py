@@ -1,6 +1,8 @@
 """Actual forms plus crafted URLs/POSTs against a disposable school database."""
 import json, re
+from html import unescape
 from http_support import ERPHttpFixture
+from app_response_http_test import config as app_config
 
 with ERPHttpFixture() as app:
     f=app.fixture
@@ -27,7 +29,7 @@ with ERPHttpFixture() as app:
     grid_path='/modules/learning/specification_grids.php'
     grid={'action':'add','name':'Own grid','class_id':cls,'subject_id':own,'count_MCQ':5,'marks_MCQ':1}
     body=app.request(grid_path,grid);assert 'Own grid' in body
-    mapping=json.loads(re.search(r'const gridSubjectsByClass=(.*?);',body).group(1))
+    mapping=json.loads(app_config(body.encode())['values']['learning-specification-grids-value-0'])
     assert [int(s['id']) for s in mapping[str(cls)]]==[own]
     grid_id=app.db.execute("SELECT id FROM specification_grids WHERE name='Own grid'").fetchone()[0]
     app.request(grid_path,{**grid,'action':'edit','grid_id':grid_id,'name':'Edited own grid'})
@@ -56,7 +58,8 @@ with ERPHttpFixture() as app:
     before=app.snapshot('schools'),app.snapshot('users')
     body=app.request(schools,{**school,'packages[]':[]})
     assert 'Tick at least one package' in body and 'TestPassword123!' not in body
-    recovery=json.loads(re.search(r'const recovery=(.*?);',body).group(1))
+    metadata=json.loads(unescape(re.search(r'data-erp-config="([^"]+)"',body).group(1)))
+    recovery=json.loads(metadata['values']['super-admin-schools-value-1'])
     assert recovery['name_en']==school['name_en'] and recovery['packages']==[] and 'admin_password' not in recovery
     assert (app.snapshot('schools'),app.snapshot('users'))==before
     body=app.request(schools,school);assert 'School registered' in body

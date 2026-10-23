@@ -1,9 +1,16 @@
-name: Deploy Website via FTP
+name: Validate and deploy Nepal ERP to InfinityFree
 
 on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: 'Deploy to InfinityFree after MySQL import and private configuration are ready'
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -14,22 +21,85 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  web-deploy:
-    name: Deploy to Hosting
+  validate:
+    name: Validate application and deployment boundaries
     runs-on: ubuntu-latest
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+    - name: Set up build-time Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+        cache: npm
+    - name: Verify deployment safeguards
+      run: python3 tests/deployment_test.py
+    - name: Build and verify frontend
+      run: |
+        npm ci --no-fund
+        npm run build
+        npm run test:ui
+        python3 tests/ftp_runtime_test.py
+
+  web-deploy:
+    name: Deploy to InfinityFree over TLS
+    needs: validate
+    if: github.ref == 'refs/heads/main' && (vars.FTP_DEPLOY_ENABLED == 'true' || (github.event_name == 'workflow_dispatch' && inputs.deploy))
+    runs-on: ubuntu-latest
+    environment: infinityfree-production
     steps:
     - name: Get latest code
       uses: actions/checkout@v4
       with:
         fetch-depth: 0 # Fetch all history so git diff works for FTP deploy
+
+    - name: Set up build-time Node (not required by the PHP host)
+      uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+        cache: npm
+    - name: Build local frontend assets
+      run: |
+        npm ci --no-fund
+        npm run build
+        npm run test:ui
     
+    - name: Validate hosting configuration
+      id: hosting
+      env:
+        FTP_SERVER: ${{ secrets.FTP_SERVER }}
+        FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+        FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        for setting in FTP_SERVER FTP_USERNAME FTP_PASSWORD FTP_SERVER_DIR; do
+          if [[ -z "${!setting}" ]]; then
+            echo "::error::Set $setting in this repository's Actions settings before deployment."
+            exit 1
+          fi
+        done
+        FTP_SERVER_DIR="${FTP_SERVER_DIR#"${FTP_SERVER_DIR%%[![:space:]]*}"}"
+        FTP_SERVER_DIR="${FTP_SERVER_DIR%"${FTP_SERVER_DIR##*[![:space:]]}"}"
+        FTP_SERVER_DIR="$(printf '%s' "$FTP_SERVER_DIR" | tr '\134' '/')"
+        FTP_SERVER_DIR="${FTP_SERVER_DIR%/}/"
+        if [[ ! "$FTP_SERVER_DIR" =~ ^/?([A-Za-z0-9_-][A-Za-z0-9._-]*/)*htdocs/$ ]]; then
+          echo '::error::FTP_SERVER_DIR must name the website htdocs folder; root, URLs and parent traversal are refused.'
+          exit 1
+        fi
+        printf '::add-mask::%s\n' "$FTP_SERVER_DIR"
+        printf 'directory=%s\n' "$FTP_SERVER_DIR" >> "$GITHUB_OUTPUT"
+
     - name: Sync files to FTP
       uses: SamKirkland/FTP-Deploy-Action@v4.3.4
       with:
         server: ${{ secrets.FTP_SERVER }}
         username: ${{ secrets.FTP_USERNAME }}
         password: ${{ secrets.FTP_PASSWORD }}
-        server-dir: school.my-board.org/htdocs/ # Subdomain folder for school.my-board.org
+        server-dir: ${{ steps.hosting.outputs.directory }}
+        protocol: ftps
+        port: 21
         # Exclusions apply to uploads AND deletions from the previous sync state.
         # These files belong to the running school, not the source repository.
         dangerous-clean-slate: false
@@ -45,6 +115,15 @@ jobs:
           **/*.db
           **/*.db-*
           **/*.bak
+          **/*.sql.gz
+          **/school_erp_mysql*.sql*
+          **/migration-manifest*.json
+          **/source-manifest*.json
+          **/projected-manifest*.json
+          **/migration-report*.md
+          **/*migration-report*.json
+          **/verification-error.json
+          **/statements.jsonl
           **/.backups
           **/.backups/**
           **/backups
@@ -59,4 +138,17 @@ jobs:
           scratch/**
           tests/**
           docs/**
+          frontend/**
+          tools/**
+          package.json
+          package-lock.json
+          .superpowers/**
           **/*.log
+
+    - name: Verify deployed question editors and math runtime (read-only)
+      env:
+        FTP_SERVER: ${{ secrets.FTP_SERVER }}
+        FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+        FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        FTP_SERVER_DIR: ${{ steps.hosting.outputs.directory }}
+      run: python3 tools/verify_ftp_runtime.py

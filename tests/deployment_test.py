@@ -10,19 +10,49 @@ required = {
     '**/.git*', '**/.git*/**', '**/node_modules/**', '**/.env*',
     '**/*.sqlite', '**/*.sqlite-*', '**/*.sqlite3', '**/*.sqlite3-*',
     '**/*.db', '**/*.db-*', '**/*.bak',
+    '**/*.sql.gz','**/school_erp_mysql*.sql*','**/migration-manifest*.json',
+    '**/source-manifest*.json','**/projected-manifest*.json','**/migration-report*.md',
+    '**/*migration-report*.json','**/verification-error.json','**/statements.jsonl',
     '**/.backups', '**/.backups/**', '**/backups', '**/backups/**',
     '**/uploads', '**/uploads/**', 'config/config.php',
     'config/local.php', 'config/*.local.php', '**/__pycache__/**',
     '**/*.pyc', 'scratch/**', 'tests/**', 'docs/**', '**/*.log',
+    'frontend/**','tools/**','package.json','package-lock.json','.superpowers/**',
 }
 assert required <= patterns, f'Missing persistent-data exclusions: {sorted(required - patterns)}'
 assert re.search(r'^        dangerous-clean-slate: false$', workflow, re.M), 'Destructive clean-slate deployment must stay disabled'
 assert re.search(r'^  cancel-in-progress: false$', workflow, re.M), 'Never interrupt a production FTP transfer'
 assert re.search(r'^  group: school-ftp-production$', workflow, re.M), 'Serialize deployment to this site'
-assert 'server-dir: school.my-board.org/htdocs/' in workflow, 'Do not broaden the FTP destination'
+assert 'server-dir: ${{ steps.hosting.outputs.directory }}' in workflow, 'Deploy only to the normalized and validated website directory'
+assert 'id: hosting' in workflow and 'directory=%s\\n' in workflow and '"$GITHUB_OUTPUT"' in workflow, 'Carry the validated directory to the FTP action'
+assert '::add-mask::%s' in workflow, 'Keep the normalized directory masked in workflow output'
+assert 'FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}' in workflow, 'Validate the same directory that FTP uses'
+assert 'school.my-board.org/htdocs/' not in workflow, 'Do not deploy the new system to the old website'
 assert 'branches:\n      - main' in workflow, 'Only main should deploy to production'
-for secret in ('FTP_SERVER', 'FTP_USERNAME', 'FTP_PASSWORD'):
+assert 'workflow_dispatch:' in workflow and 'default: false' in workflow, 'A manual deployment must be an explicit choice'
+assert "vars.FTP_DEPLOY_ENABLED == 'true'" in workflow, 'New repository pushes must not deploy before hosting is configured'
+assert "github.ref == 'refs/heads/main'" in workflow, 'Manual branch runs must not deploy feature branches'
+assert 'needs: validate' in workflow, 'Production must wait for successful validation'
+assert 'environment: infinityfree-production' in workflow, 'Hosting secrets belong to the production environment/repository'
+assert 'protocol: ftps' in workflow and 'port: 21' in workflow, 'Use explicit TLS for InfinityFree FTP'
+assert 'for setting in FTP_SERVER FTP_USERNAME FTP_PASSWORD FTP_SERVER_DIR' in workflow, 'Missing credentials must fail before FTP writes'
+assert '^/?([A-Za-z0-9_-][A-Za-z0-9._-]*/)*htdocs/$' in workflow, 'Reject root, traversal, URLs and non-htdocs destinations'
+for secret in ('FTP_SERVER', 'FTP_USERNAME', 'FTP_PASSWORD', 'FTP_SERVER_DIR'):
     assert '${{ secrets.' + secret + ' }}' in workflow, f'Use the configured {secret} secret'
 # Keep source migrations available; the real database itself must remain excluded.
 assert '*.sql' not in patterns and '**/*.sql' not in patterns
+assert '**/*.sql.gz' in patterns and '**/school_erp_mysql*.sql*' in patterns
+assert '**/migration-manifest*.json' in patterns and '**/projected-manifest*.json' in patterns and '**/statements.jsonl' in patterns
+assert 'npm ci --no-fund' in workflow and 'npm run build' in workflow and 'npm run test:ui' in workflow
+assert not any(pattern in ('assets/**','assets/dist/**','assets/vendor/**','app.php','.htaccess') for pattern in patterns),'Runtime routing, compiled assets and self-hosted editor libraries must ship'
+assert 'copyEditorAssets(root)' in (Path(__file__).resolve().parents[1]/'tools/build-assets.mjs').read_text(encoding='utf-8'),'Build the editor, plugins, math renderer and fonts before FTP'
+assert 'run: python3 tools/verify_ftp_runtime.py' in workflow,'FTP success must also verify deployed editor/runtime files read-only'
+htaccess=(Path(__file__).resolve().parents[1]/'.htaccess').read_text(encoding='utf-8')
+router=(Path(__file__).resolve().parents[1]/'router.php').read_text(encoding='utf-8')
+assert 'sql(\\.gz)?' in htaccess and 'private-migration' in htaccess and 'statements\\.jsonl' in htaccess
+assert 'sql(?:\\.gz)?' in router and '(?:migration|source|projected)-manifest' in router and 'statements\\.jsonl' in router and 'private-migration' in router
+assert not (Path(__file__).resolve().parents[1]/'database_sqlite.sql').exists()
+assert not (Path(__file__).resolve().parents[1]/'database.sql').exists()
+assert (Path(__file__).resolve().parents[1]/'tests/fixtures/database_sqlite.sql').is_file()
+assert (Path(__file__).resolve().parents[1]/'tests/fixtures/legacy_mysql.sql').is_file()
 print(f'Deployment safety checks passed: {len(required)} runtime exclusions, secrets, destination and serialized non-destructive FTP.')

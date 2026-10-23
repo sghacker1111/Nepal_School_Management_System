@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__.'/routes.php';
+require_once __DIR__.'/app_response.php';
 require_once __DIR__ . '/grading.php';
 require_once __DIR__.'/print_signature.php';
 
@@ -43,8 +45,7 @@ function redirect($url, $message = '', $type = 'success') {
         $_SESSION['flash_message'] = $message;
         $_SESSION['flash_type'] = $type;
     }
-    header("Location: $url");
-    exit;
+    schoolAppRedirect($url);
 }
 
 /**
@@ -68,7 +69,7 @@ function displayFlashMessage() {
         
         return "<div class='alert {$alertClass} alert-dismissible fade show' role='alert'>
                     {$message}
-                    <button type='button' class='btn-close' data-bs-dismiss='alert'></button>
+                    <button type='button' class='btn-close' data-ui-dismiss='alert'></button>
                 </div>";
     }
     return '';
