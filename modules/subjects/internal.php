@@ -7,7 +7,7 @@ require_once __DIR__.'/../../includes/assessment_service.php';
 require_once __DIR__.'/../../includes/exam_mapping_service.php';
 Auth::requireRole(['super_admin','school_admin','exam_officer']);
 $db=getDB();$school=(int)Auth::getSchoolId();$mapping=(int)($_GET['mapping']??0);$examId=(int)($_GET['exam']??0);$error='';
-if(!$examId&&!Auth::hasRole(['super_admin','school_admin']))denySchoolRequest('Only administrators can change future class defaults.');
+if(!$examId&&!Auth::hasRole('super_admin'))denySchoolRequest('Only system admin can change catalog assessment defaults.');
 if($examId){$exam=schoolRecord($db,'exams',$examId,$school);$q=$db->prepare('SELECT * FROM exam_subjects WHERE id=? AND exam_id=?');$q->execute([$mapping,$examId]);$row=$q->fetch();}
 else{$exam=['type'=>'terminal'];$row=schoolRecord($db,'class_subjects',$mapping,$school);$row['practical_full']=$row['in_full_marks'];}
 if(!$row)denySchoolRequest('Subject configuration not found.',404);

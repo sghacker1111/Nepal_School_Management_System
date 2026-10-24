@@ -23,7 +23,7 @@ with ERPHttpFixture() as app:
     app.login('student_login');query='?'+urlencode({'action':'catalog','class_id':cls,'subject_id':sub})
     assert shared_id in [q['id'] for q in json.loads(app.request(practice+query))['questions']]
     app.db.execute('UPDATE subjects SET is_hidden=1 WHERE id=?',(gs,));app.db.commit()
-    assert shared_id not in [q['id'] for q in json.loads(app.request(practice+query))['questions']],'Hidden shared subject cannot leak via local mapping'
+    app.request(practice+query,status=404) # Hidden shared catalog subject is no longer a school offering.
     app.db.execute('UPDATE subjects SET is_hidden=0 WHERE id=?',(gs,));app.db.commit()
     app.login('teacher');payload={**payload,'class_id':cls,'subject_id':sub,'question_text':'<p>Local integration MCQ</p>'};app.request(bank,payload)
     qid=app.db.execute("SELECT id FROM questions WHERE question_text LIKE '%Local integration MCQ%'").fetchone()[0]

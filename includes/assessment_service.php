@@ -27,13 +27,14 @@ function saveInternalAssessment(PDO $db,int $school,int $actor,string $role,int 
     require_once __DIR__.'/exam_mapping_service.php';
     $q=$db->prepare('SELECT * FROM users WHERE id=?');$q->execute([$actor]);$user=$q->fetch();
     if(!$user||!(int)$user['status']||$user['role']!==$role||($role!=='super_admin'&&(int)$user['school_id']!==$school)||!in_array($role,['super_admin','school_admin','exam_officer'],true))throw new InvalidArgumentException('Your active account cannot edit this school assessment.');
-    if(!$examId&&!in_array($role,['super_admin','school_admin'],true))throw new InvalidArgumentException('Only administrators can change future class defaults.');
+    if(!$examId&&$role!=='super_admin')throw new InvalidArgumentException('Only system admin can change catalog assessment defaults.');
     if(empty($input['confirm_assessment_change']))throw new InvalidArgumentException('Confirm the warning before editing internal assessment.');
     $exam=$examId?schoolRecord($db,'exams',$examId,$school):['type'=>'terminal'];
     if($examId)assertExamConfigurationEditable($exam);
     if($examId){$q=$db->prepare('SELECT * FROM exam_subjects WHERE id=? AND exam_id=?');$q->execute([$mappingId,$examId]);$row=$q->fetch();}
     else $row=schoolRecord($db,'class_subjects',$mappingId,$school);
     if(!$row)throw new InvalidArgumentException('The subject configuration no longer exists.');
+    if($school>0&&!schoolSubjectAssigned($db,$school,(int)$row['class_id'],(int)$row['subject_id']))throw new InvalidArgumentException('This subject is not currently assigned to the school class.');
     schoolRecord($db,'classes',(int)$row['class_id'],$school);schoolRecord($db,'subjects',(int)$row['subject_id'],$school);
     if(($row['assessment_method']??'')==='THEMATIC_CONTINUOUS'||($examId&&(empty($exam['has_internal'])||$exam['type']==='unit')))throw new InvalidArgumentException('This assessment has no separate IN components.');
     if(!hash_equals(assessmentRevision($row,(bool)$examId),(string)($input['revision']??'')))throw new InvalidArgumentException('This configuration changed. Reload and review it again.');
@@ -49,6 +50,7 @@ function saveInternalAssessment(PDO $db,int $school,int $actor,string $role,int 
         $current=schoolRecord($db,'class_subjects',$mappingId,$school,true);
         if(!hash_equals(assessmentRevision($current,false),(string)$input['revision']))throw new InvalidArgumentException('The class default changed; reload and review it again.');
         $db->prepare('UPDATE class_subjects SET internal_components=?,in_full_marks=?,in_pass_marks=? WHERE id=? AND school_id=?')->execute([$encoded,$total,$pass,$mappingId,$school]);
+        if($school===0)syncAllSchoolOfferings($db);
         $db->prepare('INSERT INTO activity_logs(user_id,action,table_name,record_id,ip_address) VALUES(?,?,?,?,?)')->execute([$actor,'Change internal assessment defaults','class_subjects',$mappingId,$_SERVER['REMOTE_ADDR']??'local']);
         $db->commit();
     }catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}
@@ -66,6 +68,7 @@ function assessmentProfile(array $scheme,array $exam): array {
 /** Explicit enrollment, never turn every offered elective into a required subject. */
 function enrollOptionalForMarks(PDO $db,int $school,array &$student,array $scheme,array $input,array $class,int $user): void {
     $subject=(int)$scheme['subject_id'];
+    if(!schoolSubjectAssigned($db,$school,(int)$class['id'],$subject))throw new InvalidArgumentException('This elective is not currently offered by this school class.');
     if(in_array($subject,array_map('intval',[$student['optional_subject_i'],$student['optional_subject_ii'],$student['optional_subject_iii']??0]),true))return;
     if(empty($input['optional_enrollment'][$student['id']][$subject])||empty($input['confirm_optional_enrollment']))throw new InvalidArgumentException('Confirm the optional-subject selection before entering its marks.');
     $q=$db->prepare('SELECT cs.id FROM class_subjects cs JOIN subjects s ON s.id=cs.subject_id WHERE cs.school_id=? AND cs.class_id=? AND cs.subject_id=? AND cs.is_optional=1 AND COALESCE(s.is_hidden,0)=0');$q->execute([$school,$class['id'],$subject]);

@@ -32,7 +32,7 @@ function learningReadClasses(PDO $db,array $actor):array {
 function learningReadSubjects(PDO $db,array $actor,int $class):array {
     if(!in_array($class,array_map('intval',array_column(learningReadClasses($db,$actor),'id')),true))return [];
     // Keep distinct subject identities even if legacy normalization makes labels equal.
-    $q=$db->prepare('SELECT DISTINCT s.*,cs.is_optional mapping_optional FROM subjects s JOIN class_subjects cs ON cs.subject_id=s.id AND cs.school_id=s.school_id JOIN classes c ON c.id=cs.class_id AND c.school_id=cs.school_id WHERE s.school_id=? AND cs.class_id=? AND (cs.is_active=1 OR cs.is_optional=1) AND c.is_active=1 AND COALESCE(s.is_hidden,0)=0 ORDER BY s.name_en,s.code,s.id');$q->execute([$actor['school_id'],$class]);$rows=$q->fetchAll(PDO::FETCH_ASSOC);
+    $q=$db->prepare('SELECT DISTINCT s.*,cs.is_optional mapping_optional FROM subjects s JOIN class_subjects cs ON cs.subject_id=s.id AND cs.school_id=s.school_id JOIN classes c ON c.id=cs.class_id AND c.school_id=cs.school_id WHERE s.school_id=? AND cs.class_id=? AND cs.is_active=1 AND c.is_active=1 AND COALESCE(s.is_hidden,0)=0 AND '.schoolSubjectAssignedSql('cs.school_id','cs.class_id','cs.subject_id').' ORDER BY s.name_en,s.code,s.id');$q->execute([$actor['school_id'],$class]);$rows=$q->fetchAll(PDO::FETCH_ASSOC);
     if($actor['role']==='student'){
         try{$student=studentLearningRecord($db,$actor['school_id'],$actor['id']);}catch(InvalidArgumentException $e){return [];}
         $optional=array_map('intval',array_filter([$student['optional_subject_i'],$student['optional_subject_ii'],$student['optional_subject_iii']]));
@@ -52,7 +52,7 @@ function learningRecordScope(PDO $db,array $actor,array $record):?array {
         foreach(learningReadSubjects($db,$actor,$class) as $r)if((int)$r['id']===$subject)return ['school_id'=>$school,'class_id'=>$class,'subject_id'=>$subject];
         return null;
     }
-    $q=$db->prepare('SELECT cs.id FROM classes c JOIN class_subjects cs ON cs.class_id=c.id AND cs.school_id=0 JOIN subjects s ON s.id=cs.subject_id AND s.school_id=0 WHERE c.school_id=0 AND c.id=? AND s.id=? AND c.is_active=1 AND COALESCE(s.is_hidden,0)=0 AND (cs.is_active=1 OR cs.is_optional=1)');$q->execute([$class,$subject]);if(!$q->fetchColumn())return null;
+    $q=$db->prepare('SELECT cs.id FROM classes c JOIN class_subjects cs ON cs.class_id=c.id AND cs.school_id=0 JOIN subjects s ON s.id=cs.subject_id AND s.school_id=0 WHERE c.school_id=0 AND c.id=? AND s.id=? AND c.is_active=1 AND COALESCE(s.is_hidden,0)=0 AND cs.is_active=1');$q->execute([$class,$subject]);if(!$q->fetchColumn())return null;
     foreach(learningReadClasses($db,$actor) as $c)foreach(learningReadSubjects($db,$actor,(int)$c['id']) as $s){
         try{$scope=learningCatalogScope($db,$actor['school_id'],(int)$c['id'],(int)$s['id']);}catch(InvalidArgumentException $e){continue;}
         if($scope['shared']&&$scope['shared']['class_id']===$class&&$scope['shared']['subject_id']===$subject)return $scope['local'];

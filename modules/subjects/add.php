@@ -8,7 +8,7 @@ require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/catalog_validation.php';
 
-Auth::requireRole(['super_admin', 'school_admin']);
+Auth::requireRole('super_admin');
 
 $db = getDB();
 $school_id = Auth::getSchoolId();
@@ -106,6 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $th_credit_hours, $in_credit_hours, $th_full_marks, $th_pass_marks, $in_full_marks, $in_pass_marks
                 ]);
                 
+                require_once __DIR__.'/../../includes/school_offerings.php';syncAllSchoolOfferings($db);
                 $db->commit();
                 
                 Auth::logActivity(Auth::getUserId(), 'Add Subject and Class Mapping', 'subjects', $new_subject_id);

@@ -22,6 +22,7 @@ function calculateModalTotals() {
 }
 
 function showAddSubjectForm() {
+    document.getElementById('subjectSchoolDefault').value='auto';
     ['subjectThCh','subjectInCh','subjectThFm','subjectThPm','subjectInFm','subjectInPm'].forEach(id=>document.getElementById(id).disabled=false);
     document.getElementById('subjectAction').value = 'add';
     document.getElementById('subjectId').value = '';
@@ -51,6 +52,7 @@ function showAddSubjectForm() {
 }
 
 function editSubject(s) {
+    document.getElementById('subjectSchoolDefault').value='auto';
     document.getElementById('subjectAction').value = 'edit';
     document.getElementById('subjectId').value = s.id;
     document.getElementById('subjectModalTitle').innerHTML = '<i class="fas fa-edit"></i> Edit Universal Subject';

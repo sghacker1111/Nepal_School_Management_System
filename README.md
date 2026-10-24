@@ -242,3 +242,5 @@ Nothing deploys automatically from local edits, but **pushing this repository's 
 ## License
 
 Proprietary software for educational institutions.
+
+School teaching subjects: see [catalog ownership and school assignments](docs/school-subject-offerings-2026-10-24.md).

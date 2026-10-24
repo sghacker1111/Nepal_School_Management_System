@@ -72,6 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         $stmt = $db->prepare("INSERT INTO academic_years (year_bs, year_ad, is_active, school_id) VALUES (?, ?, 1, ?)");
                         $stmt->execute([$year_parts[1], $year_parts[2], $new_school_id]);
                         provisionSchool($db, (int)$new_school_id);
+                        require_once __DIR__.'/../../includes/school_offerings.php';syncSchoolOfferings($db,(int)$new_school_id,true);
                         
                         // Create admin user
                         $pass_hash = password_hash($admin_password, PASSWORD_DEFAULT);
@@ -256,6 +257,7 @@ ob_start();
                             </td>
                             <td><span class="badge bg-info"><?= sanitize($school['academic_year_current'] ?: '2081/2025') ?></span></td>
                             <td class="text-end">
+                                <a class="btn btn-sm btn-outline-primary" href="<?= schoolRouteUrl('modules/super_admin/offerings.php') ?>?school_id=<?= (int)$school['id'] ?>">Classes & subjects</a>
                                 <button data-erp-click="super-admin-schools-action-1" data-erp-click-args="<?= schoolPageActionArgs("super-admin-schools",[(string)(htmlspecialchars(json_encode($school)))]) ?>" class="btn btn-sm btn-outline-warning" title="Edit">
                                     <i class="fas fa-edit"></i> Edit
                                 </button>

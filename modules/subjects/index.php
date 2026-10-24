@@ -14,6 +14,7 @@ $school_id = Auth::getSchoolId();
 if (Auth::getRole() === 'super_admin' && !$school_id) {
     $school_id = 0;
 }
+if($school_id>0){require __DIR__.'/../../includes/school_offerings_page.php';exit;}
 
 // Handle hide / unhide toggle
 if (isset($_GET['toggle_hide']) && Auth::hasRole(['super_admin', 'school_admin'])) {
@@ -47,7 +48,7 @@ $stmt = $db->prepare("
     LEFT JOIN class_subjects cs ON s.id = cs.subject_id AND (cs.school_id = ?)
     LEFT JOIN classes c ON cs.class_id = c.id
     WHERE (s.school_id = ?) $hidden_clause AND (c.is_active = 1 OR cs.class_id IS NULL) ".($filter_class?' AND cs.class_id = ?':'')."
-    ORDER BY c.id ASC, s.code ASC, s.name_en ASC
+    ORDER BY CASE WHEN cs.is_active=1 THEN 0 ELSE 1 END,c.id ASC, s.code ASC, s.name_en ASC
 ");
 $stmt->execute([$school_id, $school_id,...($filter_class?[$filter_class]:[])]);
 $subjects = $stmt->fetchAll();

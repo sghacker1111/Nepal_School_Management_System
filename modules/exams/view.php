@@ -159,7 +159,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['initialize_defaults']
                            s.in_full_marks as s_in_full, s.in_pass_marks as s_in_pass
                     FROM class_subjects cs
                     JOIN subjects s ON cs.subject_id = s.id
-                    WHERE cs.school_id = ? AND cs.class_id = ? AND (cs.is_active = 1 OR cs.is_optional = 1) AND (s.is_hidden = 0 OR s.is_hidden IS NULL)
+                    WHERE cs.school_id = ? AND cs.class_id = ? AND cs.is_active=1 AND (s.is_hidden = 0 OR s.is_hidden IS NULL)
                 ");
                 $stmt->execute([$school_id,$class_id]);
                 $class_subs = $stmt->fetchAll();
@@ -252,9 +252,7 @@ $stmt->execute([$school_id]);
 $classes = $stmt->fetchAll();
 
 // Fetch subjects
-$stmt = $db->prepare("SELECT * FROM subjects WHERE (school_id = ?) AND (is_hidden = 0 OR is_hidden IS NULL) ORDER BY code, name_en");
-$stmt->execute([$school_id]);
-$subjects = $stmt->fetchAll();
+$subjects=schoolOfferedSubjects($db,(int)$school_id);
 
 // Fetch class-subject mappings for dynamic dropdown filtering
 $stmt_cs_map = $db->prepare("
@@ -264,7 +262,7 @@ $stmt_cs_map = $db->prepare("
     FROM class_subjects cs
     JOIN subjects s ON cs.subject_id = s.id
     JOIN classes c ON cs.class_id = c.id
-    WHERE (cs.school_id = ?) AND c.is_active = 1 AND (cs.is_active = 1 OR cs.is_optional = 1) AND (s.is_hidden = 0 OR s.is_hidden IS NULL)
+    WHERE (cs.school_id = ?) AND c.is_active = 1 AND cs.is_active=1 AND (s.is_hidden = 0 OR s.is_hidden IS NULL)
 ");
 $stmt_cs_map->execute([$school_id]);
 $class_subject_mappings = $stmt_cs_map->fetchAll(PDO::FETCH_ASSOC);
@@ -293,7 +291,7 @@ $mapped_subjects = $db->prepare("
     ORDER BY c.name, sub.name_en
 ");
 $mapped_subjects->execute([$exam_id]);
-$mappings = $mapped_subjects->fetchAll();
+$mappings = schoolExamOfferingRows($db,(int)$school_id,$exam,$mapped_subjects->fetchAll());
 
 // Group mappings by class
 $grouped_mappings = [];

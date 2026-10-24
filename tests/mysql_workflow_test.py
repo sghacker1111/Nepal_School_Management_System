@@ -1,6 +1,13 @@
 import subprocess,unittest
 from mysql_test_support import MysqlImportFixture,ROOT
 class MySQLWorkflowTests(unittest.TestCase):
+    def test_school_offering_identity_and_snapshot_on_native_mysql(self):
+        with MysqlImportFixture(clean_accounting=True) as fixture:
+            fixture.import_and_verify()
+            env={**fixture.env,'ERP_TEST_MYSQL':'1'}
+            result=subprocess.run([env['ERP_TEST_PHP'],'tests/school_offerings_test.php'],cwd=ROOT,env=env,capture_output=True,text=True,timeout=120)
+            self.assertEqual(result.returncode,0,'School offering identity and snapshot must pass on native MySQL: '+result.stdout[-2000:]+result.stderr[-2000:])
+            self.assertIn('School offerings service passed:',result.stdout)
     def test_accounting_service_workflows_on_native_mysql(self):
         with MysqlImportFixture(clean_accounting=True) as fixture:
             fixture.import_and_verify()

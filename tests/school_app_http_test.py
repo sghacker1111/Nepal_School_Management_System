@@ -10,8 +10,8 @@ def run():
     tables=('students','users','classes','subjects','class_subjects','exams','marks','ac_invoices','ac_payments')
     snapshots={table:app.snapshot(table) for table in tables}
     pages=[]
-    school_paths=('/','/students','/students/add',f'/students/edit?id={f["student"]}',f'/students/view?id={f["student"]}','/students/import-export','/teachers','/teachers/add',f'/teachers/edit?id={f["ids"]["teacher"]}','/teachers/import-export','/classes','/classes/add',f'/classes/edit?class_id={f["class"]}',f'/classes/subjects?class_id={f["class"]}','/classes/routine','/subjects','/subjects/add',f'/subjects/edit?id={f["subject"]}','/exams','/exams/add',f'/exams/edit?id={f["exam"]}',f'/exams/view?id={f["exam"]}',f'/exams/symbols?exam_id={f["exam"]}&class_id={f["class"]}','/settings/users','/settings/years','/settings/school','/settings/cdc','/account/profile','/account/change-password')
-    requests=[('school_admin',school_paths),('admin',('/admin','/admin/users','/admin/schools','/admin/subjects','/admin/exam-templates'))]
+    school_paths=('/','/students','/students/add',f'/students/edit?id={f["student"]}',f'/students/view?id={f["student"]}','/students/import-export','/teachers','/teachers/add',f'/teachers/edit?id={f["ids"]["teacher"]}','/teachers/import-export','/classes','/classes/add',f'/classes/edit?class_id={f["class"]}',f'/classes/subjects?class_id={f["class"]}','/classes/routine','/subjects','/exams','/exams/add',f'/exams/edit?id={f["exam"]}',f'/exams/view?id={f["exam"]}',f'/exams/symbols?exam_id={f["exam"]}&class_id={f["class"]}','/settings/users','/settings/years','/settings/school','/settings/cdc','/account/profile','/account/change-password')
+    requests=[('school_admin',school_paths),('admin',('/admin','/admin/users','/admin/schools','/admin/subjects','/admin/exam-templates','/admin/offerings?school_id=1','/subjects/add',f'/subjects/edit?id={app.db.execute("SELECT source_id FROM subjects WHERE id=?",(f["subject"],)).fetchone()[0]}'))]
     for username,paths in requests:
       app.login(username)
       for path in paths:

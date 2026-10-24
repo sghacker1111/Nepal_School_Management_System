@@ -67,7 +67,7 @@ function changeExamState(PDO $db, int $schoolId, int $examId, string $action): v
         if(!$exam)throw new InvalidArgumentException('Exam not found in this school.');
         if($action==='publish') {
             if(!$exam['is_locked'])throw new InvalidArgumentException('Lock marks before publishing results.');
-            $q=$db->prepare('SELECT * FROM exam_subjects WHERE exam_id=?');$q->execute([$examId]);$schemes=$q->fetchAll();
+            $q=$db->prepare('SELECT * FROM exam_subjects WHERE exam_id=?');$q->execute([$examId]);$schemes=schoolExamOfferingRows($db,$schoolId,$exam,$q->fetchAll());
             if(!$schemes)throw new InvalidArgumentException('Configure exam subjects before publishing.');
             $expected=0;
             foreach($schemes as $scheme) {
@@ -88,10 +88,18 @@ function changeExamState(PDO $db, int $schoolId, int $examId, string $action): v
             if(!$expected)throw new InvalidArgumentException('There are no enrolled students for the configured exam classes.');
             $db->prepare('UPDATE exams SET is_published=1,is_locked=1 WHERE id=? AND school_id=?')->execute([$examId,$schoolId]);
         } elseif($action==='lock') {
+            if(!$exam['is_locked']){
+                $q=$db->prepare('SELECT * FROM exam_subjects WHERE exam_id=?');$q->execute([$examId]);$schemes=$q->fetchAll();
+                $active=array_column(schoolExamOfferingRows($db,$schoolId,$exam,$schemes),null,'id');
+                $db->prepare('DELETE FROM app_meta WHERE meta_key LIKE ?')->execute(['exam_offering_excluded:'.$examId.':%']);
+                $exclude=$db->prepare('INSERT INTO app_meta(meta_key,meta_value) VALUES(?,?)');
+                foreach($schemes as $scheme)if(!isset($active[$scheme['id']]))$exclude->execute(['exam_offering_excluded:'.$examId.':'.$scheme['id'],'1']);
+            }
             $db->prepare('UPDATE exams SET is_locked=1 WHERE id=? AND school_id=?')->execute([$examId,$schoolId]);
         } elseif($action==='reopen') {
             // Reopening explicitly withdraws published results while staff correct marks.
             $db->prepare('UPDATE exams SET is_published=0,is_locked=0 WHERE id=? AND school_id=?')->execute([$examId,$schoolId]);
+            $db->prepare('DELETE FROM app_meta WHERE meta_key LIKE ?')->execute(['exam_offering_excluded:'.$examId.':%']);
         } elseif($action==='delete') {
             if($exam['is_locked']||$exam['is_published']||examHasMarks($db,$examId))throw new InvalidArgumentException('Exams with saved marks or locked results cannot be deleted. Reopen marks to make corrections.');
             $db->prepare('DELETE FROM exam_student_attendance WHERE exam_id=?')->execute([$examId]);

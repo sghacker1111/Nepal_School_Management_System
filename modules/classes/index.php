@@ -41,6 +41,8 @@ if($_SERVER['REQUEST_METHOD']==='POST'&&in_array($_POST['action']??'', ['remove_
 // Handle deletes
 if (isset($_GET['delete_class']) && Auth::hasRole(['super_admin', 'school_admin'])) {
     $id = (int)$_GET['delete_class'];
+    require_once __DIR__.'/../../includes/catalog_validation.php';$catalogClass=schoolRecord($db,'classes',$id,(int)$school_id);
+    if($school_id==0||!empty($catalogClass['source_id']))denySchoolRequest('Default catalog classes cannot be deleted or archived here. Use the individual school Classes & subjects setup to hide a class.');
     $stmt = $db->prepare("UPDATE classes SET is_active=0 WHERE id = ? AND school_id = ?");
     $stmt->execute([$id, $school_id]);
     Auth::logActivity(Auth::getUserId(), 'Archive Class', 'classes', $id);
@@ -62,7 +64,7 @@ $stmt = $db->prepare('SELECT * FROM classes WHERE school_id = ?'.($showArchived?
 $stmt->execute([$school_id]);
 $classes = $stmt->fetchAll();
 $legacyClasses=[];
-if(Auth::hasRole(['super_admin','school_admin'])&&$school_id>0){$q=$db->prepare("SELECT c.id FROM classes c WHERE c.school_id=? AND c.name='7' AND c.is_active=1 AND EXISTS(SELECT 1 FROM users u WHERE u.school_id=c.school_id AND u.username='sgsunil' AND u.role='teacher')");$q->execute([$school_id]);$legacyClasses=$q->fetchAll(PDO::FETCH_COLUMN);}
+if(Auth::hasRole('super_admin')&&!Auth::isReadOnly()&&$school_id>0){$q=$db->prepare("SELECT c.id FROM classes c WHERE c.school_id=? AND c.name='7' AND c.is_active=1 AND EXISTS(SELECT 1 FROM users u WHERE u.school_id=c.school_id AND u.username='sgsunil' AND u.role='teacher')");$q->execute([$school_id]);$legacyClasses=$q->fetchAll(PDO::FETCH_COLUMN);}
 
 // Fetch sections with class name and teacher name
 $stmt = $db->prepare("
@@ -86,7 +88,7 @@ ob_start();
     <h2><i class="fas fa-school"></i> Class & Section Management</h2>
     <?php if (Auth::hasRole(['super_admin', 'school_admin'])): ?>
     <a href="<?= schoolRouteUrl('modules/classes/add.php') ?>" class="btn btn-primary">
-        <i class="fas fa-plus"></i> Add Class / Section
+        <i class="fas fa-plus"></i> <?= Auth::hasRole('super_admin')?'Add Class / Section':'Add Section' ?>
     </a>
     <?php endif; ?>
 </div>
@@ -146,10 +148,12 @@ ob_start();
                                          <a href="<?= schoolRouteUrl('modules/classes/subjects.php') ?>?class_id=<?= $class['id'] ?>" class="btn btn-sm btn-outline-primary me-1" title="Configure Subjects">
                                              <i class="fas fa-book"></i> Subjects
                                          </a>
+                                         <?php if(Auth::hasRole('super_admin')&&$school_id>0&&empty($class['source_id'])): ?>
                                          <?php if(!$class['is_active']): ?><details class="d-inline-block"><summary class="btn btn-sm btn-outline-success">Restore</summary><form method="POST"><input type="hidden" name="action" value="restore_class"><input type="hidden" name="class_id" value="<?= (int)$class['id'] ?>"><label>Current administrator password<input type="password" class="form-control" name="password" autocomplete="current-password" required></label><button class="btn btn-sm btn-success">Confirm restore</button></form></details><?php else: ?>
                                          <button data-erp-click="classes-index-action-1" data-erp-click-args="<?= schoolPageActionArgs("classes-index",[(string)($class['id'])]) ?>" class="btn btn-sm btn-outline-danger" title="Archive class">
                                              <i class="fas fa-trash"></i>
                                          </button>
+                                         <?php endif; ?>
                                          <?php endif; ?>
                                      </td>
                                      <?php endif; ?>

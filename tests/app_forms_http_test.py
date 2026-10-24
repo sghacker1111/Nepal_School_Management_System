@@ -5,8 +5,8 @@ from http_support import ERPHttpFixture
 def run():
   with ERPHttpFixture() as app:
     app.login('school_admin');protected={table:app.snapshot(table) for table in ('students','marks','questions','ac_payments','users')}
-    h,b,_=send(app,'/classes/add',data={'add_class':'1','name':''},headers=HX,status=422)
-    assert marked(h,b)['mutation']['outcome']=='invalid' and b'Class name is required' in b
+    h,b,_=send(app,'/classes/add',data={'add_section':'1','section_name':'','class_id':app.fixture['class'],'teacher_id':''},headers=HX,status=422)
+    assert marked(h,b)['mutation']['outcome']=='invalid' and b'Section name and Class are required' in b
     h,b,_=send(app,'/settings/years',data={'action':'add','year_bs':'2092','year_ad':'2035'},headers=HX)
     assert marked(h,b)['mutation']['outcome']=='saved'
     assert app.db.execute("SELECT COUNT(*) FROM academic_years WHERE year_bs='2092'").fetchone()[0]==1

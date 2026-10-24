@@ -81,16 +81,16 @@ with ERPHttpFixture() as app:
     # Duplicate checks for creation, edit and class-subject mapping.
     classes=app.snapshot('classes')
     for name in ['9','  Grade   9 ','कक्षा ९']:
-        body=app.request('/modules/classes/add.php',{'add_class':1,'name':name,'level':'Secondary'})
-        assert 'already exists' in body and app.snapshot('classes')==classes
-    body=app.request('/modules/classes/edit.php?class_id='+str(cls),{'name':'Class 8','level':'Basic'});assert 'already exists' in body and app.snapshot('classes')==classes
+        app.request('/modules/classes/add.php',{'add_class':1,'name':name,'level':'Secondary'},status=403)
+        assert app.snapshot('classes')==classes
+    app.request('/modules/classes/edit.php?class_id='+str(cls),{'name':'Class 8','level':'Basic'},status=403);assert app.snapshot('classes')==classes
     own_name,own_code=app.db.execute('SELECT name_en,code FROM subjects WHERE id=?',(subject,)).fetchone()
     subjects=app.snapshot('subjects');mappings=app.snapshot('class_subjects')
     for name,code in [('  '+own_name.upper()+'  ','OTHER-CODE'),('Different duplicate',own_code.lower())]:
-        body=app.request('/modules/subjects/add.php',{'class_id':cls,'name_en':name,'code':code});assert 'Duplicate Subject Blocked' in body
+        app.request('/modules/subjects/add.php',{'class_id':cls,'name_en':name,'code':code},status=403)
         assert app.snapshot('subjects')==subjects and app.snapshot('class_subjects')==mappings
     app.db.execute("INSERT INTO subjects(school_id,name_en,code,type) VALUES(1,'Different catalog name',?,'optional')",(own_code,));new=app.db.execute('SELECT last_insert_rowid()').fetchone()[0];app.db.commit()
-    body=app.request(f'/modules/classes/subjects.php?class_id={cls}',{'action':'map_subject','subject_id':new});assert 'Duplicate Subject Blocked' in body and app.snapshot('class_subjects')==mappings
+    app.request(f'/modules/classes/subjects.php?class_id={cls}',{'action':'map_subject','subject_id':new},status=403);assert app.snapshot('class_subjects')==mappings
     app.request('/modules/learning/curriculum.php',{'action':'map_subject','class_id':cls,'subject_id':new},status=403);assert app.snapshot('class_subjects')==mappings # Schools use Class/Subject Management; curriculum is read-only.
     # Both printing routes use the same two-row percentage layout.
     app.db.execute('INSERT INTO marks(exam_id,student_id,subject_id,theory_obtained,practical_obtained) VALUES(?,?,?,?,?)',(exam,f['student'],subject,60,20));app.db.commit()
@@ -111,16 +111,12 @@ with ERPHttpFixture() as app:
     legacy=app.db.execute('SELECT last_insert_rowid()').fetchone()[0]
     app.db.execute('INSERT INTO sections(school_id,class_id,name) VALUES(1,?,?)',(legacy,'Legacy'));app.db.commit();app.login('school_admin')
     cleanup={'action':'remove_legacy_seven','class_id':legacy,'password':'TestPassword123!','confirm_cleanup':1}
-    body=app.request('/modules/classes/index.php');assert 'Remove legacy class' in body
-    assert '<td><strong>7</strong></td>' in body and 'all associated data' not in body
-    app.login('sgsunil');body=app.request('/modules/classes/index.php');assert '<td><strong>7</strong></td>' in body and 'Remove legacy class' not in body
-    app.login('school_admin')
-    body=app.request('/modules/classes/index.php',{**cleanup,'confirm_cleanup':''});assert 'Confirm removal' in body and app.db.execute('SELECT is_active FROM classes WHERE id=?',(legacy,)).fetchone()==(1,)
-    body=app.request('/modules/classes/index.php',{**cleanup,'class_id':cls});assert 'class named exactly 7' in body and app.db.execute('SELECT is_active FROM classes WHERE id=?',(cls,)).fetchone()==(1,)
-    body=app.request('/modules/classes/index.php',cleanup);assert 'All linked records are retained' in body
+    body=app.request('/modules/classes/index.php');assert 'Remove legacy class' not in body
+    app.request('/modules/classes/index.php',cleanup,status=403)
+    super_name=app.db.execute("SELECT username FROM users WHERE role='super_admin'").fetchone()[0];app.login(super_name)
+    body=app.request('/modules/super_admin/offerings.php?school_id=1',{'offering_action':'hide_class','offering_class':legacy})
+    assert 'School class visibility saved' in body
     assert app.db.execute('SELECT is_active FROM classes WHERE id=?',(legacy,)).fetchone()==(0,) and app.db.execute('SELECT COUNT(*) FROM sections WHERE class_id=?',(legacy,)).fetchone()==(1,)
-    body=app.request('/modules/classes/index.php?show_archived=1');assert 'Archived' in body and 'Confirm restore' in body
-    body=app.request('/modules/classes/add.php',{'add_class':1,'name':'7','level':'Basic'});assert 'already exists' in body
     app.login('sgsunil');body=app.request('/modules/classes/index.php');assert '<td><strong>7</strong></td>' not in body
     app.request('/modules/classes/index.php',cleanup,status=403)
     print(f'Routine profiles, catalog and component print HTTP passed: {app.count} requests.')

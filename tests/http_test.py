@@ -54,8 +54,8 @@ with tempfile.TemporaryDirectory(prefix='erp-http-') as tmp:
             except (URLError,ConnectionError): time.sleep(.1)
         login('school_admin')
         routes=['/index.php','/modules/students/index.php','/modules/students/add.php','/modules/students/import_export.php','/modules/teachers/index.php','/modules/teachers/add.php','/modules/teachers/import_export.php','/modules/classes/index.php','/modules/classes/add.php','/modules/classes/routine.php','/modules/subjects/index.php','/modules/subjects/add.php','/modules/exams/index.php','/modules/exams/add.php','/modules/results/index.php','/modules/results/marks_entry.php','/modules/results/ledger.php','/modules/attendance/index.php','/modules/reports/index.php','/modules/settings/school.php','/modules/settings/years.php','/modules/settings/users.php','/modules/auth/profile.php','/modules/auth/change_password.php','/modules/learning/index.php','/modules/learning/questions.php','/modules/learning/paper_generator.php','/modules/learning/curriculum.php','/modules/learning/specification_grids.php','/modules/learning/ocr_scanner.php']
-        for route in routes:request(route)
-        for route in [f"/modules/students/edit.php?id={f['student']}",f"/modules/students/view.php?id={f['student']}",f"/modules/classes/edit.php?class_id={f['class']}",f"/modules/classes/subjects.php?class_id={f['class']}",f"/modules/teachers/edit.php?id={f['ids']['teacher']}",f"/modules/exams/view.php?id={f['exam']}",f"/modules/exams/edit.php?id={f['exam']}",f"/modules/subjects/edit.php?id={f['subject']}"]:request(route)
+        for route in routes:request(route,expected=403 if route.endswith('/subjects/add.php') else 200)
+        for route in [f"/modules/students/edit.php?id={f['student']}",f"/modules/students/view.php?id={f['student']}",f"/modules/classes/edit.php?class_id={f['class']}",f"/modules/classes/subjects.php?class_id={f['class']}",f"/modules/teachers/edit.php?id={f['ids']['teacher']}",f"/modules/exams/view.php?id={f['exam']}",f"/modules/exams/edit.php?id={f['exam']}",f"/modules/subjects/edit.php?id={f['subject']}"]:request(route,expected=403 if '/subjects/edit.php' in route else 200)
         query=urlencode({'exam':f['exam'],'class':f['class'],'section':f['section']})
         marks={'save_marks':'1','marks_complete':'1','exam_id':f['exam'],'class_id':f['class'],'section_id':f['section'],f"attendance[{f['student']}]":'120'}
         for key,val in [('theory','60'),('participation','3'),('project_work','12'),('previous_exam','5')]:marks[f"marks[{f['student']}][{f['subject']}][{key}]"]=val
@@ -160,6 +160,7 @@ with tempfile.TemporaryDirectory(prefix='erp-http-') as tmp:
         # Distinct subjects may have blank codes: report rows must retain their own marks.
         db.execute("UPDATE subjects SET code=NULL WHERE id=?",(f['subject'],))
         second_subject=db.execute("INSERT INTO subjects(name_en,type,school_id) VALUES ('Distinct custom subject','compulsory',1)").lastrowid
+        db.execute('INSERT INTO class_subjects(school_id,class_id,subject_id,is_active) VALUES(1,?,?,1)',(f['class'],second_subject))
         db.execute('INSERT INTO exam_subjects(exam_id,class_id,subject_id,theory_full,theory_pass,practical_full,practical_pass,credit_hours,is_optional) VALUES (?,?,?,75,26.25,25,10,4,0)',(f['exam'],f['class'],second_subject))
         db.execute('INSERT INTO marks(exam_id,student_id,subject_id,theory_obtained,practical_obtained) VALUES (?,?,?,37,11)',(f['exam'],f['student'],second_subject));db.commit()
         for route in [f"/modules/results/report_card.php?student={f['student']}&exam={f['exam']}&system=percentage",'/modules/results/print_bulk.php?'+query+'&system=percentage']:
@@ -173,13 +174,13 @@ with tempfile.TemporaryDirectory(prefix='erp-http-') as tmp:
             body=request('/modules/settings/cdc.php?grade='+str(grade))
             assert 'CDC 2083 curriculum' in body and 'Class 12 is illustrative' in body
         saved_schemes=db.execute('SELECT * FROM exam_subjects ORDER BY id').fetchall()
-        request('/modules/settings/cdc.php',{'curriculum_key':'11:4','subject_code':'101','confirmed':'1'})
-        assert db.execute("SELECT curriculum_status FROM class_subjects WHERE school_id=1 AND curriculum_key='11:4'").fetchone()[0]=='SCHOOL_CONFIRMED'
+        request('/modules/settings/cdc.php',{'curriculum_key':'11:4','subject_code':'101','confirmed':'1'},expected=403)
+        # School users cannot confirm or rewrite CDC catalog definitions.
         assert db.execute('SELECT * FROM exam_subjects ORDER BY id').fetchall()==saved_schemes
         mapping_count=db.execute('SELECT COUNT(*) FROM class_subjects').fetchone()[0]
-        request('/modules/settings/cdc.php',{'curriculum_key':'11:4','subject_code':'101','confirmed':'1'})
+        request('/modules/settings/cdc.php',{'curriculum_key':'11:4','subject_code':'101','confirmed':'1'},expected=403)
         assert db.execute('SELECT COUNT(*) FROM class_subjects').fetchone()[0]==mapping_count
-        request('/modules/settings/cdc.php',{'curriculum_key':'11:4','subject_code':'101','confirmed':'1'},expected=419,csrf=False)
+        request('/modules/settings/cdc.php',{'curriculum_key':'11:4','subject_code':'101','confirmed':'1'},expected=403,csrf=False)
         for grade in [1,4]:
             c=db.execute('SELECT id FROM classes WHERE school_id=1 AND name=?',('Class '+str(grade),)).fetchone()[0]
             request('/modules/classes/subjects.php?class_id='+str(c))
@@ -237,9 +238,9 @@ with tempfile.TemporaryDirectory(prefix='erp-http-') as tmp:
             else:
                 assert all(s[2] is None and s[3] is None for s in schemes),'Achievement split must remain unspecified'
                 row=db.execute('SELECT id,credit_hours FROM class_subjects WHERE school_id=1 AND class_id=? AND subject_id=?',(c,subject)).fetchone()
-                request('/modules/classes/subjects.php?class_id='+str(c),{'action':'edit_mapping','mapping_id':row[0],'credit_hours':row[1],'is_optional':'0'})
+                request('/modules/classes/subjects.php?class_id='+str(c),{'action':'edit_mapping','mapping_id':row[0],'credit_hours':row[1],'is_optional':'0'},expected=403)
                 assert db.execute('SELECT th_credit_hours,in_credit_hours,th_full_marks,in_full_marks FROM class_subjects WHERE id=?',(row[0],)).fetchone()==(None,None,None,None)
-                request('/modules/subjects/edit.php?id='+str(subject))
+                request('/modules/subjects/edit.php?id='+str(subject),expected=403)
         for path in ['/database.sqlite','/database_sqlite.sql','/school_erp_mysql.sql.gz','/migration-manifest.json','/nested/projected-manifest-private.json','/nested/migration-report-private.json','/verification-error.json','/statements.jsonl','/private-migration/package.sql','/config/migrate.php','/.git/config','/tests/http_fixture.php']:request(path,expected=404)
         login('teacher');request('/modules/settings/users.php',expected=403);request('/modules/settings/cdc.php',expected=403);request('/modules/classes/routine.php',{'action':'generate'},expected=403)
         login('admin')

@@ -193,7 +193,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             
             $stmt = $db->prepare("INSERT INTO class_subjects (class_id, subject_id, credit_hours, school_id) VALUES (?, ?, 4, ?)");
             $stmt->execute([$class_id, $subject_id, $school_id]);
-            $db->commit();
+            syncAllSchoolOfferings($db);$db->commit();
             echo json_encode(['success' => true]);
             exit;
         }

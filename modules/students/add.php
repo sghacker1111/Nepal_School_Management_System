@@ -117,9 +117,7 @@ $stmt = $db->prepare("SELECT * FROM sections WHERE school_id = ? ORDER BY name")
 $stmt->execute([$school_id]);
 $sections = $stmt->fetchAll();
 
-$stmt = $db->prepare("SELECT * FROM subjects WHERE (school_id = ?) AND (is_hidden = 0 OR is_hidden IS NULL) AND type = 'optional' ORDER BY name_en");
-$stmt->execute([$school_id]);
-$optional_subjects = $stmt->fetchAll();
+$optional_subjects=array_values(array_filter(schoolOfferedSubjects($db,(int)$school_id),static fn($s)=>$s['type']==='optional'));
 
 $pageTitle = 'Add New Student';
 $activePage = 'students';

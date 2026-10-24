@@ -44,9 +44,16 @@ function validateSchoolReferences(PDO $db, int $school, string $module, array $d
         $records[$table] = schoolRecord($db,$table,(int)$values[$key],$school);
     }
     if (isset($records['sections'],$records['classes']) && $records['sections']['class_id'] != $records['classes']['id']) throw new InvalidArgumentException('The section must belong to the selected class.');
+    if($school>0&&isset($records['subjects'])&&!in_array($module,['subjects','classes'],true)){
+        $classId=(int)($records['classes']['id']??0);
+        $available=$classId?schoolSubjectAssigned($db,$school,$classId,(int)$records['subjects']['id']):in_array((int)$records['subjects']['id'],array_map('intval',array_column(schoolOfferedSubjects($db,$school),'id')),true);
+        // Published/locked exam snapshots remain readable after an offering changes.
+        $historical=!$data&&$module==='results'&&!empty($records['exams'])&&(!empty($records['exams']['is_published'])||!empty($records['exams']['is_locked']));
+        if(!$available&&!$historical)throw new InvalidArgumentException('Choose a subject currently assigned to this school and class.');
+    }
     if(isset($records['topics'])&&((isset($records['classes'])&&$records['topics']['class_id']!=$records['classes']['id'])||(isset($records['subjects'])&&$records['topics']['subject_id']!=$records['subjects']['id'])))throw new InvalidArgumentException('Choose a topic belonging to the selected class subject.');
     if ($module==='exams' && isset($data['map_subject'], $records['classes'], $records['subjects'])) {
-        $mapped=$db->prepare('SELECT cs.id FROM class_subjects cs JOIN subjects s ON s.id=cs.subject_id WHERE cs.school_id=? AND cs.class_id=? AND cs.subject_id=? AND (cs.is_active=1 OR cs.is_optional=1) AND COALESCE(s.is_hidden,0)=0');
+        $mapped=$db->prepare('SELECT cs.id FROM class_subjects cs JOIN subjects s ON s.id=cs.subject_id WHERE cs.school_id=? AND cs.class_id=? AND cs.subject_id=? AND cs.is_active=1 AND COALESCE(s.is_hidden,0)=0');
         $mapped->execute([$school,$records['classes']['id'],$records['subjects']['id']]);
         if(!$mapped->fetchColumn())throw new InvalidArgumentException('Assign this subject to the class before adding it to the exam.');
     }
@@ -67,6 +74,7 @@ function validateSchoolReferences(PDO $db, int $school, string $module, array $d
         $stmt=$db->prepare('SELECT id FROM class_subjects WHERE class_id=? AND subject_id=? AND school_id=? AND is_optional=1 AND is_active=1');
         $stmt->execute([$records['classes']['id'] ?? 0,(int)$data[$key],$school]);
         if (!$stmt->fetchColumn()) throw new InvalidArgumentException('Optional subjects must be active optional choices for the selected class.');
+        if(!schoolSubjectAssigned($db,$school,(int)($records['classes']['id']??0),(int)$data[$key]))throw new InvalidArgumentException('Choose an optional subject currently offered by this school.');
     }
     $choices=array_filter(array_map('intval',[$data['optional_subject_i']??0,$data['optional_subject_ii']??0,$data['optional_subject_iii']??0]));
     if(count($choices)!==count(array_unique($choices)))throw new InvalidArgumentException('Choose different optional subjects.');

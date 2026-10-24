@@ -12,10 +12,10 @@ for folder in ('includes', 'modules', 'config'):
         commands.append([php, '-l', str(path)])
 for name in ('app.php','index.php','router.php'):
     commands.append([php, '-l', name])
-for name in ('security_test.php','import_security_test.php','packages_test.php',
+for name in ('security_test.php','school_offerings_test.php','import_security_test.php','packages_test.php',
              'learning_content_test.php','exam_teacher_scope_test.php'):
     commands.append([php, 'tests/' + name])
-for name in ('session_security_http_test.py','database_runtime_http_test.py',
+for name in ('school_offerings_http_test.py','session_security_http_test.py','database_runtime_http_test.py',
              'class_isolation_http_test.py','attendance_filters_http_test.py',
              'packages_http_test.py','exam_teacher_scope_http_test.py',
              'question_authoring_app_http_test.py','single_page_coverage_http_test.py'):

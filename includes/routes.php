@@ -15,7 +15,7 @@ function schoolRoutes(): array {
         'settings'=>['cdc','school','users','years'],
         'students'=>['add','admit_card','edit','import_export','index','view'],
         'subjects'=>['add','edit','index','internal'],
-        'super_admin'=>['exam_templates','index','question_corrections','schools','subjects','switch_school','users'],
+        'super_admin'=>['exam_templates','index','offerings','question_corrections','schools','subjects','switch_school','users'],
         'teachers'=>['add','edit','import_export','index'],
     ];
     $overrides=[

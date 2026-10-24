@@ -41,9 +41,10 @@ def run():
      assert not re.findall(rb'(?:href|action)="[^"#]*\/modules\/[^"?]+\.php',b),url
   app.login('school_admin')
   # Plain native requests still save one record and preserve clean redirects.
-  old=len(app.snapshot('classes'));app.request('/classes/add',{'add_class':'1','name':'Native fallback test class'});assert len(app.snapshot('classes'))==old+1
-  app.request('/classes/add',{'add_class':'1','name':'Native fallback test class'});assert len(app.snapshot('classes'))==old+1
+  app.login('admin');old=len(app.snapshot('classes'));added=1+app.db.execute('SELECT COUNT(*) FROM schools').fetchone()[0];app.request('/classes/add',{'add_class':'1','name':'Native fallback test class'});assert len(app.snapshot('classes'))==old+added
+  app.request('/classes/add',{'add_class':'1','name':'Native fallback test class'});assert len(app.snapshot('classes'))==old+added
   for table,rows in protected.items():assert app.snapshot(table)==rows,table
+  app.login('school_admin')
   # Headers cannot turn a JSON/download mode into HTML, or weaken expiry.
   for clean,legacy in [('/students/import-export?action=template','/modules/students/import_export.php?action=template'),('/learning/curriculum?action=get_subjects&class_id='+str(f['class']),'/modules/learning/curriculum.php?action=get_subjects&class_id='+str(f['class']))]:
    h,a,_=send(app,clean,headers=HX);old,b,_=send(app,legacy,headers=HX);assert a==b and h['Content-Type']==old['Content-Type'] and not h.get('X-ERP-Fragment')
