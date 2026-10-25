@@ -37,3 +37,6 @@ test('structured MCQs keep one bilingual prompt editable with its statement and 
  for(let i=0;i<2;i++)f.rows().at(-1).querySelectorAll('button')[2].click();f.value(f.rows()[0],'level').value='KU';assert.equal(api.valid(),true);
  assert.equal(el('questionPartAdd').disabled,true);assert.equal(new win.FormData(f.root.querySelector('form')).get('subquestions[0][level]'),'KU');f.controller.abort();win.close();
 });
+test('strict mathematics remains default while an explicit CDC mode permits source combinations',()=>{
+ const f=fixture(),{win,root,api}=f;const control=win.document.createElement('select');control.id='questionMathematicsRule';control.add(new win.Option('Strict','strict'));control.add(new win.Option('CDC','cdc'));root.querySelector('form').append(control);f.value(f.rows()[2],'level').value='U';assert.equal(api.valid(),false);control.value='cdc';assert.equal(api.valid(),true);control.value='strict';assert.equal(api.valid(),false);f.controller.abort();win.close();
+});

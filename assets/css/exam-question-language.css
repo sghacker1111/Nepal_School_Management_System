@@ -18,10 +18,12 @@
 .exam-language-pair.exam-subquestion-pair{display:block;padding-inline-start:var(--exam-label-width,3rem);text-indent:0}
 .exam-subquestion-pair :is(.exam-language-en,.exam-language-ne){display:block;text-indent:0}
 .exam-subquestion-pair .exam-part-label{display:inline-block!important;box-sizing:border-box;width:var(--exam-label-width,3rem);min-width:0;margin-inline-start:calc(-1 * var(--exam-label-width,3rem));margin-inline-end:0;text-indent:0;vertical-align:baseline}
+/* Latin labels use the English reading size, not Kokila's compensated size. */
+.exam-bilingual-content .exam-language-pair .exam-part-label{font-family:Arial,Helvetica,sans-serif!important;font-size:var(--exam-reading-size,1rem)!important;line-height:1.65}
 .exam-subquestion-pair p{margin:0 0 .15em}
 .exam-answer-marks{margin:.4em 0;font-family:Arial,Helvetica,sans-serif;font-size:1rem}
 .exam-answer-part-mark{display:inline-block;margin-inline-end:1em;white-space:nowrap}
-.exam-part-score{white-space:nowrap;font-family:Arial,Helvetica,sans-serif!important;font-size:1rem!important}
+.exam-bilingual-content .exam-part-score{white-space:nowrap;font-family:Arial,Helvetica,sans-serif!important;font-size:var(--exam-reading-size,1rem)!important}
 .question-parts-box{border:1px solid #cbd5e1;border-radius:.5rem;padding:1rem;background:#f8fafc}
 .question-subpart{border:1px solid #cbd5e1;border-radius:.4rem;padding:1rem;margin:1rem 0;background:#fff}
 .question-part-tools{display:flex;flex-wrap:wrap;align-items:end;gap:.6rem;margin-bottom:.75rem}

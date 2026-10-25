@@ -63,7 +63,7 @@ function examQuestionAnswerMarks(array $question):string {
 
 /** Explicit conversion draft; legacy stored bodies are never changed by a read. */
 function examQuestionPartsDraft(array $form):array {
-    if(($form['question_layout']??'')==='structured')return ['display'=>$form['part_display']??'both','statement_en'=>$form['statement_en']??'','statement_np'=>$form['statement_np']??'','parts'=>$form['subquestions']??[]];
+    if(($form['question_layout']??'')==='structured')return ['display'=>$form['part_display']??'both','math_rule'=>$form['mathematics_rule']??'strict','statement_en'=>$form['statement_en']??'','statement_np'=>$form['statement_np']??'','parts'=>$form['subquestions']??[]];
     $stored=questionPartsRead($form['question_text']??'',$form['question_text_np']??'');if($stored)return $stored;
     $en=examRichParagraphs($form['question_text']??'');$ne=examRichParagraphs($form['question_text_np']??'');$pairs=examBilingualPairs($en,$ne);$parts=[];$statementEn='';$statementNp='';
     $hasLabels=(bool)array_filter([...array_column($en,'label'),...array_column($ne,'label')]);

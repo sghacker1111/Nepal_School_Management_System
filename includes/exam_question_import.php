@@ -39,6 +39,7 @@ function examImportHeaders(array $headers,string $mode,?string $kind=null):array
         'statement_en'=>['statementenglish','statementen','statement','questionstatementenglish'],
         'statement_np'=>['statementnepali','statementnp','questionstatementnepali'],
         'part_display'=>['partdisplay','annotationstyle','suffixstyle'],
+        'mathematics_rule'=>['mathematicsrule','mathrule','mathematicsstructure'],
     ];
     foreach(['a','b','c','d'] as $option){
         $aliases['option_'.$option]=['option'.$option,'option'.$option.'en','option'.$option.'english','choice'.$option,'choice'.$option.'english'];
@@ -188,10 +189,10 @@ function examImportSample(PDO $db,array $actor,string $mode,int $class=0,int $su
         $rows[1][10]=$kind==='mcq'?'<p>What is \\(\\frac{1}{2}+\\frac{1}{2}\\)?</p>':'<p>Explain why \\(\\frac{1}{2}+\\frac{1}{2}=1\\).</p>';
         $rows[1][12]='<p>\\[\\frac{1+1}{2}=1\\]</p>';
     }
-    $extra=['Question Group','Subquestion Label','Statement (English)','Statement (Nepali)','Part Display'];
+    $extra=['Question Group','Subquestion Label','Statement (English)','Statement (Nepali)','Part Display','Mathematics Rule'];
     if($mode==='html'){$extra[2].=' HTML Source';$extra[3].=' HTML Source';}
     $extraOffset=count($headers);$headers=[...$headers,...$extra];
-    foreach($rows as &$row)$row=[...$row,'','','','',''];unset($row);
+    foreach($rows as &$row)$row=[...$row,'','','','','','strict'];unset($row);
     $rich=static fn($value)=>$mode==='html'?'<p>'.htmlspecialchars($value,ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8').'</p>':$value;
     if($kind==='other'){
         $groupRows=[];

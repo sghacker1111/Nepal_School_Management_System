@@ -1,0 +1,1433 @@
+{
+  "version": 1,
+  "sources": {
+    "cdc": {
+      "filename": "RS11170_Specification Grid (grade 9-10) Compulsory Mathematics_nbimkq0.pdf",
+      "sha256": "8f2f3d13394f24948e8b096f9974ec8888fa4c277715eadd7f75c464e02f8bde",
+      "publisher": "CDC Nepal",
+      "pages": 15
+    },
+    "pabson": {
+      "filename": "Class 9 and 10 C. Mathematics Full Grid.pdf",
+      "sha256": "0330463dd57e0d89804d7e5fb994d5368654d3300502b0ed53b6084c9f68afa0",
+      "publisher": "PABSON attribution supplied by the owner",
+      "pages": 11
+    }
+  },
+  "areas": {
+    "9": {
+      "Sets": [
+        "Sets"
+      ],
+      "Arithmetic": [
+        "Tax",
+        "Commission and Dividend",
+        "Household Arithmetic"
+      ],
+      "Mensuration": [
+        "Area",
+        "Prism",
+        "Cylinder and Sphere"
+      ],
+      "Algebra": [
+        "Sequence and Series",
+        "Factorization",
+        "Highest Common Factor and Lowest Common Multiple",
+        "Linear Equation",
+        "Indices"
+      ],
+      "Geometry": [
+        "Triangle",
+        "Quadrilateral",
+        "Construction",
+        "Circle"
+      ],
+      "Statistics and Probability": [
+        "Classification and Presentation of Data",
+        "Measures of Central Tendency",
+        "Probability"
+      ],
+      "Trigonometry": [
+        "Trigonometry"
+      ]
+    },
+    "10": {
+      "Sets": [
+        "Sets"
+      ],
+      "Arithmetic": [
+        "Compound Interest",
+        "Growth and Depreciation",
+        "Currency and Exchange Rate"
+      ],
+      "Mensuration": [
+        "Area and Volume",
+        "Pyramid",
+        "Cone",
+        "Combined Solids",
+        "Cost Estimation"
+      ],
+      "Algebra": [
+        "Sequence and Series",
+        "Quadratic Equation",
+        "Algebraic Fraction",
+        "Indices",
+        "Exponential Equations"
+      ],
+      "Geometry": [
+        "Triangles and Quadrilaterals",
+        "Construction",
+        "Circle"
+      ],
+      "Statistics and Probability": [
+        "Statistics",
+        "Probability"
+      ],
+      "Trigonometry": [
+        "Trigonometry"
+      ]
+    }
+  },
+  "profiles": [
+    {
+      "key": "cdc-cmath-2078-g9",
+      "grade": 9,
+      "name": "CDC 2078 - Class 9 Compulsory Mathematics",
+      "source": "cdc",
+      "page": 1,
+      "full_marks": 75,
+      "duration_minutes": 180,
+      "areas": [
+        {
+          "area": "Sets",
+          "chapters": [
+            "Sets"
+          ],
+          "question_count": 1,
+          "marks": 6,
+          "cognitive_items": {
+            "K": 1,
+            "U": 1,
+            "A": 1,
+            "HA": 1
+          },
+          "printed_items": 4,
+          "cognitive_marks": {
+            "K": 1,
+            "U": 1,
+            "A": 3,
+            "HA": 1
+          }
+        },
+        {
+          "area": "Arithmetic",
+          "chapters": [
+            "Tax",
+            "Commission and Dividend",
+            "Household Arithmetic"
+          ],
+          "question_count": 3,
+          "marks": 13,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 3,
+            "HA": 2
+          },
+          "printed_items": 9,
+          "cognitive_marks": {
+            "K": 2,
+            "U": 3,
+            "A": 5,
+            "HA": 3
+          }
+        },
+        {
+          "area": "Mensuration",
+          "chapters": [
+            "Area",
+            "Prism",
+            "Cylinder and Sphere"
+          ],
+          "question_count": 3,
+          "marks": 13,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 2,
+            "HA": 2
+          },
+          "printed_items": 8,
+          "cognitive_marks": {
+            "K": 2,
+            "U": 3,
+            "A": 5,
+            "HA": 3
+          }
+        },
+        {
+          "area": "Algebra",
+          "chapters": [
+            "Sequence and Series",
+            "Factorization",
+            "Highest Common Factor and Lowest Common Multiple",
+            "Linear Equation",
+            "Indices"
+          ],
+          "question_count": 3,
+          "marks": 15,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 3,
+            "HA": 1
+          },
+          "printed_items": 8,
+          "cognitive_marks": {
+            "K": 2,
+            "U": 4,
+            "A": 7,
+            "HA": 2
+          }
+        },
+        {
+          "area": "Geometry",
+          "chapters": [
+            "Triangle",
+            "Quadrilateral",
+            "Construction",
+            "Circle"
+          ],
+          "question_count": 3,
+          "marks": 13,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 2,
+            "HA": 2
+          },
+          "printed_items": 8,
+          "cognitive_marks": {
+            "K": 2,
+            "U": 3,
+            "A": 5,
+            "HA": 3
+          }
+        },
+        {
+          "area": "Statistics and Probability",
+          "chapters": [
+            "Classification and Presentation of Data",
+            "Measures of Central Tendency",
+            "Probability"
+          ],
+          "question_count": 2,
+          "marks": 11,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 2,
+            "HA": 2
+          },
+          "printed_items": 8,
+          "cognitive_marks": {
+            "K": 2,
+            "U": 3,
+            "A": 4,
+            "HA": 2
+          }
+        },
+        {
+          "area": "Trigonometry",
+          "chapters": [
+            "Trigonometry"
+          ],
+          "question_count": 1,
+          "marks": 4,
+          "cognitive_items": {
+            "K": 1,
+            "U": 1,
+            "A": 1,
+            "HA": 1
+          },
+          "printed_items": 4,
+          "cognitive_marks": {
+            "K": 1,
+            "U": 1,
+            "A": 1,
+            "HA": 1
+          }
+        }
+      ],
+      "notes": [
+        "CDC permits cognitive mark variation of up to 2 marks; this preset uses exact printed targets.",
+        "Cross-area application may require manual review; allocation uses the question chapter."
+      ],
+      "enforce_items": true
+    },
+    {
+      "key": "cdc-cmath-2078-g10",
+      "grade": 10,
+      "name": "CDC 2078 - Class 10 Compulsory Mathematics",
+      "source": "cdc",
+      "page": 1,
+      "full_marks": 75,
+      "duration_minutes": 180,
+      "areas": [
+        {
+          "area": "Sets",
+          "chapters": [
+            "Sets"
+          ],
+          "question_count": 1,
+          "marks": 6,
+          "cognitive_items": {
+            "K": 1,
+            "U": 1,
+            "A": 1,
+            "HA": 1
+          },
+          "printed_items": 4,
+          "cognitive_marks": {
+            "K": 1,
+            "U": 1,
+            "A": 3,
+            "HA": 1
+          }
+        },
+        {
+          "area": "Arithmetic",
+          "chapters": [
+            "Compound Interest",
+            "Growth and Depreciation",
+            "Currency and Exchange Rate"
+          ],
+          "question_count": 3,
+          "marks": 13,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 3,
+            "HA": 2
+          },
+          "printed_items": 9,
+          "cognitive_marks": {
+            "K": 2,
+            "U": 3,
+            "A": 5,
+            "HA": 3
+          }
+        },
+        {
+          "area": "Mensuration",
+          "chapters": [
+            "Area and Volume",
+            "Pyramid",
+            "Cone",
+            "Combined Solids",
+            "Cost Estimation"
+          ],
+          "question_count": 3,
+          "marks": 13,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 2,
+            "HA": 2
+          },
+          "printed_items": 8,
+          "cognitive_marks": {
+            "K": 2,
+            "U": 3,
+            "A": 5,
+            "HA": 3
+          }
+        },
+        {
+          "area": "Algebra",
+          "chapters": [
+            "Sequence and Series",
+            "Quadratic Equation",
+            "Algebraic Fraction",
+            "Indices",
+            "Exponential Equations"
+          ],
+          "question_count": 3,
+          "marks": 15,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 3,
+            "HA": 1
+          },
+          "printed_items": 8,
+          "cognitive_marks": {
+            "K": 2,
+            "U": 4,
+            "A": 7,
+            "HA": 2
+          }
+        },
+        {
+          "area": "Geometry",
+          "chapters": [
+            "Triangles and Quadrilaterals",
+            "Construction",
+            "Circle"
+          ],
+          "question_count": 3,
+          "marks": 13,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 2,
+            "HA": 2
+          },
+          "printed_items": 8,
+          "cognitive_marks": {
+            "K": 2,
+            "U": 3,
+            "A": 5,
+            "HA": 3
+          }
+        },
+        {
+          "area": "Statistics and Probability",
+          "chapters": [
+            "Statistics",
+            "Probability"
+          ],
+          "question_count": 2,
+          "marks": 11,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 2,
+            "HA": 2
+          },
+          "printed_items": 8,
+          "cognitive_marks": {
+            "K": 2,
+            "U": 3,
+            "A": 4,
+            "HA": 2
+          }
+        },
+        {
+          "area": "Trigonometry",
+          "chapters": [
+            "Trigonometry"
+          ],
+          "question_count": 1,
+          "marks": 4,
+          "cognitive_items": {
+            "K": 1,
+            "U": 1,
+            "A": 1,
+            "HA": 1
+          },
+          "printed_items": 4,
+          "cognitive_marks": {
+            "K": 1,
+            "U": 1,
+            "A": 1,
+            "HA": 1
+          }
+        }
+      ],
+      "notes": [
+        "CDC permits cognitive mark variation of up to 2 marks; this preset uses exact printed targets.",
+        "Cross-area application may require manual review; allocation uses the question chapter."
+      ],
+      "enforce_items": true
+    },
+    {
+      "key": "pabson-cmath-2083-g9-first",
+      "grade": 9,
+      "name": "PABSON supplied 2083 - Class 9 First Term",
+      "source": "pabson",
+      "page": 2,
+      "full_marks": 75,
+      "duration_minutes": 180,
+      "areas": [
+        {
+          "area": "Sets",
+          "chapters": [
+            "Sets"
+          ],
+          "question_count": 1,
+          "marks": 6,
+          "cognitive_items": {
+            "K": 1,
+            "U": 1,
+            "A": 1,
+            "HA": 1
+          },
+          "printed_items": 4
+        },
+        {
+          "area": "Arithmetic",
+          "chapters": [
+            "Tax",
+            "Commission and Dividend"
+          ],
+          "question_count": 3,
+          "marks": 14,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 3,
+            "HA": 2
+          },
+          "printed_items": 9
+        },
+        {
+          "area": "Mensuration",
+          "chapters": [
+            "Area"
+          ],
+          "question_count": 3,
+          "marks": 14,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 3,
+            "HA": 2
+          },
+          "printed_items": 8
+        },
+        {
+          "area": "Algebra",
+          "chapters": [
+            "Sequence and Series",
+            "Factorization"
+          ],
+          "question_count": 3,
+          "marks": 15,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 3,
+            "HA": 2
+          },
+          "printed_items": 9
+        },
+        {
+          "area": "Geometry",
+          "chapters": [
+            "Triangle"
+          ],
+          "question_count": 3,
+          "marks": 14,
+          "cognitive_items": {
+            "K": 2,
+            "U": 3,
+            "A": 2,
+            "HA": 2
+          },
+          "printed_items": 9
+        },
+        {
+          "area": "Statistics and Probability",
+          "chapters": [
+            "Classification and Presentation of Data",
+            "Measures of Central Tendency"
+          ],
+          "question_count": 2,
+          "marks": 8,
+          "cognitive_items": {
+            "K": 1,
+            "U": 2,
+            "A": 2,
+            "HA": 1
+          },
+          "printed_items": 6
+        },
+        {
+          "area": "Trigonometry",
+          "chapters": [
+            "Trigonometry"
+          ],
+          "question_count": 1,
+          "marks": 4,
+          "cognitive_items": {
+            "K": 1,
+            "U": 1,
+            "A": 1,
+            "HA": 1
+          },
+          "printed_items": 4
+        }
+      ],
+      "notes": [
+        "The source item columns add to 50 while the footer prints 49, and the Mensuration subtotal prints 8 for 9 listed items. Item values are retained for reference; only question counts and marks are enforced.",
+        "The source supplies item counts, not cognitive marks. No cognitive marks have been invented."
+      ],
+      "enforce_items": false
+    },
+    {
+      "key": "pabson-cmath-2083-g9-mid",
+      "grade": 9,
+      "name": "PABSON supplied 2083 - Class 9 Mid Term",
+      "source": "pabson",
+      "page": 4,
+      "full_marks": 75,
+      "duration_minutes": 180,
+      "areas": [
+        {
+          "area": "Sets",
+          "chapters": [
+            "Sets"
+          ],
+          "question_count": 1,
+          "marks": 6,
+          "cognitive_items": {
+            "K": 1,
+            "U": 1,
+            "A": 1,
+            "HA": 1
+          },
+          "printed_items": 4
+        },
+        {
+          "area": "Arithmetic",
+          "chapters": [
+            "Tax",
+            "Commission and Dividend",
+            "Household Arithmetic"
+          ],
+          "question_count": 3,
+          "marks": 13,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 3,
+            "HA": 2
+          },
+          "printed_items": 9
+        },
+        {
+          "area": "Mensuration",
+          "chapters": [
+            "Area"
+          ],
+          "question_count": 3,
+          "marks": 13,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 2,
+            "HA": 2
+          },
+          "printed_items": 8
+        },
+        {
+          "area": "Algebra",
+          "chapters": [
+            "Sequence and Series",
+            "Factorization",
+            "Highest Common Factor and Lowest Common Multiple"
+          ],
+          "question_count": 3,
+          "marks": 15,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 3,
+            "HA": 1
+          },
+          "printed_items": 8
+        },
+        {
+          "area": "Geometry",
+          "chapters": [
+            "Triangle"
+          ],
+          "question_count": 3,
+          "marks": 13,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 2,
+            "HA": 2
+          },
+          "printed_items": 8
+        },
+        {
+          "area": "Statistics and Probability",
+          "chapters": [
+            "Classification and Presentation of Data",
+            "Measures of Central Tendency",
+            "Probability"
+          ],
+          "question_count": 2,
+          "marks": 11,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 2,
+            "HA": 2
+          },
+          "printed_items": 8
+        },
+        {
+          "area": "Trigonometry",
+          "chapters": [
+            "Trigonometry"
+          ],
+          "question_count": 1,
+          "marks": 4,
+          "cognitive_items": {
+            "K": 1,
+            "U": 1,
+            "A": 1,
+            "HA": 1
+          },
+          "printed_items": 4
+        }
+      ],
+      "notes": [
+        "The source footer prints K=11/U=13 but its area rows add to K=12/U=12. Item values are retained for reference; only question counts and marks are enforced.",
+        "The source supplies item counts, not cognitive marks. No cognitive marks have been invented."
+      ],
+      "enforce_items": false
+    },
+    {
+      "key": "pabson-cmath-2083-g9-second",
+      "grade": 9,
+      "name": "PABSON supplied 2083 - Class 9 Second Term",
+      "source": "pabson",
+      "page": 5,
+      "full_marks": 75,
+      "duration_minutes": 180,
+      "areas": [
+        {
+          "area": "Sets",
+          "chapters": [
+            "Sets"
+          ],
+          "question_count": 1,
+          "marks": 6,
+          "cognitive_items": {
+            "K": 1,
+            "U": 1,
+            "A": 1,
+            "HA": 1
+          },
+          "printed_items": 4
+        },
+        {
+          "area": "Arithmetic",
+          "chapters": [
+            "Tax",
+            "Commission and Dividend",
+            "Household Arithmetic"
+          ],
+          "question_count": 3,
+          "marks": 13,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 3,
+            "HA": 2
+          },
+          "printed_items": 9
+        },
+        {
+          "area": "Mensuration",
+          "chapters": [
+            "Area",
+            "Prism",
+            "Cylinder and Sphere"
+          ],
+          "question_count": 3,
+          "marks": 13,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 2,
+            "HA": 2
+          },
+          "printed_items": 8
+        },
+        {
+          "area": "Algebra",
+          "chapters": [
+            "Sequence and Series",
+            "Factorization",
+            "Highest Common Factor and Lowest Common Multiple",
+            "Indices"
+          ],
+          "question_count": 3,
+          "marks": 15,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 3,
+            "HA": 1
+          },
+          "printed_items": 8
+        },
+        {
+          "area": "Geometry",
+          "chapters": [
+            "Triangle",
+            "Quadrilateral"
+          ],
+          "question_count": 3,
+          "marks": 13,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 2,
+            "HA": 2
+          },
+          "printed_items": 8
+        },
+        {
+          "area": "Statistics and Probability",
+          "chapters": [
+            "Classification and Presentation of Data",
+            "Measures of Central Tendency",
+            "Probability"
+          ],
+          "question_count": 2,
+          "marks": 11,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 2,
+            "HA": 2
+          },
+          "printed_items": 8
+        },
+        {
+          "area": "Trigonometry",
+          "chapters": [
+            "Trigonometry"
+          ],
+          "question_count": 1,
+          "marks": 4,
+          "cognitive_items": {
+            "K": 1,
+            "U": 1,
+            "A": 1,
+            "HA": 1
+          },
+          "printed_items": 4
+        }
+      ],
+      "notes": [
+        "The source footer prints K=11/U=13 but its area rows add to K=12/U=12. Item values are retained for reference; only question counts and marks are enforced.",
+        "The source supplies item counts, not cognitive marks. No cognitive marks have been invented."
+      ],
+      "enforce_items": false
+    },
+    {
+      "key": "pabson-cmath-2083-g9-annual",
+      "grade": 9,
+      "name": "PABSON supplied 2083 - Class 9 Annual",
+      "source": "pabson",
+      "page": 6,
+      "full_marks": 75,
+      "duration_minutes": 180,
+      "areas": [
+        {
+          "area": "Sets",
+          "chapters": [
+            "Sets"
+          ],
+          "question_count": 1,
+          "marks": 6,
+          "cognitive_items": {
+            "K": 1,
+            "U": 1,
+            "A": 1,
+            "HA": 1
+          },
+          "printed_items": 4,
+          "cognitive_marks": {
+            "K": 1,
+            "U": 1,
+            "A": 3,
+            "HA": 1
+          }
+        },
+        {
+          "area": "Arithmetic",
+          "chapters": [
+            "Tax",
+            "Commission and Dividend",
+            "Household Arithmetic"
+          ],
+          "question_count": 3,
+          "marks": 13,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 3,
+            "HA": 2
+          },
+          "printed_items": 9,
+          "cognitive_marks": {
+            "K": 2,
+            "U": 3,
+            "A": 5,
+            "HA": 3
+          }
+        },
+        {
+          "area": "Mensuration",
+          "chapters": [
+            "Area",
+            "Prism",
+            "Cylinder and Sphere"
+          ],
+          "question_count": 3,
+          "marks": 13,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 2,
+            "HA": 2
+          },
+          "printed_items": 8,
+          "cognitive_marks": {
+            "K": 2,
+            "U": 3,
+            "A": 5,
+            "HA": 3
+          }
+        },
+        {
+          "area": "Algebra",
+          "chapters": [
+            "Sequence and Series",
+            "Factorization",
+            "Highest Common Factor and Lowest Common Multiple",
+            "Linear Equation",
+            "Indices"
+          ],
+          "question_count": 3,
+          "marks": 15,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 3,
+            "HA": 1
+          },
+          "printed_items": 8,
+          "cognitive_marks": {
+            "K": 2,
+            "U": 4,
+            "A": 7,
+            "HA": 2
+          }
+        },
+        {
+          "area": "Geometry",
+          "chapters": [
+            "Triangle",
+            "Quadrilateral",
+            "Construction",
+            "Circle"
+          ],
+          "question_count": 3,
+          "marks": 13,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 2,
+            "HA": 2
+          },
+          "printed_items": 8,
+          "cognitive_marks": {
+            "K": 2,
+            "U": 3,
+            "A": 5,
+            "HA": 3
+          }
+        },
+        {
+          "area": "Statistics and Probability",
+          "chapters": [
+            "Classification and Presentation of Data",
+            "Measures of Central Tendency",
+            "Probability"
+          ],
+          "question_count": 2,
+          "marks": 11,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 2,
+            "HA": 2
+          },
+          "printed_items": 8,
+          "cognitive_marks": {
+            "K": 2,
+            "U": 3,
+            "A": 4,
+            "HA": 2
+          }
+        },
+        {
+          "area": "Trigonometry",
+          "chapters": [
+            "Trigonometry"
+          ],
+          "question_count": 1,
+          "marks": 4,
+          "cognitive_items": {
+            "K": 1,
+            "U": 1,
+            "A": 1,
+            "HA": 1
+          },
+          "printed_items": 4,
+          "cognitive_marks": {
+            "K": 1,
+            "U": 1,
+            "A": 1,
+            "HA": 1
+          }
+        }
+      ],
+      "notes": [
+        "Syllabus heading says 2082 while the grid says 2083; the preset follows the grid heading."
+      ],
+      "enforce_items": true
+    },
+    {
+      "key": "pabson-cmath-2083-g10-first",
+      "grade": 10,
+      "name": "PABSON supplied 2083 - Class 10 First Term",
+      "source": "pabson",
+      "page": 8,
+      "full_marks": 75,
+      "duration_minutes": 180,
+      "areas": [
+        {
+          "area": "Sets",
+          "chapters": [
+            "Sets"
+          ],
+          "question_count": 1,
+          "marks": 6,
+          "cognitive_items": {
+            "K": 1,
+            "U": 1,
+            "A": 1,
+            "HA": 1
+          },
+          "printed_items": 4
+        },
+        {
+          "area": "Arithmetic",
+          "chapters": [
+            "Compound Interest",
+            "Growth and Depreciation"
+          ],
+          "question_count": 3,
+          "marks": 15,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 3,
+            "HA": 2
+          },
+          "printed_items": 9
+        },
+        {
+          "area": "Mensuration",
+          "chapters": [
+            "Pyramid",
+            "Cone"
+          ],
+          "question_count": 3,
+          "marks": 14,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 3,
+            "HA": 2
+          },
+          "printed_items": 9
+        },
+        {
+          "area": "Algebra",
+          "chapters": [
+            "Sequence and Series",
+            "Exponential Equations"
+          ],
+          "question_count": 4,
+          "marks": 17,
+          "cognitive_items": {
+            "K": 2,
+            "U": 3,
+            "A": 3,
+            "HA": 2
+          },
+          "printed_items": 10
+        },
+        {
+          "area": "Geometry",
+          "chapters": [
+            "Triangles and Quadrilaterals",
+            "Construction"
+          ],
+          "question_count": 3,
+          "marks": 13,
+          "cognitive_items": {
+            "K": 2,
+            "U": 3,
+            "A": 2,
+            "HA": 2
+          },
+          "printed_items": 9
+        },
+        {
+          "area": "Statistics and Probability",
+          "chapters": [
+            "Statistics"
+          ],
+          "question_count": 1,
+          "marks": 6,
+          "cognitive_items": {
+            "K": 1,
+            "U": 1,
+            "A": 1,
+            "HA": 1
+          },
+          "printed_items": 4
+        },
+        {
+          "area": "Trigonometry",
+          "chapters": [
+            "Trigonometry"
+          ],
+          "question_count": 1,
+          "marks": 4,
+          "cognitive_items": {
+            "K": 1,
+            "U": 1,
+            "A": 1,
+            "HA": 1
+          },
+          "printed_items": 4
+        }
+      ],
+      "notes": [
+        "The source labels Understanding as C (comprehension). This maps to U, not the independent KU category.",
+        "The source supplies item counts, not cognitive marks. No cognitive marks have been invented."
+      ],
+      "enforce_items": true
+    },
+    {
+      "key": "pabson-cmath-2083-g10-mid",
+      "grade": 10,
+      "name": "PABSON supplied 2083 - Class 10 Mid Term",
+      "source": "pabson",
+      "page": 10,
+      "full_marks": 75,
+      "duration_minutes": 180,
+      "areas": [
+        {
+          "area": "Sets",
+          "chapters": [
+            "Sets"
+          ],
+          "question_count": 1,
+          "marks": 6,
+          "cognitive_items": {
+            "K": 1,
+            "U": 1,
+            "A": 1,
+            "HA": 1
+          },
+          "printed_items": 4
+        },
+        {
+          "area": "Arithmetic",
+          "chapters": [
+            "Compound Interest",
+            "Growth and Depreciation",
+            "Currency and Exchange Rate"
+          ],
+          "question_count": 3,
+          "marks": 13,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 3,
+            "HA": 2
+          },
+          "printed_items": 9
+        },
+        {
+          "area": "Mensuration",
+          "chapters": [
+            "Area and Volume",
+            "Pyramid",
+            "Cone",
+            "Combined Solids"
+          ],
+          "question_count": 3,
+          "marks": 13,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 2,
+            "HA": 2
+          },
+          "printed_items": 8
+        },
+        {
+          "area": "Algebra",
+          "chapters": [
+            "Sequence and Series",
+            "Quadratic Equation",
+            "Algebraic Fraction",
+            "Indices",
+            "Exponential Equations"
+          ],
+          "question_count": 3,
+          "marks": 15,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 3,
+            "HA": 1
+          },
+          "printed_items": 8
+        },
+        {
+          "area": "Geometry",
+          "chapters": [
+            "Triangles and Quadrilaterals",
+            "Construction",
+            "Circle"
+          ],
+          "question_count": 3,
+          "marks": 13,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 2,
+            "HA": 2
+          },
+          "printed_items": 8
+        },
+        {
+          "area": "Statistics and Probability",
+          "chapters": [
+            "Statistics",
+            "Probability"
+          ],
+          "question_count": 2,
+          "marks": 11,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 2,
+            "HA": 2
+          },
+          "printed_items": 8
+        },
+        {
+          "area": "Trigonometry",
+          "chapters": [
+            "Trigonometry"
+          ],
+          "question_count": 1,
+          "marks": 4,
+          "cognitive_items": {
+            "K": 1,
+            "U": 1,
+            "A": 1,
+            "HA": 1
+          },
+          "printed_items": 4
+        }
+      ],
+      "notes": [
+        "The source labels Understanding as C (comprehension). This maps to U, not the independent KU category.",
+        "The source supplies item counts, not cognitive marks. No cognitive marks have been invented."
+      ],
+      "enforce_items": true
+    },
+    {
+      "key": "pabson-cmath-2083-g10-prequal",
+      "grade": 10,
+      "name": "PABSON supplied 2083 - Class 10 Pre-Qualifying",
+      "source": "pabson",
+      "page": 11,
+      "full_marks": 75,
+      "duration_minutes": 180,
+      "areas": [
+        {
+          "area": "Sets",
+          "chapters": [
+            "Sets"
+          ],
+          "question_count": 1,
+          "marks": 6,
+          "cognitive_items": {
+            "K": 1,
+            "U": 1,
+            "A": 1,
+            "HA": 1
+          },
+          "printed_items": 4,
+          "cognitive_marks": {
+            "K": 1,
+            "U": 1,
+            "A": 3,
+            "HA": 1
+          }
+        },
+        {
+          "area": "Arithmetic",
+          "chapters": [
+            "Compound Interest",
+            "Growth and Depreciation",
+            "Currency and Exchange Rate"
+          ],
+          "question_count": 3,
+          "marks": 13,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 3,
+            "HA": 2
+          },
+          "printed_items": 9,
+          "cognitive_marks": {
+            "K": 2,
+            "U": 3,
+            "A": 5,
+            "HA": 3
+          }
+        },
+        {
+          "area": "Mensuration",
+          "chapters": [
+            "Area and Volume",
+            "Pyramid",
+            "Cone",
+            "Combined Solids",
+            "Cost Estimation"
+          ],
+          "question_count": 3,
+          "marks": 13,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 2,
+            "HA": 2
+          },
+          "printed_items": 8,
+          "cognitive_marks": {
+            "K": 2,
+            "U": 3,
+            "A": 5,
+            "HA": 3
+          }
+        },
+        {
+          "area": "Algebra",
+          "chapters": [
+            "Sequence and Series",
+            "Quadratic Equation",
+            "Algebraic Fraction",
+            "Indices",
+            "Exponential Equations"
+          ],
+          "question_count": 3,
+          "marks": 15,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 3,
+            "HA": 1
+          },
+          "printed_items": 8,
+          "cognitive_marks": {
+            "K": 2,
+            "U": 4,
+            "A": 7,
+            "HA": 2
+          }
+        },
+        {
+          "area": "Geometry",
+          "chapters": [
+            "Triangles and Quadrilaterals",
+            "Construction",
+            "Circle"
+          ],
+          "question_count": 3,
+          "marks": 13,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 2,
+            "HA": 2
+          },
+          "printed_items": 8,
+          "cognitive_marks": {
+            "K": 2,
+            "U": 3,
+            "A": 5,
+            "HA": 3
+          }
+        },
+        {
+          "area": "Statistics and Probability",
+          "chapters": [
+            "Statistics",
+            "Probability"
+          ],
+          "question_count": 2,
+          "marks": 11,
+          "cognitive_items": {
+            "K": 2,
+            "U": 2,
+            "A": 2,
+            "HA": 2
+          },
+          "printed_items": 8,
+          "cognitive_marks": {
+            "K": 2,
+            "U": 3,
+            "A": 4,
+            "HA": 2
+          }
+        },
+        {
+          "area": "Trigonometry",
+          "chapters": [
+            "Trigonometry"
+          ],
+          "question_count": 1,
+          "marks": 4,
+          "cognitive_items": {
+            "K": 1,
+            "U": 1,
+            "A": 1,
+            "HA": 1
+          },
+          "printed_items": 4,
+          "cognitive_marks": {
+            "K": 1,
+            "U": 1,
+            "A": 1,
+            "HA": 1
+          }
+        }
+      ],
+      "notes": [],
+      "enforce_items": true
+    }
+  ]
+}

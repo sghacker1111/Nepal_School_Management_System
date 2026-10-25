@@ -1,6 +1,12 @@
 import subprocess,unittest
 from mysql_test_support import MysqlImportFixture,ROOT
 class MySQLWorkflowTests(unittest.TestCase):
+    def test_mathematics_area_targets_on_native_mysql(self):
+        with MysqlImportFixture(clean_accounting=True) as fixture:
+            fixture.import_and_verify()
+            env={**fixture.env,'ERP_TEST_MYSQL':'1'}
+            result=subprocess.run([env['ERP_TEST_PHP'],'tests/mathematics_catalog_test.php'],cwd=ROOT,env=env,capture_output=True,text=True,timeout=120)
+            self.assertEqual(result.returncode,0,'Mathematics area targets must pass on native MySQL: '+result.stdout[-2000:]+result.stderr[-2000:])
     def test_paper_format_on_native_mysql(self):
         with MysqlImportFixture(clean_accounting=True) as fixture:
             fixture.import_and_verify()

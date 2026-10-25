@@ -45,7 +45,7 @@ function exportToWord() {
             ".paper-title {font-size:14pt;font-weight:bold;text-transform:uppercase;}"+
             ".paper-custom-header {text-align:center;border-bottom:1px solid #000;padding-bottom:10px;} .paper-custom-header h2,.paper-custom-header h3 {margin:4px 0;}"+
             ".paper-custom-meta {display:flex;justify-content:space-between;margin-top:10px;} .paper-custom-meta span {margin-right:25px;} .paper-custom-subject {font-weight:bold;} .paper-custom-instructions {white-space:pre-line;border-bottom:1px solid #000;padding-bottom:10px;margin-bottom:12px;}"+
-            ".exam-language-en {font-family:Arial,sans-serif;} .exam-structured-content .exam-language-en,.exam-structured-content .exam-language-ne,.exam-subquestion-pair .exam-language-en,.exam-subquestion-pair .exam-language-ne {display:block;} .exam-subquestion-pair {padding-left:3em;} .exam-subquestion-pair .exam-part-label {display:inline-block;width:3em;margin-left:-3em;}"+
+            ".exam-language-en {font-family:Arial,sans-serif;} .exam-structured-content .exam-language-en,.exam-structured-content .exam-language-ne,.exam-subquestion-pair .exam-language-en,.exam-subquestion-pair .exam-language-ne {display:block;} .exam-subquestion-pair {padding-left:3em;} .exam-subquestion-pair .exam-part-label {display:inline-block;width:3em;margin-left:-3em;font-family:Arial,sans-serif;font-size:12pt;}"+
             ".metadata-table {width:100%;border-bottom:1px solid #000;margin-bottom:15px;}"+
             ".question-group-title {font-weight:bold;margin-top:15px;margin-bottom:5px;text-transform:uppercase;border-bottom:1px solid #000;}"+
             ".question-item {margin-bottom:10px;}"+

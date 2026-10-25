@@ -44,7 +44,7 @@ function learningSaveQuestion(PDO $db,array $actor,array $input,?int $id=null,st
         $layout=$input['question_layout']??'plain';if(!is_string($layout)||!in_array($layout,['plain','structured'],true))throw new InvalidArgumentException('Choose a valid question layout.');
         $structure=null;
         if($layout==='structured'){
-            $structure=questionPartsNormalize(['display'=>$input['part_display']??'both','statement_en'=>$input['statement_en']??'','statement_np'=>$input['statement_np']??'','parts'=>$input['subquestions']??null],$mathematics&&$type!=='MCQ');
+            $structure=questionPartsNormalize(['display'=>$input['part_display']??'both','math_rule'=>$input['mathematics_rule']??'strict','statement_en'=>$input['statement_en']??'','statement_np'=>$input['statement_np']??'','parts'=>$input['subquestions']??null],$mathematics&&$type!=='MCQ');
             $input['question_text']=questionPartsEncode($structure,'en');$input['question_text_np']=questionPartsEncode($structure,'np');
         }else{
             foreach(['question_text','question_text_np'] as $key)if(isset($input[$key])&&!is_string($input[$key]))throw new InvalidArgumentException('Enter valid question text.');

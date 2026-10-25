@@ -49,7 +49,7 @@ export function initializeQuestionParts(root,context){
   if(!parts.length||units<=0||units>100000){error('Add subquestions with a total between 0.01 and 1,000 marks.');return false;}
   for(const row of parts){const value=key=>row.querySelector('[data-part-key="'+key+'"]').value,label=value('label').trim().toLowerCase();if(!/^[\p{L}\p{N}]{1,8}$/u.test(label)||labels.has(label)){error('Use unique labels of 1–8 letters or digits.');return false;}labels.add(label);if(!has(value('en'))&&!has(value('np'))){error('Enter English or Nepali text for subquestion ('+label+').');return false;}}
   if(type.value==='MCQ'&&parts.length!==1){error('A structured MCQ needs one prompt and one set of four options.');return false;}
-  if(type.value!=='MCQ'&&subjectRule()){
+  if(type.value!=='MCQ'&&subjectRule()&&(el('questionMathematicsRule')?.value||'strict')==='strict'){
    const category=row=>row.querySelector('[data-part-key="level"]').value;
    if(parts.length<2||category(parts[0])!=='K'||category(parts.at(-1))!=='HA'){error('Mathematics requires K first and HA last. KU is a separate category.');return false;}
    if(parts.length===3&&!['U','A','KU'].includes(category(parts[1]))){error('For three mathematics parts, choose U, A or KU in the middle.');return false;}

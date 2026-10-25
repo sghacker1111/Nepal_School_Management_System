@@ -127,7 +127,7 @@ if($view==='list'){
 }
 $form=$error&&in_array($_POST['action']??'',['add','edit'],true)?$_POST:($edit??[]);
 if($catalogRepairNotice!==''){$form['class_id']=0;$form['subject_id']=0;$form['chapter']='';$form['topic_id']='';$form['catalog_topic_id']='';}
-$form=array_filter($form,static fn($v)=>is_scalar($v)||$v===null);
+$form=array_filter($form,static fn($v,$key)=>is_scalar($v)||$v===null||($key==='subquestions'&&is_array($v)),ARRAY_FILTER_USE_BOTH);
 $formClass=(int)($form['class_id']??$class);$formSubject=(int)($form['subject_id']??$subject);
 $form+=['class_id'=>$formClass,'subject_id'=>$formSubject,'visibility'=>$actor['school_id']===0?'public':'private','type'=>$examSection==='mcq'?'MCQ':'Short'];
 $examImportKinds=$examSection==='all'?['mcq'=>'MCQs','other'=>'Other Questions']:[$importKind=>$examSection==='mcq'?'MCQs':'Other Questions'];

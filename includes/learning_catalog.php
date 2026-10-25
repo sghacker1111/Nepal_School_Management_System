@@ -40,7 +40,7 @@ function learningCatalogChoices(PDO $db,array $actor,int $class,int $subject):ar
             $choices[$key]['alias_ids'][]=(int)$r['id'];$choices[$key]['aliases'][]=['id'=>(int)$r['id'],'scope'=>$source]+$scope;
         }
     }
-    return array_values($choices);
+    require_once __DIR__.'/mathematics_catalog.php';return mathematicsDecorateChapters($db,$actor,$class,$subject,array_values($choices));
 }
 function learningCatalogChapters(PDO $db,array $actor,int $class,int $subject):array {
     require_once __DIR__.'/curriculum_catalog.php';return learningCatalogChoices($db,$actor,$class,$subject);
