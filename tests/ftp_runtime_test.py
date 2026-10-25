@@ -21,7 +21,7 @@ class RemoteCode:
 class RuntimeTests(unittest.TestCase):
     def test_public_code_only_and_complete(self):
         paths=subject.runtime_paths();remote=RemoteCode()
-        self.assertEqual(subject.verify(remote,paths),(len(paths),50))
+        self.assertEqual(subject.verify(remote,paths),(len(paths),53))
         self.assertTrue(any('/plugins/code/' in path for path in paths))
         self.assertTrue(any('/fonts/woff-v2/' in path for path in paths))
         self.assertFalse(any(path.startswith(('uploads/','tests/','scratch/','frontend/')) or '.local.php' in path or '.sqlite' in path or path.endswith('.sql') for path in remote.calls))

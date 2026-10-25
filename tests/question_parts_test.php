@@ -16,6 +16,8 @@ erpCheck(str_contains($html,'Explain your calculation. <span class="exam-part-sc
 erpEqual(substr_count($html,'exam-part-score'),3,'One suffix per part');
 erpCheck(!str_contains($html,'lang="en">('),'Structured translations have separate lines without extra parentheses');
 erpCheck(str_contains($html,'\\(A=P(1+r)^n\\)'),'Equations retain portable TeX');
+erpCheck(str_contains($html,'<p><span class="exam-part-label">(a)</span> सूत्र'),'Subquestion label is inline with Nepali text');
+erpCheck(str_contains(examQuestionPartLabelHtml('<div><p>Nested question</p></div>','(iv)'),'<div><p><span class="exam-part-label">(iv)</span> Nested question'),'Nested rich paragraph also keeps its label inline');
 foreach(['both'=>'(2.5KU)','marks'=>'(2.5)','cognitive'=>'(KU)'] as $display=>$suffix){$copy=$structure;$copy['display']=$display;$render=examStructuredQuestionRich($copy,'en');erpCheck(str_contains($render,$suffix),'Saved suffix style '.$display);erpCheck(!str_contains($render,'ब्याज'),'English output is isolated');}
 $ne=examQuestionRich($english,$nepali,'ne',true);erpCheck(str_contains($ne,'(2.5KU)')&&!str_contains($ne,'Find the interest.'),'Nepali-only output retains annotation');
 $single=$base;$single['statement_en']='';foreach($single['parts'] as &$p)$p['en']='';unset($p);$single=questionPartsNormalize($single,true);

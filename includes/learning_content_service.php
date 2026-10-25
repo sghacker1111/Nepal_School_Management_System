@@ -43,18 +43,16 @@ function learningSaveQuestion(PDO $db,array $actor,array $input,?int $id=null,st
         $layout=$input['question_layout']??'plain';if(!is_string($layout)||!in_array($layout,['plain','structured'],true))throw new InvalidArgumentException('Choose a valid question layout.');
         $structure=null;
         if($layout==='structured'){
-            if($type==='MCQ')throw new InvalidArgumentException('Use a written question type for subquestions.');
-            $structure=questionPartsNormalize(['display'=>$input['part_display']??'both','statement_en'=>$input['statement_en']??'','statement_np'=>$input['statement_np']??'','parts'=>$input['subquestions']??null],$mathematics);
+            $structure=questionPartsNormalize(['display'=>$input['part_display']??'both','statement_en'=>$input['statement_en']??'','statement_np'=>$input['statement_np']??'','parts'=>$input['subquestions']??null],$mathematics&&$type!=='MCQ');
             $input['question_text']=questionPartsEncode($structure,'en');$input['question_text_np']=questionPartsEncode($structure,'np');
         }else{
             foreach(['question_text','question_text_np'] as $key)if(isset($input[$key])&&!is_string($input[$key]))throw new InvalidArgumentException('Enter valid question text.');
-            $structure=questionPartsRead($input['question_text']??'',$input['question_text_np']??'',$mathematics);
-            if($structure&&$type==='MCQ')throw new InvalidArgumentException('MCQs cannot contain written subquestions.');
+            $structure=questionPartsRead($input['question_text']??'',$input['question_text_np']??'',$mathematics&&$type!=='MCQ');
         }
-        if($structure){$input['marks']=questionPartNumber($structure['total_units']);$input['cognitive_domain']=QUESTION_PART_LEVELS[$structure['parts'][0]['levels'][0]];}
+        if($structure){if($type==='MCQ'&&count($structure['parts'])!==1)throw new InvalidArgumentException('A structured MCQ needs one prompt and one set of four options.');$input['marks']=questionPartNumber($structure['total_units']);$input['cognitive_domain']=QUESTION_PART_LEVELS[$structure['parts'][0]['levels'][0]];}
         $get=static function($key)use($input):string {$value=$input[$key]??'';if(!is_scalar($value))throw new InvalidArgumentException('Enter valid question content.');return (string)$value;};
         $content=questionImportRowContent($get,'html');
-        if($structure&&$content['type']==='MCQ')throw new InvalidArgumentException('Written subquestions cannot contain MCQ options.');
+        if($structure&&$type!=='MCQ'&&$content['type']==='MCQ')throw new InvalidArgumentException('Written subquestions cannot contain MCQ options.');
         if($structure){$content['question_text']=questionPartsEncode($structure,'en');$content['question_text_np']=questionPartsEncode($structure,'np');}
         if($bankKind==='exam'||isset($input['marks']))$content['marks']=learningDecimalString(learningDecimalUnits($input['marks']??null,100000,'Question marks'));
         // Exam authoring is chapter-wide. Retain legacy topic links on an edit in

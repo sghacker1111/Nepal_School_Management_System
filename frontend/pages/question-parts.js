@@ -34,12 +34,12 @@ export function initializeQuestionParts(root,context){
  }
  function subjectRule(){const cls=el('examClass')?.value,subject=el('examSubject')?.value,selected=(config.subjects?.[cls]||[]).find(s=>String(s.id)===subject),name=(selected?.name_en||'')+' '+(selected?.name_np||'');const math=/(?:\bmath(?:ematic)?s?\b|\bmathematics\b|गणित)/i.test(name);el('questionMathRule').hidden=!math;return math;}
  function mode(){
-  const mcq=type.value==='MCQ';if(mcq)layout.value='plain';el('questionLayoutControl').hidden=mcq;
+  const mcq=type.value==='MCQ';el('questionLayoutControl').hidden=false;el('questionPartAdd').disabled=mcq;
   const structured=layout.value==='structured';panel.hidden=!structured;
   panel.querySelectorAll('input,select,textarea').forEach(node=>node.disabled=!structured);
   panel.querySelectorAll('textarea').forEach(node=>node.classList.toggle('exam-rich',structured));
   root.querySelectorAll('[data-question-plain]').forEach(wrap=>{wrap.hidden=structured;wrap.querySelectorAll('textarea').forEach(node=>{node.disabled=structured;node.classList.toggle('exam-rich',!structured);});});
-  marks.readOnly=structured;domain.disabled=structured;subjectRule();if(structured)totals();
+  marks.readOnly=structured;domain.disabled=structured;subjectRule();if(mcq)el('questionMathRule').hidden=true;if(structured)totals();
  }
  function error(message){const notice=el('questionPartsError');notice.textContent=message;notice.hidden=!message;if(message)notice.scrollIntoView?.({block:'center'});}
  function valid(){
@@ -48,7 +48,8 @@ export function initializeQuestionParts(root,context){
   if(!has(el('questionStatementEn').value)&&!has(el('questionStatementNp').value)){error('Enter the statement in English or Nepali.');return false;}
   if(!parts.length||units<=0||units>100000){error('Add subquestions with a total between 0.01 and 1,000 marks.');return false;}
   for(const row of parts){const value=key=>row.querySelector('[data-part-key="'+key+'"]').value,label=value('label').trim().toLowerCase();if(!/^[\p{L}\p{N}]{1,8}$/u.test(label)||labels.has(label)){error('Use unique labels of 1–8 letters or digits.');return false;}labels.add(label);if(!has(value('en'))&&!has(value('np'))){error('Enter English or Nepali text for subquestion ('+label+').');return false;}}
-  if(subjectRule()){
+  if(type.value==='MCQ'&&parts.length!==1){error('A structured MCQ needs one prompt and one set of four options.');return false;}
+  if(type.value!=='MCQ'&&subjectRule()){
    const category=row=>row.querySelector('[data-part-key="level"]').value;
    if(parts.length<2||category(parts[0])!=='K'||category(parts.at(-1))!=='HA'){error('Mathematics requires K first and HA last. KU is a separate category.');return false;}
    if(parts.length===3&&!['U','A','KU'].includes(category(parts[1]))){error('For three mathematics parts, choose U, A or KU in the middle.');return false;}
@@ -57,7 +58,7 @@ export function initializeQuestionParts(root,context){
  }
  el('questionStatementEn').value=typeof draft.statement_en==='string'?draft.statement_en:'';el('questionStatementNp').value=typeof draft.statement_np==='string'?draft.statement_np:'';el('questionPartDisplay').value=['both','marks','cognitive'].includes(draft.display)?draft.display:'both';
  const parts=Array.isArray(draft.parts)?draft.parts:[];for(const part of parts.slice(0,40))if(part&&typeof part==='object')addPart(part);initialized=true;
- layout.value=type.value!=='MCQ'&&(config.stored||config.new)?'structured':'plain';mode();refresh();
+ layout.value=config.stored||(config.new&&type.value!=='MCQ')?'structured':'plain';mode();refresh();
  listen(layout,'change',()=>{saveEditors();mode();refresh();dirty();});listen(type,'change',()=>{saveEditors();mode();refresh();dirty();});
  listen(el('examSubject'),'change',subjectRule);listen(el('examClass'),'change',subjectRule);
  listen(el('questionPartAdd'),'click',()=>{addPart({level:subjectRule()?(rows.children.length?'HA':'K'):'U'});mode();dirty();});
@@ -66,7 +67,7 @@ export function initializeQuestionParts(root,context){
  context.onBeforeSubmit?.(submitted=>{if(submitted===form){saveEditors();totals();}});
  listen(el('questionPartsPreview'),'click',()=>{
   if(!valid())return;const preview=el('questionPartsPreviewBody');preview.replaceChildren();const content=element('div','exam-bilingual-content exam-structured-content');
-  const append=(label,ne,en,suffix='')=>{const row=element('div','exam-bilingual-row'),pair=element('div','exam-language-pair');if(label)row.append(element('span','exam-part-label','('+label+')'));for(const [language,html]of [['ne',ne],['en',en]]){if(!html.trim())continue;const block=element('div','exam-language-'+language+(language==='ne'?' font-nepali':''));block.lang=language;block.innerHTML=win.SchoolEditorSecurity?.sanitize?.(html)||'';if(suffix&&(language==='en'||!en.trim())){const score=element('span','exam-part-score',' '+suffix),last=block.lastElementChild;if(last?.tagName==='P')last.append(score);else block.append(score);}pair.append(block);}row.append(pair);content.append(row);};
+  const append=(label,ne,en,suffix='')=>{const row=element('div','exam-bilingual-row'),pair=element('div','exam-language-pair');for(const [language,html]of [['ne',ne],['en',en]]){if(!html.trim())continue;const block=element('div','exam-language-'+language+(language==='ne'?' font-nepali':''));block.lang=language;block.innerHTML=win.SchoolEditorSecurity?.sanitize?.(html)||'';if(label&&(language==='ne'||!ne.trim())){const prefix=element('span','exam-part-label','('+label+') '),first=block.firstElementChild;if(first&&['P','DIV','H1','H2','H3','H4','H5','H6','BLOCKQUOTE'].includes(first.tagName))first.prepend(prefix);else block.prepend(prefix);}if(suffix&&(language==='en'||!en.trim())){const score=element('span','exam-part-score',' '+suffix),last=block.lastElementChild;if(last?.tagName==='P')last.append(score);else block.append(score);}pair.append(block);}row.append(pair);content.append(row);};
   append('',el('questionStatementNp').value,el('questionStatementEn').value);for(const row of allRows()){const value=key=>row.querySelector('[data-part-key="'+key+'"]').value;append(value('label'),value('np'),value('en'),partSuffix(number(Math.round(Number(value('marks'))*100)),value('level'),el('questionPartDisplay').value));}preview.append(content);preview.hidden=false;
   Promise.resolve(win.MathJax?.startup?.promise).then(()=>{if(!context.signal.aborted&&preview.isConnected)return win.MathJax?.typesetPromise?.([preview]);}).catch(()=>{});
  });

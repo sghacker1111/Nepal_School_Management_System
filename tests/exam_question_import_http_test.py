@@ -88,8 +88,8 @@ def run():
                 assert f'.{fmt}' in headers['Content-Disposition']
                 if fmt == 'csv':
                     data = list(csv.reader(io.StringIO(sample.decode('utf-8-sig'))))
-                    assert len(data) == count + 1 and len(data[0]) == len(MCQ_HEADERS if kind == 'mcq' else HEADERS)-1 and 'Topic' not in data[0]
-                    if kind == 'mcq': assert all(r[3] == 'MCQ' and r[-1] in 'ABCD' and all(r[i] or r[i+1] for i in (13,15,17,19)) for r in data[1:])
+                    assert len(data) == (2 if kind == 'mcq' else 6) + 1 and len(data[0]) == len(MCQ_HEADERS if kind == 'mcq' else HEADERS)+4 and 'Topic' not in data[0]
+                    if kind == 'mcq': assert all(r[3] == 'MCQ' and r[21] in 'ABCD' and all(r[i] or r[i+1] for i in (13,15,17,19)) for r in data[1:])
                     else: assert {r[3] for r in data[1:]} == {'Very Short','Short','Long','Difference Between'} and not any('Option' in h for h in data[0])
                 else:
                     with zipfile.ZipFile(io.BytesIO(sample)) as book:

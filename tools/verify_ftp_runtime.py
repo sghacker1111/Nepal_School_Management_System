@@ -20,6 +20,7 @@ def runtime_paths(root=ROOT):
            'modules/auth/verify_password.php','modules/super_admin/index.php','assets/js/pdfjs-runtime.mjs']
     names.extend(['includes/school_offerings.php','includes/school_offerings_page.php','includes/request_guard.php','includes/school_setup.php','includes/school_validation.php','includes/teaching_scope.php','includes/learning_content.php','includes/exam_service.php','includes/marks_service.php','modules/super_admin/offerings.php','modules/super_admin/subjects.php','modules/subjects/index.php','includes/routes.php'])
     names.extend(['includes/question_parts.php','includes/question_parts_form.php','includes/exam_question_language.php','includes/exam_paper_service.php','assets/css/exam-question-language.css','includes/functions.php','assets/js/request-security.js'])
+    names.extend(['includes/question_parts_import.php','includes/exam_question_import.php','includes/exam_question_import_form.php'])
     for folder in ('assets/dist','assets/vendor/tinymce-6.8.6','assets/vendor/mathjax-3.2.2','assets/vendor/pdfjs-6.4.299'):
         directory=root/folder
         if not directory.is_dir():raise ValueError('Build required public runtime assets before verification.')
@@ -49,6 +50,7 @@ def verify(ftp,paths,root=ROOT):
               'assets/js/pdfjs-runtime.mjs','assets/vendor/pdfjs-6.4.299/pdf.min.mjs','assets/vendor/pdfjs-6.4.299/pdf.worker.min.mjs']
     critical.extend(['includes/school_offerings.php','includes/school_offerings_page.php','includes/request_guard.php','includes/school_setup.php','includes/school_validation.php','includes/teaching_scope.php','includes/learning_content.php','includes/exam_service.php','includes/marks_service.php','modules/super_admin/offerings.php','modules/super_admin/subjects.php','modules/subjects/index.php','includes/routes.php'])
     critical.extend(['includes/question_parts.php','includes/question_parts_form.php','includes/exam_question_language.php','includes/exam_paper_service.php','includes/learning_content_service.php','assets/css/exam-question-language.css','includes/functions.php','assets/js/request-security.js'])
+    critical.extend(['includes/question_parts_import.php','includes/exam_question_import.php','includes/exam_question_import_form.php'])
     for name in critical:
         digest=hashlib.sha256()
         ftp.retrbinary('RETR '+name,digest.update)

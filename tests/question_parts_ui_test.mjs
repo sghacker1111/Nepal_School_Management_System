@@ -14,7 +14,7 @@ test('structured authoring pairs languages, saves independent KU, totals decimal
  assert.deepEqual(Object.keys(questionPartCategories),['K','U','A','HA','KU']);
  f.value(f.rows()[1],'marks').value='2.25';f.value(f.rows()[1],'marks').dispatchEvent(new win.Event('input',{bubbles:true}));assert.equal(root.querySelector('[name="marks"]').value,'4.25');
  for(const [mode,suffix]of [['both','(2.25KU)'],['marks','(2.25)'],['cognitive','(KU)']]){
-  el('questionPartDisplay').value=mode;el('questionPartsPreview').click();const preview=el('questionPartsPreviewBody');assert.equal(preview.hidden,false);assert.match(preview.textContent,new RegExp(suffix.replace(/[()]/g,'\\$&')));const rows=preview.querySelectorAll('.exam-bilingual-row');assert.equal(rows.length,4);assert.equal(rows[2].querySelector('.exam-language-pair').firstElementChild.lang,'ne');assert.match(rows[2].querySelector('.exam-language-en p:last-child').textContent,/Explain it\./);assert.equal(rows[2].querySelectorAll('.exam-part-score').length,1);
+  el('questionPartDisplay').value=mode;el('questionPartsPreview').click();const preview=el('questionPartsPreviewBody');assert.equal(preview.hidden,false);assert.match(preview.textContent,new RegExp(suffix.replace(/[()]/g,'\\$&')));const rows=preview.querySelectorAll('.exam-bilingual-row');assert.equal(rows.length,4);assert.equal(rows[2].querySelector('.exam-language-pair').firstElementChild.lang,'ne');assert.equal(rows[2].querySelector('.exam-part-label').parentElement.tagName,'P');assert.match(rows[2].querySelector('.exam-language-en p:last-child').textContent,/Explain it\./);assert.equal(rows[2].querySelectorAll('.exam-part-score').length,1);
  }
  const data=new win.FormData(root.querySelector('form'));assert.equal(data.get('subquestions[1][level]'),'KU');assert.equal(data.get('marks'),'4.25');assert.equal(data.has('question_text'),false);assert.equal(data.has('cognitive_domain'),false);f.controller.abort();win.close();
 });
@@ -30,4 +30,10 @@ test('preview rejects active content, keeps drafts across mode changes and dispo
  el('questionPartsPreview').click();const preview=el('questionPartsPreviewBody');assert.equal(preview.querySelector('script,[onclick],[onerror]'),null);assert.match(preview.textContent,/Safe/);
  for(const mode of ['plain','structured']){el('questionLayout').value=mode;el('questionLayout').dispatchEvent(new win.Event('change'));}assert.match(text.value,/Safe/);
  const count=f.rows().length;f.controller.abort();el('questionPartAdd').click();assert.equal(f.rows().length,count);assert.equal(partSuffix('2','KU','both'),'(2KU)');win.close();
+});
+test('structured MCQs keep one bilingual prompt editable with its statement and category',()=>{
+ const f=fixture(),{win,el,api}=f;el('examType').value='MCQ';el('examType').dispatchEvent(new win.Event('change'));
+ assert.equal(el('questionLayout').value,'structured');assert.equal(api.valid(),false);assert.match(el('questionPartsError').textContent,/one prompt/);
+ for(let i=0;i<2;i++)f.rows().at(-1).querySelectorAll('button')[2].click();f.value(f.rows()[0],'level').value='KU';assert.equal(api.valid(),true);
+ assert.equal(el('questionPartAdd').disabled,true);assert.equal(new win.FormData(f.root.querySelector('form')).get('subquestions[0][level]'),'KU');f.controller.abort();win.close();
 });

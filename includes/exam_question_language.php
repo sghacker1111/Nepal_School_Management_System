@@ -3,6 +3,16 @@
 require_once __DIR__.'/question_import.php';
 require_once __DIR__.'/question_parts.php';
 
+/** Put the label in the text paragraph, independent of flex/grid stylesheet order. */
+function examQuestionPartLabelHtml(string $body,string $label):string {
+    if($label==='')return $body;
+    $prefix='<span class="exam-part-label">'.sanitize($label).'</span> ';
+    if(preg_match('/^(\s*(?:<(?:div|blockquote)\b[^>]*>\s*)*<(?:p|h[1-6])\b[^>]*>)/i',$body))return preg_replace_callback('/^(\s*(?:<(?:div|blockquote)\b[^>]*>\s*)*<(?:p|h[1-6])\b[^>]*>)/i',static fn($m)=>$m[1].$prefix,$body,1);
+    if(preg_match('/^\s*<(div|blockquote)\b[^>]*>/i',$body))return preg_replace_callback('/^(\s*<(?:div|blockquote)\b[^>]*>)/i',static fn($m)=>$m[1].$prefix,$body,1);
+    if(!preg_match('/^\s*<(?:table|pre|ol|ul)\b/i',$body))return '<p>'.$prefix.$body.'</p>';
+    return $prefix.$body;
+}
+
 function examQuestionPartSuffixHtml(string $body,string $suffix):string {
     $annotation='<span class="exam-part-score">'.sanitize($suffix).'</span>';
     // Keep the annotation at the end of the last English paragraph, even when
@@ -17,9 +27,10 @@ function examStructuredQuestionRich(array $structure,string $language):string {
         $en=$language==='ne'?'':$row['en'];$ne=$language==='en'?'':$row['np'];
         if(!questionImportHasContent($en)&&!questionImportHasContent($ne))continue;$shown=true;
         $out.='<div class="exam-bilingual-row">';
-        if($row['label']!=='')$out.='<span class="exam-part-label">('.sanitize($row['label']).')</span>';
         $out.='<div class="exam-language-pair">';
         $suffix=$row['label']===''?'':questionPartsSuffix($row,$structure['display']);
+        $label=$row['label']===''?'':'('.$row['label'].')';
+        if(questionImportHasContent($ne))$ne=examQuestionPartLabelHtml($ne,$label);else $en=examQuestionPartLabelHtml($en,$label);
         if(questionImportHasContent($ne))$out.='<div class="exam-language-ne font-nepali" lang="ne">'.($suffix!==''&&!questionImportHasContent($en)?examQuestionPartSuffixHtml($ne,$suffix):$ne).'</div>';
         if(questionImportHasContent($en))$out.='<div class="exam-language-en" lang="en">'.($suffix!==''?examQuestionPartSuffixHtml($en,$suffix):$en).'</div>';
         $out.='</div></div>';
@@ -140,10 +151,9 @@ function examQuestionRich(string $english,string $nepali,string $language='both'
     foreach($pairs as [$e,$n]){
         $label=$n['label']??$e['label']??'';if($label==='')$label=$e['label']??'';
         $out.='<div class="exam-bilingual-row">';
-        if($label!=='')$out.='<span class="exam-part-label">'.sanitize($label).'</span> ';
         $out.='<div class="exam-language-pair">';
-        if($n)$out.='<div class="exam-language-ne font-nepali" lang="ne">'.$n['html'].'</div>';
-        if($e)$out.=($n?' ':'').'<div class="exam-language-en" lang="en">'.($n?'(':'').$e['html'].($n?')':'').'</div>';
+        if($n)$out.='<div class="exam-language-ne font-nepali" lang="ne">'.examQuestionPartLabelHtml($n['html'],$label).'</div>';
+        if($e)$out.=($n?' ':'').'<div class="exam-language-en" lang="en">'.($n?'(':'').($n?$e['html']:examQuestionPartLabelHtml($e['html'],$label)).($n?')':'').'</div>';
         $out.='</div></div>';
     }
     return $out.'</div>';

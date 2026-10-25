@@ -12,6 +12,6 @@ $partsStored=($form['question_layout']??'')==='structured'||str_contains($form['
 <p id="questionMathRule" class="form-text" hidden>Mathematics: first part K, last part HA; with three parts the middle category is U, A or KU. KU does not replace the required K.</p>
 <div id="questionSubparts"></div>
 <div class="d-flex flex-wrap gap-2 align-items-center"><button type="button" id="questionPartAdd" class="btn btn-outline-primary">Add subquestion</button><strong id="questionPartsTotal" role="status"></strong><button type="button" id="questionPartsPreview" class="btn btn-outline-secondary">Preview question</button></div>
-<p class="form-text">Use a, b, c or custom labels. Labels remain with their parts when reordered. K, U, A, HA and KU are independent categories. The total is calculated from all subquestions.</p>
+<p class="form-text">Use a, b, c or custom labels. Labels remain with their parts when reordered and print at the start of Nepali text on the same line. K, U, A, HA and KU are independent categories. The total is calculated from all subquestions. A structured MCQ has one prompt and four choices.</p>
 <div id="questionPartsError" class="alert alert-danger" role="alert" hidden></div><div id="questionPartsPreviewBody" class="question-part-preview exam-bank-rich" hidden></div>
 </section></div>
