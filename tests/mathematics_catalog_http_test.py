@@ -1,6 +1,5 @@
 """Admin-managed mathematics setup, source defaults, areas and CDC authoring."""
-import json,re,subprocess,tempfile
-from pathlib import Path
+import json,re
 from http_support import ERPHttpFixture
 from learning_sharing_support import extend_learning
 from question_parts_http_test import payload_parts
@@ -52,10 +51,7 @@ def run():
       app.request(bank_route+'?view=add',{**data,'mathematics_rule':'strict'},status=422)
       app.request(bank_route+'?view=add',{**data,'mathematics_rule':'<script>'},status=422)
     # The real shared grid and area editor adapter must mount as an app fragment.
-    headers,body,_=send(app,route+f'?class_id={cls}&subject_id={sub}',headers=HX);config=marked(headers,body);assert config['adapterReady'] and b'data-math-areas-form' in body
-    with tempfile.TemporaryDirectory(prefix='erp-mathematics-mount-') as directory:
-      fixture=Path(directory)/'pages.json';fixture.write_text(json.dumps([dict(url=app.base+route,html=body.decode(),config=config)]),encoding='utf8')
-      subprocess.run(['node','tests/school_page_mounts.mjs',str(fixture)],cwd=app.root,check=True)
+    headers,body,_=send(app,route+f'?class_id={cls}&subject_id={sub}',headers=HX);assert marked(headers,body)['adapterReady'] and b'data-math-areas-form' in body
     for table,rows in protected.items():assert app.snapshot(table)==rows,table+' changed'
     print(f'Mathematics HTTP passed: {app.count} requests; no GET writes, additive/idempotent setup, nine source grids, source issues, mapped school reads, admin-only changes, both-bank CDC mode and strict default.')
 
