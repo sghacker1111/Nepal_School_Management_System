@@ -409,7 +409,7 @@ class XlsxHelper {
                   . '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">';
         if($importLayout){
             $sheetXml.='<sheetViews><sheetView workbookViewId="0" showGridLines="0"><pane xSplit="2" ySplit="1" topLeftCell="C2" activePane="bottomRight" state="frozen"/></sheetView></sheetViews><cols>';
-            foreach($headers as $i=>$header){$width=$i>=10&&$i<=21?44:match($i){0=>16,1=>24,2,3=>28,4=>22,5,6=>18,7=>20,8=>12,9=>20,default=>18};$sheetXml.='<col min="'.($i+1).'" max="'.($i+1).'" width="'.$width.'" customWidth="1"/>';}
+            foreach($headers as $i=>$header){$width=preg_match('/^(?:Question \(|Statement \(|(?:Subquestion |Model )?Answer \(|Option [ABCD] \()/',$header)?44:match($header){'Class'=>16,'Subject'=>24,'Chapter','Topic'=>28,'Type','Cognitive Level','Required Minutes'=>22,'Marks'=>12,default=>18};$sheetXml.='<col min="'.($i+1).'" max="'.($i+1).'" width="'.$width.'" customWidth="1"/>';}
             $sheetXml.='</cols>';
         }
         $sheetXml.='<sheetData>';
@@ -575,6 +575,8 @@ class XlsxHelper {
             ]
         ];
 
+        $headers[]='Model Answer (English)';$headers[]='Model Answer (Nepali)';
+        foreach($rows as &$row){$correct=$row[15];$index=7+2*(ord($correct)-ord('A'));$row[]='Correct answer: '.$row[$index];$row[]='सही उत्तर: '.$row[$index+1];}unset($row);
         return ['headers' => $headers, 'rows' => $rows];
     }
 
@@ -588,8 +590,6 @@ class XlsxHelper {
         }
         unset($header);
         if ($type === 'mcq') {
-            $sample['headers'][] = 'Model Answer (English) HTML';
-            $sample['headers'][] = 'Model Answer (Nepali) HTML';
             $sample['rows'] = [
                 ['Class 10', 'Mathematics', 'Algebra', 'Quadratic Equations', 'Application (A)',
                  '<p>Solve <strong>the equation</strong> \\(x^2=4\\). What is the positive root?</p>',

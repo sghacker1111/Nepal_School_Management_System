@@ -37,8 +37,10 @@ with ERPHttpFixture() as app:
         _,template=app.request_bytes(url+f'?action=download_template&type={kind}&format={fmt}'+context_query(app))
         if fmt=='xlsx':
             with zipfile.ZipFile(io.BytesIO(template)) as archive:
-                expected=len(ET.fromstring(archive.read('xl/worksheets/sheet1.xml')).findall('{*}sheetData/{*}row'))-1
-        else:expected=len(list(csv.reader(io.StringIO(template.decode('utf-8-sig')))))-1
+                sheet=ET.fromstring(archive.read('xl/worksheets/sheet1.xml'));headers=[node.text for node in sheet.findall('{*}sheetData/{*}row')[0].findall('{*}c/{*}is/{*}t')];assert 'Answer (English)' in headers and 'Subquestion Answer (Nepali)' in headers
+        else:
+            headers=list(csv.reader(io.StringIO(template.decode('utf-8-sig'))))[0];assert 'Answer (English)' in headers and 'Subquestion Answer (Nepali)' in headers
+        expected=2 if kind=='mcq' else 4
         before=len(app.snapshot('questions'));body=upload(app,template,'template.'+fmt)
         assert len(app.snapshot('questions'))==before+expected,body[-2000:]
         assert body.count('alert-success')==1 and '&lt;strong&gt;' not in body

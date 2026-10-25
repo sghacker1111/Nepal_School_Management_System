@@ -12,12 +12,20 @@ foreach(['exam','learning'] as $bank)foreach(['normal','html'] as $mode)foreach(
  $result=examImportQuestions($db,$teacher,[$headers,...$rows],$mode,'private',$kind,$selection,$bank);
  erpEqual($result['saved'],$kind==='mcq'?2:4,'Samples import multiple main questions '.$bank.' '.$mode.' '.$kind);
  erpEqual($result['skipped'],0,'Every sample row is valid');
+ $sampleMap=examImportHeaders($headers,$mode,$kind);
+ foreach(['answer','answer_np','part_answer','part_answer_np','statement_en','statement_np'] as $field)erpCheck(isset($sampleMap[$field]),'Sample exposes '.$field.' '.$bank.' '.$mode.' '.$kind);
+ foreach($result['ids'] as $answerId){$savedAnswer=$db->query('SELECT answer,answer_np FROM questions WHERE id='.$answerId)->fetch(PDO::FETCH_ASSOC);erpCheck(questionImportHasContent($savedAnswer['answer'])&&questionImportHasContent($savedAnswer['answer_np']),'Every sample question has a bilingual model answer');}
  $qid=$result['ids'][$kind==='mcq'?1:2];$q=learningContentRecord($db,$teacher,'questions',$qid,$bank==='exam'?'exam_bank':'bank');$parts=questionPartsRead($q['question_text'],$q['question_text_np']);
  erpEqual(count($parts['parts']),$kind==='mcq'?1:3,'Rows grouped into exact subquestion count');
  erpEqual((float)$q['marks'],$kind==='mcq'?2.5:4.0,'Total marks are computed once per question');
  $html=examQuestionRich($q['question_text'],$q['question_text_np'],'both',true);$doc=new DOMDocument();@$doc->loadHTML('<?xml encoding="UTF-8">'.$html);$xpath=new DOMXPath($doc);
  $label=$xpath->query('//span[@class="exam-part-label"]')->item(0);erpCheck($label&&$label->parentNode instanceof DOMElement&&$label->parentNode->tagName==='p','Label is inside the Nepali text paragraph');
  erpCheck(str_contains($html,$kind==='mcq'?'(2.5U)':'(2KU)'),'Cognitive annotations retained');
+ if($kind==='other'){
+  erpCheck(str_contains($q['answer'],'(a)')&&str_contains($q['answer'],'(b)')&&str_contains($q['answer'],'(c)'),'Each solution keeps its subquestion label');
+  erpCheck(str_contains($q['answer'],'20,500')&&str_contains($q['answer_np'],'20,500'),'Per-part solutions persist in both model-answer fields');
+  $answerHtml=examQuestionRich($q['answer'],$q['answer_np'],'both',true);erpCheck(str_contains($answerHtml,'20,500')&&str_contains($answerHtml,'(b)'),'Model-answer view renders imported solutions');
+ }
  if($kind==='mcq'){
   erpEqual($q['correct_option'],'B','MCQ answer key retained');erpEqual(count(json_decode($q['options'],true)),4,'MCQ options retained');
   $edit=$q;foreach(['bank_kind','school_id','created_by_user_id'] as $field)unset($edit[$field]);learningSaveQuestion($db,$teacher,$edit,$qid,$bank);erpCheck(questionPartsRead(learningContentRecord($db,$teacher,'questions',$qid,$bank==='exam'?'exam_bank':'bank')['question_text'],$q['question_text_np'])!==null,'Imported MCQ can be edited without losing its structure');
@@ -32,9 +40,20 @@ $bad=$partRows;$bad[1][$map['marks']]='0';$before=(int)$db->query('SELECT COUNT(
 $result=examImportQuestions($db,$teacher,[$headers,$rows[0],...$bad],'normal','private','other',$selection);erpEqual($result['saved'],1,'Independent good question retained');erpEqual($result['skipped'],3,'Every row of invalid group reported skipped');erpEqual((int)$db->query('SELECT COUNT(*) FROM questions')->fetchColumn(),$before+1,'No partial group saved');
 foreach(['statement_en','required_minutes','type','part_display'] as $field){$bad=$partRows;$bad[1][$map[$field]]=$field==='required_minutes'?'9':($field==='type'?'Short':'Conflicting value');erpReject(fn()=>examImportQuestions($db,$teacher,[$headers,...$bad],'normal','private','other',$selection),'Conflicting grouped '.$field.' rejected');}
 $bad=$partRows;$bad[1][$map['part_label']]='a';erpReject(fn()=>examImportQuestions($db,$teacher,[$headers,...$bad],'normal','private','other',$selection),'Duplicate group labels rejected');
+// Full-model answers and per-row solutions coexist; blank solutions never invent an answer.
+$solutions=$partRows;$solutions[0][$map['answer']]='Complete solution introduction';$solutions[0][$map['answer_np']]='सम्पूर्ण समाधानको परिचय';$solutions[1][$map['part_label']]='ii';
+$result=examImportQuestions($db,$teacher,[$headers,...$solutions],'normal','private','other',$selection);$saved=$db->query('SELECT answer,answer_np FROM questions WHERE id='.$result['ids'][0])->fetch(PDO::FETCH_ASSOC);
+erpCheck(str_contains($saved['answer'],'Complete solution introduction')&&str_contains($saved['answer'],'(ii)')&&str_contains($saved['answer_np'],'(ii)'),'Whole-answer introduction and custom part labels survive together');
+$solutions=$partRows;foreach($solutions as &$row){$row[$map['part_answer']]='';$row[$map['part_answer_np']]='';}unset($row);
+$result=examImportQuestions($db,$teacher,[$headers,...$solutions],'normal','private','other',$selection);$saved=$db->query('SELECT answer,answer_np FROM questions WHERE id='.$result['ids'][0])->fetch(PDO::FETCH_ASSOC);erpEqual($saved,['answer'=>'','answer_np'=>''],'Empty optional answers stay empty');
+$plain=$rows[0];$plain[$map['part_answer']]='Misplaced solution';erpReject(fn()=>examImportQuestions($db,$teacher,[$headers,$plain],'normal','private','other',$selection),'Plain-question part answers cannot be silently discarded');
+$htmlSolutions=$partRows;foreach($htmlSolutions as &$row){$row[$map['part_answer']]='<p><strong>Solution</strong> \\(x^2\\)</p><script>alert(1)</script><img src="javascript:alert(1)" onerror="bad()">';$row[$map['part_answer_np']]='<p>उत्तर <em>२</em></p>';}unset($row);
+$result=examImportQuestions($db,$teacher,[$headers,...$htmlSolutions],'html','private','other',$selection);$saved=$db->query('SELECT answer,answer_np FROM questions WHERE id='.$result['ids'][0])->fetch(PDO::FETCH_ASSOC);
+erpCheck(str_contains($saved['answer'],'<strong>Solution</strong>')&&str_contains($saved['answer'],'x^2')&&str_contains($saved['answer_np'],'<em>२</em>'),'Rich part-answer formatting and TeX survive');erpCheck(!preg_match('/<script|javascript:|onerror/i',$saved['answer']),'Part answers use the existing HTML security filter');
 $bad=$partRows;$bad[1][$map['subject']]='Unknown subject';$before=(int)$db->query('SELECT COUNT(*) FROM questions')->fetchColumn();erpReject(fn()=>examImportQuestions($db,$teacher,[$headers,$rows[0],...$bad],'normal','private','other',$selection),'Scope mismatch rejects entire batch');erpEqual((int)$db->query('SELECT COUNT(*) FROM questions')->fetchColumn(),$before,'Preflight never saves earlier questions');
 // Header priority covers statements as well as subquestion rich text.
 $dual=[...$headers,'Statement (English) HTML Source'];erpEqual(examImportHeaders($dual,'normal','other')['statement_en'],$map['statement_en'],'Normal statement column wins in normal mode');erpEqual(examImportHeaders($dual,'html','other')['statement_en'],count($headers),'HTML statement column wins in HTML mode');
+$dual=[...$headers,'Subquestion Answer (English) HTML Source'];erpEqual(examImportHeaders($dual,'normal','other')['part_answer'],$map['part_answer'],'Normal part-answer column wins in normal mode');erpEqual(examImportHeaders($dual,'html','other')['part_answer'],count($headers),'HTML part-answer column wins in HTML mode');
 $normal=$partRows;$normal[0][$map['question_text']]='Literal <script>alert(1)</script> < 2';$normal[1][$map['question_text']]='Continued';$result=examImportQuestions($db,$teacher,[$headers,...$normal],'normal','private','other',$selection);$q=$db->query('SELECT * FROM questions WHERE id='.$result['ids'][0])->fetch(PDO::FETCH_ASSOC);erpCheck(str_contains($q['question_text'],'&lt;script&gt;')&&!str_contains($q['question_text'],'<script>'),'Normal import treats HTML as literal text');
 foreach($protected as $table=>$snapshot)erpEqual($db->query("SELECT * FROM $table ORDER BY id")->fetchAll(PDO::FETCH_ASSOC),$snapshot,'Grouped imports preserve '.$table);
 echo 'Structured import checks passed: '.$GLOBALS['erp_checks'].PHP_EOL;

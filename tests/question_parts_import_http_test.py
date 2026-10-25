@@ -1,5 +1,6 @@
 """Download actual CSV/XLSX samples and import structured questions in both banks."""
-import csv,io,re
+import csv,io,re,zipfile
+from xml.etree import ElementTree as ET
 from urllib.request import Request
 from urllib.error import HTTPError
 from http_support import ERPHttpFixture
@@ -43,6 +44,12 @@ def run():
                         if fmt=='csv':
                             values=list(csv.reader(io.StringIO(sample.decode('utf-8-sig'))));assert 'Question Group' in values[0] and 'Subquestion Label' in values[0]
                             assert any('Statement (English)' in h for h in values[0])
+                            headers=values[0]
+                        else:
+                            with zipfile.ZipFile(io.BytesIO(sample)) as workbook:
+                                sheet=ET.fromstring(workbook.read('xl/worksheets/sheet1.xml'));headers=[cell.text for cell in sheet.findall('{*}sheetData/{*}row')[0].findall('{*}c/{*}is/{*}t')]
+                        for name in ('Answer (English)','Answer (Nepali)','Subquestion Answer (English)','Subquestion Answer (Nepali)'):
+                            assert name+(' HTML Source' if mode=='html' else '') in headers, (bank,kind,mode,fmt,name)
                         before=len(app.snapshot('questions'));body=upload(app,route,sample,'grouped.'+fmt,kind,mode)
                         count=2 if kind=='mcq' else 4
                         assert f'Successfully imported {count}' in body and len(app.snapshot('questions'))==before+count
@@ -51,6 +58,10 @@ def run():
                         visible=app.request(route+sep+'record_id='+str(q[0]))
                         assert re.search(r'<div class="exam-language-ne[^>]*><p><span class="exam-part-label">\(a\)</span>',visible), 'Label must be inside first Nepali paragraph without extra alignment whitespace'
                         assert '(2.5U)' in visible if kind=='mcq' else '(2KU)' in visible
+                        answers=app.db.execute('SELECT answer,answer_np FROM questions WHERE id=?',(q[0],)).fetchone();assert all(answers),'Every structured sample has bilingual model answers'
+                        if kind=='other':
+                            assert all(label in answer for answer in answers for label in ('(a)','(b)','(c)'))
+                            assert '20,500' in visible and '20,500' in answers[0] and '20,500' in answers[1]
                         edit=app.request(route+sep+'view=edit&question_id='+str(q[0]));assert 'question-parts-config' in edit and '&quot;stored&quot;:true' in edit
         app.login('other_admin');app.request('/exam-mcqs?view=edit&question_id='+str(q[0]),status=404)
         for name,snapshot in protected.items():assert app.snapshot(name)==snapshot,name

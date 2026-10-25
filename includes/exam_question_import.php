@@ -33,6 +33,8 @@ function examImportHeaders(array $headers,string $mode,?string $kind=null):array
         'question_text_np'=>['questionnepali','questionnp','qnepali','qtextnp','nepaliquestion','qusnp','qusnepali'],
         'answer'=>['answer','answeren','answerenglish','ans','ansen','ansenglish','answermodelen','modelanswer','modelanswerenglish','expectedanswer','expectedansweren'],
         'answer_np'=>['answernp','answernepali','ansnp','ansnepali','answermodelnp','modelanswernepali','expectedanswernp','expectedanswernepali'],
+        'part_answer'=>['subquestionanswer','subquestionanswerenglish','subquestionansweren','partanswer','partanswerenglish','partansweren','subquestionmodelanswerenglish'],
+        'part_answer_np'=>['subquestionanswernepali','subquestionanswernp','partanswernepali','partanswernp','subquestionmodelanswernepali'],
         'correct_option'=>['correctoption','correct','answerkey','key','correctanswer','correctchoice'],
         'question_group'=>['questiongroup','group','groupkey','questionreference'],
         'part_label'=>['subquestionlabel','partlabel','subpartlabel'],
@@ -189,20 +191,21 @@ function examImportSample(PDO $db,array $actor,string $mode,int $class=0,int $su
         $rows[1][10]=$kind==='mcq'?'<p>What is \\(\\frac{1}{2}+\\frac{1}{2}\\)?</p>':'<p>Explain why \\(\\frac{1}{2}+\\frac{1}{2}=1\\).</p>';
         $rows[1][12]='<p>\\[\\frac{1+1}{2}=1\\]</p>';
     }
-    $extra=['Question Group','Subquestion Label','Statement (English)','Statement (Nepali)','Part Display','Mathematics Rule'];
-    if($mode==='html'){$extra[2].=' HTML Source';$extra[3].=' HTML Source';}
+    $extra=['Question Group','Subquestion Label','Statement (English)','Statement (Nepali)','Part Display','Mathematics Rule','Subquestion Answer (English)','Subquestion Answer (Nepali)'];
+    if($mode==='html')foreach([2,3,6,7] as $i)$extra[$i].=' HTML Source';
     $extraOffset=count($headers);$headers=[...$headers,...$extra];
-    foreach($rows as &$row)$row=[...$row,'','','','','','strict'];unset($row);
+    foreach($rows as &$row)$row=[...$row,'','','','','','strict','',''];unset($row);
     $rich=static fn($value)=>$mode==='html'?'<p>'.htmlspecialchars($value,ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8').'</p>':$value;
     if($kind==='other'){
         $groupRows=[];
         foreach([
-            ['a','K',1,'State the compound interest formula.','चक्रीय ब्याजको सूत्र लेख्नुहोस्।'],
-            ['b','KU',2,'Find the first year compound interest.','पहिलो वर्षको चक्रीय ब्याज पत्ता लगाउनुहोस्।'],
-            ['c','HA',1,'Compare the interest earned in the two years.','दुई वर्षमा प्राप्त ब्याज तुलना गर्नुहोस्।']
-        ] as [$label,$category,$marks,$en,$np]){
+            ['a','K',1,'State the compound interest formula.','चक्रीय ब्याजको सूत्र लेख्नुहोस्।','CI = P(1 + r/100)^n - P.','CI = P(1 + r/100)^n - P हुन्छ।'],
+            ['b','KU',2,'Find the first year compound interest with annual compounding.','वार्षिक चक्रीय ब्याजमा पहिलो वर्षको ब्याज पत्ता लगाउनुहोस्।','CI = 2,00,000 x 10/100 = Rs. 20,000.','CI = 2,00,000 x 10/100 = रु. 20,000।'],
+            ['c','HA',1,'Compare annual and half-yearly interest for one year.','एक वर्षको वार्षिक र अर्धवार्षिक चक्रीय ब्याज तुलना गर्नुहोस्।','Half-yearly: 2,00,000 x (1.05)^2 - 2,00,000 = Rs. 20,500. This is Rs. 500 more than annual compounding.','अर्धवार्षिक: 2,00,000 x (1.05)^2 - 2,00,000 = रु. 20,500। यो वार्षिकभन्दा रु. 500 बढी हो।']
+        ] as [$label,$category,$marks,$en,$np,$answer,$answerNp]){
             $row=$rows[2];$row[7]=$category;$row[8]=$marks;$row[9]=8;$row[10]=$rich($en);$row[11]=$rich($np);$row[12]='';$row[13]='';
-            $row[$extraOffset]='WRITTEN-1';$row[$extraOffset+1]=$label;$row[$extraOffset+2]=$rich('A depositor invests Rs. 2,00,000 at 10% p.a. Compare annual and half-yearly compounding.');$row[$extraOffset+3]=$rich('एक व्यक्तिले वार्षिक 10% ब्याजदरमा रु. 2,00,000 जम्मा गरे। वार्षिक र अर्धवार्षिक चक्रीय ब्याज तुलना गर्नुहोस्।');$row[$extraOffset+4]='both';$groupRows[]=$row;
+            $row[$extraOffset]='WRITTEN-1';$row[$extraOffset+1]=$label;$row[$extraOffset+2]=$rich('A depositor invests Rs. 2,00,000 at 10% p.a. Compare annual and half-yearly compounding.');$row[$extraOffset+3]=$rich('एक व्यक्तिले वार्षिक 10% ब्याजदरमा रु. 2,00,000 जम्मा गरे। वार्षिक र अर्धवार्षिक चक्रीय ब्याज तुलना गर्नुहोस्।');$row[$extraOffset+4]='both';
+            $row[$extraOffset+6]=$rich($answer);$row[$extraOffset+7]=$rich($answerNp);$groupRows[]=$row;
         }
         array_splice($rows,2,1,$groupRows);
     }else{
