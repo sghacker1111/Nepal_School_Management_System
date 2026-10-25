@@ -32,7 +32,7 @@ with ERPHttpFixture() as app:
     match=re.search(r"document\.getElementById\('modalNoteChapter'\)\.value\s*=\s*([^\n]+);",function)
     literal=match.group(1)
     data={'values':app_config(body.encode())['values']}
-    evaluated=subprocess.run(['node','-e','const config='+json.dumps(data)+';process.stdout.write(String('+literal+'));'],capture_output=True,text=True,check=True).stdout
+    evaluated=subprocess.run(['node','-'],input='const config='+json.dumps(data)+';process.stdout.write(String('+literal+'));',capture_output=True,text=True,check=True).stdout
     if evaluated!=title:failures.append('Add Note chooses an entity-encoded chapter instead of the option title')
     assert not failures,'; '.join(failures)
     print(f'Learning note preservation HTTP passed: {app.count} requests; alias IDs, legacy review and exact JS chapter title')

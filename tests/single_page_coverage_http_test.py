@@ -10,7 +10,7 @@ def run():
  routes=json.loads(subprocess.run(['php','-r','require "includes/routes.php";echo json_encode(schoolRoutes());'],cwd=root,capture_output=True,text=True,check=True).stdout)
  discovered={'index.php'}|{str(p.relative_to(root)).replace('\\','/') for p in root.glob('modules/*/*.php')}
  assert {r['controller'] for r in routes}==discovered
- native={'auth-login','auth-logout','auth-verify-password','super-admin-switch-school','accounting-search','students-admit-card','results-report-card','exams-admit-cards'}
+ native={'auth-security','auth-recovery','auth-login','auth-logout','auth-verify-password','super-admin-switch-school','accounting-search','students-admit-card','results-report-card','exams-admit-cards'}
  unready=[r['id'] for r in routes if not r['enhanced'] and r['id'] not in native];assert unready==[],unready
  adapters=set()
  for path in (root/'frontend/pages').glob('*.js'):

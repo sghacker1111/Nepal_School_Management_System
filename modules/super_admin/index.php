@@ -37,6 +37,7 @@ $activePage = 'super_admin_dashboard';
 ob_start();
 ?>
 
+<?php if(!schoolBackupCodes($db,(int)Auth::getUserId())): ?><div class="alert alert-warning" role="status"><strong>Set up administrator recovery.</strong> Generate and save backup codes before you need to recover a locked account. <a href="<?= schoolRouteUrl('modules/auth/security.php') ?>">Open Account security</a></div><?php endif; ?>
 <div class="alert <?= $runtimeSecurity['patched'] ? 'alert-info' : 'alert-danger' ?>" role="status">
     <strong>PHP security:</strong> this web server reports PHP <?= sanitize($runtimeSecurity['version']) ?>.
     <?php if ($runtimeSecurity['patched']): ?>

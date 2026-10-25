@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__.'/account_security.php';
 function saveSchoolUser(PDO $db, int $actorId, string $actorRole, int $actorSchool, array $input): int {
     $actorQuery=$db->prepare('SELECT role,school_id,status FROM users WHERE id=?');$actorQuery->execute([$actorId]);$actor=$actorQuery->fetch();
     if(!$actor||!(int)$actor['status']||$actor['role']!==$actorRole||($actorRole!=='super_admin'&&(int)$actor['school_id']!==$actorSchool))throw new InvalidArgumentException('An active administrator assigned to this school is required.');
@@ -19,6 +20,8 @@ function saveSchoolUser(PDO $db, int $actorId, string $actorRole, int $actorScho
     if ($id) {
         $stmt=$db->prepare('SELECT * FROM users WHERE id=? AND school_id=?'); $stmt->execute([$id,$school]); $existing=$stmt->fetch();
         if (!$existing || $existing['role']==='super_admin') throw new InvalidArgumentException('This account cannot be edited here or moved between schools.');
+        $security=schoolAccountState($db,$id);
+        if($security['blocked']||$security['retry'])throw new InvalidArgumentException('Unlock this account through an authorized administrator before editing its access or password.');
         if ($id===$actorId && (!$status || $role!==$actorRole)) throw new InvalidArgumentException('You cannot disable your own account or remove your administrator role.');
         if ($existing['role']==='school_admin' && $existing['status'] && (!$status || $role!=='school_admin')) {
             $stmt=$db->prepare("SELECT COUNT(*) FROM users WHERE school_id=? AND role='school_admin' AND status=1 AND id<>?"); $stmt->execute([$school,$id]);
@@ -29,6 +32,7 @@ function saveSchoolUser(PDO $db, int $actorId, string $actorRole, int $actorScho
     if ($stmt->fetchColumn()) throw new InvalidArgumentException('That username is already in use.');
     $db->beginTransaction();
     try {
+        if($id){schoolSecurityUser($db,$id);$security=schoolAccountState($db,$id);if($security['blocked']||$security['retry'])throw new InvalidArgumentException('Unlock this account through an authorized administrator before editing its access or password.');}
         $studentRecord=null;
         if($role==='student'){
             $studentId=$input['student_record_id']??'';

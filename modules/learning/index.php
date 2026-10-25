@@ -32,7 +32,16 @@ if (!$is_admin && isset($_GET['action']) && $_GET['action'] === 'request_hub_per
 }
 
 require_once __DIR__.'/../../includes/learning_content_service.php';
+require_once __DIR__.'/../../includes/question_import_context.php';
 $contentActor=learningActor($db,(int)Auth::getUserId(),(int)$school_id,Auth::isReadOnly());
+if(($_GET['action']??'')==='note_catalog'){
+    header('Content-Type: application/json');header('Cache-Control: no-store, private');
+    try{
+        if(!learningPurposeAllowed($db,$contentActor,'study'))throw new InvalidArgumentException('Learning Hub access is required.');
+        echo json_encode(questionImportCatalog($db,$contentActor,learningId($_GET['class_id']??null),learningId($_GET['subject_id']??null)),JSON_THROW_ON_ERROR);
+    }catch(InvalidArgumentException $e){http_response_code(422);echo json_encode(['error'=>$e->getMessage()]);}
+    exit;
+}
 if($_SERVER['REQUEST_METHOD']==='POST'&&(isset($_POST['action_note'])||isset($_GET['delete_note']))){
     try{
         $action=$_POST['action_note']??'archive';
@@ -46,10 +55,10 @@ if($_SERVER['REQUEST_METHOD']==='POST'&&(isset($_POST['action_note'])||isset($_G
     catch(Throwable $e){$error=schoolPublicError($e);}
 }
 $classes=learningReadClasses($db,$contentActor);
-$class_id=(int)($_GET['class_id']??($classes[0]['id']??0));
+$class_id=(int)(($_GET['class_id']??'')?:($classes[0]['id']??0));
 $selected_class=null;foreach($classes as $row)if((int)$row['id']===$class_id)$selected_class=$row;
 $subjects=learningReadSubjects($db,$contentActor,$class_id);
-$subject_id=(int)($_GET['subject_id']??($subjects[0]['id']??0));
+$subject_id=(int)(($_GET['subject_id']??'')?:($subjects[0]['id']??0));
 $selected_subject=null;foreach($subjects as $row)if((int)$row['id']===$subject_id)$selected_subject=$row;
 $chapterRows=$selected_class&&$selected_subject?learningCatalogChapters($db,$contentActor,$class_id,$subject_id):[];
 $chapters=array_column($chapterRows,'name');
@@ -59,7 +68,8 @@ $notes=[];$questions=[];
 $filter_source=$_GET['source']??'all';$filter_archived=($_GET['archived']??'')==='1';
 $reviewLegacy=($_GET['unassigned']??'')==='1';
 if($reviewLegacy&&(!$is_admin||(int)$school_id!==0))denySchoolRequest('Content not found.',404);
-$canCreateNote=$selected_class&&$selected_subject&&learningCanCreate($db,$contentActor,$class_id,$subject_id);
+$noteWriterSubjects=learningPurposeAllowed($db,$contentActor,'study')?questionImportWriterSubjects($db,$contentActor,$classes):[];
+$canCreateNote=(bool)$noteWriterSubjects;
 if($selected_class&&$selected_subject&&$selected_chapter){
     $filters=['class_id'=>$class_id,'subject_id'=>$subject_id,'chapter'=>$selected_chapter,'source'=>$filter_source,'archived'=>$filter_archived];
     $filters['record_id']=$_GET['record_id']??'';
@@ -104,7 +114,6 @@ ob_start();
 <?php $pageAssets[]="tinymce"; ?>
 
 <!-- MathJax for rendering equations -->
-<?php $pageAssets[]="mathjax"; ?>
 <?php $pageAssets[]="mathjax"; ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -298,8 +307,8 @@ ob_start();
 <!-- Creator-owned Note Modal -->
 <?php if ($canCreateNote): ?>
 <div class="modal fade" id="noteModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <form method="POST" action="" data-erp-submit="learning-index-action-9" data-erp-submit-args="<?= schoolPageActionArgs("learning-index",[]) ?>">
+    <div class="modal-dialog modal-xl">
+        <form method="POST" action="" id="noteForm" data-erp-submit="learning-index-action-9" data-erp-submit-args="<?= schoolPageActionArgs("learning-index",[]) ?>">
             <input type="hidden" name="action_note" id="modalActionNote" value="add">
             <input type="hidden" name="note_id" id="modalNoteId">
             <?php foreach(['chapter_id','topic_id','catalog_chapter_id','catalog_topic_id'] as $ref): ?><input type="hidden" name="<?= $ref ?>" id="noteRef_<?= $ref ?>"><?php endforeach; ?>
@@ -310,18 +319,20 @@ ob_start();
                 </div>
                 <div class="modal-body p-4">
                     <div class="row g-3">
-                        <input type="hidden" name="class_id" value="<?= $class_id ?>"><input type="hidden" name="subject_id" value="<?= $subject_id ?>">
-                        <div class="col-12"><p class="text-muted"><?= sanitize($selected_class['name']) ?> · <?= sanitize($selected_subject['name_en']) ?></p></div>
-                        <div class="col-md-6"><label class="form-label">Chapter</label><select name="chapter" id="modalNoteChapter" class="form-select" required data-erp-change="learning-index-action-10" data-erp-change-args="<?= schoolPageActionArgs("learning-index",[]) ?>"><?php foreach($chapters as $ch): ?><option value="<?= sanitize($ch) ?>" <?= $selected_chapter===$ch?'selected':'' ?>><?= sanitize($ch) ?></option><?php endforeach; ?></select><div class="form-text">Select another chapter in the filter before adding notes for it.</div></div>
+                        <div class="col-md-6"><label for="modalNoteClass" class="form-label">Class</label><select id="modalNoteClass" name="class_id" class="form-select" required><?php foreach($classes as $c): if(empty($noteWriterSubjects[$c['id']]))continue; ?><option value="<?= (int)$c['id'] ?>" <?= $class_id===(int)$c['id']?'selected':'' ?>><?= sanitize($c['name']) ?></option><?php endforeach; ?></select></div>
+                        <div class="col-md-6"><label for="modalNoteSubject" class="form-label">Subject</label><select id="modalNoteSubject" name="subject_id" class="form-select" required></select></div>
+                        <div class="col-md-6"><label class="form-label">Chapter</label><select name="chapter" id="modalNoteChapter" class="form-select" required data-erp-change="learning-index-action-10" data-erp-change-args="<?= schoolPageActionArgs("learning-index",[]) ?>"><?php foreach($chapters as $ch): ?><option value="<?= sanitize($ch) ?>" <?= $selected_chapter===$ch?'selected':'' ?>><?= sanitize($ch) ?></option><?php endforeach; ?></select></div>
                         <div class="col-md-6"><label class="form-label">Topic (optional)</label><select name="topic" id="modalNoteTopic" class="form-select" data-erp-change="learning-index-action-11" data-erp-change-args="<?= schoolPageActionArgs("learning-index",[]) ?>"><option value="">No topic</option><?php foreach($noteTopics as $t): ?><option value="<?= sanitize($t['name']) ?>"><?= sanitize($t['name']) ?></option><?php endforeach; ?></select></div>
                         <div class="col-12"><label class="form-label">Visibility</label><select name="visibility" id="modalNoteVisibility" class="form-select"><option value="private">Private</option><option value="public"><?= $is_admin?'Shared catalog':'Public within this school' ?></option></select></div>
+                        <div id="noteCatalogStatus" class="col-12 small" role="status"></div>
                         <div class="col-12">
-                            <label class="form-label">Note Title *</label>
-                            <input type="text" name="title" id="modalNoteTitleInput" class="form-control" required placeholder="e.g. Understanding Coefficients & Graphs">
+                            <label class="form-label">Note heading *</label>
+                            <input type="text" name="title" id="modalNoteTitleInput" class="form-control" required maxlength="255" placeholder="e.g. Understanding Coefficients & Graphs">
                         </div>
                         <div class="col-12">
-                            <label class="form-label">Content Body (HTML & MathJax LaTeX Supported) *</label>
-                            <textarea name="content" id="modalNoteContent" class="form-control" rows="8" required placeholder="Type notes content here..."></textarea>
+                            <label class="form-label">Notes, formulas and reading materials *</label>
+                            <textarea name="content" id="modalNoteContent" class="form-control exam-rich" rows="8" placeholder="Write your study notes, worked examples and reading materials..."></textarea>
+                            <div class="form-text">Use headings, tables, images and Mathematics in TeX, or edit HTML with the Source code tool.</div>
                         </div>
                     </div>
                 </div>
@@ -336,7 +347,9 @@ ob_start();
 
 <?php schoolPageModule("learning-index");schoolPageValue("learning-index-value-0",(string)(json_encode($is_admin?'public':'private')));
 schoolPageValue("learning-index-value-1",(string)(json_encode($selected_chapter,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT)));
-schoolPageValue("learning-index-value-2",(string)(json_encode($selected_chapter,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT))); ?>
+schoolPageValue("learning-index-value-2",(string)(json_encode($selected_chapter,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT)));
+schoolPageValue('note-editor',json_encode(['subjects'=>$noteWriterSubjects,'class_id'=>$class_id,'subject_id'=>$subject_id,'chapter'=>$selected_chapter,'catalog'=>['chapters'=>$chapterRows,'topics'=>array_reduce($chapterRows,function($out,$ch)use($db,$contentActor,$class_id,$subject_id){$out[$ch['id']]=learningCatalogTopics($db,$contentActor,$class_id,$subject_id,(int)$ch['id']);return $out;},[])],'url'=>schoolRouteUrl('modules/learning/index.php'),'retry'=>$error!==''&&in_array($_POST['action_note']??'',['add','edit'],true)?$_POST:null],JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT));
+include __DIR__.'/../../includes/question_editor.php'; ?>
 <?php endif; ?>
 
 <?php

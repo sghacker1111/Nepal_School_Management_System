@@ -2,6 +2,8 @@
 /** Shared re-authentication limit across tabs, sessions and sensitive actions. */
 function schoolVerifySensitivePassword(PDO $db, int $userId, mixed $password): bool {
     if ($userId < 1 || !is_string($password) || $password === '' || strlen($password)>1024) return false;
+    require_once __DIR__.'/account_security.php';
+    if(str_contains($password,"\0")||schoolAccountLocked(schoolAccountState($db,$userId)))return false;
     $key = hash('sha256', 'reauth|'.$userId);
     $cutoff = time()-900;
     $db->prepare('DELETE FROM login_attempts WHERE identity_key=? AND attempted_at<?')->execute([$key,$cutoff]);

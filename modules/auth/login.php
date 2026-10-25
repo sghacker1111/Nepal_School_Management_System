@@ -8,6 +8,7 @@ require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
 
 Auth::startSession();
+header('Cache-Control: no-store, private');
 
 // If already logged in, redirect to dashboard
 if (Auth::isLoggedIn()) {
@@ -17,18 +18,18 @@ if (Auth::isLoggedIn()) {
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $username = sanitize($_POST['username'] ?? '');
+    $username = $_POST['username'] ?? '';
     $password = $_POST['password'] ?? '';
     
     if (!Auth::verifyCSRFToken($_POST[CSRF_TOKEN_NAME] ?? null)) {
         $error = 'Your sign-in form expired. Please try again.';
-    } elseif (empty($username) || empty($password)) {
+    } elseif (!is_string($username)||!is_string($password)||empty($username) || empty($password)) {
         $error = 'Please enter both username and password';
     } else {
         if (Auth::login($username, $password)) {
             schoolAppRedirect(schoolRouteUrl('index.php'));
         } else {
-            $error = 'Invalid username or password';
+            $error = 'Sign-in failed. Check your credentials or account lock. After 5 incorrect attempts, wait 30 minutes. Two further failures require an administrator unlock.';
         }
     }
 }
@@ -120,6 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 <div class="text-center mt-3">
                     <span class="text-muted small">Forgot your password? Contact your school administrator.</span>
+                    <a class="d-block small mt-2" href="<?= schoolRouteUrl('modules/auth/recovery.php') ?>">Main administrator: recover with a backup code</a>
                 </div>
             </form>
             <!-- Demo credentials section removed -->

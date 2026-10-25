@@ -24,6 +24,7 @@ def runtime_paths(root=ROOT):
     names.extend(['includes/exam_paper_output.php','includes/question_paper_output.php','includes/question_bank_actions.php','assets/js/exam-question-language.js','modules/learning/paper_generator.php'])
     names.extend(['includes/paper_format.php','includes/paper_format_form.php','includes/paper_sections_editor.php','includes/exam_paper_groups.php','includes/learning_test_paper_page.php','modules/learning/exam_paper_generator.php','assets/css/exam-paper.css'])
     names.extend(['config/data/mathematics_grids.json','includes/mathematics_catalog.php','includes/mathematics_areas_panel.php','includes/curriculum_deletion.php','modules/learning/curriculum.php','modules/learning/exam_specification_grids.php','assets/js/exam-grid-editor.js','assets/js/exam-questions.js','includes/exam_grid_editor.php','includes/learning_catalog.php'])
+    names.extend(['includes/account_security.php','includes/user_management.php','modules/auth/login.php','modules/auth/security.php','modules/auth/recovery.php','modules/settings/users.php','modules/learning/index.php','modules/learning/ocr_scanner.php'])
     for folder in ('assets/dist','assets/vendor/tinymce-6.8.6','assets/vendor/mathjax-3.2.2','assets/vendor/pdfjs-6.4.299'):
         directory=root/folder
         if not directory.is_dir():raise ValueError('Build required public runtime assets before verification.')
@@ -57,6 +58,7 @@ def verify(ftp,paths,root=ROOT):
     critical.extend(['includes/exam_paper_output.php','includes/question_paper_output.php','includes/question_bank_actions.php','assets/js/exam-question-language.js','modules/learning/paper_generator.php'])
     critical.extend(['includes/paper_format.php','includes/paper_format_form.php','includes/paper_sections_editor.php','includes/exam_paper_groups.php','includes/learning_test_paper_page.php','modules/learning/exam_paper_generator.php','assets/css/exam-paper.css'])
     critical.extend(['config/data/mathematics_grids.json','includes/mathematics_catalog.php','includes/mathematics_areas_panel.php','includes/curriculum_deletion.php','modules/learning/curriculum.php','modules/learning/exam_specification_grids.php','assets/js/exam-grid-editor.js','assets/js/exam-questions.js','includes/exam_grid_editor.php','includes/learning_catalog.php'])
+    critical.extend(['includes/account_security.php','includes/user_management.php','modules/auth/login.php','modules/auth/security.php','modules/auth/recovery.php','modules/settings/users.php','modules/learning/index.php','modules/learning/ocr_scanner.php'])
     for name in critical:
         digest=hashlib.sha256()
         ftp.retrbinary('RETR '+name,digest.update)

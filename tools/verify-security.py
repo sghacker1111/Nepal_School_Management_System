@@ -12,15 +12,16 @@ for folder in ('includes', 'modules', 'config'):
         commands.append([php, '-l', str(path)])
 for name in ('app.php','index.php','router.php'):
     commands.append([php, '-l', name])
-for name in ('security_test.php','school_offerings_test.php','question_parts_test.php','question_bulk_archive_test.php','paper_format_test.php','mathematics_catalog_test.php','question_parts_import_test.php','import_security_test.php','packages_test.php',
+for name in ('security_test.php','account_security_test.php','school_offerings_test.php','question_parts_test.php','question_bulk_archive_test.php','paper_format_test.php','mathematics_catalog_test.php','question_parts_import_test.php','import_security_test.php','packages_test.php',
              'learning_content_test.php','exam_teacher_scope_test.php'):
     commands.append([php, 'tests/' + name])
-for name in ('school_offerings_http_test.py','question_parts_http_test.py','question_bulk_http_test.py','paper_format_http_test.py','mathematics_catalog_http_test.py','exam_question_language_http_test.py','question_parts_import_http_test.py','session_security_http_test.py','database_runtime_http_test.py',
+for name in ('account_security_http_test.py','learning_notes_http_test.py','learning_note_catalog_http_test.py','learning_note_preservation_http_test.py','school_offerings_http_test.py','question_parts_http_test.py','question_bulk_http_test.py','paper_format_http_test.py','mathematics_catalog_http_test.py','exam_question_language_http_test.py','question_parts_import_http_test.py','session_security_http_test.py','database_runtime_http_test.py',
              'class_isolation_http_test.py','attendance_filters_http_test.py',
              'packages_http_test.py','exam_teacher_scope_http_test.py',
              'question_authoring_app_http_test.py','single_page_coverage_http_test.py'):
     commands.append([sys.executable, 'tests/' + name])
 commands.append([sys.executable, 'tests/deployment_test.py'])
+commands.append([sys.executable, 'tests/account_security_concurrency_test.py'])
 for command in commands:
     result = subprocess.run(command, cwd=root, capture_output=True, text=True,
                             encoding='utf-8', errors='replace', timeout=180)

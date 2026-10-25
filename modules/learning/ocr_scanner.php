@@ -22,6 +22,7 @@ ob_start();
 
 <!-- Locally packaged editor -->
 <?php $pageAssets[]="tinymce"; ?>
+<?php $pageAssets[]="mathjax"; ?>
 
 <!-- Tesseract OCR CDN -->
 <?php $pageAssets[]="tesseract"; ?>
@@ -35,7 +36,7 @@ ob_start();
     <div class="d-flex justify-content-between align-items-center mb-4 no-print">
         <div>
             <h2 class="fw-bold text-primary mb-1"><i class="fas fa-camera-retro me-2"></i> OCR Question Paper Scanner</h2>
-            <p class="text-muted mb-0">Scan printed/handwritten papers, images, or PDF documents into editable text format using advanced AI OCR.</p>
+            <p class="text-muted mb-0">Extract text from paper images or PDFs locally in your browser. Review the results and edit questions, tables and formulas below.</p>
         </div>
         <a href="<?= schoolRouteUrl('index.php') ?>" class="btn btn-outline-secondary">
             <i class="fas fa-arrow-left"></i> Dashboard
@@ -127,7 +128,7 @@ ob_start();
                     </div>
                 </div>
                 <div class="card-body p-0">
-                    <textarea id="ocrEditor" style="height: 520px; border: none;"></textarea>
+                    <textarea id="ocrEditor" class="exam-rich" style="height: 520px; border: none;" aria-label="Editable question paper"></textarea>
                 </div>
             </div>
         </div>
@@ -135,6 +136,7 @@ ob_start();
 </div>
 
 <?php schoolPageModule("learning-ocr-scanner"); ?>
+<?php include __DIR__.'/../../includes/question_editor.php'; ?>
 
 <?php
 $content = ob_get_clean();

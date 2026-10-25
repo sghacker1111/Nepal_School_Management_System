@@ -6,7 +6,7 @@ function schoolRoutes(): array {
     $groups=[
         'accounting'=>['create_bill','credit','expenses','fees','generate','index','invoice','invoices','journals','payments','receipt','reports','search','settings','student','subscriptions'],
         'attendance'=>['index'],
-        'auth'=>['change_password','login','logout','profile','verify_password'],
+        'auth'=>['change_password','login','logout','profile','verify_password','security','recovery'],
         'classes'=>['add','edit','index','routine','subjects'],
         'exams'=>['add','admit_cards','edit','index','symbols','view'],
         'learning'=>['curriculum','exam_mcqs','exam_paper_generator','exam_questions','exam_specification_grids','index','ocr_scanner','paper_generator','practice_mcqs','question_corrections','question_grid','questions','specification_grids'],
@@ -25,7 +25,7 @@ function schoolRoutes(): array {
         'learning/exam_specification_grids'=>'/exam-paper-grids',
     ];
     $kinds=[
-        'auth/login'=>'auth','auth/logout'=>'auth','auth/verify_password'=>'json',
+        'auth/login'=>'auth','auth/logout'=>'auth','auth/recovery'=>'auth','auth/security'=>'auth','auth/verify_password'=>'json',
         'super_admin/switch_school'=>'auth','accounting/search'=>'json',
         'students/admit_card'=>'print','results/report_card'=>'print',
     ];

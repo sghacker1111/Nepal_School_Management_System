@@ -65,3 +65,15 @@ test('an enhanced import can be corrected and submitted again after validation f
  for(let attempt=0;attempt<2;attempt++){root.querySelector('form').requestSubmit();for(let n=0;n<50&&!root.querySelector('[data-form-error]');n++)await new Promise(resolve=>setImmediate(resolve));assert.equal(calls,attempt+1);assert.equal(root.querySelector('button').disabled,false);root.querySelector('[data-form-error]')?.remove();}
  await disposePage();off();win.close();
 });
+
+test('OCR auto-format keeps line boundaries and treats recognized markup as text',async()=>{
+ const source=readFileSync('modules/learning/ocr_scanner.php','utf8'),html=source.slice(source.indexOf('<div class="container-fluid'),source.lastIndexOf('<?php schoolPageModule("learning-ocr-scanner")'));
+ const dom=new JSDOM('<main id="main-content">'+html.replace(/<\?[^]*?\?>/g,'')+'</main>',{url:'https://school.example/learning/ocr-scanner'}),win=dom.window,root=win.document.querySelector('main');
+ let content='<p>1. &lt;img src=x onerror=alert(1)&gt;<br>(a) Find x &lt; 5</p><p>Plain text &amp; formula \\(x^2\\)</p>';
+ const editor={getElement:()=>root.querySelector('#ocrEditor'),getContent:()=>content,setContent(value){content=value;},remove(){}};
+ win.pdfjsLib={GlobalWorkerOptions:{}};win.tinymce={get:id=>id?editor:[editor]};
+ await mountPage(root,{pageId:'learning-ocr-scanner',assets:[],modules:['learning-ocr-scanner'],values:{}});
+ root.querySelector('[data-erp-click="learning-ocr-scanner-action-3"]').click();
+ const parsed=win.document.createElement('div');parsed.innerHTML=content;assert.equal(parsed.querySelector('img'),null);assert.equal(parsed.querySelectorAll('p').length,3);assert.match(parsed.textContent,/<img src=x onerror=alert\(1\)>/);assert.match(content,/\\\(x\^2\\\)/);
+ await disposePage();win.close();
+});
