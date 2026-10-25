@@ -70,7 +70,7 @@ async function loadAsset(id, doc) {
         node.addEventListener('error', failed, {once: true});
         if (!existing) {
             node.dataset.erpAsset = id;
-            if (css) { node.rel = 'stylesheet'; node.href = url; }
+            if (css) { node.rel = 'stylesheet'; node.href = url+(id==='question-language-css'?'?v=2026102501':''); }
             else { if(path.endsWith('.mjs'))node.type='module';node.src = url; node.async = true; }
             doc.head.append(node);
         }

@@ -764,7 +764,7 @@ ob_start();
                     foreach ($questions_list as $q): 
                     ?>
                         <div class="question-item">
-                            <span class="question-marks">[<?= $q['marks'] ?>]</span>
+                            <?php if(!examQuestionHasParts($q)): ?><span class="question-marks">[<?= $q['marks'] ?>]</span><?php endif; ?>
                             <div style="margin-left: 25px; text-indent: -25px;">
                                 <?= $q_idx ?>. 
                                 <div class="mathjax-render"><?= examQuestionRichVariants($q['question_text'],$q['question_text_np']??'',$questionLanguage,true) ?></div>

@@ -2,6 +2,7 @@
 require_once __DIR__.'/learning_content.php';
 require_once __DIR__.'/question_import.php';
 require_once __DIR__.'/question_parts.php';
+require_once __DIR__.'/password_security.php';
 
 function learningWrite(PDO $db,callable $work):mixed {return curriculumWrite($db,$work);}
 function learningId(mixed $value):int {if(!is_scalar($value)||!preg_match('/^[1-9][0-9]*$/',(string)$value))throw new InvalidArgumentException('Choose a valid record.');return (int)$value;}
@@ -87,6 +88,30 @@ function learningSetVisibility(PDO $db,array $actor,string $kind,int $id,string 
 }
 function learningSetArchived(PDO $db,array $actor,string $kind,int $id,bool $archived,string $bankKind='learning'):void {
     learningWrite($db,function()use($db,$actor,$kind,$id,$archived,$bankKind){$record=learningMutableRecord($db,$actor,$kind,$id,$bankKind);if(!$archived)curriculumAssertContentRestorable($db,$record);$db->prepare("UPDATE $kind SET archived_at=?,updated_at=CURRENT_TIMESTAMP WHERE id=?")->execute([$archived?date('Y-m-d H:i:s'):null,$id]);learningAudit($db,$actor,$archived?'Archive content':'Restore content',$kind,$id);});
+}
+/** Password failures must remain recorded even when the archive transaction rolls back. */
+function learningBulkArchiveQuestions(PDO $db,array $actor,mixed $selection,mixed $password,string $bankKind='learning',string $section='all'):int {
+    if(!in_array($bankKind,['learning','exam'],true)||!in_array($section,['all','written','mcq'],true))throw new InvalidArgumentException('Choose a valid question section.');
+    if(!is_array($selection)||!array_is_list($selection)||!$selection||count($selection)>100)throw new InvalidArgumentException('Select between 1 and 100 questions on this page.');
+    $ids=array_values(array_unique(array_map('learningId',$selection)));sort($ids,SORT_NUMERIC);
+    $current=learningActor($db,(int)$actor['id'],(int)$actor['school_id'],(bool)$actor['read_only']);
+    if($current['read_only']||$current['role']!==$actor['role']||!in_array($current['role'],['super_admin','school_admin','teacher'],true)||!learningPurposeAllowed($db,$current,$bankKind==='exam'?'exam_bank':'bank'))throw new InvalidArgumentException('Your account cannot delete these questions.');
+    if(!schoolVerifySensitivePassword($db,$current['id'],$password))throw new InvalidArgumentException('Current password is incorrect or verification is temporarily locked. Try again later after repeated failures.');
+    return learningWrite($db,function()use($db,$current,$ids,$bankKind,$section){
+        // Check every selection before changing anything: foreign, shared, stale,
+        // other-bank and other-section IDs cannot cause a partially applied batch.
+        foreach($ids as $id){
+            $record=learningMutableRecord($db,$current,'questions',$id,$bankKind);
+            if($record['archived_at'])throw new InvalidArgumentException('A selected question is already archived. Refresh the list.');
+            if($section!=='all'&&($record['type']==='MCQ')!==($section==='mcq'))throw new InvalidArgumentException('Select questions from this question section only.');
+        }
+        $update=$db->prepare('UPDATE questions SET archived_at=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND archived_at IS NULL');$now=date('Y-m-d H:i:s');
+        foreach($ids as $id){
+            $update->execute([$now,$id]);if($update->rowCount()!==1)throw new InvalidArgumentException('A selected question changed. Refresh and try again.');
+            learningAudit($db,$current,'Bulk archive question','questions',$id);
+        }
+        return count($ids);
+    });
 }
 function learningSaveNote(PDO $db,array $actor,array $input,?int $id=null):int {
     return learningWrite($db,function()use($db,$actor,$input,$id){

@@ -35,6 +35,9 @@ def run():
                 assert suffix in body and body.index('एक व्यक्ति')<body.index('A depositor')<body.index('ब्याजको सूत्र')<body.index('State the interest formula.')
                 assert body.count('class="exam-part-score"')==3
                 english=app.request(route+f'?record_id={qid}&language=en');nepali=app.request(route+f'?record_id={qid}&language=ne')
+                english_first=app.request(route+f'?record_id={qid}&language=both_en')
+                assert english_first.index('A depositor')<english_first.index('एक व्यक्ति') and english_first.index('State the interest formula.')<english_first.index('ब्याजको सूत्र')
+                assert english_first.count('exam-subquestion-pair')==3
                 assert 'A depositor' in english and 'एक व्यक्ति' not in english
                 assert 'एक व्यक्ति' in nepali and 'A depositor' not in nepali and suffix in nepali
                 edit=app.request(route+f'?view=edit&question_id={qid}')
@@ -47,6 +50,10 @@ def run():
                     sheet=app.request(generator,dict(action='generate_test',class_id=cls,subject_id=subject,paper_title='Structured QA',allocations_json=json.dumps({'rows':allocation,'duration_minutes':20}),language='both'))
                 visible=visible_exam_text(sheet)
                 assert suffix in visible and 'A depositor' in visible and 'एक व्यक्ति' in visible
+                question_sheet=sheet.split('id="examQuestionSheet"')[1].split('id="examAnswersSheet"')[0]
+                assert '</div><span>['+str(4+index)+'.00]</span></div>' not in question_sheet
+                answer_sheet=sheet.split('id="examAnswersSheet"')[1]
+                assert 'Subquestion marking guide' in answer_sheet and f'(b) ({2+index}'+(')' if display=='marks' else 'KU)') in answer_sheet
             current=app.db.execute('SELECT COUNT(*) FROM questions').fetchone()[0]
             invalid=[dict(p) for p in parts];invalid[0]['level']='KU'
             result=app.request(route+'?view=add',{**base,**payload_parts(invalid)},status=422);assert 'first must include K' in result

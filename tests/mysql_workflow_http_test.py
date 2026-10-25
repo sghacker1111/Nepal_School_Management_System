@@ -8,7 +8,7 @@ from mysql_test_support import ROOT
 
 class NativeMySQLHttpTests(unittest.TestCase):
     def test_school_and_learning_http_parity(self):
-        suites = ('school_offerings_http_test.py','question_parts_http_test.py','question_parts_import_http_test.py','session_security_http_test.py', 'class_isolation_http_test.py', 'attendance_filters_http_test.py',
+        suites = ('school_offerings_http_test.py','question_parts_http_test.py','question_bulk_http_test.py','exam_question_language_http_test.py','question_parts_import_http_test.py','session_security_http_test.py', 'class_isolation_http_test.py', 'attendance_filters_http_test.py',
                   'teacher_results_http_test.py', 'progress_print_http_test.py',
                   'mcq_practice_http_test.py', 'learning_sharing_http_test.py',
                   'exam_question_import_http_test.py', 'question_source_http_test.py',

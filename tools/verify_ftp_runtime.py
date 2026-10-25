@@ -21,6 +21,7 @@ def runtime_paths(root=ROOT):
     names.extend(['includes/school_offerings.php','includes/school_offerings_page.php','includes/request_guard.php','includes/school_setup.php','includes/school_validation.php','includes/teaching_scope.php','includes/learning_content.php','includes/exam_service.php','includes/marks_service.php','modules/super_admin/offerings.php','modules/super_admin/subjects.php','modules/subjects/index.php','includes/routes.php'])
     names.extend(['includes/question_parts.php','includes/question_parts_form.php','includes/exam_question_language.php','includes/exam_paper_service.php','assets/css/exam-question-language.css','includes/functions.php','assets/js/request-security.js'])
     names.extend(['includes/question_parts_import.php','includes/exam_question_import.php','includes/exam_question_import_form.php'])
+    names.extend(['includes/exam_paper_output.php','includes/question_paper_output.php','includes/question_bank_actions.php','assets/js/exam-question-language.js','modules/learning/paper_generator.php'])
     for folder in ('assets/dist','assets/vendor/tinymce-6.8.6','assets/vendor/mathjax-3.2.2','assets/vendor/pdfjs-6.4.299'):
         directory=root/folder
         if not directory.is_dir():raise ValueError('Build required public runtime assets before verification.')
@@ -51,6 +52,7 @@ def verify(ftp,paths,root=ROOT):
     critical.extend(['includes/school_offerings.php','includes/school_offerings_page.php','includes/request_guard.php','includes/school_setup.php','includes/school_validation.php','includes/teaching_scope.php','includes/learning_content.php','includes/exam_service.php','includes/marks_service.php','modules/super_admin/offerings.php','modules/super_admin/subjects.php','modules/subjects/index.php','includes/routes.php'])
     critical.extend(['includes/question_parts.php','includes/question_parts_form.php','includes/exam_question_language.php','includes/exam_paper_service.php','includes/learning_content_service.php','assets/css/exam-question-language.css','includes/functions.php','assets/js/request-security.js'])
     critical.extend(['includes/question_parts_import.php','includes/exam_question_import.php','includes/exam_question_import_form.php'])
+    critical.extend(['includes/exam_paper_output.php','includes/question_paper_output.php','includes/question_bank_actions.php','assets/js/exam-question-language.js','modules/learning/paper_generator.php'])
     for name in critical:
         digest=hashlib.sha256()
         ftp.retrbinary('RETR '+name,digest.update)

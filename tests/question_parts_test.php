@@ -16,7 +16,16 @@ erpCheck(str_contains($html,'Explain your calculation. <span class="exam-part-sc
 erpEqual(substr_count($html,'exam-part-score'),3,'One suffix per part');
 erpCheck(!str_contains($html,'lang="en">('),'Structured translations have separate lines without extra parentheses');
 erpCheck(str_contains($html,'\\(A=P(1+r)^n\\)'),'Equations retain portable TeX');
-erpCheck(str_contains($html,'<p><span class="exam-part-label">(a)</span> सूत्र'),'Subquestion label is inline with Nepali text');
+erpCheck(str_contains($html,'<p><span class="exam-part-label">(a)</span>सूत्र'),'Subquestion label is inline with Nepali text without an extra alignment space');
+erpEqual(substr_count($html,'exam-subquestion-pair'),3,'Both language lines use the same hanging gutter');
+$enFirst=examQuestionRich($english,$nepali,'both_en',true);
+erpCheck(strpos($enFirst,'A depositor')<strpos($enFirst,'एक व्यक्ति')&&strpos($enFirst,'Find the interest.')<strpos($enFirst,'ब्याज'),'English-first statement and subquestion order');
+erpEqual(substr_count($enFirst,'exam-part-label'),3,'English-first labels are not repeated');
+erpCheck(str_contains($enFirst,'<p><span class="exam-part-label">(a)</span>State'),'Label precedes first English paragraph');
+$question=['question_text'=>$english,'question_text_np'=>$nepali,'marks_units'=>475];
+erpCheck(examQuestionHasParts($question),'Structured question suppresses redundant statement total');
+$guide=examQuestionAnswerMarks($question);erpCheck(str_contains($guide,'(a) (1K)')&&str_contains($guide,'(b) (2.5KU)')&&str_contains($guide,'(c) (1.25HA)')&&!str_contains($guide,'4.75'),'Answer guide shows per-part marks and independent KU without duplicate total');
+erpCheck(str_contains(examQuestionAnswerMarks(['question_text'=>'Plain question','marks'=>'2.5']),'Marks: 2.5'),'Ordinary answer keys show their question marks');
 erpCheck(str_contains(examQuestionPartLabelHtml('<div><p>Nested question</p></div>','(iv)'),'<div><p><span class="exam-part-label">(iv)</span> Nested question'),'Nested rich paragraph also keeps its label inline');
 foreach(['both'=>'(2.5KU)','marks'=>'(2.5)','cognitive'=>'(KU)'] as $display=>$suffix){$copy=$structure;$copy['display']=$display;$render=examStructuredQuestionRich($copy,'en');erpCheck(str_contains($render,$suffix),'Saved suffix style '.$display);erpCheck(!str_contains($render,'ब्याज'),'English output is isolated');}
 $ne=examQuestionRich($english,$nepali,'ne',true);erpCheck(str_contains($ne,'(2.5KU)')&&!str_contains($ne,'Find the interest.'),'Nepali-only output retains annotation');

@@ -1,5 +1,13 @@
 # Structured bilingual questions
 
+## Viewing, printing and recoverable deletion
+
+- Language selectors now offer Nepali then English (default), English then Nepali, English only and Nepali only. Paper controls switch the same selected questions, options and answers without regenerating the paper.
+- Each labeled subquestion uses one shared hanging gutter. Both language lines and wrapped lines start at the same horizontal position; the label appears once beside the first displayed language. Custom labels receive a wider gutter when needed.
+- Structured question totals remain part of paper allocation and full-mark totals, but do not appear beside the statement. Only subquestion annotations are printed in the question body. Answer keys show a per-part marking guide; even cognitive-only question views include marks in the answer guide. Ordinary question/MCQ answers show question marks.
+- Question Bank, Exam Questions and Exam MCQs support selection of up to 100 editable questions on the current page. Delete selected opens a warning and current-password confirmation. The server checks the shared password retry limit and every record's creator, school, bank, section and active state before archiving the entire selection in one transaction. A failed batch changes no question. Passwords never enter audit logs or rendered responses.
+- Single-question deletion retains its confirmation warning without a password. Both deletion paths preserve the complete question and allow restoration from the Deleted / archived filter. Existing creator permissions still apply to restoration.
+
 Question Bank and Exam Questions share **Statement + subquestions** authoring. New written questions start in this mode. Existing free-form questions remain unchanged until their author selects it and saves a reviewed conversion draft. MCQs can also use a bilingual statement with one labeled prompt and their existing four choices and answer key.
 
 1. Choose class, subject and chapter (and a topic for a new Question Bank item).
@@ -8,7 +16,7 @@ Question Bank and Exam Questions share **Statement + subquestions** authoring. N
 4. Add, remove or reorder subquestions. Labels remain attached to their parts; edit the labels to change their printed sequence. Equations use the existing TeX dialog; formatted paragraphs, tables and diagrams remain inside their own subquestion.
 5. Choose the saved annotation style: **marks + category** `(2KU)`, **marks only** `(2)`, or **category only** `(KU)`. Preview, then save.
 
-The statement prints Nepali first and English below it. Each subquestion label is inserted directly into its first Nepali text paragraph, so it does not occupy a separate line. English follows on the next line, with its annotation at the end of the last English paragraph. Single-language output puts the label and annotation in that language. Both banks, question views, learning views, previews, correction snapshots, generated papers and print-language variants use the same layout. No extra translation parentheses are added to structured content.
+By default the statement prints Nepali first and English below it. Each subquestion label is inserted directly into its first displayed text paragraph, so it does not occupy a separate line. The translation follows on the next line, starting in the same text column. English then Nepali reverses each pair while keeping its annotation at the end of the last English paragraph. Single-language output puts the label and annotation in that language. Both banks, question views, learning views, previews, correction snapshots, generated papers and print-language variants use the same layout. No extra translation parentheses are added to structured content.
 
 Total marks are calculated from subquestions using integer hundredths on the server. A forged total is ignored. There can be 1–40 parts and at most 1,000 total marks, with two decimal places. Each stored language document is limited to 60,000 bytes to fit existing MySQL TEXT storage.
 

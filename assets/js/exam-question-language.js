@@ -5,7 +5,7 @@ window.initExamQuestionLanguage=function(root=document,context={}){
 const cleanups=[],listen=(node,type,fn)=>{node.addEventListener(type,fn);cleanups.push(()=>{node.removeEventListener?.(type,fn);wired.delete(node);});};
 root.querySelectorAll('[data-exam-language-control]').forEach(control=>{if(wired.has(control))return;wired.add(control);listen(control,'change',()=>{
     if(context.signal?.aborted)return;
-    if(!['both','en','ne'].includes(control.value))return;
+    if(!['both','both_en','en','ne'].includes(control.value))return;
     root.querySelectorAll('[data-exam-language-control]').forEach(other=>{other.value=control.value;});
     root.querySelectorAll('[data-exam-language-view]').forEach(view=>{view.hidden=view.dataset.examLanguageView!==control.value;});
 });});

@@ -49,7 +49,7 @@ def run():
                         q=app.db.execute("SELECT id,marks,question_text FROM questions WHERE bank_kind=? AND question_text LIKE '%data-question-structure%' ORDER BY id DESC LIMIT 1",(bank,)).fetchone()
                         assert float(q[1])==(2.5 if kind=='mcq' else 4)
                         visible=app.request(route+sep+'record_id='+str(q[0]))
-                        assert re.search(r'<div class="exam-language-ne[^>]*><p><span class="exam-part-label">\(a\)</span> ',visible), 'Label must be inside first Nepali paragraph'
+                        assert re.search(r'<div class="exam-language-ne[^>]*><p><span class="exam-part-label">\(a\)</span>',visible), 'Label must be inside first Nepali paragraph without extra alignment whitespace'
                         assert '(2.5U)' in visible if kind=='mcq' else '(2KU)' in visible
                         edit=app.request(route+sep+'view=edit&question_id='+str(q[0]));assert 'question-parts-config' in edit and '&quot;stored&quot;:true' in edit
         app.login('other_admin');app.request('/exam-mcqs?view=edit&question_id='+str(q[0]),status=404)
