@@ -229,6 +229,10 @@ function safeRichHtml(string $html): string {
                     $name=strtolower($attribute->name);$value=trim($attribute->value);
                     $ok=in_array($name,['title','alt','colspan','rowspan','lang'],true);
                     if($name==='class')$ok=(bool)preg_match('/^[\w\s-]*$/u',$value);
+                    if($tag==='div'){
+                        $rules=['data-question-structure'=>'/^1$/','data-question-role'=>'/^(statement|part)$/','data-part-display'=>'/^(both|marks|cognitive)$/','data-part-label'=>'/^[\p{L}\p{N}]{1,8}$/u','data-part-marks'=>'/^\d{1,4}(?:\.\d{1,2})?$/','data-part-levels'=>'/^(?:K|U|A|HA|KU)$/'];
+                        if(isset($rules[$name]))$ok=(bool)preg_match($rules[$name],$value);
+                    }
                     if(($tag==='a'&&$name==='href')||($tag==='img'&&$name==='src'))$ok=(bool)preg_match('~^(https?://|/(?!/)|\./|\.\./|data:image/(png|jpeg|gif|webp);base64,)~i',$value);
                     if(!$ok)$child->removeAttribute($attribute->name);
                 }

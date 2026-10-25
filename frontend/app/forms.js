@@ -6,10 +6,11 @@ const submissions=new WeakSet();
 
 export function canHandleForm(form,submitter) {
     if(!installed||!form?.matches?.('form')||!form.closest('#main-content')||form.closest('[data-untrusted-content],.exam-bank-rich'))return false;
-    if(form.dataset.erpNative!==undefined||form.target&&form.target!=='_self'||submitter?.formTarget&&submitter.formTarget!=='_self')return false;
+    const targetName=submitter?.getAttribute('formtarget')||form.getAttribute('target');
+    if(form.dataset.erpNative!==undefined||targetName&&targetName!=='_self')return false;
     if(form.getAttribute('hx-target')==='#questionBankPanel')return false;
-    let url=submitter?.hasAttribute('formaction')?submitter.formAction:form.action;
-    if((submitter?.formMethod||form.method).toUpperCase()==='GET'){
+    let url=new URL(submitter?.getAttribute('formaction')||form.getAttribute('action')||form.ownerDocument.defaultView.location.href,form.ownerDocument.defaultView.location.href).href;
+    if((submitter?.getAttribute('formmethod')||form.getAttribute('method')||'get').toUpperCase()==='GET'){
         const target=new URL(url,form.ownerDocument.defaultView.location.href);target.search='';
         for(const[key,value]of new form.ownerDocument.defaultView.FormData(form))if(typeof value==='string')target.searchParams.append(key,value);
         if(submitter?.name&&!submitter.disabled)target.searchParams.append(submitter.name,submitter.value);url=target.href;
@@ -31,7 +32,7 @@ function responseInfo(response,doc) {
 
 export async function submitForm(form,submitter) {
     if(!canHandleForm(form,submitter)||submissions.has(form))return false;
-    const state=installed,{win,deps}=state,method=(submitter?.getAttribute('formmethod')||form.method||'get').toUpperCase();
+    const state=installed,{win,deps}=state,method=(submitter?.getAttribute('formmethod')||form.getAttribute('method')||'get').toUpperCase();
     if(method!=='GET'&&method!=='POST')return false;
     if(['pending','uncertain'].includes(mutationState(form)))return false;
     submissions.add(form);let pending=false,saved=false;const buttons=[];
@@ -42,7 +43,7 @@ export async function submitForm(form,submitter) {
         if(!form.noValidate&&!submitter?.formNoValidate&&!form.reportValidity())return false;
         const body=new win.FormData(form);
         if(submitter?.name&&!submitter.disabled)body.append(submitter.name,submitter.value);
-        const url=new URL(submitter?.hasAttribute('formaction')?submitter.formAction:form.action,win.location.href);
+        const url=new URL(submitter?.getAttribute('formaction')||form.getAttribute('action')||win.location.href,win.location.href);
         if(url.origin!==win.location.origin||!/^https?:$/.test(url.protocol))return false;
         if(method==='GET'){
             url.search='';for(const [key,value]of body)if(typeof value==='string')url.searchParams.append(key,value);

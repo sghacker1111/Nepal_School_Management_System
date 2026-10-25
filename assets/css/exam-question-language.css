@@ -9,5 +9,17 @@
 .exam-language-pair :is(table,pre){display:table;max-width:100%;margin:.3em 0}.exam-language-pair img{max-width:100%;height:auto}
 .exam-language-missing{font-size:.9em;color:#697584;font-style:italic}
 [data-exam-language-view][hidden]{display:none!important}
+.exam-structured-content .exam-bilingual-row{display:flex;gap:.3em;align-items:baseline;margin:.65em 0}
+.exam-structured-content .exam-language-pair{display:block;min-width:0;flex:1}
+.exam-structured-content :is(.exam-language-en,.exam-language-ne){display:block}
+.exam-structured-content .exam-language-pair p{margin:0 0 .15em}
+.exam-part-score{white-space:nowrap;font-family:Arial,Helvetica,sans-serif!important;font-size:1rem!important}
+.question-parts-box{border:1px solid #cbd5e1;border-radius:.5rem;padding:1rem;background:#f8fafc}
+.question-subpart{border:1px solid #cbd5e1;border-radius:.4rem;padding:1rem;margin:1rem 0;background:#fff}
+.question-part-tools{display:flex;flex-wrap:wrap;align-items:end;gap:.6rem;margin-bottom:.75rem}
+.question-part-tools label{display:block;font-size:.9rem}
+.question-part-tools input{max-width:7rem}.question-part-tools select{max-width:19rem}
+.question-part-preview{padding:1rem;border:1px solid #cbd5e1;background:white;margin-top:1rem}
+.question-parts-box [hidden],#examQuestionForm [data-question-plain][hidden]{display:none!important}
 .exam-mcq-options>div{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:baseline;gap:6px}
 @media print{.exam-language-missing{color:#555}.exam-bilingual-row{margin:.18em 0}}

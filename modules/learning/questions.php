@@ -201,7 +201,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_import_excel']
                             'k' => 'Knowledge', 'knowledge' => 'Knowledge', 'knowledgek' => 'Knowledge',
                             'u' => 'Understanding', 'understanding' => 'Understanding', 'understandingu' => 'Understanding',
                             'a' => 'Application', 'application' => 'Application', 'applicationa' => 'Application',
-                            'ha' => 'Higher Ability', 'higherability' => 'Higher Ability', 'higherabilityha' => 'Higher Ability'
+                            'ha' => 'Higher Ability', 'higherability' => 'Higher Ability', 'higherabilityha' => 'Higher Ability',
+                            'ku'=>'Knowledge and Understanding', 'knowledgeandunderstanding'=>'Knowledge and Understanding', 'knowledgeandunderstandingku'=>'Knowledge and Understanding'
                         ];
                         $cdClean = strtolower(preg_replace('/[^a-z0-9]/i', '', $cdRaw));
                         $cognitiveDomain = $cdMap[$cdClean] ?? 'Knowledge';
@@ -554,7 +555,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                                     'Knowledge' => 'K',
                                     'Understanding' => 'U',
                                     'Application' => 'A',
-                                    'Higher Ability' => 'HA'
+                                    'Higher Ability' => 'HA', 'Knowledge and Understanding'=>'KU'
                                 ][$cd] ?? substr($cd, 0, 2);
                                 ?>
                                 <span class="badge <?= $cd_badge ?> px-2 py-1" title="<?= htmlspecialchars($cd) ?>">
@@ -674,7 +675,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                                 <option value="Knowledge">Knowledge (K)</option>
                                 <option value="Understanding">Understanding (U)</option>
                                 <option value="Application">Application (A)</option>
-                                <option value="Higher Ability">Higher Ability (HA)</option>
+                                <option value="Higher Ability">Higher Ability (HA)</option><option value="Knowledge and Understanding">KU (independent category)</option>
                             </select>
                         </div>
                         <div class="col-md-2">

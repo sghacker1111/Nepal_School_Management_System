@@ -148,7 +148,8 @@ function examImportQuestions(PDO $db,array $actor,array $rows,string $mode,strin
                 if(!$difficulty)throw new InvalidArgumentException('Difficulty must be Easy, Medium, Hard or Challenging.');
                 $domainKey=strtolower(preg_replace('/[^a-z]/i','',$get('cognitive_domain')));
                 $domains=['k'=>'Knowledge','knowledge'=>'Knowledge','knowledgek'=>'Knowledge','u'=>'Understanding','understanding'=>'Understanding','understandingu'=>'Understanding','a'=>'Application','application'=>'Application','applicationa'=>'Application','ha'=>'Higher Ability','higherability'=>'Higher Ability','higherabilityha'=>'Higher Ability'];
-                $domain=$domains[$domainKey]??null;if(!$domain)throw new InvalidArgumentException('Cognitive Level must be K, U, A or HA.');
+                $domains+=['ku'=>'Knowledge and Understanding','knowledgeandunderstanding'=>'Knowledge and Understanding','knowledgeandunderstandingku'=>'Knowledge and Understanding'];
+                $domain=$domains[$domainKey]??null;if(!$domain)throw new InvalidArgumentException('Cognitive Level must be K, U, A, HA or KU.');
                 $source=curriculumNameKey($get('source'));$permitted=$actor['school_id']===0?['shared','shared catalog']:['school','this school'];
                 if($source!==''&&$source!=='auto'&&!in_array($source,$permitted,true))throw new InvalidArgumentException('Source must be Auto or '.($actor['school_id']===0?'Shared':'School').'; the school and creator are assigned by your account.');
                 $marks=learningDecimalString(learningDecimalUnits($get('marks'),100000,'Question marks'));

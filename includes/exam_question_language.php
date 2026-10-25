@@ -1,12 +1,54 @@
 <?php
 /** Presentation only: never rewrite imported bilingual content or question IDs. */
 require_once __DIR__.'/question_import.php';
+require_once __DIR__.'/question_parts.php';
+
+function examQuestionPartSuffixHtml(string $body,string $suffix):string {
+    $annotation='<span class="exam-part-score">'.sanitize($suffix).'</span>';
+    // Keep the annotation at the end of the last English paragraph, even when
+    // the part contains several paragraphs, diagrams or a table.
+    if(preg_match('/<\/p>\s*$/i',$body))return preg_replace('/<\/p>(\s*)$/i',' '.$annotation.'</p>$1',$body,1);
+    return $body.' '.$annotation;
+}
+function examStructuredQuestionRich(array $structure,string $language):string {
+    $out='<div class="exam-bilingual-content exam-structured-content">';
+    $rows=[['label'=>'','en'=>$structure['statement_en'],'np'=>$structure['statement_np']],...$structure['parts']];$shown=false;
+    foreach($rows as $row){
+        $en=$language==='ne'?'':$row['en'];$ne=$language==='en'?'':$row['np'];
+        if(!questionImportHasContent($en)&&!questionImportHasContent($ne))continue;$shown=true;
+        $out.='<div class="exam-bilingual-row">';
+        if($row['label']!=='')$out.='<span class="exam-part-label">('.sanitize($row['label']).')</span>';
+        $out.='<div class="exam-language-pair">';
+        $suffix=$row['label']===''?'':questionPartsSuffix($row,$structure['display']);
+        if(questionImportHasContent($ne))$out.='<div class="exam-language-ne font-nepali" lang="ne">'.($suffix!==''&&!questionImportHasContent($en)?examQuestionPartSuffixHtml($ne,$suffix):$ne).'</div>';
+        if(questionImportHasContent($en))$out.='<div class="exam-language-en" lang="en">'.($suffix!==''?examQuestionPartSuffixHtml($en,$suffix):$en).'</div>';
+        $out.='</div></div>';
+    }
+    if(!$shown)$out.='<div class="exam-language-missing">'.($language==='en'?'English':'Nepali').' version not provided.</div>';
+    return $out.'</div>';
+}
 
 function examQuestionLanguage(mixed $value='both'):string {
     if(!is_string($value)||!in_array($value,['both','en','ne'],true))throw new InvalidArgumentException('Choose English, Nepali or both question languages.');
     return $value;
 }
 function examQuestionLanguages():array {return ['both'=>'Nepali + English','en'=>'English only','ne'=>'Nepali only'];}
+
+/** Explicit conversion draft; legacy stored bodies are never changed by a read. */
+function examQuestionPartsDraft(array $form):array {
+    if(($form['question_layout']??'')==='structured')return ['display'=>$form['part_display']??'both','statement_en'=>$form['statement_en']??'','statement_np'=>$form['statement_np']??'','parts'=>$form['subquestions']??[]];
+    $stored=questionPartsRead($form['question_text']??'',$form['question_text_np']??'');if($stored)return $stored;
+    $en=examRichParagraphs($form['question_text']??'');$ne=examRichParagraphs($form['question_text_np']??'');$pairs=examBilingualPairs($en,$ne);$parts=[];$statementEn='';$statementNp='';
+    $hasLabels=(bool)array_filter([...array_column($en,'label'),...array_column($ne,'label')]);
+    foreach($pairs as $i=>[$e,$n]){$label=$e['label']??$n['label']??'';if($label==='')$label=$n['label']??'';
+        if(($hasLabels&&$label===''&&!$parts)||(!$hasLabels&&$i===0)){$statementEn.='<p>'.($e['html']??'').'</p>';$statementNp.='<p>'.($n['html']??'').'</p>';continue;}
+        if($hasLabels&&$label===''&&$parts){$last=count($parts)-1;$parts[$last]['en'].='<p>'.($e['html']??'').'</p>';$parts[$last]['np'].='<p>'.($n['html']??'').'</p>';continue;}
+        $parts[]=['label'=>trim($label," ().\t\r\n")?:questionPartLabel(count($parts)),'en'=>$e['html']??'','np'=>$n['html']??''];
+    }
+    if(!$parts)$parts=array_fill(0,3,['en'=>'','np'=>'']);$units=100*count($parts);try{if(isset($form['marks']))$units=questionPartUnits((string)$form['marks']);}catch(InvalidArgumentException){}
+    foreach($parts as $i=>&$part){$part+=['label'=>questionPartLabel($i),'marks'=>questionPartNumber(max(1,intdiv($units,count($parts))+($i<$units%count($parts)?1:0))),'levels'=>[$i===0?'K':($i===count($parts)-1?'HA':'U')]];}unset($part);
+    return ['display'=>'both','statement_en'=>$statementEn,'statement_np'=>$statementNp,'parts'=>$parts];
+}
 
 /** Split rich paragraphs/line breaks without breaking formatting, TeX or tables. */
 function examRichParagraphs(string $html):array {
@@ -71,7 +113,9 @@ function examBilingualPairs(array $en,array $ne):array {
     return $pairs;
 }
 function examQuestionRich(string $english,string $nepali,string $language='both',bool $questionParts=false):string {
-    examQuestionLanguage($language);$en=examRichParagraphs($english);$ne=examRichParagraphs($nepali);
+    examQuestionLanguage($language);
+    if($questionParts){$structure=questionPartsRead($english,$nepali);if($structure)return examStructuredQuestionRich($structure,$language);}
+    $en=examRichParagraphs($english);$ne=examRichParagraphs($nepali);
     if($questionParts){
         // For questions, an unlabeled first paragraph is the statement and later
         // matching paragraphs are subparts. Answers/options keep ordinary prose.

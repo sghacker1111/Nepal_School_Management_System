@@ -1,6 +1,8 @@
 import {editorInstances} from '../app/editor-instances.js';
+import {initializeQuestionParts} from './question-parts.js';
 export function initializeLearning(root,context){
  const win=root.ownerDocument.defaultView;
+ initializeQuestionParts(root,context);
  win.initExamQuestionLanguage?.(root,context);
  if(root.querySelector('.exam-rich')&&!root.querySelector('#examQuestionForm'))win.SchoolQuestionEditor?.init('.exam-rich',root,context);
  context.onBeforeSubmit?.(()=>{for(const editor of editorInstances(win))if(root.contains(editor.getElement?.()))editor.save();});

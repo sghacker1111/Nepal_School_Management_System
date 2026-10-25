@@ -60,8 +60,8 @@ async function loadAsset(id, doc) {
         const failed = () => fail('Required asset unavailable: ');
         const loaded = async () => {
             try {
-                if (!available()) { failed(); return; }
                 if (id === 'mathjax') await win.MathJax.startup?.promise;
+                if (!available()) { failed(); return; }
                 if (settled) return; settled = true; cleanup(); resolve();
             } catch { failed(); }
         };

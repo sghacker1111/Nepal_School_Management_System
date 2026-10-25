@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__.'/learning_content.php';
 require_once __DIR__.'/question_import.php';
+require_once __DIR__.'/question_parts.php';
 
 function learningWrite(PDO $db,callable $work):mixed {return curriculumWrite($db,$work);}
 function learningId(mixed $value):int {if(!is_scalar($value)||!preg_match('/^[1-9][0-9]*$/',(string)$value))throw new InvalidArgumentException('Choose a valid record.');return (int)$value;}
@@ -37,8 +38,24 @@ function learningSaveQuestion(PDO $db,array $actor,array $input,?int $id=null,st
             if(!is_array($options))throw new InvalidArgumentException('Invalid MCQ options.');
             foreach(['A','B','C','D'] as $key)$input['option_'.strtolower($key).($field==='options_np'?'_np':'')]=$options[$key]??'';
         }
+        $subjectRow=$db->prepare('SELECT name_en,name_np FROM subjects WHERE id=?');$subjectRow->execute([$subject]);$subjectNames=$subjectRow->fetch(PDO::FETCH_ASSOC);
+        $mathematics=false;foreach($subjectNames as $name)if(in_array(questionImportSubjectKey((string)$name),['mathematics','optional mathematics'],true))$mathematics=true;
+        $layout=$input['question_layout']??'plain';if(!is_string($layout)||!in_array($layout,['plain','structured'],true))throw new InvalidArgumentException('Choose a valid question layout.');
+        $structure=null;
+        if($layout==='structured'){
+            if($type==='MCQ')throw new InvalidArgumentException('Use a written question type for subquestions.');
+            $structure=questionPartsNormalize(['display'=>$input['part_display']??'both','statement_en'=>$input['statement_en']??'','statement_np'=>$input['statement_np']??'','parts'=>$input['subquestions']??null],$mathematics);
+            $input['question_text']=questionPartsEncode($structure,'en');$input['question_text_np']=questionPartsEncode($structure,'np');
+        }else{
+            foreach(['question_text','question_text_np'] as $key)if(isset($input[$key])&&!is_string($input[$key]))throw new InvalidArgumentException('Enter valid question text.');
+            $structure=questionPartsRead($input['question_text']??'',$input['question_text_np']??'',$mathematics);
+            if($structure&&$type==='MCQ')throw new InvalidArgumentException('MCQs cannot contain written subquestions.');
+        }
+        if($structure){$input['marks']=questionPartNumber($structure['total_units']);$input['cognitive_domain']=QUESTION_PART_LEVELS[$structure['parts'][0]['levels'][0]];}
         $get=static function($key)use($input):string {$value=$input[$key]??'';if(!is_scalar($value))throw new InvalidArgumentException('Enter valid question content.');return (string)$value;};
         $content=questionImportRowContent($get,'html');
+        if($structure&&$content['type']==='MCQ')throw new InvalidArgumentException('Written subquestions cannot contain MCQ options.');
+        if($structure){$content['question_text']=questionPartsEncode($structure,'en');$content['question_text_np']=questionPartsEncode($structure,'np');}
         if($bankKind==='exam'||isset($input['marks']))$content['marks']=learningDecimalString(learningDecimalUnits($input['marks']??null,100000,'Question marks'));
         // Exam authoring is chapter-wide. Retain legacy topic links on an edit in
         // the same scope rather than silently detaching historical references.
@@ -47,7 +64,7 @@ function learningSaveQuestion(PDO $db,array $actor,array $input,?int $id=null,st
             if(!$supplied)foreach(['topic_id','catalog_topic_id'] as $key)$input[$key]=$old[$key]??null;
         }
         $catalog=learningCatalogSelection($db,$actor,$class,$subject,$input,$allowCatalogCreate&&learningCanManageCatalog($actor));
-        $domain=$input['cognitive_domain']??'Knowledge';if(!is_string($domain)||!in_array($domain,['Knowledge','Understanding','Application','Higher Ability'],true))throw new InvalidArgumentException('Choose a valid cognitive level.');
+        $domain=$input['cognitive_domain']??'Knowledge';if(!is_string($domain)||!in_array($domain,array_values(QUESTION_PART_LEVELS),true))throw new InvalidArgumentException('Choose a valid cognitive level.');
         $values=$content+['class_id'=>$class,'subject_id'=>$subject,'chapter'=>$catalog['chapter'],'topic_id'=>$catalog['topic_id'],'catalog_chapter_id'=>$catalog['catalog_chapter_id'],'catalog_topic_id'=>$catalog['catalog_topic_id'],'visibility'=>$visibility,'cognitive_domain'=>$domain,'updated_at'=>date('Y-m-d H:i:s')];
         if($bankKind==='learning'){
             if(isset($input['difficulty'])){if(!is_string($input['difficulty'])||!in_array($input['difficulty'],['Easy','Medium','Hard','Challenging'],true))throw new InvalidArgumentException('Choose a valid difficulty.');$values['difficulty']=$input['difficulty'];}

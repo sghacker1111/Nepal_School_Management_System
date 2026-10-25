@@ -1,0 +1,17 @@
+<?php
+try{$partsDraft=examQuestionPartsDraft($form);}catch(InvalidArgumentException){$partsDraft=['display'=>'both','statement_en'=>'','statement_np'=>'','parts'=>[]];}
+$partsStored=($form['question_layout']??'')==='structured'||str_contains($form['question_text']??'','data-question-structure');
+?>
+<div class="col-12" id="questionLayoutControl"><label for="questionLayout" class="form-label">Question layout</label><select id="questionLayout" name="question_layout" class="form-select"><option value="plain">Free-form question / MCQ</option><option value="structured">Statement + subquestions</option></select><p class="form-text">Changing to subquestions prepares a draft from matching paragraphs. Review every part before saving. Switching layouts keeps both drafts.</p></div>
+<div class="col-12" id="questionPartsPanel" hidden>
+<section class="question-parts-box" aria-label="Statement and subquestions">
+<input type="hidden" data-question-parts-config value="<?= sanitize(json_encode(['draft'=>$partsDraft,'stored'=>$partsStored,'new'=>!$edit,'subjects'=>$writerSubjects],JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_THROW_ON_ERROR)) ?>">
+<h3 class="h5">Question statement</h3>
+<div class="row g-3"><div class="col-md-6"><label for="questionStatementNp" class="form-label">Statement (Nepali)</label><textarea id="questionStatementNp" name="statement_np" class="form-control font-nepali" rows="3"></textarea></div><div class="col-md-6"><label for="questionStatementEn" class="form-label">Statement (English)</label><textarea id="questionStatementEn" name="statement_en" class="form-control" rows="3"></textarea></div></div>
+<div class="mt-3"><label for="questionPartDisplay" class="form-label">Show at the end of each subquestion</label><select id="questionPartDisplay" name="part_display" class="form-select"><option value="both">Marks + cognitive category — (1K), (2KU)</option><option value="marks">Marks only — (1), (2)</option><option value="cognitive">Cognitive category only — (K), (KU)</option></select></div>
+<p id="questionMathRule" class="form-text" hidden>Mathematics: first part K, last part HA; with three parts the middle category is U, A or KU. KU does not replace the required K.</p>
+<div id="questionSubparts"></div>
+<div class="d-flex flex-wrap gap-2 align-items-center"><button type="button" id="questionPartAdd" class="btn btn-outline-primary">Add subquestion</button><strong id="questionPartsTotal" role="status"></strong><button type="button" id="questionPartsPreview" class="btn btn-outline-secondary">Preview question</button></div>
+<p class="form-text">Use a, b, c or custom labels. Labels remain with their parts when reordered. K, U, A, HA and KU are independent categories. The total is calculated from all subquestions.</p>
+<div id="questionPartsError" class="alert alert-danger" role="alert" hidden></div><div id="questionPartsPreviewBody" class="question-part-preview exam-bank-rich" hidden></div>
+</section></div>

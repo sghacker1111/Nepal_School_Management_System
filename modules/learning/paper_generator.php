@@ -603,10 +603,7 @@ ob_start();
                                         </td>
                                         <td>
                                             <div class="small">
-                                                <strong>EN:</strong> <?= safeRichHtml($q['question_text']) ?><br>
-                                                <?php if ($q['question_text_np']): ?>
-                                                <strong class="text-muted">NP:</strong> <?= safeRichHtml($q['question_text_np']) ?>
-                                                <?php endif; ?>
+                                                <?= examQuestionRich($q['question_text'],$q['question_text_np']??'',$questionLanguage,true) ?>
                                             </div>
                                         </td>
                                         <td>

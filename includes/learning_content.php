@@ -4,6 +4,7 @@ require_once __DIR__.'/teaching_scope.php';
 require_once __DIR__.'/student_learning.php';
 require_once __DIR__.'/packages.php';
 require_once __DIR__.'/exam_content_policy.php';
+require_once __DIR__.'/question_parts.php';
 
 function learningActor(PDO $db,int $userId,int $school=0,bool $readOnly=false):array {
     $q=$db->prepare('SELECT id,role,school_id FROM users WHERE id=? AND status=1');$q->execute([$userId]);$user=$q->fetch(PDO::FETCH_ASSOC);
@@ -124,7 +125,7 @@ function learningContentList(PDO $db,array $actor,string $kind,array $filters,st
         if($kind!=='questions'||!in_array($filters['question_group'],['mcq','written'],true))throw new InvalidArgumentException('Choose a valid question section.');
         $where[]=$filters['question_group']==='mcq'?"type='MCQ'":"type<>'MCQ'";
     }
-    if(isset($filters['cognitive_domain'])){if(!is_string($filters['cognitive_domain'])||!in_array($filters['cognitive_domain'],['Knowledge','Understanding','Application','Higher Ability'],true))throw new InvalidArgumentException('Choose a valid cognitive level.');$where[]='cognitive_domain=?';$params[]=$filters['cognitive_domain'];}
+    if(isset($filters['cognitive_domain'])){if(!is_string($filters['cognitive_domain'])||!in_array($filters['cognitive_domain'],array_values(QUESTION_PART_LEVELS),true))throw new InvalidArgumentException('Choose a valid cognitive level.');$where[]='((cognitive_domain=? AND question_text NOT LIKE ?) OR question_text LIKE ?)';$params[]=$filters['cognitive_domain'];$params[]='%data-question-structure%';$params[]='%data-part-levels="'.array_search($filters['cognitive_domain'],QUESTION_PART_LEVELS,true).'"%';}
     if(isset($filters['topic_alias_ids'])){
         $aliases=$filters['topic_alias_ids'];if(!is_array($aliases)||!$aliases||count($aliases)>100)throw new InvalidArgumentException('Choose a valid topic.');
         foreach($aliases as $alias)if(!is_scalar($alias)||!preg_match('/^[1-9][0-9]*$/',(string)$alias))throw new InvalidArgumentException('Choose a valid topic.');

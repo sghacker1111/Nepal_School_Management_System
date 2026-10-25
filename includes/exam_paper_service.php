@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__.'/learning_content_service.php';
 require_once __DIR__.'/exam_mixed_paper.php';
-const EXAM_DOMAINS=['K'=>'Knowledge','U'=>'Understanding','A'=>'Application','HA'=>'Higher Ability'];
+const EXAM_DOMAINS=QUESTION_PART_LEVELS;
 const EXAM_TYPES=['MCQ','Very Short','Short','Long','Reasoning','Difference Between'];
 function examCount(mixed $value,string $label,bool $zero=false):int {
     if(!is_scalar($value)||!preg_match('/^\d{1,3}$/',(string)$value)||(int)$value<($zero?0:1)||(int)$value>200)throw new InvalidArgumentException($label.' must be '.($zero?'0':'1').'–200.');return (int)$value;
@@ -27,8 +27,8 @@ function examNormalizeGrid(PDO $db,array $actor,int $class,int $subject,array $i
         $each=($row['marks_each']??'')!==''&&$row['marks_each']!==null?learningDecimalUnits($row['marks_each'],100000,'Marks per question'):null;
         if($each!==null&&$each*$quantity!==$marks)throw new InvalidArgumentException('Count × marks per question must equal section marks in '.$name.'.');
         $difficulty=$row['difficulty']??'';if(!is_string($difficulty)||!in_array($difficulty,['','Easy','Medium','Hard','Challenging'],true))throw new InvalidArgumentException('Choose a valid difficulty.');
-        $domains=$row['domains']??[];if(!is_array($domains)||array_diff(array_keys($domains),array_keys(EXAM_DOMAINS)))throw new InvalidArgumentException('Use K, U, A and HA domain counts.');
-        $quota=[];foreach(EXAM_DOMAINS as $key=>$label)$quota[$key]=examCount($domains[$key]??0,$key.' count',true);if(array_sum($quota)>0&&array_sum($quota)!==$quantity)throw new InvalidArgumentException('K + U + A + HA must equal the question count in '.$name.'.');
+        $domains=$row['domains']??[];if(!is_array($domains)||array_diff(array_keys($domains),array_keys(EXAM_DOMAINS)))throw new InvalidArgumentException('Use K, U, A, HA and KU domain counts.');
+        $quota=[];foreach(EXAM_DOMAINS as $key=>$label)$quota[$key]=examCount($domains[$key]??0,$key.' count',true);if(array_sum($quota)>0&&array_sum($quota)!==$quantity)throw new InvalidArgumentException('K + U + A + HA + KU must equal the question count in '.$name.'.');
         // Saved exam grids may contain old topic IDs. Preserve their stored JSON,
         // but chapter-wide exam generation no longer applies those constraints.
         $topicIds=$bankKind==='learning'?($row['topic_ids']??[]):[];if(!is_array($topicIds)||!array_is_list($topicIds)||count($topicIds)>100)throw new InvalidArgumentException('Select valid topic filters.');$availableTopics=[];
@@ -124,6 +124,7 @@ function examGeneratePaper(PDO $db,array $actor,int $class,int $subject,array $i
     $questions=[];
     foreach($pool as $q){try{$q['marks_units']=learningDecimalUnits((string)$q['marks'],100000,'Question marks');$q['minutes_units']=$bankKind==='learning'&&empty($q['required_minutes'])?0:learningDecimalUnits((string)$q['required_minutes'],60000,'Question minutes');}catch(InvalidArgumentException $e){continue;}
         if(!in_array($q['cognitive_domain'],EXAM_DOMAINS,true))continue;
+        $q['cognitive_units']=questionCognitiveUnits($q);
         if($q['type']==='MCQ'){$en=json_decode($q['options']??'{}',true);$np=json_decode($q['options_np']??'{}',true);if(!is_array($en)||!is_array($np)||!in_array($q['correct_option'],['A','B','C','D'],true))continue;$valid=true;foreach(['A','B','C','D'] as $o)if(!questionImportHasContent($en[$o]??'')&&!questionImportHasContent($np[$o]??''))$valid=false;if(!$valid)continue;}
         $questions[(int)$q['id']]=$q;
     }
@@ -132,7 +133,7 @@ function examGeneratePaper(PDO $db,array $actor,int $class,int $subject,array $i
         $candidates=[];foreach($questions as $id=>$q)if(($q['type']===$row['type']||($row['type']==='Written'&&in_array($q['type'],array_diff(EXAM_TYPES,['MCQ']),true)))&&in_array($q['chapter'],$row['chapter_names'],true)&&(!$row['difficulty']||$q['difficulty']===$row['difficulty'])&&($row['each_units']===null||$q['marks_units']===$row['each_units'])&&(!$row['topic_ids']||in_array((int)($q['catalog_topic_id']?:$q['topic_id']),$row['topic_ids'],true)))$candidates[]=$id;
         shuffle($candidates);if(count($candidates)<$row['count'])throw new InvalidArgumentException($row['name'].': needs '.$row['count'].' matching '.$row['type'].' questions; only '.count($candidates).' are available.');
         $eligibleRows[$i]=$candidates;$rowTotals[$i]=$row['total_units'];$rowCounts[$i]=$row['count'];$groups=array_sum($row['domains'])?$row['domains']:['*'=>$row['count']];
-        foreach($groups as $domain=>$n){if(!$n)continue;$ids=$domain==='*'?$candidates:array_values(array_filter($candidates,static fn($id)=>$questions[$id]['cognitive_domain']===EXAM_DOMAINS[$domain]));
+        foreach($groups as $domain=>$n){if(!$n)continue;$ids=$domain==='*'?$candidates:array_values(array_filter($candidates,static fn($id)=>count(array_filter($questions[$id]['cognitive_units']))===1&&($questions[$id]['cognitive_units'][EXAM_DOMAINS[$domain]]??0)>0));
             if(count($ids)<$n)throw new InvalidArgumentException($row['name'].': needs '.$n.' '.$domain.' questions; only '.count($ids).' match.');
             foreach($ids as $id)$eligibleIds[$id]=true;
             if(count($eligibleIds)>2000)throw new InvalidArgumentException('More than 2000 matching exam questions: narrow chapter, type, difficulty, topic or mark filters before generating.');
@@ -151,10 +152,10 @@ function examGeneratePaper(PDO $db,array $actor,int $class,int $subject,array $i
         foreach($slot['ids'] as $rank=>$id){if($rank<=$oldLast||isset($used[$id]))continue;$q=$questions[$id];$m=$q['marks_units'];$min=$q['minutes_units'];$ch=$q['chapter'];$d=$q['cognitive_domain'];
             if($m>$rowTotals[$row]||$time+$min>$grid['duration_units'])continue;
             $target=$targets[$ch]??null;if($target&&(($target['count']!==null&&($chapterCounts[$ch]??0)+1>$target['count'])||($target['units']!==null&&($chapterMarks[$ch]??0)+$m>$target['units'])))continue;
-            $key=array_search($d,EXAM_DOMAINS,true);if(isset($grid['cognitive_units'][$key])&&($domainMarks[$d]??0)+$m>$grid['cognitive_units'][$key])continue;
-            $used[$id]=true;$selected[$at]=$id;$groupLast[$group]=$rank;$rowTotals[$row]-=$m;$rowCounts[$row]--;$chapterCounts[$ch]=($chapterCounts[$ch]??0)+1;$chapterMarks[$ch]=($chapterMarks[$ch]??0)+$m;$domainMarks[$d]=($domainMarks[$d]??0)+$m;$time+=$min;
+            $exceeds=false;foreach($q['cognitive_units'] as $category=>$units){$key=array_search($category,EXAM_DOMAINS,true);if(isset($grid['cognitive_units'][$key])&&($domainMarks[$category]??0)+$units>$grid['cognitive_units'][$key])$exceeds=true;}if($exceeds)continue;
+            $used[$id]=true;$selected[$at]=$id;$groupLast[$group]=$rank;$rowTotals[$row]-=$m;$rowCounts[$row]--;$chapterCounts[$ch]=($chapterCounts[$ch]??0)+1;$chapterMarks[$ch]=($chapterMarks[$ch]??0)+$m;foreach($q['cognitive_units'] as $category=>$units)$domainMarks[$category]=($domainMarks[$category]??0)+$units;$time+=$min;
             if($remainingRows()&&$solve($at+1))return true;
-            unset($used[$id],$selected[$at]);$groupLast[$group]=$oldLast;$rowTotals[$row]+=$m;$rowCounts[$row]++;$chapterCounts[$ch]--;$chapterMarks[$ch]-=$m;$domainMarks[$d]-=$m;$time-=$min;
+            unset($used[$id],$selected[$at]);$groupLast[$group]=$oldLast;$rowTotals[$row]+=$m;$rowCounts[$row]++;$chapterCounts[$ch]--;$chapterMarks[$ch]-=$m;foreach($q['cognitive_units'] as $category=>$units)$domainMarks[$category]-=$units;$time-=$min;
         }return false;
     };
     if(!$remainingRows()||!$solve(0))throw new InvalidArgumentException('No complete paper meets these counts, marks, chapter/cognitive targets and time. Add matching exam questions or adjust the grid.');

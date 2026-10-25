@@ -73,7 +73,7 @@ function mathSource(span) {
 }
 
 function init(selector,root=document,context={}){
- editorScopes.get(root)?.();
+ editorScopes.get(root)?.dispose();
  const owned=new Set(),removers=[];let disposed=false;
  const listen=(node,event,handler)=>{node.addEventListener(event,handler);removers.push(()=>node.removeEventListener?.(event,handler));};
  const dispose=()=>{
@@ -81,7 +81,7 @@ function init(selector,root=document,context={}){
   owned.forEach(editor=>editor.remove?.());owned.clear();texModalObj?.dispose?.();
   activeEditorId='';activeTexSpan=null;activeTexBookmark=null;editorScopes.delete(root);
  };
- editorScopes.set(root,dispose);context.signal?.addEventListener('abort',dispose,{once:true});
+ const state={dispose,refresh:()=>{}};editorScopes.set(root,state);context.signal?.addEventListener('abort',dispose,{once:true});
  context.onBeforeSubmit?.(form=>{for(const editor of owned)if(editor.getElement?.()?.form===form)editor.save();});
  const start=()=>{
     if(disposed)return;
@@ -102,7 +102,7 @@ function init(selector,root=document,context={}){
 
     // Initialize TinyMCE editors
     if (window.tinymce) {
-        window.tinymce.init({
+        const editorConfig={
             selector:root===document?selector:'#'+CSS.escape(root.id)+' '+selector.split(',').join(',#'+CSS.escape(root.id)+' '),
             height: 420,
             min_height: 380,
@@ -172,7 +172,8 @@ function init(selector,root=document,context={}){
                 }
             `,
             setup: function (editor) {
-                if(disposed){editor.remove?.();return;}owned.add(editor);
+                if(disposed){editor.remove?.();return;}owned.add(editor);editor.on('remove',()=>owned.delete(editor));
+                if(editor.getElement()?.closest('#questionPartsPanel')){editor.options?.set('height',260);editor.options?.set('min_height',200);editor.options?.set('menubar',false);editor.options?.set('toolbar','undo redo | bold italic underline | table math_tex | code fullscreen');}
                 // When content is loaded, wrap LaTeX with span so it can render inside iframe
                 editor.on('BeforeSetContent', function (e) {
                     if(!window.SchoolEditorSecurity?.sanitize)throw new Error('Editor security could not load. Reload the page.');
@@ -286,7 +287,8 @@ function init(selector,root=document,context={}){
                     }
                 });
             }
-        });
+        };
+        state.refresh=()=>{if(!disposed)return window.tinymce.init(editorConfig);};state.refresh();
     }
  };
  if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',start,{once:true});removers.push(()=>document.removeEventListener?.('DOMContentLoaded',start));}else start();
@@ -446,5 +448,5 @@ function insertTexIntoEditor() {
     }
 }
 
-window.SchoolQuestionEditor={init};
+window.SchoolQuestionEditor={init,refresh(root=document){return editorScopes.get(root)?.refresh();}};
 })();

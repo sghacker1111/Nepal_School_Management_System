@@ -30,6 +30,16 @@ test('timed-out script is removed so the next page can retry rather than await a
  }finally{await disposePage();win.close();}
 });
 
+test('MathJax script load waits for its safety module before checking the typeset API',async()=>{
+ const dom=new JSDOM('<main id="main-content"></main>',{url:'https://school.example/questions'}),win=dom.window,root=win.document.querySelector('main');
+ try{
+  const pending=mountPage(root,{pageId:'editor-assets-fixture',assets:['mathjax']});await tick();let ready;
+  win.MathJax={startup:{promise:new Promise(resolve=>ready=resolve)}};
+  const script=win.document.querySelector('script');script.dispatchEvent(new win.Event('load'));await tick();assert(script.isConnected);
+  win.MathJax.typesetPromise=async()=>{};ready();await pending;assert(script.isConnected);
+ }finally{await disposePage();win.close();}
+});
+
 test('a 200 response without the expected editor API is a failed dependency, not a successful load',async()=>{
  const dom=new JSDOM('<main id="main-content"></main>',{url:'https://school.example/questions'}),win=dom.window,root=win.document.querySelector('main');
  try{

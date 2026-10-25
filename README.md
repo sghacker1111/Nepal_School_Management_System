@@ -10,6 +10,7 @@ PHP school administration application using MySQL, locally built Tailwind CSS, A
 - Exam configuration, marks entry, shared GPA/percentage calculations, ledgers, report cards, and admit cards.
 - Question banks, curriculum topics, learning notes, specification grids, and paper generation.
 - Separate Exam Questions, chapter-wise Exam Paper Grids, and quota-checked exam papers with printable answer keys.
+- [Bilingual statement and subquestion authoring](docs/structured-questions-2026-10-25.md), per-part marks, independent K/U/A/HA/KU categories, automatic totals and saved print annotations in both banks.
 - Shared-question correction requests, private requester replies, and mixed chapter-based MCQ/written exam papers.
 - Staff and restricted student account management, academic years, school settings, and system administration.
 - Interactive Practice MCQs with question selection, instant feedback, sounds, optional full screen and answer review.
