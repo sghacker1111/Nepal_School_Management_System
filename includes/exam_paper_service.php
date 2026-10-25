@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__.'/learning_content_service.php';
 require_once __DIR__.'/exam_mixed_paper.php';
+require_once __DIR__.'/paper_format.php';
 const EXAM_DOMAINS=QUESTION_PART_LEVELS;
 const EXAM_TYPES=['MCQ','Very Short','Short','Long','Reasoning','Difference Between'];
 function examCount(mixed $value,string $label,bool $zero=false):int {
@@ -18,10 +19,12 @@ function examNormalizeGrid(PDO $db,array $actor,int $class,int $subject,array $i
     $catalog=learningCatalogChapters($db,$actor,$class,$subject);$names=[];foreach($catalog as $c)foreach($c['alias_ids'] as $id)$names[(int)$id]=$c;
     $resolve=function($ids,string $label)use($names):array {if(!is_array($ids)||!array_is_list($ids)||!count($ids)||count($ids)>100)throw new InvalidArgumentException('Select chapters for '.$label.'.');$found=[];foreach($ids as $id){$id=learningId($id);if(!isset($names[$id]))throw new InvalidArgumentException('A chapter in '.$label.' is unavailable in this class subject.');$found[$names[$id]['id']]=$names[$id];}return array_values($found);};
     if(!is_array($input['rows']??null)||!array_is_list($input['rows'])||count($input['rows'])<1||count($input['rows'])>50)throw new InvalidArgumentException('Add 1–50 question allocation rows.');
-    $rows=[];$total=0;$count=0;
+    $rows=[];$total=0;$count=0;$sectionTitles=[];$sectionRows=0;
     foreach($input['rows'] as $i=>$row){
         if(!is_array($row))throw new InvalidArgumentException('Invalid question allocation row.');
         $name=$row['name']??('Section '.($i+1));if(!is_string($name)||trim($name)===''||mb_strlen($name)>100)throw new InvalidArgumentException('Enter a section name of at most 100 characters.');
+        $sectionId=$row['section_id']??null;$sectionTitle=$row['section_title']??'';
+        if($sectionId!==null){$sectionId=learningId($sectionId);if($sectionId>26||!is_string($sectionTitle)||mb_strlen($sectionTitle)>80)throw new InvalidArgumentException('Choose a valid paper section.');$sectionTitle=trim($sectionTitle);if(isset($sectionTitles[$sectionId])&&$sectionTitles[$sectionId]!==$sectionTitle)throw new InvalidArgumentException('Use the same title for every allocation in a section.');$sectionTitles[$sectionId]=$sectionTitle;$sectionRows++;}
         $type=$row['type']??'';if(!is_string($type)||(!in_array($type,EXAM_TYPES,true)&&!($chapterMode&&$type==='Written')))throw new InvalidArgumentException('Choose a valid question type.');
         $chapters=$resolve($row['chapter_ids']??[],trim($name));$quantity=examCount($row['count']??null,'Question count');$marks=learningDecimalUnits($row['total_marks']??null,100000,'Section marks');
         $each=($row['marks_each']??'')!==''&&$row['marks_each']!==null?learningDecimalUnits($row['marks_each'],100000,'Marks per question'):null;
@@ -34,9 +37,10 @@ function examNormalizeGrid(PDO $db,array $actor,int $class,int $subject,array $i
         $topicIds=$bankKind==='learning'?($row['topic_ids']??[]):[];if(!is_array($topicIds)||!array_is_list($topicIds)||count($topicIds)>100)throw new InvalidArgumentException('Select valid topic filters.');$availableTopics=[];
         if($topicIds)foreach($chapters as $c)foreach(learningCatalogTopics($db,$actor,$class,$subject,(int)$c['id']) as $t)foreach($t['alias_ids'] as $id)$availableTopics[(int)$id]=$t['alias_ids'];
         $expandedTopics=[];foreach($topicIds as $id){$id=learningId($id);if(!isset($availableTopics[$id]))throw new InvalidArgumentException('Choose topics within the row chapters.');foreach($availableTopics[$id] as $alias)$expandedTopics[(int)$alias]=true;}$topicIds=array_keys($expandedTopics);
-        $rows[]=['name'=>trim($name),'type'=>$type,'chapter_ids'=>array_map('intval',array_column($chapters,'id')),'chapter_names'=>array_column($chapters,'name'),'topic_ids'=>array_values(array_unique($topicIds)),'count'=>$quantity,'total_marks'=>learningDecimalString($marks),'total_units'=>$marks,'marks_each'=>$each===null?null:learningDecimalString($each),'each_units'=>$each,'difficulty'=>$difficulty,'domains'=>$quota];$total+=$marks;$count+=$quantity;
+        $rows[]=['name'=>trim($name),'section_id'=>$sectionId,'section_title'=>$sectionId===null?'':$sectionTitle,'type'=>$type,'chapter_ids'=>array_map('intval',array_column($chapters,'id')),'chapter_names'=>array_column($chapters,'name'),'topic_ids'=>array_values(array_unique($topicIds)),'count'=>$quantity,'total_marks'=>learningDecimalString($marks),'total_units'=>$marks,'marks_each'=>$each===null?null:learningDecimalString($each),'each_units'=>$each,'difficulty'=>$difficulty,'domains'=>$quota];$total+=$marks;$count+=$quantity;
     }
     if($total!==$full||$count>200)throw new InvalidArgumentException('Section totals must equal full marks; the paper may contain at most 200 questions.');
+    if($sectionRows&&$sectionRows!==count($rows))throw new InvalidArgumentException('Assign every allocation to a section, or leave all section assignments blank.');
     $targets=[];$targetNames=[];$targetInput=$input['chapter_targets']??[];if(!is_array($targetInput)||!array_is_list($targetInput)||count($targetInput)>100)throw new InvalidArgumentException('Choose valid chapter targets.');
     foreach($targetInput as $t){if(!is_array($t))throw new InvalidArgumentException('Invalid chapter target.');$selected=$resolve([$t['chapter_id']??null],'chapter target');$c=$selected[0];if(isset($targetNames[$c['name']]))throw new InvalidArgumentException('Use one target per chapter.');$targetNames[$c['name']]=true;
         $n=($t['count']??'')!==''&&$t['count']!==null?examCount($t['count'],'Chapter question count',true):null;

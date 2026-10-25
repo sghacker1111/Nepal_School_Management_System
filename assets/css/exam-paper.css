@@ -3,6 +3,11 @@
 .exam-print-header{display:flex;justify-content:center;align-items:center;gap:18px;text-align:center;border-bottom:2px solid #222;padding-bottom:14px;margin-bottom:12px}
 .exam-print-header h2{font-size:1.5em;margin:0}.exam-print-header h3{font-size:1.2em;margin:.3em 0}.exam-print-header p{margin:.2em 0}.exam-print-logo{width:75px;height:75px;object-fit:contain;flex-shrink:0}
 .exam-print-metadata{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;font-weight:600}.exam-instructions{margin-block:12px;font-style:italic}
+.paper-custom-header{text-align:center;border-bottom:1px solid #111;padding-bottom:.65em;margin-bottom:.65em;break-inside:avoid}
+.paper-custom-header h2{margin:0;font-size:1.5em}.paper-custom-header h3{margin:.35em 0 0;font-size:1.15em}
+.paper-custom-meta{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1em;font-weight:600}.paper-custom-meta>span:nth-child(2){text-align:center}.paper-custom-meta>span:last-child{text-align:right}
+.paper-custom-subject{font-weight:600;margin:.35em 0!important}.paper-custom-instructions{padding:.35em 0 .65em;border-bottom:1px solid #111;margin-bottom:1em;white-space:pre-line}
+.exam-section-title>span{white-space:nowrap;text-align:right}
 .exam-section-title{font-size:1.1em;display:flex;justify-content:space-between;gap:12px;margin:18px 0 12px;border-bottom:1px solid #bbb;padding-bottom:6px}
 .exam-question{margin-bottom:16px;break-inside:avoid}.exam-question-heading{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px;align-items:start}.exam-question p{margin:.15em 0}.exam-question img{max-width:100%;height:auto}.exam-mcq-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px;padding-left:28px;margin-top:8px}.exam-mcq-options>div{min-width:0}.exam-mcq-options p{display:inline}
 #examAnswersSheet{border-top:2px solid #555}.exam-paper .font-nepali{font-family:Kokila,"Noto Sans Devanagari",serif;font-size:20pt}

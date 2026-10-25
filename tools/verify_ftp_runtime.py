@@ -22,6 +22,7 @@ def runtime_paths(root=ROOT):
     names.extend(['includes/question_parts.php','includes/question_parts_form.php','includes/exam_question_language.php','includes/exam_paper_service.php','assets/css/exam-question-language.css','includes/functions.php','assets/js/request-security.js'])
     names.extend(['includes/question_parts_import.php','includes/exam_question_import.php','includes/exam_question_import_form.php'])
     names.extend(['includes/exam_paper_output.php','includes/question_paper_output.php','includes/question_bank_actions.php','assets/js/exam-question-language.js','modules/learning/paper_generator.php'])
+    names.extend(['includes/paper_format.php','includes/paper_format_form.php','includes/paper_sections_editor.php','includes/exam_paper_groups.php','includes/learning_test_paper_page.php','modules/learning/exam_paper_generator.php','assets/css/exam-paper.css'])
     for folder in ('assets/dist','assets/vendor/tinymce-6.8.6','assets/vendor/mathjax-3.2.2','assets/vendor/pdfjs-6.4.299'):
         directory=root/folder
         if not directory.is_dir():raise ValueError('Build required public runtime assets before verification.')
@@ -53,6 +54,7 @@ def verify(ftp,paths,root=ROOT):
     critical.extend(['includes/question_parts.php','includes/question_parts_form.php','includes/exam_question_language.php','includes/exam_paper_service.php','includes/learning_content_service.php','assets/css/exam-question-language.css','includes/functions.php','assets/js/request-security.js'])
     critical.extend(['includes/question_parts_import.php','includes/exam_question_import.php','includes/exam_question_import_form.php'])
     critical.extend(['includes/exam_paper_output.php','includes/question_paper_output.php','includes/question_bank_actions.php','assets/js/exam-question-language.js','modules/learning/paper_generator.php'])
+    critical.extend(['includes/paper_format.php','includes/paper_format_form.php','includes/paper_sections_editor.php','includes/exam_paper_groups.php','includes/learning_test_paper_page.php','modules/learning/exam_paper_generator.php','assets/css/exam-paper.css'])
     for name in critical:
         digest=hashlib.sha256()
         ftp.retrbinary('RETR '+name,digest.update)
