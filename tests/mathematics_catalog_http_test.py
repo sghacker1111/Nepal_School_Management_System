@@ -11,7 +11,7 @@ def run():
     f=extend_learning(app);route='/exam-paper-grids';app.login('admin')
     protected={table:app.snapshot(table) for table in ('schools','students','marks','exams','ac_payments','users')}
     before={table:app.snapshot(table) for table in ('chapters','exam_paper_grids','cdc_reference')}
-    page=app.request(route);assert 'Install missing mathematics chapters and default grids' in page
+    page=app.request(route);assert 'Class 9–10 compulsory mathematics defaults' not in page and 'Install missing mathematics chapters and default grids' not in page
     assert all(app.snapshot(table)==rows for table,rows in before.items()),'GET must never install a catalog'
     app.request(route,dict(action='install_math_defaults'),csrf=False,status=419)
     app.request(route,dict(action='install_math_defaults'))

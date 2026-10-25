@@ -1,6 +1,3 @@
-<?php if($actor['role']==='super_admin'&&$actor['school_id']===0&&!$actor['read_only']): ?>
-<section class="card card-body mb-3"><h3 class="h5">Class 9–10 compulsory mathematics defaults</h3><p>Add missing shared chapters and the nine CDC/PABSON source presets. Existing IDs, questions, custom grids and archived records are preserved. Repeating setup does not overwrite an edited default.</p><form method="post"><input type="hidden" name="action" value="install_math_defaults"><input type="hidden" name="class_id" value="<?= $class ?>"><input type="hidden" name="subject_id" value="<?= $subject ?>"><button class="btn btn-outline-primary">Install missing mathematics chapters and default grids</button></form></section>
-<?php endif; ?>
 <?php if($subject&&mathematicsGrade($db,$class,$subject)): $mathAreas=mathematicsAreas($db,$actor,$class,$subject); ?>
 <section class="card card-body mb-3"><h3 class="h5">Content areas and chapters</h3><p>Several chapters can belong to one area. Area grids select from the mapped chapters and enforce their main-question counts and marks. Only system admin can change the shared area definitions.</p>
 <?php if($actor['role']==='super_admin'&&$actor['school_id']===0&&!$actor['read_only']): ?>

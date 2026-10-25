@@ -194,30 +194,33 @@ function addChapter() {
 }
 
 function deleteChapter(name) {
-    if (!confirm("Are you sure you want to delete chapter: " + name + "?")) return;
-
     const classId = document.getElementById('chapterFilterClass').value;
     const subjectId = document.getElementById('chapterFilterSubject').value;
-
-    // We need to fetch the ID of the chapter first or delete by name
-    // Let's create an AJAX request that deletes by name
-    $.ajax({
-        url: JSON.parse(config.values["super-admin-subjects-value-2"]||'null'),
-        type: 'POST',
-        data: {
-            action_chapter: 'delete_by_name',
-            class_id: classId,
-            subject_id: subjectId,
-            name: name
-        },
-        dataType: 'json',
-        success: function(res) {
-            if(res.success){loadChaptersList();Swal.fire('Deleted','Chapter and empty topics deleted. Restore them in Curriculum & Topics Manager → Deleted curriculum.','success');}
-            else CurriculumDeleteUI.showBlocked(res,JSON.parse(config.values["super-admin-subjects-value-3"]||'null'));
-        },
-        error: function() {
-            alert("Error deleting chapter.");
-        }
+    Swal.fire({
+        title: 'Delete Chapter',
+        text: `Delete ${name} only when it has no active questions, notes or exam grids. You must confirm your current password.`,
+        icon: 'warning',
+        input: 'password',
+        inputLabel: 'Current password',
+        inputAttributes: {autocomplete: 'current-password', maxlength: '1024'},
+        inputValidator: value => value ? undefined : 'Enter your current password to continue.',
+        showCancelButton: true,
+        confirmButtonColor: '#b42338',
+        confirmButtonText: 'Confirm and delete'
+    }).then(result => {
+        if (!result.isConfirmed) return;
+        $.ajax({
+            url: JSON.parse(config.values["super-admin-subjects-value-2"]||'null'),
+            type: 'POST',
+            data: {action_chapter: 'delete_by_name', class_id: classId, subject_id: subjectId, name, current_password: result.value},
+            dataType: 'json',
+            success: res => {
+                if (res.success) {loadChaptersList(); Swal.fire('Deleted', 'The unused chapter was archived for recovery.', 'success');}
+                else if (res.blocked) CurriculumDeleteUI.showBlocked(res, JSON.parse(config.values["super-admin-subjects-value-3"]||'null'));
+                else Swal.fire('Deletion cancelled', res.message || 'The chapter was not deleted.', 'error');
+            },
+            error: () => Swal.fire('Deletion not confirmed', 'The request failed. Reload the chapter list before trying again.', 'error')
+        });
     });
 }
 

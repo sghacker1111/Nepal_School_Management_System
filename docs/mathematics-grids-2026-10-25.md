@@ -1,6 +1,6 @@
 # Class 9–10 compulsory mathematics areas and source grids
 
-System admin can open **Exam Paper Grids** in the shared catalog and select **Install missing mathematics chapters and default grids**. Class 9 and Class 10 compulsory Mathematics must be active first. Setup adds missing chapters and nine shared presets. It preserves existing chapter IDs, questions, archived records, custom area mappings and edited presets. Repeating setup does not reset an existing default. No schema migration or database replacement is required; reading a page never installs data.
+Class 9 and Class 10 compulsory Mathematics use shared CDC/PABSON source presets and seven content areas. Reading the grids page never installs curriculum data. The page no longer shows the separate mathematics-defaults installer panel.
 
 Select a class and compulsory Mathematics to edit its **Content areas and chapters**. Each chapter can belong to one area; an area can include several chapters. School accounts can read the shared mappings and copy a grid, but cannot change the shared catalog. Existing school subject assignments and teacher restrictions still apply.
 
@@ -14,7 +14,7 @@ Select a class and compulsory Mathematics to edit its **Content areas and chapte
 
 The second PDF is attributed to PABSON by the owner; the application records that attribution without claiming independent publisher verification. Source filenames, SHA-256 checksums, page numbers, area allocations and review notes are kept in `config/data/mathematics_grids.json`. The original PDFs are not published with the application.
 
-The seven areas are Sets, Arithmetic, Mensuration, Algebra, Geometry, Statistics and Probability, and Trigonometry. The setup adds the Class 9 catalog and Class 10 chapters, including separate Pyramid, Cone, Combined Solids, Cost Estimation and Exponential Equations chapters. Existing broader Area and Volume / Indices chapters remain available.
+The seven areas are Sets, Arithmetic, Mensuration, Algebra, Geometry, Statistics and Probability, and Trigonometry. Class 10 keeps the CDC curriculum chapters **Area and Volume** and **Indices**. Pyramid, Cone, Combined Solids and Cost Estimation grid references map to Area and Volume; Exponential Equations maps to Indices. These source subtopics are not installed as separate Class 10 chapters. Existing archived records and questions remain preserved.
 
 The CDC and Class 10 Pre-Qualifying allocations are 6, 13, 13, 15, 13, 11 and 4 marks respectively: 16 main questions, 49 subquestion items and 75 marks in three hours. Generation enforces each area's chapter pool, main-question count, marks, and supplied consistent cognitive mark/item targets. K, U, A, HA and KU remain independent categories. A missing eligible question produces an error instead of an incomplete paper.
 
@@ -34,4 +34,4 @@ Labels and marks annotations now use the English reading size, avoiding the larg
 
 Disposable SQLite and native MySQL checks cover setup, permissions, preservation, idempotence and source allocation. HTTP tests exercise both question banks, strict/CDC authoring and shared area controls. The real PHP area/grid page is mounted and disposed with the shipped frontend adapters in an isolated DOM.
 
-Deployment transfers code only. Run the setup action while signed in as system admin to install the presets into the hosted database. A successful FTP runtime check does not confirm that this action has run, nor replace authenticated browser and physical print review.
+Curriculum delete actions require the system administrator's current password, and active linked questions, notes or grids block removal. Unused entries are archived for recovery. A successful FTP runtime check does not replace authenticated browser review.

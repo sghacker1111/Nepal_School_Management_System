@@ -4,6 +4,14 @@ require_once __DIR__.'/routes.php';
 class CurriculumDeleteBlocked extends InvalidArgumentException {
     public function __construct(public readonly array $report){parent::__construct('Cannot delete: '.$report['total'].' active linked content item(s). Remove or reassign the content listed below, then try again.');}
 }
+function curriculumRequireDeletePassword(PDO $db,int $userId,mixed $password):void {
+    if(!schoolVerifySensitivePassword($db,$userId,$password))throw new InvalidArgumentException('The current password is incorrect or verification is temporarily locked. Deletion was cancelled.');
+}
+function curriculumRequireDeleteAuthorization(PDO $db,int $school,string $kind,int $id,int $userId,mixed $password):void {
+    $report=curriculumDependencyReport($db,$school,$kind,$id);
+    if($report['total'])throw new CurriculumDeleteBlocked($report);
+    curriculumRequireDeletePassword($db,$userId,$password);
+}
 function migrateCurriculumDeletion(PDO $db):void {
     foreach(['chapters'=>['archived_at'=>'TIMESTAMP NULL'],'topics'=>['archived_at'=>'TIMESTAMP NULL','deleted_with_chapter_id'=>'INTEGER NULL']] as $table=>$columns){
         $existing=dbColumns($db,$table);foreach($columns as $name=>$type)if(!in_array($name,$existing,true))$db->exec("ALTER TABLE $table ADD COLUMN $name $type");

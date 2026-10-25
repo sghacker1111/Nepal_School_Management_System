@@ -8,6 +8,7 @@ require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/catalog_validation.php';
 require_once __DIR__.'/../../includes/curriculum_catalog.php';
+require_once __DIR__.'/../../includes/password_security.php';
 require_once __DIR__.'/../../includes/school_offerings.php';
 
 Auth::requireRole('super_admin');
@@ -60,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_chapter'])) {
             curriculumEnsureChapter($db,0,$c_id,$s_id,$name,$name_np,$sort_order);
             echo json_encode(['success' => true]);
         } catch (PDOException|InvalidArgumentException $e) {
-            echo json_encode(['success' => false, 'message' => schoolPublicError($e)]);
+            echo json_encode(['success' => false, 'message' => $e instanceof InvalidArgumentException?$e->getMessage():schoolPublicError($e)]);
         }
         exit;
     }
@@ -69,12 +70,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_chapter'])) {
         $ch_id = (int)($_POST['chapter_id']??0);
         try {
             if(!is_scalar($_POST['chapter_id']??null)||!preg_match('/^[1-9][0-9]*$/',(string)$_POST['chapter_id']))throw new InvalidArgumentException('Choose a valid chapter record.');
+            curriculumRequireDeleteAuthorization($db,0,'chapters',$ch_id,(int)Auth::getUserId(),$_POST['current_password']??null);
             curriculumDelete($db,0,'chapters',$ch_id);
             echo json_encode(['success' => true]);
         } catch (CurriculumDeleteBlocked $e) {
             echo json_encode(['success'=>false,'blocked'=>true,'message'=>$e->getMessage(),'dependencies'=>$e->report]);
         } catch (PDOException|InvalidArgumentException $e) {
-            echo json_encode(['success' => false, 'message' => schoolPublicError($e)]);
+            echo json_encode(['success' => false, 'message' => $e instanceof InvalidArgumentException?$e->getMessage():schoolPublicError($e)]);
         }
         exit;
     }
@@ -84,13 +86,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_chapter'])) {
         $s_id = (int)$_POST['subject_id'];
         try {
             if(!is_string($_POST['name']??null))throw new InvalidArgumentException('Choose a valid chapter name.');$name=trim($_POST['name']);
-            $found=false;foreach(curriculumChapters($db,0,$c_id,$s_id) as $chapter)if(curriculumNameKey($chapter['name'])===curriculumNameKey($name)){$found=true;curriculumDelete($db,0,'chapters',(int)$chapter['id']);}
-            if(!$found)throw new InvalidArgumentException('Choose an active chapter to delete.');
+            $target=null;foreach(curriculumChapters($db,0,$c_id,$s_id) as $chapter)if(curriculumNameKey($chapter['name'])===curriculumNameKey($name)){$target=$chapter;break;}
+            if(!$target)throw new InvalidArgumentException('Choose an active chapter to delete.');
+            curriculumRequireDeleteAuthorization($db,0,'chapters',(int)$target['id'],(int)Auth::getUserId(),$_POST['current_password']??null);
+            curriculumDelete($db,0,'chapters',(int)$target['id']);
             echo json_encode(['success' => true]);
         } catch (CurriculumDeleteBlocked $e) {
             echo json_encode(['success'=>false,'blocked'=>true,'message'=>$e->getMessage(),'dependencies'=>$e->report]);
         } catch (PDOException|InvalidArgumentException $e) {
-            echo json_encode(['success' => false, 'message' => schoolPublicError($e)]);
+            echo json_encode(['success' => false, 'message' => $e instanceof InvalidArgumentException?$e->getMessage():schoolPublicError($e)]);
         }
         exit;
     }

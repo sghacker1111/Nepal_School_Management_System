@@ -13,6 +13,7 @@ require_once __DIR__.'/../../includes/teaching_scope.php';
 require_once __DIR__.'/../../includes/catalog_validation.php';
 require_once __DIR__.'/../../includes/curriculum_catalog.php';
 require_once __DIR__.'/../../includes/learning_content.php';
+require_once __DIR__.'/../../includes/password_security.php';
 
 $db = getDB();
 $school_id = Auth::getSchoolId();
@@ -128,6 +129,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
         if ($action === 'delete_chapter') {
             $id = (int)$_POST['id'];
+            curriculumRequireDeleteAuthorization($db,(int)$school_id,'chapters',$id,(int)Auth::getUserId(),$_POST['current_password']??null);
             curriculumWrite($db,function()use($db,$school_id,$id){curriculumDelete($db,(int)$school_id,'chapters',$id);Auth::logActivity(Auth::getUserId(),'Delete unused chapter','chapters',$id);});
             echo json_encode(['success' => true, 'message' => 'Chapter and its empty topics deleted successfully. Restore is available in Deleted curriculum.']);
             exit;
@@ -169,6 +171,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
         if ($action === 'delete_topic') {
             $id = (int)$_POST['id'];
+            curriculumRequireDeleteAuthorization($db,(int)$school_id,'topics',$id,(int)Auth::getUserId(),$_POST['current_password']??null);
             curriculumWrite($db,function()use($db,$school_id,$id){curriculumDelete($db,(int)$school_id,'topics',$id);Auth::logActivity(Auth::getUserId(),'Delete unused topic','topics',$id);});
             echo json_encode(['success' => true, 'message' => 'Unused topic deleted successfully. Restore is available in Deleted curriculum.']);
             exit;

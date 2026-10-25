@@ -3,6 +3,15 @@
 function mathematicsData():array {static $data;return $data??=json_decode(file_get_contents(__DIR__.'/../config/data/mathematics_grids.json'),true,64,JSON_THROW_ON_ERROR);}
 function mathematicsChapterKey(string $name):string {return curriculumNameKey(trim(preg_replace('/\s*\([^)]*\)\s*$/u','',$name)));}
 function mathematicsAreaKey(string $name):string {return strtolower(trim(preg_replace('/[^a-z0-9]+/i','-',$name),'-'));}
+/** Source grids sometimes name subtopics that are not standalone CDC chapters. */
+function mathematicsGridChapterName(int $grade,string $name):string {
+    $key=mathematicsChapterKey($name);
+    if($grade===10){
+        if(in_array($key,array_map('mathematicsChapterKey',['Pyramid','Cone','Combined Solids','Cost Estimation']),true))return 'Area and Volume';
+        if($key===mathematicsChapterKey('Exponential Equations'))return 'Indices';
+    }
+    return $name;
+}
 function mathematicsGrade(PDO $db,int $class,int $subject):?int {
     $q=$db->prepare('SELECT c.name,s.name_en,s.type FROM classes c JOIN class_subjects cs ON cs.class_id=c.id AND cs.school_id=c.school_id JOIN subjects s ON s.id=cs.subject_id AND s.school_id=cs.school_id WHERE c.id=? AND s.id=?');$q->execute([$class,$subject]);$row=$q->fetch(PDO::FETCH_ASSOC);
     if(!$row||$row['type']!=='compulsory'||questionImportSubjectKey($row['name_en'])!=='mathematics')return null;
@@ -43,7 +52,7 @@ function mathematicsSaveAreas(PDO $db,array $actor,int $class,int $subject,mixed
 function mathematicsReferences(PDO $db,array $actor,int $class,int $subject):array {
     $grade=mathematicsGrade($db,$class,$subject);if(!$grade)return [];$chapters=learningCatalogChapters($db,$actor,$class,$subject);$references=[];
     foreach(mathematicsData()['profiles'] as $profile){if($profile['grade']!==$grade)continue;$rows=[];$missing=[];
-        foreach($profile['areas'] as $area){$key=mathematicsAreaKey($area['area']);$ids=[];foreach($chapters as $chapter)if(($chapter['area_key']??'')===$key&&in_array(mathematicsChapterKey($chapter['name']),array_map('mathematicsChapterKey',$area['chapters']),true))$ids[]=(int)$chapter['id'];
+        foreach($profile['areas'] as $area){$key=mathematicsAreaKey($area['area']);$gridChapters=array_map(static fn($name)=>mathematicsChapterKey(mathematicsGridChapterName($grade,(string)$name)),$area['chapters']);$ids=[];foreach($chapters as $chapter)if(($chapter['area_key']??'')===$key&&in_array(mathematicsChapterKey($chapter['name']),$gridChapters,true))$ids[]=(int)$chapter['id'];
             if(!$ids)$missing[]=$area['area'];
             $rows[]=['name'=>$area['area'],'area_key'=>$key,'type'=>'Written','chapter_ids'=>$ids,'count'=>$area['question_count'],'total_marks'=>$area['marks'],'cognitive_marks'=>$area['cognitive_marks']??[], 'cognitive_items'=>$profile['enforce_items']?$area['cognitive_items']:[],'reference_items'=>$area['cognitive_items']];
         }
@@ -58,7 +67,7 @@ function mathematicsInstallDefaults(PDO $db,array $actor):array {
         $counts=['chapters_added'=>0,'grids_added'=>0,'classes'=>0];$catalog=require __DIR__.'/../config/cdc_curriculum.php';
         $q=$db->query("SELECT c.id class_id,s.id subject_id FROM classes c JOIN class_subjects cs ON cs.class_id=c.id AND cs.school_id=0 JOIN subjects s ON s.id=cs.subject_id AND s.school_id=0 WHERE c.school_id=0 AND c.is_active=1 AND cs.is_active=1 AND COALESCE(s.is_hidden,0)=0");
         foreach($q->fetchAll(PDO::FETCH_ASSOC) as $scope){$class=(int)$scope['class_id'];$subject=(int)$scope['subject_id'];$grade=mathematicsGrade($db,$class,$subject);if(!$grade)continue;$counts['classes']++;
-            $names=$catalog['Mathematics']['Class '.$grade];if($grade===10)array_push($names,'Pyramid (पिरामिड)','Cone (शङ्कु)','Combined Solids (संयुक्त ठोस वस्तुहरू)','Cost Estimation (लागत अनुमान)','Exponential Equations (घाताङ्कीय समीकरणहरू)');
+            $names=$catalog['Mathematics']['Class '.$grade];
             foreach($names as $order=>$name){$found=false;foreach(curriculumChapters($db,0,$class,$subject,true) as $chapter)if(mathematicsChapterKey($chapter['name'])===mathematicsChapterKey($name)){$found=true;break;}if(!$found){curriculumEnsureChapter($db,0,$class,$subject,$name,'',$order+1);$counts['chapters_added']++;}}
             foreach(mathematicsReferences($db,$actor,$class,$subject) as $reference){$key=$reference['key'];$check=$db->prepare("SELECT payload FROM cdc_reference WHERE category='MATH_DEFAULT_GRID' AND item_key=?");$check->execute([$key]);if($check->fetchColumn()!==false)continue;
                 $grid=examSaveGrid($db,$actor,$class,$subject,$reference['name'],$reference['config']);$db->prepare('INSERT INTO cdc_reference(category,item_key,payload) VALUES(?,?,?)')->execute(['MATH_DEFAULT_GRID',$key,json_encode(['grid_id'=>$grid],JSON_THROW_ON_ERROR)]);$counts['grids_added']++;
