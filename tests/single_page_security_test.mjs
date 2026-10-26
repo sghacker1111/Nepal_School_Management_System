@@ -6,13 +6,13 @@ const html=context=>'<div hidden data-erp-config="'+JSON.stringify(config(contex
 test('login/challenge/wrong media responses never replace private page content',async()=>{
  for(const response of [{status:200,text:'<h1>Sign in</h1>',header:()=>null},{status:200,text:'<h1>Browser challenge</h1>',header:name=>name==='X-ERP-Fragment'?'app-page':name==='Content-Type'?'application/json':null}]){
   const dom=new JSDOM('<nav id="sidebar"></nav><main id="main-content">'+html('one')+'</main>',{url:'https://school.example/students'});dom.window.scrollTo=()=>{};
-  const off=installNavigation({config:{},process(){}},{window:dom.window,request:async()=>response,mountPage:async()=>{},disposePage:async()=>{},confirmNavigation:async()=>true});await off.ready;
+  const off=installNavigation({config:{},process(){}},{window:dom.window,request:async()=>response,mountPage:async()=>{},disposePage:async()=>{},confirmNavigation:async()=>true,hasUnsavedChanges:()=>true});await off.ready;
   assert.equal(await navigate('/students'),false);assert.match(dom.window.document.querySelector('main').textContent,/Private school record/);assert.equal(dom.window.localStorage.length,0);assert.equal(dom.window.sessionStorage.length,0);off();dom.window.close();
  }
 });
 test('a changed session/school clears the old content and menu before native rebuilding',async()=>{
  const dom=new JSDOM('<nav id="sidebar"><section class="nav-group">Private menu</section></nav><main id="main-content">'+html('one')+'</main>',{url:'https://school.example/students'});let reloads=0;
- const off=installNavigation({config:{},process(){}},{window:dom.window,request:async()=>({status:200,text:html('other'),header:name=>name==='X-ERP-Fragment'?'app-page':name==='Content-Type'?'text/html':null}),mountPage:async()=>{},disposePage:async()=>{},confirmNavigation:async()=>true,fullNavigate(){reloads++;}});await off.ready;
+ const off=installNavigation({config:{},process(){}},{window:dom.window,request:async()=>({status:200,text:html('other'),header:name=>name==='X-ERP-Fragment'?'app-page':name==='Content-Type'?'text/html':null}),mountPage:async()=>{},disposePage:async()=>{},confirmNavigation:async()=>true,hasUnsavedChanges:()=>true,fullNavigate(){reloads++;}});await off.ready;
  await navigate('/students');assert.equal(reloads,1);assert.equal(dom.window.document.querySelector('main').textContent,'');assert.equal(dom.window.document.querySelectorAll('#sidebar .nav-group').length,0);assert.equal(dom.window.localStorage.length,0);off();dom.window.close();
 });
 test('rich-content metadata lookalikes cannot choose executable modules or page identity',()=>{

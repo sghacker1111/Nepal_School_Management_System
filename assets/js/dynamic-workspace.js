@@ -11,6 +11,10 @@
         const link = document.createElement('a'); link.href = safeURL(url); link.textContent = 'Open the full page';
         banner.append(text, link); document.body.append(banner);
     }
+    function recoverRead(message, url) {
+        if (!window.erpFormState?.hasUnsavedChanges()) { window.location.assign(safeURL(url)); return; }
+        recover(message, url);
+    }
     function install(htmx) {
         if (window.erpDynamicInstalled) return;
         window.erpDynamicInstalled = true;
@@ -51,11 +55,11 @@
             }
             if (!valid) {
                 event.detail.shouldSwap = false; target.removeAttribute('aria-busy');
-                recover('The update could not be loaded. Your existing work has not changed.', event.detail.requestConfig?.path || xhr.responseURL);
+                recoverRead('The update could not be loaded. Your existing work has not changed.', event.detail.requestConfig?.path || xhr.responseURL);
             }
         });
         document.addEventListener('htmx:afterRequest', event => { if(event.detail.target?.id==='questionBankPanel')event.detail.target.removeAttribute('aria-busy'); });
-        for (const name of ['htmx:sendError', 'htmx:timeout', 'htmx:swapError']) document.addEventListener(name, event => { if(event.detail.target?.id!=='main-content')recover('Connection interrupted. Try loading this page again.', event.detail.requestConfig?.path); });
+        for (const name of ['htmx:sendError', 'htmx:timeout', 'htmx:swapError']) document.addEventListener(name, event => { if(event.detail.target?.id==='questionBankPanel')recoverRead('Connection interrupted. Try loading this page again.', event.detail.requestConfig?.path); });
         document.addEventListener('htmx:afterSwap', event => {
             if (event.detail.target?.id !== 'questionBankPanel') return;
             // outerHTML swaps can leave detail.target pointing to the removed

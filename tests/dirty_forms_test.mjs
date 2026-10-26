@@ -22,10 +22,10 @@ test('text/check/select/editor/grid changes track reversions without persisting 
 });
 test('file selection and dynamic forms are tracked',async()=>{
  const {dom,root,form,dispose}=fixture(),file=form.elements.file;
- Object.defineProperty(file,'files',{configurable:true,value:[new dom.window.File(['x'],'questions.xlsx',{lastModified:1})]});assert(hasUnsavedChanges());markSaved(form);assert.equal(hasUnsavedChanges(),false);
+ Object.defineProperty(file,'files',{configurable:true,value:[new dom.window.File(['x'],'questions.xlsx',{lastModified:1})]});file.dispatchEvent(new dom.window.Event('change',{bubbles:true}));assert(hasUnsavedChanges());markSaved(form);assert.equal(hasUnsavedChanges(),false);
  Object.defineProperty(file,'files',{value:[]});assert(hasUnsavedChanges());markSaved(form);
  const added=dom.window.document.createElement('form');added.method='post';added.innerHTML='<input name="extra" value="new">';root.append(added);await new Promise(resolve=>dom.window.queueMicrotask(resolve));
- added.elements.extra.value='changed';assert(hasUnsavedChanges());dispose();dom.window.close();
+ added.elements.extra.value='changed';added.elements.extra.dispatchEvent(new dom.window.Event('input',{bubbles:true}));assert(hasUnsavedChanges());dispose();dom.window.close();
 });
 test('pending and uncertain mutations cannot be duplicated or discarded',async()=>{
  const {dom,form,dispose}=fixture();dom.window.confirm=()=>true;form.elements.name.value='Retained';
@@ -36,4 +36,14 @@ test('pending and uncertain mutations cannot be duplicated or discarded',async()
  const event=new dom.window.Event('beforeunload',{cancelable:true});dom.window.dispatchEvent(event);assert.equal(event.defaultPrevented,true);
  markSaved(form);assert.equal(hasUnsavedChanges(),false);assert.equal(mutationState(form),'clean');dispose();dom.window.close();
  const source=readFileSync('frontend/app/dirty-forms.js','utf8');assert(!/(?:localStorage|sessionStorage)\s*\./.test(source));
+});
+
+test('background defaults and hidden editor controls stay clean; actual edits and pending saves warn',async()=>{
+ const {dom,root,form,dispose}=fixture(),win=dom.window;
+ form.elements.question.value='<p>Text</p>';form.elements.class.value='10';
+ const chrome=win.document.createElement('div');chrome.className='tox';chrome.innerHTML='<input value="Editor search">';form.append(chrome);
+ assert(!hasUnsavedChanges());assert.equal(await confirmNavigation(),true);
+ form.elements.name.dispatchEvent(new win.Event('focusin',{bubbles:true}));form.elements.name.value='Draft';form.elements.name.dispatchEvent(new win.Event('input',{bubbles:true}));assert(hasUnsavedChanges());
+ win.confirm=()=>false;assert.equal(await confirmNavigation(),false);form.elements.name.value='Original';assert(!hasUnsavedChanges());
+ form.elements.name.value='Draft again';assert(hasUnsavedChanges());form.remove();assert(!hasUnsavedChanges(),'Removed panel forms cannot leave stale drafts');dispose();dom.window.close();
 });

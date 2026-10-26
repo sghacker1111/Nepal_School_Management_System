@@ -201,6 +201,7 @@ function init(selector,root=document,context={}){
                 // Load MathJax inside the editor iframe dynamically and configure English/Nepali base font
                 editor.on('init', function () {
                     if(disposed){editor.remove?.();return;}
+                    editor.getElement()?.dispatchEvent(new CustomEvent('erp:editor-ready', {bubbles:true}));
                     const doc = editor.getDoc();
                     const win = editor.getWin();
 
@@ -265,6 +266,7 @@ function init(selector,root=document,context={}){
                 editor.on('SetContent', typesetEditorMath);
                 editor.on('change keyup', function () {
                     editor.save(); // Sync back to textarea
+                    editor.getElement()?.dispatchEvent(new Event('input', {bubbles:true}));
                     typesetEditorMath();
                 });
 

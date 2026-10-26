@@ -91,7 +91,7 @@ export async function submitForm(form,submitter) {
         const updated=await(deps.applyPageResponse||applyPageResponse)(response,url.href,{history:'replace',focus:'retain'});
         // A preview is not a saved invoice/paper draft. Remounting must not
         // silently establish it as a clean baseline for navigation.
-        if(updated&&parsed.config.mutation.outcome==='preview')form.ownerDocument.getElementById('main-content')?.dispatchEvent(new win.Event('erp:dirty',{bubbles:true}));
+        if(updated&&parsed.config.mutation.outcome==='preview'&&!parsed.config.pageId?.startsWith('learning-'))form.ownerDocument.getElementById('main-content')?.dispatchEvent(new win.Event('erp:dirty',{bubbles:true}));
         return true;
     }catch(error){
         if(pending&&!saved){setMutationUncertain(form,form.dataset.statusUrl||form.action);pending=false;}

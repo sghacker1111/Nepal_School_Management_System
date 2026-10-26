@@ -17,7 +17,7 @@ test('asynchronous exam catalog hydration preserves the saved chapter and draft 
         release({ok:true,json:async()=>({chapters:[{id:3,name:'Sets'},{id:4,name:'Algebra'}],topics:{}})});
         await new Promise(resolve=>setImmediate(resolve));
         assert.equal(mutationState(form),'clean');
-        root.querySelector('#examChapter').value='Algebra';assert.equal(mutationState(form),'dirty');
+        root.querySelector('#examChapter').value='Algebra';root.querySelector('#examChapter').dispatchEvent(new win.Event('change',{bubbles:true}));assert.equal(mutationState(form),'dirty');
         dispose();
     }finally{win.close();}
 });

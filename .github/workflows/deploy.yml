@@ -50,6 +50,7 @@ jobs:
         npm run build
         npm run test:ui
         python3 tests/learning_app_http_test.py
+        python3 tests/workspace_bundle_http_test.py
         python3 tests/ftp_runtime_test.py
 
   web-deploy:

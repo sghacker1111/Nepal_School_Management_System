@@ -83,7 +83,7 @@ test('the actual shipped TinyMCE uses get() and actual local MathJax renders a f
   Object.defineProperty(editor.getWin().HTMLElement.prototype,'innerText',{configurable:true,get(){return this.textContent;},set(value){this.textContent=value;}});
   editor.getWin().Range.prototype.getClientRects=()=>[];
   editor.getWin().Range.prototype.getBoundingClientRect=()=>({x:0,y:0,left:0,top:0,right:0,bottom:0,width:0,height:0});
-  editor.setContent('<p>Edited question \\(\\frac{3}{4}\\)</p>');editor.save();assert.match(root.querySelector('textarea').value,/\\frac\{3\}\{4\}/);
+  editor.setContent('<p>Edited question \\(\\frac{3}{4}\\)</p>');editor.save();editor.dispatch('change');assert.match(root.querySelector('textarea').value,/\\frac\{3\}\{4\}/);
   assert.equal(mutationState(root.querySelector('form')),'dirty','Actual rich edits must remain protected');
   assert(!root.querySelector('textarea').value.includes('mjx-container'),'Only portable TeX is saved, never renderer markup');
   // Establish the caret a browser normally supplies when the author clicks in.
@@ -92,4 +92,15 @@ test('the actual shipped TinyMCE uses get() and actual local MathJax renders a f
   root.querySelector('#texInput').value='x^2+1';root.querySelector('#btnInsertTex').click();assert.deepEqual(errors,[]);assert.match(root.querySelector('textarea').value,/x\^2\+1/,'Editor DOM after insertion: '+editor.getBody().innerHTML);
   disposeTracking();dispose();assert.equal(win.tinymce.get('exam_question_text'),null);
  } finally {dom.window.close();}
+});
+
+
+test('cold navigation loads actual MathJax before initializing the paper adapter',async()=>{
+ const errors=[];const console=new VirtualConsole();console.on('jsdomError',error=>errors.push(error.message));
+ const dom=new JSDOM('<main id="main-content"><p>Paper \\(x^2\\)</p></main>',{
+  url:'https://school.example/learning/paper-generator',runScripts:'dangerously',pretendToBeVisual:true,virtualConsole:console,
+  resources:{interceptors:[requestInterceptor(request=>{const path=new URL(request.url).pathname;assert(path.startsWith('/assets/'));return new Response(readFileSync('.'+path),{headers:{'Content-Type':path.endsWith('.css')?'text/css':'application/javascript'}});})]},
+ });
+ try {await mountPage(dom.window.document.querySelector('main'),{pageId:'editor-assets-fixture',assets:['mathjax','exam-paper-css','question-language-css']});assert.equal(typeof dom.window.MathJax.typesetPromise,'function');assert.deepEqual(errors,[]);}
+ finally{await disposePage();dom.window.close();}
 });

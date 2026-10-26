@@ -17,7 +17,7 @@
  const inspect=()=>{
   if(!window.document?.body)return;
   document.querySelectorAll('.alert-success,.alert-danger,.alert-warning,.alert-info[data-notify]').forEach(el=>{
-   if(el.dataset.notified||el.closest('#school-notifications'))return;el.dataset.notified='1';
+   if(el.dataset.notified||el.closest('#school-notifications,[hidden],.modal:not(.show)'))return;el.dataset.notified='1';
    // Dismiss controls are not part of the explanatory sentence.
    const copy=el.cloneNode(true);copy.querySelectorAll('button').forEach(b=>b.remove());
    schoolNotify(copy.textContent,el.classList.contains('alert-danger')?'error':el.classList.contains('alert-warning')?'warning':el.classList.contains('alert-info')?'info':'success');

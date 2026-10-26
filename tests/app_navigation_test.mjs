@@ -63,7 +63,21 @@ test('changed context discards private content and forces authorized shell rebui
  const f=await fixture(async()=>response('exams',{contextVersion:'other-school'}));await navigate('/exams');assert.equal(f.reloads,1);assert(!f.dom.window.document.querySelector('main').textContent.includes('Fresh data'));f.dispose();f.dom.window.close();
 });
 test('unmarked challenge and timeout never replace existing content',async()=>{
- const f=await fixture(async()=>({status:200,text:'<h1>Browser check</h1>',header:()=>null}));const doc=f.dom.window.document;
+ const f=await fixture(async()=>({status:200,text:'<h1>Browser check</h1>',header:()=>null}),{hasUnsavedChanges:()=>true});const doc=f.dom.window.document;
  assert.equal(await navigate('/exams'),false);assert.equal(doc.querySelector('h1').textContent,'students');assert.equal(doc.querySelector('#erpRequestError a').origin,f.dom.window.location.origin);
  f.deps.request=async()=>{throw new Error('Timeout');};assert.equal(await navigate('/classes'),false);assert.equal(doc.querySelector('h1').textContent,'students');assert.equal(f.dom.window.location.pathname,'/students');f.dispose();f.dom.window.close();
+});
+
+test('clean failed GET automatically opens full page once without resubmitting a form',async()=>{
+ const f=await fixture(async()=>({status:200,text:'Challenge',header:()=>null}));
+ assert.equal(await navigate('/exams'),true);assert.equal(f.reloads,1);assert(!f.dom.window.document.querySelector('#erpRequestError'));f.dispose();f.dom.window.close();
+});
+
+test('draft entered while navigation is waiting prevents automatic fallback',async()=>{
+ let release,dirty=false;const f=await fixture(()=>new Promise(resolve=>release=resolve),{hasUnsavedChanges:()=>dirty});
+ const request=navigate('/classes');await tick();dirty=true;release({status:200,text:'Challenge',header:()=>null});assert.equal(await request,false);assert.equal(f.reloads,0);assert(f.dom.window.document.querySelector('#erpRequestError'));f.dispose();f.dom.window.close();
+});
+
+test('adapter initialization failure recovers through a full GET for a clean page',async()=>{
+ const f=await fixture();f.deps.mountPage=async()=>{throw new Error('Asset not ready');};assert.equal(await navigate('/exams'),true);assert.equal(f.reloads,1);f.dispose();f.dom.window.close();
 });
