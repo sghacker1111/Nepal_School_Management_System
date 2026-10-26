@@ -19,8 +19,8 @@ function questionPartBody(mixed $raw):string {
     foreach((new DOMXPath($doc))->query('//*') as $node)foreach(iterator_to_array($node->attributes) as $attr)if(str_starts_with($attr->name,'data-question-')||str_starts_with($attr->name,'data-part-'))$node->removeAttribute($attr->name);
     $out='';foreach($doc->getElementById('part-body')->childNodes as $node)$out.=$doc->saveHTML($node);return $out;
 }
-function questionPartsNormalize(array $input,bool $mathematics=false):array {
-    $mathRule=$input['math_rule']??'strict';if(!is_string($mathRule)||!in_array($mathRule,['strict','cdc'],true))throw new InvalidArgumentException('Choose a valid mathematics structure rule.');
+function questionPartsNormalize(array $input,bool $mathematics=false,bool $allowImportedStructure=false):array {
+    $mathRule=$input['math_rule']??'strict';$validRules=['strict','cdc'];if($allowImportedStructure)$validRules[]='import';if(!is_string($mathRule)||!in_array($mathRule,$validRules,true))throw new InvalidArgumentException('Choose a valid mathematics structure rule.');
     $display=$input['display']??'both';if(!is_string($display)||!in_array($display,['both','marks','cognitive'],true))throw new InvalidArgumentException('Choose marks and cognitive levels, marks only, or cognitive levels only.');
     $en=questionPartBody($input['statement_en']??'');$ne=questionPartBody($input['statement_np']??'');
     if(!questionImportHasContent($en)&&!questionImportHasContent($ne))throw new InvalidArgumentException('Enter the question statement in English or Nepali.');
@@ -41,10 +41,11 @@ function questionPartsNormalize(array $input,bool $mathematics=false):array {
         if(count($parts)<2||!in_array('K',$parts[0]['levels'],true)||!in_array('HA',$parts[count($parts)-1]['levels'],true))throw new InvalidArgumentException('Mathematics needs at least two subquestions: the first must include K and the last must include HA.');
         if(count($parts)===3&&!array_intersect(['U','A','KU'],$parts[1]['levels']))throw new InvalidArgumentException('For three mathematics subquestions, the middle one must be U, A or KU.');
     }
-    return ['display'=>$display,'statement_en'=>$en,'statement_np'=>$ne,'parts'=>$parts,'total_units'=>$total]+($mathRule==='cdc'?['math_rule'=>'cdc']:[]);
+    return ['display'=>$display,'statement_en'=>$en,'statement_np'=>$ne,'parts'=>$parts,'total_units'=>$total]+(in_array($mathRule,['cdc','import'],true)?['math_rule'=>$mathRule]:[]);
 }
 function questionPartsEncode(array $structure,string $language):string {
-    $out='<div data-question-structure="1" data-part-display="'.$structure['display'].'"'.(($structure['math_rule']??'strict')==='cdc'?' data-question-math="cdc"':'').'><div data-question-role="statement">'.$structure[$language==='en'?'statement_en':'statement_np'].'</div>';
+    $mathRule=$structure['math_rule']??'strict';$mathMarker=in_array($mathRule,['cdc','import'],true)?' data-question-math="'.$mathRule.'"':'';
+    $out='<div data-question-structure="1" data-part-display="'.$structure['display'].'"'.$mathMarker.'><div data-question-role="statement">'.$structure[$language==='en'?'statement_en':'statement_np'].'</div>';
     foreach($structure['parts'] as $part){
         $out.='<div data-question-role="part" data-part-label="'.sanitize($part['label']).'" data-part-marks="'.$part['marks'].'" data-part-levels="'.implode(',',$part['levels']).'"'.'>'.$part[$language==='en'?'en':'np'].'</div>';
     }
@@ -57,7 +58,7 @@ function questionPartsReadLanguage(string $html):?array {
     $doc->loadHTML('<?xml encoding="UTF-8"><div id="parts-root">'.safeRichHtml(questionImportMathSource($html)).'</div>',LIBXML_HTML_NOIMPLIED|LIBXML_HTML_NODEFDTD|LIBXML_NONET);libxml_clear_errors();libxml_use_internal_errors($previous);
     $root=$doc->getElementById('parts-root');$nodes=[];foreach($root->childNodes as $node){if($node instanceof DOMText&&trim($node->textContent)==='')continue;$nodes[]=$node;}
     if(count($nodes)!==1||!$nodes[0] instanceof DOMElement||$nodes[0]->getAttribute('data-question-structure')!=='1')throw new InvalidArgumentException('Invalid structured question. Use the subquestion editor.');
-    $container=$nodes[0];$out=['display'=>$container->getAttribute('data-part-display'),'math_rule'=>$container->getAttribute('data-question-math')?:'strict','statement'=>'','parts'=>[]];$statement=false;
+    $container=$nodes[0];$mathRule=$container->getAttribute('data-question-math')?:'strict';if(!in_array($mathRule,['strict','cdc','import'],true))throw new InvalidArgumentException('Invalid mathematics structure rule.');$out=['display'=>$container->getAttribute('data-part-display'),'math_rule'=>$mathRule,'statement'=>'','parts'=>[]];$statement=false;
     foreach($container->childNodes as $node){
         if($node instanceof DOMText&&trim($node->textContent)==='')continue;
         if(!$node instanceof DOMElement)throw new InvalidArgumentException('Invalid question part.');
@@ -72,7 +73,7 @@ function questionPartsRead(string $english,string $nepali,bool $mathematics=fals
     $en=questionPartsReadLanguage($english);$ne=questionPartsReadLanguage($nepali);if(!$en&&!$ne)return null;
     if(!$en||!$ne||$en['display']!==$ne['display']||$en['math_rule']!==$ne['math_rule']||count($en['parts'])!==count($ne['parts']))throw new InvalidArgumentException('Both language structures must use matching subquestions.');
     $parts=[];foreach($en['parts'] as $i=>$part){$np=$ne['parts'][$i];foreach(['label','marks','levels'] as $key)if($part[$key]!==$np[$key])throw new InvalidArgumentException('Subquestion marks, labels and cognitive levels must match across languages.');$parts[]=$part+['en'=>$part['body'],'np'=>$np['body']];}
-    return questionPartsNormalize(['display'=>$en['display'],'math_rule'=>$en['math_rule'],'statement_en'=>$en['statement'],'statement_np'=>$ne['statement'],'parts'=>$parts],$mathematics);
+    return questionPartsNormalize(['display'=>$en['display'],'math_rule'=>$en['math_rule'],'statement_en'=>$en['statement'],'statement_np'=>$ne['statement'],'parts'=>$parts],$mathematics,true);
 }
 function questionPartsSuffix(array $part,string $display):string {return '('.($display==='cognitive'?'':$part['marks']).($display==='marks'?'':implode('',$part['levels'])).')';}
 function questionCognitiveItems(array $question):array {

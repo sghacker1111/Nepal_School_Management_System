@@ -31,10 +31,12 @@ $q=$paper['questions'][0];$structure=questionPartsRead($q['question_text'],$q['q
 $chapter=$areas[0]['chapter_ids'][0];$topic=curriculumEnsureTopic($db,0,$chapter,'CDC import fixture');$selection=['import_class_id'=>$class,'import_subject_id'=>$subject,'import_chapter_id'=>$chapter,'import_topic_id'=>$topic];
 foreach(['exam','learning'] as $bank)foreach(['normal','html'] as $mode){
     [$headers,$rows]=examImportSample($db,$admin,$mode,$class,$subject,'other',$selection,$bank);$map=examImportHeaders($headers,$mode,'other');$rows=array_slice($rows,2,2);
-    foreach($rows as &$row)$row[$map['mathematics_rule']]='cdc';unset($row);
+    erpCheck(!isset($map['mathematics_rule']),'New import sample omits Mathematics Rule');
     $import=examImportQuestions($db,$admin,[$headers,...$rows],$mode,'public','other',$selection,$bank);$saved=$db->query('SELECT * FROM questions WHERE id='.$import['ids'][0])->fetch(PDO::FETCH_ASSOC);$parsed=questionPartsRead($saved['question_text'],$saved['question_text_np'],true);
-    erpEqual($parsed['math_rule'],'cdc','CDC mathematics import mode retained '.$bank.' '.$mode);erpEqual(count($parsed['parts']),2,'CDC import permits source question without HA');
-    foreach($rows as &$row)$row[$map['mathematics_rule']]='strict';unset($row);erpReject(fn()=>examImportQuestions($db,$admin,[$headers,...$rows],$mode,'public','other',$selection,$bank),'Same mathematics import rejects a strict question without HA');
+    erpEqual($parsed['math_rule'],'import','Math import keeps a flexible structure marker '.$bank.' '.$mode);erpEqual(count($parsed['parts']),2,'Math import accepts source question without HA');
+    $legacyHeaders=[...$headers,'Mathematics Rule'];$legacyRows=$rows;foreach($legacyRows as &$row)$row[]='strict';unset($row);
+    $legacy=examImportQuestions($db,$admin,[$legacyHeaders,...$legacyRows],$mode,'public','other',$selection,$bank);$legacySaved=$db->query('SELECT question_text,question_text_np FROM questions WHERE id='.$legacy['ids'][0])->fetch(PDO::FETCH_ASSOC);
+    erpEqual(questionPartsRead($legacySaved['question_text'],$legacySaved['question_text_np'],true)['math_rule'],'import','Legacy Mathematics Rule column is ignored '.$bank.' '.$mode);
 }
 foreach(['students','marks','exams','ac_payments'] as $table)erpEqual($db->query("SELECT * FROM $table ORDER BY id")->fetchAll(PDO::FETCH_ASSOC),$before[$table],'Generation preserves '.$table);
 echo 'Mathematics catalog passed: '.$GLOBALS['erp_checks'].' checks; additive setup, all nine grids, areas, exact per-area marks/items, 16 main questions, KU isolation and admin-only writes.'.PHP_EOL;

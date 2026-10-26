@@ -14,6 +14,15 @@ function examImportSubjects(PDO $db,array $actor,array $classes):array {
     return questionImportWriterSubjects($db,$actor,$classes);
 }
 
+function examImportIsMathematics(array $subjects,int $classId,int $subjectId):bool {
+    foreach($subjects[$classId]??[] as $subject){
+        if((int)$subject['id']!==$subjectId)continue;
+        foreach(['name_en','name_np'] as $field)if(in_array(questionImportSubjectKey((string)($subject[$field]??'')),['mathematics','optional mathematics'],true))return true;
+        return false;
+    }
+    return false;
+}
+
 function examImportHeaders(array $headers,string $mode,?string $kind=null):array {
     questionImportFormat($mode);
     if($kind!==null)examImportKind($kind);
@@ -41,7 +50,6 @@ function examImportHeaders(array $headers,string $mode,?string $kind=null):array
         'statement_en'=>['statementenglish','statementen','statement','questionstatementenglish'],
         'statement_np'=>['statementnepali','statementnp','questionstatementnepali'],
         'part_display'=>['partdisplay','annotationstyle','suffixstyle'],
-        'mathematics_rule'=>['mathematicsrule','mathrule','mathematicsstructure'],
     ];
     foreach(['a','b','c','d'] as $option){
         $aliases['option_'.$option]=['option'.$option,'option'.$option.'en','option'.$option.'english','choice'.$option,'choice'.$option.'english'];
@@ -148,10 +156,11 @@ function examImportQuestions(PDO $db,array $actor,array $rows,string $mode,strin
                 $class=examImportClassId($classes,$get('class'));
                 $subject=questionImportSubjectId($subjects[$class]??[],$get('subject'));
                 $input=questionImportGroupInput($group,$map,$mode,$kind);
+                if(($input['question_layout']??'')==='structured'&&($input['type']??'')!=='MCQ'&&examImportIsMathematics($subjects,$class,$subject))$input['mathematics_rule']='import';
                 $source=curriculumNameKey($input['source']);$permitted=$actor['school_id']===0?['shared','shared catalog']:['school','this school'];
                 if($source!==''&&$source!=='auto'&&!in_array($source,$permitted,true))throw new InvalidArgumentException('Source must be Auto or '.($actor['school_id']===0?'Shared':'School').'; the school and creator are assigned by your account.');
                 unset($input['source']);if(isset($input['import_marks'])){$input['marks']=$input['import_marks'];unset($input['import_marks']);}
-                $ids[]=learningSaveQuestion($db,$actor,$input+['class_id'=>$class,'subject_id'=>$subject,'chapter'=>$context['catalog']['chapter'],'topic'=>$context['catalog']['topic']??'','visibility'=>$visibility,'student_visible'=>'0'],null,$bankKind,false);
+                $ids[]=learningSaveQuestion($db,$actor,$input+['class_id'=>$class,'subject_id'=>$subject,'chapter'=>$context['catalog']['chapter'],'topic'=>$context['catalog']['topic']??'','visibility'=>$visibility,'student_visible'=>'0'],null,$bankKind,false,true);
                 $db->exec('RELEASE SAVEPOINT exam_import_row');
             }catch(InvalidArgumentException $error){
                 $db->exec('ROLLBACK TO SAVEPOINT exam_import_row');$db->exec('RELEASE SAVEPOINT exam_import_row');$skipped+=count($group['rows']);
@@ -191,10 +200,10 @@ function examImportSample(PDO $db,array $actor,string $mode,int $class=0,int $su
         $rows[1][10]=$kind==='mcq'?'<p>What is \\(\\frac{1}{2}+\\frac{1}{2}\\)?</p>':'<p>Explain why \\(\\frac{1}{2}+\\frac{1}{2}=1\\).</p>';
         $rows[1][12]='<p>\\[\\frac{1+1}{2}=1\\]</p>';
     }
-    $extra=['Question Group','Subquestion Label','Statement (English)','Statement (Nepali)','Part Display','Mathematics Rule','Subquestion Answer (English)','Subquestion Answer (Nepali)'];
-    if($mode==='html')foreach([2,3,6,7] as $i)$extra[$i].=' HTML Source';
+    $extra=['Question Group','Subquestion Label','Statement (English)','Statement (Nepali)','Part Display','Subquestion Answer (English)','Subquestion Answer (Nepali)'];
+    if($mode==='html')foreach([2,3,5,6] as $i)$extra[$i].=' HTML Source';
     $extraOffset=count($headers);$headers=[...$headers,...$extra];
-    foreach($rows as &$row)$row=[...$row,'','','','','','strict','',''];unset($row);
+    foreach($rows as &$row)$row=[...$row,'','','','','','',''];unset($row);
     $rich=static fn($value)=>$mode==='html'?'<p>'.htmlspecialchars($value,ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8').'</p>':$value;
     if($kind==='other'){
         $groupRows=[];
@@ -205,7 +214,7 @@ function examImportSample(PDO $db,array $actor,string $mode,int $class=0,int $su
         ] as [$label,$category,$marks,$en,$np,$answer,$answerNp]){
             $row=$rows[2];$row[7]=$category;$row[8]=$marks;$row[9]=8;$row[10]=$rich($en);$row[11]=$rich($np);$row[12]='';$row[13]='';
             $row[$extraOffset]='WRITTEN-1';$row[$extraOffset+1]=$label;$row[$extraOffset+2]=$rich('A depositor invests Rs. 2,00,000 at 10% p.a. Compare annual and half-yearly compounding.');$row[$extraOffset+3]=$rich('एक व्यक्तिले वार्षिक 10% ब्याजदरमा रु. 2,00,000 जम्मा गरे। वार्षिक र अर्धवार्षिक चक्रीय ब्याज तुलना गर्नुहोस्।');$row[$extraOffset+4]='both';
-            $row[$extraOffset+6]=$rich($answer);$row[$extraOffset+7]=$rich($answerNp);$groupRows[]=$row;
+            $row[$extraOffset+5]=$rich($answer);$row[$extraOffset+6]=$rich($answerNp);$groupRows[]=$row;
         }
         array_splice($rows,2,1,$groupRows);
     }else{

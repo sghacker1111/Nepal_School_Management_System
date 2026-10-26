@@ -22,9 +22,9 @@ function learningMutableRecord(PDO $db,array $actor,string $kind,int $id,string 
     if(!learningCanEdit($db,$actor,$record))throw new InvalidArgumentException('Only the creator may change this content, while assigned to its subject.');
     return $record;
 }
-function learningSaveQuestion(PDO $db,array $actor,array $input,?int $id=null,string $bankKind='learning',bool $allowCatalogCreate=true):int {
+function learningSaveQuestion(PDO $db,array $actor,array $input,?int $id=null,string $bankKind='learning',bool $allowCatalogCreate=true,bool $importContext=false):int {
     if(!in_array($bankKind,['learning','exam'],true))throw new InvalidArgumentException('Invalid bank.');
-    return learningWrite($db,function()use($db,$actor,$input,$id,$bankKind,$allowCatalogCreate){
+    return learningWrite($db,function()use($db,$actor,$input,$id,$bankKind,$allowCatalogCreate,$importContext){
         if(array_key_exists('bank_kind',$input))throw new InvalidArgumentException('The question bank is determined by its section.');
         if(array_key_exists('school_id',$input)||array_key_exists('created_by_user_id',$input))throw new InvalidArgumentException('Content school and creator are set by your account.');
         if($id){$old=learningMutableRecord($db,$actor,'questions',$id,$bankKind);if($old['archived_at'])throw new InvalidArgumentException('Restore archived content before editing it.');}
@@ -42,13 +42,14 @@ function learningSaveQuestion(PDO $db,array $actor,array $input,?int $id=null,st
         $subjectRow=$db->prepare('SELECT name_en,name_np FROM subjects WHERE id=?');$subjectRow->execute([$subject]);$subjectNames=$subjectRow->fetch(PDO::FETCH_ASSOC);
         $mathematics=false;foreach($subjectNames as $name)if(in_array(questionImportSubjectKey((string)$name),['mathematics','optional mathematics'],true))$mathematics=true;
         $layout=$input['question_layout']??'plain';if(!is_string($layout)||!in_array($layout,['plain','structured'],true))throw new InvalidArgumentException('Choose a valid question layout.');
-        $structure=null;
+        $structure=null;$existingStructure=isset($old)?questionPartsRead($old['question_text']??'',$old['question_text_np']??''):null;$allowImportedStructure=$importContext||(($existingStructure['math_rule']??'')==='import');
         if($layout==='structured'){
-            $structure=questionPartsNormalize(['display'=>$input['part_display']??'both','math_rule'=>$input['mathematics_rule']??'strict','statement_en'=>$input['statement_en']??'','statement_np'=>$input['statement_np']??'','parts'=>$input['subquestions']??null],$mathematics&&$type!=='MCQ');
+            $structure=questionPartsNormalize(['display'=>$input['part_display']??'both','math_rule'=>$input['mathematics_rule']??'strict','statement_en'=>$input['statement_en']??'','statement_np'=>$input['statement_np']??'','parts'=>$input['subquestions']??null],$mathematics&&$type!=='MCQ',$allowImportedStructure);
             $input['question_text']=questionPartsEncode($structure,'en');$input['question_text_np']=questionPartsEncode($structure,'np');
         }else{
             foreach(['question_text','question_text_np'] as $key)if(isset($input[$key])&&!is_string($input[$key]))throw new InvalidArgumentException('Enter valid question text.');
             $structure=questionPartsRead($input['question_text']??'',$input['question_text_np']??'',$mathematics&&$type!=='MCQ');
+            if(($structure['math_rule']??'')==='import'&&!$allowImportedStructure)throw new InvalidArgumentException('Imported flexible mathematics structure can only be retained from an existing imported question.');
         }
         if($structure){if($type==='MCQ'&&count($structure['parts'])!==1)throw new InvalidArgumentException('A structured MCQ needs one prompt and one set of four options.');$input['marks']=questionPartNumber($structure['total_units']);$input['cognitive_domain']=QUESTION_PART_LEVELS[$structure['parts'][0]['levels'][0]];}
         $get=static function($key)use($input):string {$value=$input[$key]??'';if(!is_scalar($value))throw new InvalidArgumentException('Enter valid question content.');return (string)$value;};

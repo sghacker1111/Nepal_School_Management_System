@@ -36,7 +36,7 @@ function questionImportGroupInput(array $group,array $map,string $mode,string $k
     $levels=['easy'=>'Easy','medium'=>'Medium','hard'=>'Hard','challenging'=>'Challenging'];$difficulty=$levels[curriculumNameKey($get('difficulty'))]??null;
     if(!$difficulty)throw new InvalidArgumentException('Difficulty must be Easy, Medium, Hard or Challenging.');
     $minutes=learningDecimalString(learningDecimalUnits($get('required_minutes'),60000,'Required minutes'));
-    $merged=[];foreach(['statement_en','statement_np','answer','answer_np','source','part_display','mathematics_rule','correct_option','option_a','option_a_np','option_b','option_b_np','option_c','option_c_np','option_d','option_d_np'] as $field)$merged[$field]='';
+    $merged=[];foreach(['statement_en','statement_np','answer','answer_np','source','part_display','correct_option','option_a','option_a_np','option_b','option_b_np','option_c','option_c_np','option_d','option_d_np'] as $field)$merged[$field]='';
     foreach($group['rows'] as $index=>$partRow){
         $value=static fn($field)=>(string)($partRow[$map[$field]??-1]??'');
         if(($types[curriculumNameKey($value('type'))]??null)!==$type||($levels[curriculumNameKey($value('difficulty'))]??null)!==$difficulty||learningDecimalString(learningDecimalUnits($value('required_minutes'),60000,'Required minutes'))!==$minutes)throw new InvalidArgumentException('Every row in a Question Group must use the same Type, Difficulty and whole-question Required Minutes.');
@@ -61,6 +61,6 @@ function questionImportGroupInput(array $group,array $map,string $mode,string $k
             if(strlen($input[$answerField])>60000)throw new InvalidArgumentException('The combined model answer is too long. Keep each language below 60,000 bytes.');
         }
     }
-    $input['correct_option']=$merged['correct_option'];$input['mathematics_rule']=strtolower($merged['mathematics_rule']?:'strict');
+    $input['correct_option']=$merged['correct_option'];
     return $input;
 }
