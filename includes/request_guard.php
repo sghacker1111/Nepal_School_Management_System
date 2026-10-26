@@ -21,7 +21,11 @@ function schoolMutationQuery(array $query): bool {
 }
 function schoolRoleCanWrite(string $role, string $module, string $file): bool {
     if($role==='student')return $module==='auth'||($module==='learning'&&$file==='practice_mcqs.php');
-    if (in_array($role, ['super_admin','school_admin'], true)) return true;
+    if ($role==='super_admin') return true;
+    if ($role==='school_admin') {
+        if($module==='subjects'&&in_array($file,['add.php','edit.php'],true))return false;
+        return true;
+    }
     if ($module === 'auth') return true;
     if ($module === 'accounting') {
         if($role==='cashier')return in_array($file,['payments.php','invoice.php','student.php'],true);
@@ -71,6 +75,19 @@ function guardSchoolRequest(): void {
         if(!$action||!accountingActionAllowed((string)$role,$action,Auth::isReadOnly()))denySchoolRequest('Your role does not allow this financial action.');
     }
     if (($write || $mutation) && Auth::isReadOnly() && $module !== 'auth') denySchoolRequest('School preview is read-only. Sign in as a school administrator to make changes.');
+    if(($write||$mutation)&&$role!=='super_admin'){
+        if($module==='subjects'&&$file==='internal.php'&&empty($_GET['exam']))denySchoolRequest('Only system admin may edit catalog assessment defaults.');
+        if($module==='subjects'&&$file==='index.php'&&!isset($_POST['offering_action']))denySchoolRequest('Only system admin may edit or hide catalog subjects.');
+        if($module==='settings'&&$file==='cdc.php')denySchoolRequest('Only system admin may save CDC catalog definitions.');
+        if($module==='classes'){
+            if($mutation||in_array($_POST['action']??'',['remove_legacy_seven','restore_class'],true)||isset($_POST['add_class']))denySchoolRequest('Only system admin may change catalog classes.');
+            if($file==='subjects.php'&&!isset($_POST['offering_action']))denySchoolRequest('Select school offerings and teachers without editing catalog definitions.');
+            if($file==='edit.php'){
+                $q=getDB()->prepare('SELECT * FROM classes WHERE id=? AND school_id=?');$q->execute([(int)($_GET['class_id']??0),(int)Auth::getSchoolId()]);$catalogClass=$q->fetch();
+                foreach(['name','name_np','level','grading_type'] as $field)if(array_key_exists($field,$_POST)&&(!$catalogClass||!is_scalar($_POST[$field])||(string)$_POST[$field]!== (string)$catalogClass[$field]))denySchoolRequest('Only system admin may edit class names, levels and grading definitions.');
+            }
+        }
+    }
     if (!$write && $mutation) {
         // Old bookmarked action links remain usable, but a GET never changes records.
         $url = htmlspecialchars(schoolCanonicalUrl($_SERVER['REQUEST_URI']??'')??schoolRouteUrl('index.php'), ENT_QUOTES, 'UTF-8');

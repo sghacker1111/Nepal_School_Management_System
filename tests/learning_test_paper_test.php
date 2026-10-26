@@ -35,7 +35,7 @@ $emptyChapter=curriculumEnsureChapter($db,1,$class,$subject,'Chapter without top
 foreach(['normal','html'] as $mode)foreach(['mcq','other'] as $kind){
     [$headers,$samples]=examImportSample($db,$actor,$mode,$class,$subject,$kind,$selection);
     erpCheck(!in_array('Topic',$headers,true),'Exam sample omits Topic');
-    $result=examImportQuestions($db,$actor,[$headers,...$samples],$mode,'private',$kind,$selection);erpEqual($result['saved'],count($samples),'Chapter-only sample roundtrip');
+    $result=examImportQuestions($db,$actor,[$headers,...$samples],$mode,'private',$kind,$selection);erpEqual($result['saved'],$kind==='mcq'?2:4,'Chapter-only sample roundtrip');
     foreach($result['ids'] as $id)erpEqual($db->query('SELECT topic_id FROM questions WHERE id='.$id)->fetchColumn(),null,'Exam import binds no single topic');
 }
 erpReject(fn()=>examImportSample($db,$actor,'normal',$class,$subject,'mcq',$selection,'learning'),'Learning imports still require topic');

@@ -8,6 +8,8 @@ require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/catalog_validation.php';
 require_once __DIR__.'/../../includes/curriculum_catalog.php';
+require_once __DIR__.'/../../includes/password_security.php';
+require_once __DIR__.'/../../includes/school_offerings.php';
 
 Auth::requireRole('super_admin');
 
@@ -19,8 +21,16 @@ $filter_class=(int)($_GET['filter_class']??$_POST['filter_class']??0);
 $show_hidden=(string)($_GET['show_hidden']??$_POST['show_hidden']??'0')==='1';
 if($filter_class)try{schoolRecord($db,'classes',$filter_class,0);}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),404);}
 $catalogReturn=schoolRouteUrl('modules/super_admin/subjects.php') . '?'.http_build_query(['filter_class'=>$filter_class,'show_hidden'=>$show_hidden?'1':'0']);
+if($_SERVER['REQUEST_METHOD']==='POST'&&isset($_POST['synchronize_schools'])){
+    try{$db->beginTransaction();syncAllSchoolOfferings($db);$db->commit();Auth::logActivity(Auth::getUserId(),'Synchronize school offerings','subjects');redirect($catalogReturn,'School catalogs synchronized. Existing elective selections and admin exceptions retained.');}
+    catch(Throwable $e){if($db->inTransaction())$db->rollBack();$error=schoolPublicError($e);}
+}
 
 
+if($_SERVER['REQUEST_METHOD']==='POST'&&isset($_POST['required_default'])){
+    try{$m=schoolRecord($db,'class_subjects',(int)($_POST['mapping_id']??0),0);$db->beginTransaction();catalogWriteLock($db,0);offeringSetRequiredDefault($db,(int)$m['class_id'],(int)$m['subject_id'],($_POST['required_default']??'')==='1');syncAllSchoolOfferings($db);$db->commit();redirect($catalogReturn,'School assignment default saved. Individual system-admin exceptions retained.');}
+    catch(Throwable $e){if($db->inTransaction())$db->rollBack();$error=schoolPublicError($e);}
+}
 // Handle AJAX Chapter Actions
 if(isset($_GET['action_get_chapters'])){
     header('Content-Type: application/json');
@@ -51,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_chapter'])) {
             curriculumEnsureChapter($db,0,$c_id,$s_id,$name,$name_np,$sort_order);
             echo json_encode(['success' => true]);
         } catch (PDOException|InvalidArgumentException $e) {
-            echo json_encode(['success' => false, 'message' => schoolPublicError($e)]);
+            echo json_encode(['success' => false, 'message' => $e instanceof InvalidArgumentException?$e->getMessage():schoolPublicError($e)]);
         }
         exit;
     }
@@ -60,12 +70,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_chapter'])) {
         $ch_id = (int)($_POST['chapter_id']??0);
         try {
             if(!is_scalar($_POST['chapter_id']??null)||!preg_match('/^[1-9][0-9]*$/',(string)$_POST['chapter_id']))throw new InvalidArgumentException('Choose a valid chapter record.');
+            curriculumRequireDeleteAuthorization($db,0,'chapters',$ch_id,(int)Auth::getUserId(),$_POST['current_password']??null);
             curriculumDelete($db,0,'chapters',$ch_id);
             echo json_encode(['success' => true]);
         } catch (CurriculumDeleteBlocked $e) {
             echo json_encode(['success'=>false,'blocked'=>true,'message'=>$e->getMessage(),'dependencies'=>$e->report]);
         } catch (PDOException|InvalidArgumentException $e) {
-            echo json_encode(['success' => false, 'message' => schoolPublicError($e)]);
+            echo json_encode(['success' => false, 'message' => $e instanceof InvalidArgumentException?$e->getMessage():schoolPublicError($e)]);
         }
         exit;
     }
@@ -75,13 +86,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_chapter'])) {
         $s_id = (int)$_POST['subject_id'];
         try {
             if(!is_string($_POST['name']??null))throw new InvalidArgumentException('Choose a valid chapter name.');$name=trim($_POST['name']);
-            $found=false;foreach(curriculumChapters($db,0,$c_id,$s_id) as $chapter)if(curriculumNameKey($chapter['name'])===curriculumNameKey($name)){$found=true;curriculumDelete($db,0,'chapters',(int)$chapter['id']);}
-            if(!$found)throw new InvalidArgumentException('Choose an active chapter to delete.');
+            $target=null;foreach(curriculumChapters($db,0,$c_id,$s_id) as $chapter)if(curriculumNameKey($chapter['name'])===curriculumNameKey($name)){$target=$chapter;break;}
+            if(!$target)throw new InvalidArgumentException('Choose an active chapter to delete.');
+            curriculumRequireDeleteAuthorization($db,0,'chapters',(int)$target['id'],(int)Auth::getUserId(),$_POST['current_password']??null);
+            curriculumDelete($db,0,'chapters',(int)$target['id']);
             echo json_encode(['success' => true]);
         } catch (CurriculumDeleteBlocked $e) {
             echo json_encode(['success'=>false,'blocked'=>true,'message'=>$e->getMessage(),'dependencies'=>$e->report]);
         } catch (PDOException|InvalidArgumentException $e) {
-            echo json_encode(['success' => false, 'message' => schoolPublicError($e)]);
+            echo json_encode(['success' => false, 'message' => $e instanceof InvalidArgumentException?$e->getMessage():schoolPublicError($e)]);
         }
         exit;
     }
@@ -124,6 +137,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_subject'])) {
             if($map_class_id)schoolRecord($db,'classes',$map_class_id,0);
             if($action==='edit')schoolRecord($db,'subjects',(int)($_POST['subject_id']??0),0);
             $db->beginTransaction();catalogWriteLock($db,0);
+            if($action==='edit')syncAllSchoolOfferings($db);
             if($action==='add'&&$map_class_id)validateUniqueClassSubject($db,0,$map_class_id,['name_en'=>$name_en,'name_np'=>$name_np,'code'=>$code]);
             if($action==='edit'){
                 $q=$db->prepare('SELECT DISTINCT class_id FROM class_subjects WHERE school_id=0 AND subject_id=?');$q->execute([(int)$_POST['subject_id']]);
@@ -188,8 +202,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_subject'])) {
                     $s_id
                 ]);
                 $success = "Universal subject updated successfully.";
+                $db->prepare('UPDATE class_subjects SET is_optional=?,credit_hours=?,th_credit_hours=?,in_credit_hours=?,th_full_marks=?,th_pass_marks=?,in_full_marks=?,in_pass_marks=? WHERE school_id=0 AND subject_id=?')->execute([$is_optional,$credit_hours,$th_credit_hours,$in_credit_hours,$th_full_marks,$th_pass_marks,$in_full_marks,$in_pass_marks,$s_id]);
             }
-            $db->commit();
+            $savedSubject=(int)($action==='add'?$new_subject_id:$s_id);
+            if(in_array($_POST['school_default']??'auto',['all','choose'],true)){
+                $mapped=$db->prepare('SELECT class_id FROM class_subjects WHERE school_id=0 AND subject_id=?');$mapped->execute([$savedSubject]);
+                foreach($mapped->fetchAll(PDO::FETCH_COLUMN) as $mappedClass)offeringSetRequiredDefault($db,(int)$mappedClass,$savedSubject,$_POST['school_default']==='all');
+            }
+            syncAllSchoolOfferings($db);$db->commit();
         } catch (Throwable $e) {
             if($db->inTransaction())$db->rollBack();
             $error = $e instanceof InvalidArgumentException?$e->getMessage():schoolPublicError($e);
@@ -207,10 +227,12 @@ if($_SERVER['REQUEST_METHOD']==='POST'&&(isset($_POST['action_visibility'])||iss
     $id=(int)($_POST['subject_id']??$_GET['toggle_hide']??0);
     try{$s=schoolRecord($db,'subjects',$id,0);$visible=isset($_POST['visible'])?(int)$_POST['visible']:(int)!empty($s['is_hidden']);
         if(!in_array($visible,[0,1],true))throw new InvalidArgumentException('Choose a valid visibility state.');
+        $db->beginTransaction();catalogWriteLock($db,0);
         $db->prepare('UPDATE subjects SET is_hidden=? WHERE id=? AND school_id=0')->execute([$visible?0:1,$id]);
+        syncAllSchoolOfferings($db);$db->commit();
         Auth::logActivity(Auth::getUserId(),'Update universal subject visibility','subjects',$id);
         redirect($catalogReturn,'Subject visibility saved successfully.','success');
-    }catch(Throwable $e){$error=schoolPublicError($e);}
+    }catch(Throwable $e){if($db->inTransaction())$db->rollBack();$error=schoolPublicError($e);}
 }
 // Handle Add Class-Subject Mapping
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_map'])) {
@@ -263,7 +285,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_map'])) {
                 $stmt->execute([$class_id, $subject_id, $ch, $th_ch, $in_ch, $th_fm, $th_pm, $in_fm, $in_pm, $is_opt]);
                 $success = "Subject mapped to class successfully.";
             }
-            if($error)$db->rollBack();else $db->commit();
+            if($error)$db->rollBack();else {syncAllSchoolOfferings($db);$db->commit();}
         } catch (Throwable $e) {
             if($db->inTransaction())$db->rollBack();
             if($e instanceof InvalidArgumentException)$error=$e->getMessage();
@@ -285,16 +307,18 @@ if($_SERVER['REQUEST_METHOD']==='POST'&&(isset($_POST['action_mapping_visibility
     $id=(int)($_POST['mapping_id']??$_GET['toggle_map_status']??0);
     try{$mapping=schoolRecord($db,'class_subjects',$id,0);$active=isset($_POST['active'])?(int)$_POST['active']:(int)!$mapping['is_active'];
         if(!in_array($active,[0,1],true))throw new InvalidArgumentException('Choose a valid mapping state.');
+        $db->beginTransaction();catalogWriteLock($db,0);
         $db->prepare('UPDATE class_subjects SET is_active=? WHERE id=? AND school_id=0')->execute([$active,$id]);
+        syncAllSchoolOfferings($db);$db->commit();
         Auth::logActivity(Auth::getUserId(),'Update universal mapping visibility','class_subjects',$id);
         redirect($catalogReturn,'Class mapping visibility saved successfully.','success');
-    }catch(Throwable $e){$error=schoolPublicError($e);}
+    }catch(Throwable $e){if($db->inTransaction())$db->rollBack();$error=schoolPublicError($e);}
 }
 // Fetch all universal classes
 $classes = $db->query("SELECT * FROM classes WHERE school_id = 0 ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
 
 $catalogSubjects=$db->query('SELECT * FROM subjects WHERE school_id=0 ORDER BY name_en,id')->fetchAll();
-$subjects=[];$mappings=[];
+$subjects=$catalogSubjects;$mappings=[];
 if($filter_class){
     $q=$db->prepare('SELECT DISTINCT s.* FROM subjects s JOIN class_subjects cs ON cs.subject_id=s.id AND cs.school_id=0 WHERE s.school_id=0 AND cs.class_id=?'.($show_hidden?'':' AND COALESCE(s.is_hidden,0)=0 AND cs.is_active=1').' ORDER BY s.name_en,s.id');$q->execute([$filter_class]);$subjects=$q->fetchAll();
     $q=$db->prepare('SELECT cs.*,c.name class_name,s.name_en subject_name FROM class_subjects cs JOIN classes c ON c.id=cs.class_id AND c.school_id=0 JOIN subjects s ON s.id=cs.subject_id AND s.school_id=0 WHERE cs.school_id=0 AND cs.class_id=?'.($show_hidden?'':' AND cs.is_active=1 AND COALESCE(s.is_hidden,0)=0').' ORDER BY s.name_en,cs.id');$q->execute([$filter_class]);$mappings=$q->fetchAll();
@@ -305,6 +329,7 @@ $activePage = 'super_admin_subjects';
 ob_start();
 ?>
 
+<form method="POST" class="mb-3"><input type="hidden" name="synchronize_schools" value="1"><button class="btn btn-outline-primary">Apply latest catalog to all schools</button><small class="d-block text-muted">Compulsory defaults apply to all schools. New optional subjects stay unassigned. School exceptions and existing elective choices are retained.</small></form>
 <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
     <h2><i class="fas fa-book-open text-primary"></i> Subjects & Chapters Catalog (Universal)</h2>
 </div>
@@ -452,6 +477,7 @@ ob_start();
                                     <?php endif; ?>
                                 </td>
                                 <td class="text-end">
+                                    <?php $requiredDefault=offeringRequiredDefault($db,$m); ?><form method="POST" class="d-inline"><input type="hidden" name="mapping_id" value="<?= $m['id'] ?>"><input type="hidden" name="required_default" value="<?= $requiredDefault?'0':'1' ?>"><button class="btn btn-sm btn-outline-primary"><?= $requiredDefault?'All schools (change to school choice)':'School choice (make compulsory)' ?></button></form>
                                     <form method="POST" class="d-inline"><input type="hidden" name="action_mapping_visibility" value="1"><input type="hidden" name="mapping_id" value="<?= $m['id'] ?>"><input type="hidden" name="active" value="<?= $m['is_active']?'0':'1' ?>"><button class="btn btn-sm btn-outline-secondary" title="Save mapping visibility"><i class="fas <?= $m['is_active']?'fa-eye-slash':'fa-eye' ?>"></i></button></form>
                                 </td>
                             </tr>
@@ -555,6 +581,7 @@ ob_start();
                         <input type="text" name="name_np" id="subjectNameNp" class="form-control" placeholder="e.g. नेपाली">
                     </div>
                     
+                    <div class="col-12"><label class="form-label" for="subjectSchoolDefault">School assignment default</label><select class="form-select" name="school_default" id="subjectSchoolDefault"><option value="auto">Keep existing; new core subjects default to all schools</option><option value="all">Compulsory for all schools</option><option value="choose">Schools choose whether to teach</option></select><small class="text-muted">This is separate from student elective selection. School-specific system-admin exceptions remain in force.</small></div>
                     <div class="col-12" id="subjectMapClassWrapper">
                         <label class="form-label fw-semibold">Target Class (Map Class) *</label>
                         <select name="map_class_id" id="subjectMapClassId" class="form-select">

@@ -21,7 +21,7 @@ try{$profile_id=routineIdentifier($_GET['profile_id']??0);}catch(InvalidArgument
 if($_SERVER['REQUEST_METHOD']==='POST'){
     if(!$canEdit)denySchoolRequest('Only administrators may change the weekly routine.',403);
     $q=$db->prepare('SELECT password FROM users WHERE id=? AND school_id=? AND status=1');$q->execute([$actor,$school_id]);
-    if(!is_string($_POST['password']??null)||!password_verify($_POST['password'],$q->fetchColumn()?:''))$error='Enter your current administrator password to confirm routine changes.';
+    if(!$q->fetchColumn()||!schoolVerifySensitivePassword($db,$actor,$_POST['password']??null))$error='Enter your current administrator password to confirm routine changes.';
     else try{
         $db->beginTransaction();
         // Serialize timetable changes per school (including MySQL).

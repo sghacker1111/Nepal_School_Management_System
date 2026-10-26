@@ -81,15 +81,14 @@ if (isset($_GET['action']) && $_GET['action'] === 'download_template') {
     $format = strtolower($_GET['format'] ?? 'xlsx');
     try{$contentMode=questionImportFormat($_GET['content_mode']??'normal');}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
     
-    if ($type === 'mcq') {
-        $sample = XlsxHelper::getMcqSample();
-        $filename = 'sample_mcq_questions_template';
-    } else {
-        $sample = XlsxHelper::getOtherSample();
-        $filename = 'sample_other_questions_template';
-    }
-    if($contentMode==='html'){$sample=XlsxHelper::getHtmlSample($type);$filename.='_html_source';}
-    try{$sample=questionImportSampleContext($sample,questionImportContext($db,$contentActor,$_GET));}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
+    require_once __DIR__.'/../../includes/exam_question_import.php';
+    try{
+        $kind=examImportKind($type);
+        [$sampleHeaders,$sampleRows]=examImportSample($db,$contentActor,$contentMode,0,0,$kind,$_GET,'learning');
+        $sample=['headers'=>$sampleHeaders,'rows'=>$sampleRows];
+        $filename='sample_'.$kind.'_questions_template'.($contentMode==='html'?'_html_source':'');
+    }catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
+    header('Cache-Control: private, no-store');
     
     if ($format === 'csv') {
         $content = XlsxHelper::generateCsv($sample['headers'], $sample['rows']);
@@ -98,11 +97,10 @@ if (isset($_GET['action']) && $_GET['action'] === 'download_template') {
         echo $content;
         exit;
     } else {
-        $content = XlsxHelper::generateXlsx($sample['headers'], $sample['rows'], ucfirst($type) . ' Questions');
+        $content = XlsxHelper::generateXlsx($sample['headers'], $sample['rows'], ucfirst($type) . ' Questions',[array_search('Marks',$sample['headers'],true),array_search('Required Minutes',$sample['headers'],true)],true);
         header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         header('Content-Disposition: attachment; filename="' . $filename . '.xlsx"');
         header('Content-Length: ' . strlen($content));
-        header('Cache-Control: max-age=0');
         echo $content;
         exit;
     }
@@ -119,17 +117,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_import_excel']
         $fileName = $_FILES['excel_file']['name'];
         $fileExt = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
 
-        if (!in_array($fileExt, ['xlsx', 'csv', 'txt'])) {
+        if (!in_array($fileExt, ['xlsx', 'csv'])) {
             $error = "Only .xlsx and .csv files are supported.";
         } else {
             $importTransactionOwned=false;
             try {
                 $importContentMode=questionImportFormat($_POST['import_content_mode']??'normal');
-                $rows = XlsxHelper::read($fileTmp);
+                require_once __DIR__.'/../../includes/exam_question_import.php';
+                $rows = examImportReadUpload($_FILES['excel_file']);
                 if (empty($rows) || count($rows) < 2) {
                     $error = "Uploaded file contains no data or only the header row.";
                 } else {
                     $headerRow = $rows[0];
+                    $normalizedHeaders=array_map(static fn($h)=>strtolower(preg_replace('/[^a-z0-9]/i','',(string)$h)),$headerRow);
+                    // Old download URLs now supply the same complete samples as
+                    // the current banks. Process them through the shared service.
+                    if(preg_grep('/^(?:requiredminutes|questiongroup|subquestionlabel|statement|subquestionanswer|partanswer)/',$normalizedHeaders)){
+                        $kind=$_POST['import_kind']??'';
+                        if($kind===''){
+                            $kind='other';
+                            foreach($normalizedHeaders as $heading)if(preg_match('/^(?:option|choice)[abcd]/',$heading)){$kind='mcq';break;}
+                        }
+                        $result=examImportQuestions($db,$contentActor,$rows,$importContentMode,learningVisibility($_POST['import_visibility']??($is_admin?'public':'private')),examImportKind($kind),$_POST,'learning');
+                        $skip=$result['skipped']?' '.$result['skipped'].' row(s) skipped. '.implode(' ',$result['errors']):'';
+                        redirect(schoolRouteUrl('modules/learning/questions.php',['category'=>'all']),'Successfully imported '.$result['saved'].' questions into the Question Bank.'.$skip,$result['skipped']?'warning':'success');
+                    }
                     $colMap = [];
                     
                     // Column normalization mapping (strip non-alphanumeric chars)
@@ -201,7 +213,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_import_excel']
                             'k' => 'Knowledge', 'knowledge' => 'Knowledge', 'knowledgek' => 'Knowledge',
                             'u' => 'Understanding', 'understanding' => 'Understanding', 'understandingu' => 'Understanding',
                             'a' => 'Application', 'application' => 'Application', 'applicationa' => 'Application',
-                            'ha' => 'Higher Ability', 'higherability' => 'Higher Ability', 'higherabilityha' => 'Higher Ability'
+                            'ha' => 'Higher Ability', 'higherability' => 'Higher Ability', 'higherabilityha' => 'Higher Ability',
+                            'ku'=>'Knowledge and Understanding', 'knowledgeandunderstanding'=>'Knowledge and Understanding', 'knowledgeandunderstandingku'=>'Knowledge and Understanding'
                         ];
                         $cdClean = strtolower(preg_replace('/[^a-z0-9]/i', '', $cdRaw));
                         $cognitiveDomain = $cdMap[$cdClean] ?? 'Knowledge';
@@ -554,7 +567,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                                     'Knowledge' => 'K',
                                     'Understanding' => 'U',
                                     'Application' => 'A',
-                                    'Higher Ability' => 'HA'
+                                    'Higher Ability' => 'HA', 'Knowledge and Understanding'=>'KU'
                                 ][$cd] ?? substr($cd, 0, 2);
                                 ?>
                                 <span class="badge <?= $cd_badge ?> px-2 py-1" title="<?= htmlspecialchars($cd) ?>">
@@ -674,7 +687,7 @@ mjx-utext, mjx-mtext, .MathJax mtext, .MathJax [class*="mtext"], mjx-c {
                                 <option value="Knowledge">Knowledge (K)</option>
                                 <option value="Understanding">Understanding (U)</option>
                                 <option value="Application">Application (A)</option>
-                                <option value="Higher Ability">Higher Ability (HA)</option>
+                                <option value="Higher Ability">Higher Ability (HA)</option><option value="Knowledge and Understanding">KU (independent category)</option>
                             </select>
                         </div>
                         <div class="col-md-2">

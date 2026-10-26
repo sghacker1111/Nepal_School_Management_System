@@ -19,7 +19,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $new_pass = $_POST['new_password'] ?? '';
     $confirm_pass = $_POST['confirm_password'] ?? '';
     
-    if (empty($old_pass) || empty($new_pass) || empty($confirm_pass)) {
+    if (!is_string($old_pass) || !is_string($new_pass) || !is_string($confirm_pass)
+        || strlen($old_pass)>1024 || strlen($new_pass)>72 || strlen($confirm_pass)>72
+        || str_contains($new_pass, "\0")) {
+        $error = 'Enter valid passwords; the new password must be at most 72 bytes.';
+    } elseif (empty($old_pass) || empty($new_pass) || empty($confirm_pass)) {
         $error = 'All password fields are required';
     } elseif (strlen($new_pass) < 8) {
         $error = 'Use at least 8 characters for the new password';
@@ -31,11 +35,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->execute([$user_id]);
         $user = $stmt->fetch();
         
-        if ($user && password_verify($old_pass, $user['password'])) {
+        if ($user && schoolVerifySensitivePassword($db, (int)$user_id, $old_pass)) {
             try {
                 $hashed_password = password_hash($new_pass, PASSWORD_DEFAULT);
                 $stmt = $db->prepare("UPDATE users SET password = ? WHERE id = ?");
                 $stmt->execute([$hashed_password, $user_id]);
+                Auth::refreshOwnCredentials();
                 
                 Auth::logActivity($user_id, 'Changed own account password', 'users', $user_id);
                 $success = 'Password changed successfully!';

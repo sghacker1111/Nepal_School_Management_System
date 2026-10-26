@@ -26,7 +26,7 @@ function learningCatalogScope(PDO $db,int $school,int $class,int $subject):array
 }
 function learningCanManageCatalog(array $actor):bool {return $actor['role']==='super_admin'&&!$actor['read_only'];}
 function learningSharedScopeEligible(PDO $db,array $scope):bool {
-    $q=$db->prepare('SELECT cs.id FROM classes c JOIN class_subjects cs ON cs.class_id=c.id AND cs.school_id=0 JOIN subjects s ON s.id=cs.subject_id AND s.school_id=0 WHERE c.school_id=0 AND c.id=? AND s.id=? AND c.is_active=1 AND COALESCE(s.is_hidden,0)=0 AND (cs.is_active=1 OR cs.is_optional=1)');$q->execute([$scope['class_id'],$scope['subject_id']]);return (bool)$q->fetchColumn();
+    $q=$db->prepare('SELECT cs.id FROM classes c JOIN class_subjects cs ON cs.class_id=c.id AND cs.school_id=0 JOIN subjects s ON s.id=cs.subject_id AND s.school_id=0 WHERE c.school_id=0 AND c.id=? AND s.id=? AND c.is_active=1 AND COALESCE(s.is_hidden,0)=0 AND cs.is_active=1');$q->execute([$scope['class_id'],$scope['subject_id']]);return (bool)$q->fetchColumn();
 }
 function learningCatalogChoices(PDO $db,array $actor,int $class,int $subject):array {
     require_once __DIR__.'/learning_content.php';
@@ -40,7 +40,7 @@ function learningCatalogChoices(PDO $db,array $actor,int $class,int $subject):ar
             $choices[$key]['alias_ids'][]=(int)$r['id'];$choices[$key]['aliases'][]=['id'=>(int)$r['id'],'scope'=>$source]+$scope;
         }
     }
-    return array_values($choices);
+    require_once __DIR__.'/mathematics_catalog.php';return mathematicsDecorateChapters($db,$actor,$class,$subject,array_values($choices));
 }
 function learningCatalogChapters(PDO $db,array $actor,int $class,int $subject):array {
     require_once __DIR__.'/curriculum_catalog.php';return learningCatalogChoices($db,$actor,$class,$subject);

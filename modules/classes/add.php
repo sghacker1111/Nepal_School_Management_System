@@ -20,6 +20,7 @@ $success = '';
 
 // Handle class creation
 if (isset($_POST['add_class'])) {
+    if(!Auth::hasRole('super_admin'))denySchoolRequest('Only system admin may create catalog classes.');
     $name = sanitize($_POST['name'] ?? '');
     $name_np = sanitize($_POST['name_np'] ?? '');
     $level = sanitize($_POST['level'] ?? 'Basic');
@@ -91,6 +92,7 @@ if (isset($_POST['add_class'])) {
             }
             
             Auth::logActivity(Auth::getUserId(), 'Add Class', 'classes', $new_id);
+            require_once __DIR__.'/../../includes/school_offerings.php';syncAllSchoolOfferings($db);
             $db->commit();
             redirect(schoolRouteUrl('modules/classes/index.php'), 'Class added successfully');
         } catch (PDOException|InvalidArgumentException $e) {
@@ -151,6 +153,7 @@ ob_start();
 <?php endif; ?>
 
 <div class="row">
+    <?php if(Auth::hasRole('super_admin')): ?>
     <!-- Add Class Form -->
     <div class="col-md-6 mb-4">
         <div class="card shadow-sm border-0">
@@ -210,6 +213,7 @@ ob_start();
         </div>
     </div>
 
+    <?php endif; ?>
     <!-- Add Section Form -->
     <div class="col-md-6 mb-4">
         <div class="card">

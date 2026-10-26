@@ -14,7 +14,7 @@ const assets = Object.freeze({
     tinymce: '/assets/vendor/tinymce-6.8.6/tinymce.min.js',
     mathjax: '/assets/vendor/mathjax-3.2.2/tex-mml-chtml.js',
     tesseract: 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js',
-    pdfjs: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js',
+    pdfjs: '/assets/js/pdfjs-runtime.mjs',
 });
 let active = null;
 
@@ -41,7 +41,11 @@ async function loadAsset(id, doc) {
         : id === 'mathjax' ? typeof win.MathJax?.typesetPromise === 'function'
         : id === 'tesseract' ? !!win.Tesseract : id === 'pdfjs' ? !!win.pdfjsLib : true;
     if (!path.endsWith('.css') && available()) return;
-    if(id==='mathjax')win.MathJax={tex:{inlineMath:[['\\(','\\)'],['$','$']],displayMath:[['\\[','\\]'],['$$','$$']],processEscapes:true}};
+    if(id==='mathjax')win.MathJax={
+        loader:{load:['ui/safe']},
+        options:{safeOptions:{allow:{URLs:'none',classes:'safe',cssIDs:'none',styles:'safe'}}},
+        tex:{inlineMath:[['\\(','\\)'],['$','$']],displayMath:[['\\[','\\]'],['$$','$$']],processEscapes:true}
+    };
     const url = path.startsWith('/') ? new URL((win.APP_URL || win.location.origin).replace(/\/$/, '') + path).href : path;
     const css = path.endsWith('.css');
     const existing = [...doc.querySelectorAll(css ? 'link[rel="stylesheet"]' : 'script[src]')].find(node => (css ? node.href : node.src).split('?')[0] === url);
@@ -56,8 +60,8 @@ async function loadAsset(id, doc) {
         const failed = () => fail('Required asset unavailable: ');
         const loaded = async () => {
             try {
-                if (!available()) { failed(); return; }
                 if (id === 'mathjax') await win.MathJax.startup?.promise;
+                if (!available()) { failed(); return; }
                 if (settled) return; settled = true; cleanup(); resolve();
             } catch { failed(); }
         };
@@ -66,8 +70,8 @@ async function loadAsset(id, doc) {
         node.addEventListener('error', failed, {once: true});
         if (!existing) {
             node.dataset.erpAsset = id;
-            if (css) { node.rel = 'stylesheet'; node.href = url; }
-            else { node.src = url; node.async = true; }
+            if (css) { node.rel = 'stylesheet'; node.href = url+(['question-language-css','exam-paper-css'].includes(id)?'?v=2026102503':''); }
+            else { if(path.endsWith('.mjs'))node.type='module';node.src = url; node.async = true; }
             doc.head.append(node);
         }
     });

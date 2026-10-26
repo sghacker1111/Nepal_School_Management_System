@@ -25,6 +25,7 @@ function saveExamMarks(PDO $db,int $school,int $user,string $role,array $input):
         $student=$students[$id]??null;
         if(!$student || ($section && $student['section_id']!=$section))throw new InvalidArgumentException('Marks include a student outside the selected school, class, section or academic year.');
         foreach($entries as $subjectId=>$fields){
+            if(!schoolSubjectAssigned($db,$school,(int)$class['id'],(int)$subjectId))throw new InvalidArgumentException('Marks can be entered only for subjects currently assigned to this school class.');
             $scheme=$subjects[$subjectId]??null;if(!$scheme)throw new InvalidArgumentException('This subject is not configured for the selected exam and class.');
             if($role==='teacher'&&!$classTeacher) {
                 $scopes=$allowed[$subjectId]??[];$permitted=false;

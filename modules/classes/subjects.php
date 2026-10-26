@@ -13,7 +13,7 @@ Auth::requireRole(['super_admin', 'school_admin']);
 $db = getDB();
 $error = '';
 $success = '';
-$class_id = isset($_GET['class_id']) ? (int)$_GET['class_id'] : 0;
+$class_id = (int)($_GET['class_id']??$_GET['class']??0);
 
 // Fetch class details
 $school_id = Auth::getSchoolId();
@@ -27,15 +27,20 @@ $class = $stmt->fetch();
 if (!$class) {
     redirect(schoolRouteUrl('modules/classes/index.php'), 'Class not found', 'error');
 }
+if($school_id>0){require __DIR__.'/../../includes/school_offerings_page.php';exit;}
 
 // Handle Toggle Subject Active/Hidden State (Compulsory or Optional)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array($_POST['action'], ['toggle_optional', 'toggle_subject_status'])) {
     $mapping_id = (int)($_POST['mapping_id'] ?? 0);
     $is_active = !empty($_POST['is_active']) ? 1 : 0;
+    $is_ajax = strtolower($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'xmlhttprequest'
+        || ($_POST['is_ajax'] ?? '') === '1';
     
     try {
+        $db->beginTransaction();catalogWriteLock($db,(int)$school_id);
         $stmt = $db->prepare("UPDATE class_subjects SET is_active = ? WHERE id = ? AND class_id = ?");
         $stmt->execute([$is_active, $mapping_id, $class_id]);
+        syncAllSchoolOfferings($db);$db->commit();
         
         $is_ajax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') 
                    || (isset($_POST['is_ajax']) && $_POST['is_ajax'] == '1');
@@ -46,10 +51,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
             exit;
         }
         redirect(schoolRouteUrl('modules/classes/subjects.php') . '?class_id=' . $class_id, 'Subject status updated successfully.');
-    } catch (PDOException $e) {
+    } catch (PDOException|InvalidArgumentException $e) {
+        if($db->inTransaction())$db->rollBack();
         if ($is_ajax) {
             header('Content-Type: application/json');
-            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+            echo json_encode(['success' => false, 'error' => schoolPublicError($e)]);
             exit;
         }
         $error = schoolPublicError($e);
@@ -127,7 +133,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     $success = "Subject mapped successfully.";
                 }
             }
-            if($error)$db->rollBack();else $db->commit();
+            if($error)$db->rollBack();else {syncAllSchoolOfferings($db);$db->commit();}
         } catch (PDOException|InvalidArgumentException $e) {
             if($db->inTransaction())$db->rollBack();
             if($e instanceof InvalidArgumentException)$error=$e->getMessage();
@@ -168,6 +174,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         if(($existingScheme['assessment_method']??'')==='THEMATIC_CONTINUOUS'){$th_credit_hours=$in_credit_hours=$th_full_marks=$th_pass_marks=$in_full_marks=$in_pass_marks=null;$credit_hours=(float)$existingScheme['credit_hours'];}
         $weekly=$_POST['weekly_periods']??'';
         if(!is_scalar($weekly)||($weekly!==''&&(!preg_match('/^\d{1,2}$/',(string)$weekly)||(int)$weekly>50)))throw new InvalidArgumentException('Weekly periods must be a whole number from 0 to 50.');
+        $db->beginTransaction();catalogWriteLock($db,0);
         $stmt = $db->prepare("
             UPDATE class_subjects 
             SET credit_hours = ?, th_credit_hours = ?, in_credit_hours = ?,
@@ -180,9 +187,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $th_full_marks, $th_pass_marks, $in_full_marks, $in_pass_marks,
             $teacher_id_str, $is_optional,$weekly===''?null:(int)$weekly, $mapping_id, $class_id
         ]);
+        syncAllSchoolOfferings($db);$db->commit();
         Auth::logActivity(Auth::getUserId(), 'Edit Class Subject Assignment', 'class_subjects', $mapping_id);
         $success = "Subject mapping updated successfully.";
     } catch (Throwable $e) {
+        if($db->inTransaction())$db->rollBack();
         $error = schoolPublicError($e);
     }
 }

@@ -5,7 +5,7 @@ const {document,window,$,fetch,setTimeout,clearTimeout,ErpUI,Swal,Option,navigat
 $(document).ready(function() {
     var table = $('#subjectTable').DataTable({
         pageLength: 25,
-        order: [[2, 'asc'], [0, 'asc']],
+        order: [],
         language: {
             emptyTable: "No subjects configured."
         },

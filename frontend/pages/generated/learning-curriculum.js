@@ -289,32 +289,43 @@ function chapterSubmit(e) {
     });
 }
 
-function deleteChapter(id) {
+function requestCurriculumDelete(action,id,title,warning,refresh) {
     Swal.fire({
-        title: 'Delete Chapter',
-        text: 'Delete this chapter and its empty topics? Active questions, notes or paper grids will block deletion and show their locations. Deleted entries can be restored.',
+        title,
+        text: warning + ' Active questions, notes or exam grids will block deletion and show their locations. This action archives the unused curriculum entry for recovery.',
         icon: 'warning',
+        input: 'password',
+        inputLabel: 'Confirm with your current password',
+        inputPlaceholder: 'Current password',
+        inputAttributes: {autocomplete: 'current-password', maxlength: '1024'},
+        inputValidator: value => value ? undefined : 'Enter your current password to continue.',
         showCancelButton: true,
-        confirmButtonColor: '#d33',
-        confirmButtonText: 'Yes, delete it'
-    }).then((result) => {
-        if (result.isConfirmed) {
-            $.ajax({
-                url: window.location.pathname,
-                type: 'POST',
-                data: { action: 'delete_chapter', id: id },
-                dataType: 'json',
-                success: function(res) {
-                    if (res.success) {
-                        loadChaptersTree();
-                        Swal.fire('Deleted',res.message,'success');
-                    } else {
-                        CurriculumDeleteUI.showBlocked(res,JSON.parse(config.values["learning-curriculum-value-1"]||'null'));
-                    }
+        confirmButtonColor: '#b42338',
+        confirmButtonText: 'Confirm and delete'
+    }).then(result => {
+        if (!result.isConfirmed) return;
+        $.ajax({
+            url: window.location.pathname,
+            type: 'POST',
+            data: {action, id, current_password: result.value},
+            dataType: 'json',
+            success: res => {
+                if (res.success) {
+                    refresh();
+                    Swal.fire('Deleted', res.message, 'success');
+                } else if (res.blocked) {
+                    CurriculumDeleteUI.showBlocked(res, JSON.parse(config.values["learning-curriculum-value-1"]||'null'));
+                } else {
+                    Swal.fire('Deletion cancelled', res.message || 'The entry was not deleted.', 'error');
                 }
-            });
-        }
+            },
+            error: () => Swal.fire('Deletion not confirmed', 'The request failed. Reload the page and check the curriculum before trying again.', 'error')
+        });
     });
+}
+
+function deleteChapter(id) {
+    requestCurriculumDelete('delete_chapter', id, 'Delete Chapter', 'Delete this chapter and its empty topics?', loadChaptersTree);
 }
 
 // Topic Modals
@@ -382,31 +393,7 @@ function topicSubmit(e) {
 }
 
 function deleteTopic(id, chapterId) {
-    Swal.fire({
-        title: 'Delete Topic',
-        text: 'Delete this unused topic? Active linked content will block deletion and show its locations. You can restore deleted topics.',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#d33',
-        confirmButtonText: 'Yes, delete it'
-    }).then((result) => {
-        if (result.isConfirmed) {
-            $.ajax({
-                url: window.location.pathname,
-                type: 'POST',
-                data: { action: 'delete_topic', id: id },
-                dataType: 'json',
-                success: function(res) {
-                    if (res.success) {
-                        loadTopicsList(chapterId);
-                        Swal.fire('Deleted',res.message,'success');
-                    } else {
-                        CurriculumDeleteUI.showBlocked(res,JSON.parse(config.values["learning-curriculum-value-2"]||'null'));
-                    }
-                }
-            });
-        }
-    });
+    requestCurriculumDelete('delete_topic', id, 'Delete Topic', 'Delete this topic only when it has no linked content?', () => loadTopicsList(chapterId));
 }
 function showDeletedCurriculum(){
     if(!currentClassId||!currentSubjectId){Swal.fire('Choose class and subject','Select a class and subject first.','info');return;}

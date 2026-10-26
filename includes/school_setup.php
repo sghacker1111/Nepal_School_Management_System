@@ -38,6 +38,9 @@ function provisionSchool(PDO $db, int $schoolId): void {
                 $params = [$schoolId,$source,$row[$name]];
                 if ($table==='subjects') $params[]=$row['code'];
                 $lookup->execute($params);
+                // Course identity includes its source row; identical labels/codes may
+                // represent different grade-specific CDC assessment schemes.
+                if($table==='subjects'){$lookup=$db->prepare('SELECT id FROM subjects WHERE school_id=? AND source_id=? ORDER BY id LIMIT 1');$lookup->execute([$schoolId,$source]);}
                 $target = $lookup->fetchColumn();
                 if (!$target) {
                     $row['school_id']=$schoolId;

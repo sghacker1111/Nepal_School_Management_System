@@ -60,9 +60,9 @@ $otherResult=$import($teacher,[$otherHeaders,$otherRow],'html','private','other'
 erpEqual($other['type'],'Short','Written type is preserved');erpEqual($other['options'],null,'No English options on written imports');erpEqual($other['options_np'],null,'No Nepali options on written imports');erpEqual($other['correct_option'],null,'No answer key on written imports');
 foreach(['normal','html'] as $mode)foreach(['mcq','other'] as $kind){
     [$sampleHeaders,$sampleRows]=examImportSample($db,$teacher,$mode,$f['class'],$f['subject'],$kind,$selection);
-    erpEqual(count($sampleHeaders),$kind==='mcq'?22:13,'Chapter-only template column count '.$kind.' '.$mode);
-    erpEqual(count($sampleRows),$kind==='mcq'?2:4,'Separate template example count '.$kind.' '.$mode);
-    if($kind==='other')erpEqual(array_column($sampleRows,3),['Very Short','Short','Long','Difference Between'],'All requested written types shown');
+    erpEqual(count($sampleHeaders),$kind==='mcq'?30:21,'Chapter-only template includes all metadata and bilingual part-answer columns '.$kind.' '.$mode);
+    erpEqual(count($sampleRows),$kind==='mcq'?2:6,'Separate template example count '.$kind.' '.$mode);
+    if($kind==='other')erpEqual(array_column($sampleRows,3),['Very Short','Short','Long','Long','Long','Difference Between'],'All requested written types shown');
 }
 // A metadata mismatch after a good row rejects the entire file without writes.
 $before=(int)$db->query('SELECT COUNT(*) FROM questions')->fetchColumn();

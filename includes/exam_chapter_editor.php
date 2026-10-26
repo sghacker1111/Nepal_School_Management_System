@@ -15,7 +15,7 @@ $chapterValue=static fn($value,$fallback='0')=>is_scalar($value)?(string)$value:
         <td><input class="form-control" type="number" data-chapter-marks name="chapters[<?= $cid ?>][marks]" min="0" max="1000" step="0.01" value="<?= sanitize($chapterValue($allocation['marks']??0)) ?>" aria-label="<?= sanitize($chapter['name']) ?>: total marks"></td></tr>
     <?php endforeach; ?></tbody></table></div>
     <p id="examChapterTotals" class="fw-bold mb-1" role="status" aria-live="polite">Totals are calculated from chapters with a question count above 0.</p>
-    <p class="small text-muted mb-0">Up to 200 questions, 50 selected chapters and 1,000 marks. Questions keep their saved marks; the generator must find an exact match. Select Written + MCQs above for a mixed paper, or use Advanced grid for difficulty and K/U/A/HA quotas.</p>
+    <p class="small text-muted mb-0">Up to 200 questions, 50 selected chapters and 1,000 marks. Questions keep their saved marks; the generator must find an exact match. Select Written + MCQs above for a mixed paper, or use Advanced grid for difficulty and K/U/A/HA/KU quotas.</p>
     <?php endif; ?>
 </section>
 <?php schoolPageModule("external-exam-chapter-editor"); ?>

@@ -16,4 +16,10 @@ export async function copyEditorAssets(root) {
     // Do not copy unused combined SVG/full/speech bundles or Node tooling.
     for(const name of ['tex-mml-chtml.js','core.js','loader.js','startup.js','a11y','adaptors','input','output','sre','ui'])await cp(path.join(math,'es5',name),path.join(mathOut,name),{recursive:true});
     await copyFile(path.join(math,'LICENSE'),path.join(mathOut,'LICENSE.txt'));
+    const pdf=path.join(root,'node_modules/pdfjs-dist'),pdfOut=path.join(output,'pdfjs-6.4.299');
+    await mkdir(pdfOut,{recursive:true});
+    // The upstream compatibility build includes polyfills needed by older browsers.
+    for(const name of ['pdf.min.mjs','pdf.worker.min.mjs'])await copyFile(path.join(pdf,'legacy','build',name),path.join(pdfOut,name));
+    for(const name of ['cmaps','standard_fonts','wasm'])await cp(path.join(pdf,name),path.join(pdfOut,name),{recursive:true});
+    await copyFile(path.join(pdf,'LICENSE'),path.join(pdfOut,'LICENSE.txt'));
 }

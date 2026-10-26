@@ -84,7 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $stmt->execute([Auth::getUserId()]);
     $user = $stmt->fetch();
     
-    if (!$user || !password_verify($password, $user['password'])) {
+    if (!$user || !schoolVerifySensitivePassword($db, (int)Auth::getUserId(), $password)) {
         $error = "Incorrect password. Academic year change cancelled.";
     } else if ($yr_school_id != $school_id) {
         $error = "Unauthorized academic year target.";

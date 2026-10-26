@@ -2,8 +2,7 @@
 export default function(scope,config){
 const {document,window,$,fetch,setTimeout,clearTimeout,ErpUI,Swal,Option,navigator,Blob,URL,Event,FormData,confirm,alert,verifyPasswordAndProceed,confirmDelete,schoolConvertDate,CurriculumDeleteUI,tinymce,MathJax,pdfjsLib,Tesseract,FileReader,Image,NodeFilter,localStorage,URLSearchParams,fixDevanagariInMathJax,renderPaperChapters}=scope;
 
-    // Configure PDF.js worker path
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+    // The version-matched PDF worker is configured by the local module loader.
 
 
     const dropZone = document.getElementById('dropZone');
@@ -11,18 +10,7 @@ const {document,window,$,fetch,setTimeout,clearTimeout,ErpUI,Swal,Option,navigat
     let selectedFilesList = [];
     document.addEventListener('click',event=>{const button=event.target.closest('[data-ocr-remove]');if(button)removeFile(Number(button.dataset.ocrRemove));});
 
-    // Initialize TinyMCE
-    document.addEventListener('DOMContentLoaded', function() {
-        tinymce.init({
-            selector: '#ocrEditor',
-            plugins: 'lists link image table fullscreen code wordcount searchreplace',
-            toolbar: 'undo redo | formatselect | bold italic underline | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | table link image | code fullscreen',
-            height: 550,
-            menubar: true,
-            branding: false,
-            content_style: 'body { font-family:Inter,Helvetica,Arial,sans-serif; font-size:14px }'
-        });
-    });
+    // initializeLearning mounts the same rich-text / TeX editor as Exam Questions.
 
     // Prevent default drag behaviors
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -255,8 +243,11 @@ const {document,window,$,fetch,setTimeout,clearTimeout,ErpUI,Swal,Option,navigat
         // Create an offscreen DOM parser
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = content;
-
-        const rawText = tempDiv.innerText || tempDiv.textContent;
+        // Keep OCR line boundaries, then escape every textual fragment before HTML output.
+        tempDiv.querySelectorAll('br').forEach(node=>node.replaceWith(document.createTextNode('\n')));
+        tempDiv.querySelectorAll('p,div,li,h1,h2,h3,h4').forEach(node=>node.append(document.createTextNode('\n')));
+        const rawText = tempDiv.textContent;
+        const textHtml=value=>{const node=document.createElement('span');node.textContent=value;return node.innerHTML;};
         const lines = rawText.split('\n');
         let formattedHtml = '';
 
@@ -270,11 +261,11 @@ const {document,window,$,fetch,setTimeout,clearTimeout,ErpUI,Swal,Option,navigat
             const subQuestionMatch = line.match(/^(\([a-z]\)|[a-z]\))\s+(.*)$/i);
 
             if (questionMatch) {
-                formattedHtml += `<p style="margin-top: 15px; margin-bottom: 5px;"><strong>${questionMatch[1]}.</strong> ${questionMatch[2]}</p>`;
+                formattedHtml += `<p style="margin-top: 15px; margin-bottom: 5px;"><strong>${textHtml(questionMatch[1])}.</strong> ${textHtml(questionMatch[2])}</p>`;
             } else if (subQuestionMatch) {
-                formattedHtml += `<p style="margin-left: 30px; margin-top: 3px; margin-bottom: 3px;"><strong>${subQuestionMatch[1]}</strong> ${subQuestionMatch[2]}</p>`;
+                formattedHtml += `<p style="margin-left: 30px; margin-top: 3px; margin-bottom: 3px;"><strong>${textHtml(subQuestionMatch[1])}</strong> ${textHtml(subQuestionMatch[2])}</p>`;
             } else {
-                formattedHtml += `<p style="margin-bottom: 5px;">${line}</p>`;
+                formattedHtml += `<p style="margin-bottom: 5px;">${textHtml(line)}</p>`;
             }
         });
 

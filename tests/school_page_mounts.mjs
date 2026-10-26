@@ -14,13 +14,16 @@ for(const page of pages){
  win.CSS??={};win.CSS.escape??=value=>value;
  win.MathJax={startup:{promise:Promise.resolve()},typesetPromise:async()=>{},typesetClear(){}};
  win.pdfjsLib={GlobalWorkerOptions:{}};win.Tesseract={};
- const editors=new Map();win.tinymce={editors:[],get:id=>editors.get(id),triggerSave(){for(const e of editors.values())e.save();},init(config){for(const node of config.target?[config.target]:win.document.querySelectorAll(config.selector)){const e={id:node.id,on(){},getElement:()=>node,getContent:()=>node.value,getWin:()=>({}),save(){},remove(){editors.delete(e.id);win.tinymce.editors=win.tinymce.editors.filter(item=>item!==e);},ui:{registry:{addButton(){}}}};editors.set(e.id,e);win.tinymce.editors.push(e);config.setup?.(e);}return Promise.resolve([...editors.values()]);}};
+ const editors=new Map();win.tinymce={editors:[],get:id=>editors.get(id),triggerSave(){for(const e of editors.values())e.save();},init(config){for(const node of config.target?[config.target]:win.document.querySelectorAll(config.selector)){const e={config,id:node.id,on(){},getElement:()=>node,getContent:()=>node.value,getWin:()=>({}),save(){},remove(){editors.delete(e.id);win.tinymce.editors=win.tinymce.editors.filter(item=>item!==e);},ui:{registry:{addButton(){}}}};editors.set(e.id,e);win.tinymce.editors.push(e);config.setup?.(e);}return Promise.resolve([...editors.values()]);}};
  for(const file of ['assets/js/question-editor.js','assets/js/exam-question-language.js'])win.eval(readFileSync(file,'utf8'));
  win.fetch=async()=>new Response(JSON.stringify({success:true,chapters:[],topics:{},subjects:[]}),{headers:{'Content-Type':'application/json'}});
  const styles={'attendance-css':'attendance','ledger-css':'result-ledger','question-language-css':'exam-question-language','question-bank-css':'exam-question-bank','practice-css':'mcq-practice','exam-paper-css':'exam-paper','accounting-css':'accounting'};
  for(const id of page.config.assets||[])if(styles[id]){const link=win.document.createElement('link');link.rel='stylesheet';link.href=win.APP_URL+'/assets/css/'+styles[id]+'.css';win.document.head.append(link);}
  await mountPage(win.document.querySelector('main'),page.config);
  await new Promise(resolve=>setImmediate(resolve));
+ for(const id of page.config.pageId==='learning-index'?['modalNoteContent']:page.config.pageId==='learning-ocr-scanner'?['ocrEditor']:[]){
+  if(win.document.getElementById(id)){const editor=editors.get(id);assert(editor,'Shared editor mounted for '+id);assert.match(editor.config.toolbar,/math_tex/);assert.match(editor.config.toolbar,/code/);assert.equal(win.document.querySelectorAll('#texModal').length,1);}
+ }
  if(page.config.pageId==='settings-users'){
   const add=win.document.querySelector('[data-erp-click="settings-users-action-0"]');add.click();assert(win.document.getElementById('accountModal').classList.contains('show'),'Account dialog opens without inline scripts');
  }

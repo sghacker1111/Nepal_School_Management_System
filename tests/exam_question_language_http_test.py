@@ -40,6 +40,8 @@ def run():
         assert content.count('>(a)</span>')==1 and content.count('>(b)</span>')==1
         assert r'\frac{1}{2}' in content
       english=card(app.request(route+'?language=en'),qid);nepali=card(app.request(route+'?language=ne'),qid)
+      english_first=card(app.request(route+'?language=both_en'),qid)
+      assert english_first.index(en)<english_first.index(ne)
       assert en in english and ne not in english
       assert ne in nepali and en not in nepali
       if qid==mcq:
@@ -50,15 +52,16 @@ def run():
       edit=app.request(route+f'?view=edit&question_id={qid}&language=ne')
       assert 'matching paragraphs' in edit and 'language=ne' in edit
     generate=dict(action='generate',class_id=f['class'],subject_id=f['subject'],exam_title='Bilingual synthetic exam',config_json=json.dumps(config))
-    for lang in ('both','en','ne'):
+    for lang in ('both','both_en','en','ne'):
       body=app.request(GENERATOR,{**generate,'language':lang})
       assert 'id="examQuestionSheet"' in body and 'id="examPrintLanguage"' in body
       assert f'data-exam-language-view="{lang}">' in body
-      for other in {'both','en','ne'}-{lang}:assert f'data-exam-language-view="{other}" hidden' in body
+      for other in {'both','both_en','en','ne'}-{lang}:assert f'data-exam-language-view="{other}" hidden' in body
       assert 'data-exam-print="answers"' in body and 'data-exam-print="questions"' in body
       sheet=visible_exam_text(body.split('id="examQuestionSheet"')[1].split('id="examAnswersSheet"')[0])
-      assert ('Choose the value.' in sheet)==(lang in ('both','en'))
-      assert ('मान छान्नुहोस्।' in sheet)==(lang in ('both','ne'))
+      assert ('Choose the value.' in sheet)==(lang in ('both','both_en','en'))
+      assert ('मान छान्नुहोस्।' in sheet)==(lang in ('both','both_en','ne'))
+      if lang=='both_en':assert sheet.index('Choose the value.')<sheet.index('मान छान्नुहोस्।')
       assert sheet.count('Choose the value.')<=1 and sheet.count('मान छान्नुहोस्।')<=1
     app.request(GENERATOR,{**generate,'language':'xx'},status=422)
     app.login('student_login');assert 'मान छान्नुहोस्।' in card(app.request(MCQ+'?language=ne'),mcq)

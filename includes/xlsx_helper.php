@@ -6,6 +6,51 @@
  */
 
 class XlsxHelper {
+    private const MAX_FILE_BYTES = 5242880;
+    private const MAX_EXPANDED_BYTES = 33554432;
+    private const MAX_ROWS = 10001;
+    private const MAX_COLUMNS = 128;
+    private const MAX_CELL_BYTES = 100000;
+
+    private static function checkInputFile(string $path): void {
+        if (!is_file($path) || filesize($path) > self::MAX_FILE_BYTES) {
+            throw new InvalidArgumentException('Choose an import file of 5 MB or smaller.');
+        }
+    }
+
+    /** Inspect sizes before inflation. Never expand or resolve XML entities. */
+    private static function validateArchive(ZipArchive $zip): void {
+        if ($zip->numFiles > 1000) throw new InvalidArgumentException('The workbook has too many entries. Split it into smaller imports.');
+        $expanded = 0;
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $stat = $zip->statIndex($i);
+            if (!$stat || $stat['size'] < 0 || $stat['size'] > self::MAX_EXPANDED_BYTES - $expanded) {
+                throw new InvalidArgumentException('The expanded workbook exceeds 32 MB. Split it into smaller imports.');
+            }
+            $expanded += $stat['size'];
+        }
+    }
+
+    private static function readXml(string $xml): SimpleXMLElement {
+        // Reject UTF-16/NUL input too, so declarations cannot evade the check.
+        if (str_contains($xml, "\0") || preg_match('/<!\s*(?:DOCTYPE|ENTITY)\b/i', $xml)) {
+            throw new InvalidArgumentException('The workbook contains unsupported XML declarations.');
+        }
+        $previous = libxml_use_internal_errors(true);
+        try { $parsed = simplexml_load_string($xml, SimpleXMLElement::class, LIBXML_NONET); }
+        finally { libxml_clear_errors(); libxml_use_internal_errors($previous); }
+        if ($parsed === false) throw new InvalidArgumentException('The workbook contains invalid XML.');
+        return $parsed;
+    }
+
+    private static function checkRow(array $row): void {
+        if (count($row) > self::MAX_COLUMNS) throw new InvalidArgumentException('Use at most 128 import columns.');
+        foreach ($row as $cell) {
+            if (strlen((string)$cell) > self::MAX_CELL_BYTES || !mb_check_encoding((string)$cell, 'UTF-8')) {
+                throw new InvalidArgumentException('Use UTF-8 text and keep each cell at most 100,000 bytes.');
+            }
+        }
+    }
 
     /**
      * Read an Excel file (.xlsx) or CSV file (.csv) and return rows as an array of arrays
@@ -15,16 +60,16 @@ class XlsxHelper {
      * @return array Array of rows
      */
     public static function read($filePath, bool $preserveRows = false) {
-        if (!file_exists($filePath)) {
-            throw new Exception("File not found: " . $filePath);
-        }
+        self::checkInputFile($filePath);
 
         // Try reading as XLSX if ZipArchive is supported
         if (class_exists('ZipArchive')) {
             $zip = new ZipArchive();
             if ($zip->open($filePath) === true) {
-                $rows = self::parseXlsxZip($zip, $preserveRows);
-                $zip->close();
+                try {
+                    self::validateArchive($zip);
+                    $rows = self::parseXlsxZip($zip, $preserveRows);
+                } finally { $zip->close(); }
                 if (!empty($rows)) {
                     return $rows;
                 }
@@ -45,7 +90,7 @@ class XlsxHelper {
         if ($ssIndex !== false) {
             $ssXml = $zip->getFromIndex($ssIndex);
             if ($ssXml) {
-                $sxml = @simplexml_load_string($ssXml);
+                $sxml = self::readXml($ssXml);
                 if ($sxml && isset($sxml->si)) {
                     foreach ($sxml->si as $si) {
                         if (isset($si->t)) {
@@ -74,8 +119,8 @@ class XlsxHelper {
             // be sheet1.xml after sheets have been reordered in Excel.
             $workbookXml=$zip->getFromName('xl/workbook.xml');$relationshipXml=$zip->getFromName('xl/_rels/workbook.xml.rels');
             if($workbookXml!==false&&$relationshipXml!==false){
-                $workbook=@simplexml_load_string($workbookXml,SimpleXMLElement::class,LIBXML_NONET);
-                $relationships=@simplexml_load_string($relationshipXml,SimpleXMLElement::class,LIBXML_NONET);
+                $workbook=self::readXml($workbookXml);
+                $relationships=self::readXml($relationshipXml);
                 if($workbook&&$relationships&&isset($workbook->sheets->sheet)){
                     $attributes=$workbook->sheets->sheet[0]->attributes('http://schemas.openxmlformats.org/officeDocument/2006/relationships');$id=(string)($attributes['id']??'');
                     foreach($relationships->Relationship as $relation)if((string)$relation['Id']===$id){
@@ -106,21 +151,28 @@ class XlsxHelper {
             return [];
         }
 
-        $sxml = @simplexml_load_string($sheetXml);
+        $sxml = self::readXml($sheetXml);
         if (!$sxml || !isset($sxml->sheetData)) {
             return [];
         }
 
         $rows = [];
+        $lastRow = 0;
         foreach ($sxml->sheetData->row as $rowElem) {
+            if (!preg_match('/^[1-9][0-9]{0,4}$/', (string)$rowElem['r'])) throw new InvalidArgumentException('Invalid worksheet row number.');
             $rowNum = (int)$rowElem['r'];
+            if ($rowNum > self::MAX_ROWS || $rowNum <= $lastRow) throw new InvalidArgumentException('Keep ordered worksheet rows within the first 10,001 rows.');
+            $lastRow = $rowNum;
             $rowData = [];
             $maxColIdx = 0;
 
             foreach ($rowElem->c as $cell) {
                 $cellRef = (string)$cell['r'];
-                $colLetters = preg_replace('/[0-9]/', '', $cellRef);
+                if (!preg_match('/^([A-Z]{1,3})([1-9][0-9]{0,4})$/', $cellRef, $cellMatch)
+                    || (int)$cellMatch[2] !== $rowNum) throw new InvalidArgumentException('Invalid worksheet cell position.');
+                $colLetters = $cellMatch[1];
                 $colIdx = self::columnLetterToIndex($colLetters);
+                if ($colIdx >= self::MAX_COLUMNS || array_key_exists($colIdx, $rowData)) throw new InvalidArgumentException('Use unique cells within the first 128 columns.');
 
                 if ($colIdx > $maxColIdx) {
                     $maxColIdx = $colIdx;
@@ -151,6 +203,7 @@ class XlsxHelper {
 
                 $rowData[$colIdx] = trim($val);
             }
+            self::checkRow($rowData);
 
             // Fill gaps with empty strings up to max column
             $completeRow = [];
@@ -209,6 +262,7 @@ class XlsxHelper {
      * Read CSV file with auto-delimiter detection and UTF-8 BOM handling
      */
     public static function readCsv($filePath, bool $preserveRows = false) {
+        self::checkInputFile($filePath);
         $rows = [];
         $content = file_get_contents($filePath);
         if ($content === false) {
@@ -252,6 +306,7 @@ class XlsxHelper {
         while (($data = fgetcsv($tempHandle, 0, $delimiter, '"', '')) !== false) {
             // Trim all cell values
             $data = array_map(static fn($value)=>trim((string)($value??'')), $data);
+            self::checkRow($data);
             $hasContent = false;
             foreach ($data as $d) {
                 if ($d !== '') {
@@ -261,6 +316,10 @@ class XlsxHelper {
             }
             if ($hasContent || $preserveRows) {
                 $rows[] = $data;
+                if (count($rows) > self::MAX_ROWS) {
+                    fclose($tempHandle);
+                    throw new InvalidArgumentException('Import at most 10,000 data rows plus headings.');
+                }
             }
         }
 
@@ -350,7 +409,7 @@ class XlsxHelper {
                   . '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">';
         if($importLayout){
             $sheetXml.='<sheetViews><sheetView workbookViewId="0" showGridLines="0"><pane xSplit="2" ySplit="1" topLeftCell="C2" activePane="bottomRight" state="frozen"/></sheetView></sheetViews><cols>';
-            foreach($headers as $i=>$header){$width=$i>=10&&$i<=21?44:match($i){0=>16,1=>24,2,3=>28,4=>22,5,6=>18,7=>20,8=>12,9=>20,default=>18};$sheetXml.='<col min="'.($i+1).'" max="'.($i+1).'" width="'.$width.'" customWidth="1"/>';}
+            foreach($headers as $i=>$header){$width=preg_match('/^(?:Question \(|Statement \(|(?:Subquestion |Model )?Answer \(|Option [ABCD] \()/',$header)?44:match($header){'Class'=>16,'Subject'=>24,'Chapter','Topic'=>28,'Type','Cognitive Level','Required Minutes'=>22,'Marks'=>12,default=>18};$sheetXml.='<col min="'.($i+1).'" max="'.($i+1).'" width="'.$width.'" customWidth="1"/>';}
             $sheetXml.='</cols>';
         }
         $sheetXml.='<sheetData>';
@@ -516,6 +575,8 @@ class XlsxHelper {
             ]
         ];
 
+        $headers[]='Model Answer (English)';$headers[]='Model Answer (Nepali)';
+        foreach($rows as &$row){$correct=$row[15];$index=7+2*(ord($correct)-ord('A'));$row[]='Correct answer: '.$row[$index];$row[]='सही उत्तर: '.$row[$index+1];}unset($row);
         return ['headers' => $headers, 'rows' => $rows];
     }
 
@@ -529,8 +590,6 @@ class XlsxHelper {
         }
         unset($header);
         if ($type === 'mcq') {
-            $sample['headers'][] = 'Model Answer (English) HTML';
-            $sample['headers'][] = 'Model Answer (Nepali) HTML';
             $sample['rows'] = [
                 ['Class 10', 'Mathematics', 'Algebra', 'Quadratic Equations', 'Application (A)',
                  '<p>Solve <strong>the equation</strong> \\(x^2=4\\). What is the positive root?</p>',

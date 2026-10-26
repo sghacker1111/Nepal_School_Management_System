@@ -16,7 +16,7 @@
         if (new URL(options.url, location.href).origin === location.origin) xhr.setRequestHeader('X-CSRF-Token', window.CSRF_TOKEN || '');
     });
     const addToken = form => {
-        if (form.method.toLowerCase() !== 'post' || new URL(form.action, location.href).origin !== location.origin) return;
+        if ((form.getAttribute('method')||'get').toLowerCase() !== 'post' || new URL(form.getAttribute('action')||location.href, location.href).origin !== location.origin) return;
         let token = form.querySelector('[name="csrf_token"]');
         if (!token) { token = document.createElement('input'); token.type = 'hidden'; token.name = 'csrf_token'; form.append(token); }
         token.value = window.CSRF_TOKEN || '';

@@ -10,7 +10,15 @@ export function pageLibraries(page,context,cleanups){
   if(key==='triggerSave')return()=>{if(!signal.aborted)for(const editor of editorInstances(win))if(owns(editor))editor.save();};
   if(key==='init')return options=>{
    current();const nodes=options.target?[options.target]:[...page.querySelectorAll(options.selector)];
-   return Promise.all(nodes.map(node=>target.init({...options,selector:undefined,target:node,setup(editor){if(signal.aborted){editor.remove?.();return;}options.setup?.(editor);}}))).then(groups=>{const editors=groups.flat();if(signal.aborted)editors.forEach(editor=>editor.remove?.());return editors;});
+   const plugins=typeof options.plugins==='string'?options.plugins.split(/\s+/).filter(name=>name!=='media').join(' '):options.plugins;
+   return Promise.all(nodes.map(node=>target.init({...options,plugins,invalid_elements:'script,style,svg,math,iframe,object,embed,video,audio,source,form,input,button,textarea,select,meta,link,base',selector:undefined,target:node,setup(editor){
+    if(signal.aborted){editor.remove?.();return;}
+    editor.on?.('BeforeSetContent PastePreProcess',event=>{
+     if(!win.SchoolEditorSecurity?.sanitize)throw new Error('Editor security could not load. Reload the page.');
+     event.content=win.SchoolEditorSecurity.sanitize(event.content);
+    });
+    options.setup?.(editor);
+   }}))).then(groups=>{const editors=groups.flat();if(signal.aborted)editors.forEach(editor=>editor.remove?.());return editors;});
   }
   return target[key];
  }});
@@ -27,7 +35,12 @@ export function pageLibraries(page,context,cleanups){
  }});
  const pdfjsLib=win.pdfjsLib&&new Proxy(win.pdfjsLib,{get(target,key){
   if(key!=='getDocument')return target[key];
-  return(...args)=>{current();const task=target.getDocument(...args);cleanups.push(()=>Promise.resolve(task.destroy()).catch(()=>{}));return new Proxy(task,{get(loading,name){
+  return(source)=>{
+   current();
+   if(!source||typeof source!=='object'||!Object.hasOwn(source,'data'))throw new Error('Choose a local PDF file.');
+   const base=(win.APP_URL||win.location.origin).replace(/\/$/,'')+'/assets/vendor/pdfjs-6.4.299/';
+   const task=target.getDocument({...source,isEvalSupported:false,enableXfa:false,cMapUrl:base+'cmaps/',cMapPacked:true,standardFontDataUrl:base+'standard_fonts/',wasmUrl:base+'wasm/'});
+   cleanups.push(()=>Promise.resolve(task.destroy()).catch(()=>{}));return new Proxy(task,{get(loading,name){
    if(name==='promise')return loading.promise.then(pdf=>{current();return new Proxy(pdf,{get(document,key){if(key==='getPage')return async(...args)=>{current();return document.getPage(...args);};const value=document[key];return typeof value==='function'?value.bind(document):value;}});});
    const value=loading[name];return typeof value==='function'?value.bind(loading):value;
   }});};

@@ -1,11 +1,12 @@
 <?php
+require_once __DIR__.'/school_offerings.php';
 /** One assignment policy for learning editors, selectors and marks entry. */
 function teacherAssignmentContains($value,int $teacher):bool {
     return in_array((string)$teacher,array_map('trim',explode(',',(string)$value)),true);
 }
 function teacherTeachingAssignments(PDO $db,int $school,int $teacher):array {
     $q=$db->prepare("SELECT id FROM users WHERE id=? AND school_id=? AND role='teacher' AND status=1");$q->execute([$teacher,$school]);if(!$q->fetchColumn())return [];
-    $q=$db->prepare('SELECT cs.* FROM class_subjects cs JOIN classes c ON c.id=cs.class_id AND c.school_id=cs.school_id JOIN subjects s ON s.id=cs.subject_id AND s.school_id=cs.school_id WHERE cs.school_id=? AND (cs.is_active=1 OR cs.is_optional=1) AND c.is_active=1 AND COALESCE(s.is_hidden,0)=0');$q->execute([$school]);
+    $q=$db->prepare('SELECT cs.* FROM class_subjects cs JOIN classes c ON c.id=cs.class_id AND c.school_id=cs.school_id JOIN subjects s ON s.id=cs.subject_id AND s.school_id=cs.school_id WHERE cs.school_id=? AND cs.is_active=1 AND c.is_active=1 AND COALESCE(s.is_hidden,0)=0');$q->execute([$school]);
     return array_values(array_filter($q->fetchAll(),static fn($row)=>teacherAssignmentContains($row['teacher_id'],$teacher)));
 }
 function teacherOwnsSubject(PDO $db,int $school,int $teacher,int $class,int $subject,?int $section=null):bool {
@@ -20,7 +21,7 @@ function learningClasses(PDO $db,int $school,string $role,int $actor):array {
 }
 function learningSubjects(PDO $db,int $school,int $class,string $role,int $actor):array {
     if(!$class)return [];
-    $q=$db->prepare('SELECT DISTINCT s.*,cs.is_optional AS mapping_optional FROM subjects s JOIN class_subjects cs ON cs.subject_id=s.id AND cs.school_id=s.school_id JOIN classes c ON c.id=cs.class_id AND c.school_id=cs.school_id WHERE s.school_id=? AND cs.class_id=? AND (cs.is_active=1 OR cs.is_optional=1) AND c.is_active=1 AND COALESCE(s.is_hidden,0)=0 ORDER BY s.name_en,s.code,s.id');$q->execute([$school,$class]);$rows=$q->fetchAll();
+    $q=$db->prepare('SELECT DISTINCT s.*,cs.is_optional AS mapping_optional FROM subjects s JOIN class_subjects cs ON cs.subject_id=s.id AND cs.school_id=s.school_id JOIN classes c ON c.id=cs.class_id AND c.school_id=cs.school_id WHERE s.school_id=? AND cs.class_id=? AND cs.is_active=1 AND c.is_active=1 AND COALESCE(s.is_hidden,0)=0 AND '.schoolSubjectAssignedSql('cs.school_id','cs.class_id','cs.subject_id').' ORDER BY s.name_en,s.code,s.id');$q->execute([$school,$class]);$rows=$q->fetchAll();
     if($role==='student'){
         require_once __DIR__.'/student_learning.php';$student=studentLearningRecord($db,$school,$actor);
         if((int)$student['class_id']!==$class)return [];
@@ -79,12 +80,12 @@ function validateTeacherLearningRequest(PDO $db,int $school,string $module,strin
     foreach($scopes as [$class,$subject]){
         if($role==='teacher'&&!teacherOwnsSubject($db,$school,$teacher,$class,$subject))throw new InvalidArgumentException('Teachers may use only their assigned class subjects.');
         if(in_array($file,['questions.php','paper_generator.php','question_grid.php','index.php'],true)){
-            $q=$db->prepare('SELECT cs.id FROM class_subjects cs JOIN subjects s ON s.id=cs.subject_id AND s.school_id=cs.school_id WHERE cs.school_id=? AND cs.class_id=? AND cs.subject_id=? AND (cs.is_active=1 OR cs.is_optional=1) AND COALESCE(s.is_hidden,0)=0');
+            $q=$db->prepare('SELECT cs.id FROM class_subjects cs JOIN subjects s ON s.id=cs.subject_id AND s.school_id=cs.school_id WHERE cs.school_id=? AND cs.class_id=? AND cs.subject_id=? AND cs.is_active=1 AND COALESCE(s.is_hidden,0)=0');
             $q->execute([$school,$class,$subject]);if(!$q->fetchColumn())throw new InvalidArgumentException('Choose a visible subject mapped to this class.');
         }
         // A grid must use an active class mapping, not a random same-school catalogue subject.
         if($file==='specification_grids.php'&&$data&&in_array($action,['add','edit'],true)){
-            $q=$db->prepare('SELECT id FROM class_subjects WHERE school_id=? AND class_id=? AND subject_id=? AND (is_active=1 OR is_optional=1)');$q->execute([$school,$class,$subject]);if(!$q->fetchColumn())throw new InvalidArgumentException('Choose an active subject mapped to the selected class.');
+            $q=$db->prepare('SELECT id FROM class_subjects WHERE school_id=? AND class_id=? AND subject_id=? AND is_active=1');$q->execute([$school,$class,$subject]);if(!$q->fetchColumn())throw new InvalidArgumentException('Choose an active subject mapped to the selected class.');
         }
     }
 }

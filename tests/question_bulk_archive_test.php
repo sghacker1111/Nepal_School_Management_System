@@ -1,0 +1,32 @@
+<?php
+require_once __DIR__.'/test_support.php';['db'=>$db,'fixture'=>$f]=erpTestFixture();
+require_once __DIR__.'/learning_sharing_fixture.php';$f=learningSharingFixture($db,$f);
+require_once __DIR__.'/../includes/learning_content_service.php';
+$owner=learningActor($db,$f['ids']['teacher']);$password='TestPassword123!';
+$make=function(string $bank='learning',string $type='Short',?int $creator=null)use($db,$f,$owner):int{
+    $db->prepare('INSERT INTO questions(school_id,class_id,subject_id,chapter,type,question_text,created_by_user_id,bank_kind,visibility) VALUES(1,?,?,?,?,?,?,?,?)')->execute([$f['class'],$f['subject'],'Bulk archive QA',$type,'Recoverable question',$creator??$owner['id'],$bank,'public']);return (int)$db->lastInsertId();
+};
+$a=$make();$b=$make();$other=$make('learning','Short',$f['ids']['co_teacher']);$exam=$make('exam');$mcq=$make('exam','MCQ');
+$before=$db->query('SELECT * FROM questions ORDER BY id')->fetchAll(PDO::FETCH_ASSOC);
+foreach([null,[],(string)$a,[$a,'0'],[$a,[$b]],array_fill(0,101,$a)] as $bad)erpReject(fn()=>learningBulkArchiveQuestions($db,$owner,$bad,$password),'Malformed/bounded selection rejected');
+erpReject(fn()=>learningBulkArchiveQuestions($db,$owner,[$a,$b],'wrong'),'Password required');
+$key=hash('sha256','reauth|'.$owner['id']);$q=$db->prepare('SELECT COUNT(*) FROM login_attempts WHERE identity_key=?');$q->execute([$key]);erpEqual((int)$q->fetchColumn(),1,'Failed password remains rate-limited outside rollback');
+foreach([[$a,$other],[$a,$exam],[$a,999999999]] as $bad)erpReject(fn()=>learningBulkArchiveQuestions($db,$owner,$bad,$password),'Entire batch rejected on invalid ownership, bank or record');
+erpReject(fn()=>learningBulkArchiveQuestions($db,$owner,[$exam,$mcq],$password,'exam','written'),'Other exam section rejected');
+erpReject(fn()=>learningBulkArchiveQuestions($db,learningActor($db,$f['ids']['other_admin']),[$a],$password),'Foreign school denied');
+erpReject(fn()=>learningBulkArchiveQuestions($db,learningActor($db,$f['ids']['school_admin']),[$a],$password),'School admin cannot bulk delete another creator');
+$readonly=$owner;$readonly['read_only']=true;erpReject(fn()=>learningBulkArchiveQuestions($db,$readonly,[$a],$password),'Read-only preview denied');
+erpEqual($db->query('SELECT * FROM questions ORDER BY id')->fetchAll(PDO::FETCH_ASSOC),$before,'All denied batches preserve every question');
+erpEqual(learningBulkArchiveQuestions($db,$owner,[$b,$a,$a],$password),2,'Duplicate selections are archived once');
+$q=$db->prepare('SELECT COUNT(*) FROM questions WHERE id IN (?,?) AND archived_at IS NOT NULL');$q->execute([$a,$b]);erpEqual((int)$q->fetchColumn(),2,'Archive preserves both records');
+$q=$db->prepare("SELECT COUNT(*) FROM activity_logs WHERE action LIKE 'Bulk archive question%' AND record_id IN (?,?)");$q->execute([$a,$b]);erpEqual((int)$q->fetchColumn(),2,'Audit per selected question');
+erpEqual(count(learningContentList($db,$owner,'questions',['record_id'=>(string)$a],'bank')),0,'Archived question removed from active bank');
+erpReject(fn()=>learningBulkArchiveQuestions($db,$owner,[$a,$other],$password),'Already archived batch rejected');
+learningSetArchived($db,$owner,'questions',$a,false);erpEqual(count(learningContentList($db,$owner,'questions',['record_id'=>(string)$a],'bank')),1,'Archived question can be restored');
+erpEqual(learningBulkArchiveQuestions($db,$owner,[$exam],$password,'exam','written'),1,'Exam written bulk archive supported');
+erpEqual(learningBulkArchiveQuestions($db,$owner,[$mcq],$password,'exam','mcq'),1,'Exam MCQ bulk archive supported');
+for($i=0;$i<10;$i++)erpReject(fn()=>learningBulkArchiveQuestions($db,$owner,[$a],'wrong'),'Repeated password failure rejected');
+erpReject(fn()=>learningBulkArchiveQuestions($db,$owner,[$a],$password),'Correct password cannot bypass temporary lockout');
+$q=$db->prepare('SELECT archived_at FROM questions WHERE id=?');$q->execute([$a]);erpEqual($q->fetchColumn(),null,'Lockout leaves question active');
+erpCheck(!str_contains(json_encode($db->query('SELECT * FROM activity_logs')->fetchAll(PDO::FETCH_ASSOC)),$password),'Passwords are not written to audit logs');
+echo 'Question bulk archive passed: '.$GLOBALS['erp_checks'].' assertions; password verification, persistent lockout, all-or-nothing permissions, bank/section boundaries, audit and restoration.'.PHP_EOL;

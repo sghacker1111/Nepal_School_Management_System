@@ -8,7 +8,7 @@ require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/catalog_validation.php';
 
-Auth::requireRole(['super_admin', 'school_admin']);
+Auth::requireRole('super_admin');
 
 $db = getDB();
 $school_id = Auth::getSchoolId();
@@ -101,6 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             try {
                 $db->beginTransaction();
+                require_once __DIR__.'/../../includes/school_offerings.php';syncAllSchoolOfferings($db);
                 catalogWriteLock($db,(int)$school_id);
                 $mappedClasses=$db->prepare('SELECT DISTINCT class_id FROM class_subjects WHERE school_id=? AND subject_id=?');$mappedClasses->execute([$school_id,$id]);
                 foreach(array_unique([$class_id,...$mappedClasses->fetchAll(PDO::FETCH_COLUMN)]) as $mappedClass)validateUniqueClassSubject($db,(int)$school_id,(int)$mappedClass,['name_en'=>$name_en,'name_np'=>$name_np,'code'=>$code],$id);
@@ -147,6 +148,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ]);
                 }
                 
+                require_once __DIR__.'/../../includes/school_offerings.php';syncAllSchoolOfferings($db);
                 $db->commit();
                 
                 Auth::logActivity(Auth::getUserId(), 'Edit Subject and Class Mapping', 'subjects', $id);

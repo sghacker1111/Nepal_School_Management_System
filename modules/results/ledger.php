@@ -91,7 +91,7 @@ if ($exam_id && $class_id) {
         ORDER BY s.type DESC, s.name_en ASC
     ");
     $stmt->execute([$exam_id, $class_id]);
-    $subjects = erpSortSubjects($stmt->fetchAll());
+    $subjects = erpSortSubjects(schoolExamOfferingRows($db,(int)$school_id,$exam,$stmt->fetchAll()));
     $all_subjects=$subjects;
     if($subject_id){
         $subjects=array_values(array_filter($subjects,static fn($subject)=>(int)$subject['subject_id']===$subject_id));

@@ -73,7 +73,7 @@ function mathSource(span) {
 }
 
 function init(selector,root=document,context={}){
- editorScopes.get(root)?.();
+ editorScopes.get(root)?.dispose();
  const owned=new Set(),removers=[];let disposed=false;
  const listen=(node,event,handler)=>{node.addEventListener(event,handler);removers.push(()=>node.removeEventListener?.(event,handler));};
  const dispose=()=>{
@@ -81,7 +81,7 @@ function init(selector,root=document,context={}){
   owned.forEach(editor=>editor.remove?.());owned.clear();texModalObj?.dispose?.();
   activeEditorId='';activeTexSpan=null;activeTexBookmark=null;editorScopes.delete(root);
  };
- editorScopes.set(root,dispose);context.signal?.addEventListener('abort',dispose,{once:true});
+ const state={dispose,refresh:()=>{}};editorScopes.set(root,state);context.signal?.addEventListener('abort',dispose,{once:true});
  context.onBeforeSubmit?.(form=>{for(const editor of owned)if(editor.getElement?.()?.form===form)editor.save();});
  const start=()=>{
     if(disposed)return;
@@ -102,17 +102,18 @@ function init(selector,root=document,context={}){
 
     // Initialize TinyMCE editors
     if (window.tinymce) {
-        window.tinymce.init({
+        const editorConfig={
             selector:root===document?selector:'#'+CSS.escape(root.id)+' '+selector.split(',').join(',#'+CSS.escape(root.id)+' '),
             height: 420,
             min_height: 380,
             toolbar_mode: 'wrap',
             font_family_formats: 'Arial=arial,helvetica,sans-serif; Kokila=Kokila,Noto Sans Devanagari,Kalimati,sans-serif; Courier New=courier new,courier; Georgia=georgia,palatino; Tahoma=tahoma,arial,helvetica,sans-serif; Times New Roman=times new roman,times; Trebuchet MS=trebuchet ms,geneva; Verdana=verdana,geneva',
-            plugins: 'advlist autolink lists link image charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime media table wordcount',
+            plugins: 'advlist autolink lists link image charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime table wordcount',
             toolbar: 'undo redo | blocks fontfamily fontsize | bold italic underline forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | table | math_tex | fullscreen code',
             branding: false,
             promotion: false,
             extended_valid_elements: 'span[class|style|lang|title|contenteditable|data-tex|data-mode]',
+            invalid_elements: 'script,style,svg,math,iframe,object,embed,video,audio,source,form,input,button,textarea,select,meta,link,base',
             // Styling inside editor iframe to support Arial for English, Kokila for Nepali, and locked TeX equations
             content_style: `
                 @font-face {
@@ -171,10 +172,16 @@ function init(selector,root=document,context={}){
                 }
             `,
             setup: function (editor) {
-                if(disposed){editor.remove?.();return;}owned.add(editor);
+                if(disposed){editor.remove?.();return;}owned.add(editor);editor.on('remove',()=>owned.delete(editor));
+                if(editor.getElement()?.closest('#questionPartsPanel')){editor.options?.set('height',260);editor.options?.set('min_height',200);editor.options?.set('menubar',false);editor.options?.set('toolbar','undo redo | bold italic underline | table math_tex | code fullscreen');}
                 // When content is loaded, wrap LaTeX with span so it can render inside iframe
                 editor.on('BeforeSetContent', function (e) {
-                    e.content = convertLatexToSpan(e.content);
+                    if(!window.SchoolEditorSecurity?.sanitize)throw new Error('Editor security could not load. Reload the page.');
+                    e.content = convertLatexToSpan(window.SchoolEditorSecurity.sanitize(e.content));
+                });
+                editor.on('PastePreProcess', function (e) {
+                    if(!window.SchoolEditorSecurity?.sanitize)throw new Error('Editor security could not load. Reload the page.');
+                    e.content = window.SchoolEditorSecurity.sanitize(e.content);
                 });
 
                 // When retrieving content, strip MathJax HTML markup and restore clean LaTeX tags
@@ -194,6 +201,7 @@ function init(selector,root=document,context={}){
                 // Load MathJax inside the editor iframe dynamically and configure English/Nepali base font
                 editor.on('init', function () {
                     if(disposed){editor.remove?.();return;}
+                    editor.getElement()?.dispatchEvent(new CustomEvent('erp:editor-ready', {bubbles:true}));
                     const doc = editor.getDoc();
                     const win = editor.getWin();
 
@@ -215,6 +223,8 @@ function init(selector,root=document,context={}){
                     const configScript = doc.createElement('script');
                     configScript.text = `
                         window.MathJax = {
+                            loader: {load: ['ui/safe']},
+                            options: {safeOptions: {allow: {URLs: 'none', classes: 'safe', cssIDs: 'none', styles: 'safe'}}},
                             tex: {
                                 inlineMath: [['\\\\(', '\\\\)'], ['$', '$']],
                                 displayMath: [['\\\\[', '\\\\]'], ['$$', '$$']],
@@ -256,6 +266,7 @@ function init(selector,root=document,context={}){
                 editor.on('SetContent', typesetEditorMath);
                 editor.on('change keyup', function () {
                     editor.save(); // Sync back to textarea
+                    editor.getElement()?.dispatchEvent(new Event('input', {bubbles:true}));
                     typesetEditorMath();
                 });
 
@@ -278,7 +289,8 @@ function init(selector,root=document,context={}){
                     }
                 });
             }
-        });
+        };
+        state.refresh=()=>{if(!disposed)return window.tinymce.init(editorConfig);};state.refresh();
     }
  };
  if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',start,{once:true});removers.push(()=>document.removeEventListener?.('DOMContentLoaded',start));}else start();
@@ -438,5 +450,5 @@ function insertTexIntoEditor() {
     }
 }
 
-window.SchoolQuestionEditor={init};
+window.SchoolQuestionEditor={init,refresh(root=document){return editorScopes.get(root)?.refresh();}};
 })();

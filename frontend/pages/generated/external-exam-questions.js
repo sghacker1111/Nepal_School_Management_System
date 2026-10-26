@@ -20,7 +20,7 @@ const module=undefined; // Browser-only build; retain upstream CommonJS unit-tes
   }
   function syncTopic(){if(!field('examTopic'))return;const o=field('examTopic').selectedOptions[0];field('examLocalTopic').value=o?.dataset.scope==='local'?o.value:'';field('examCatalogTopic').value=o?.dataset.scope==='shared'?o.value:'';}
   async function loadCatalog(chapter='',topic=''){
-   const current=++version;field('examChapter').replaceChildren(new Option('Loading chapters…',''));field('examChapter').disabled=true;topics();
+   const current=++version;field('examChapter').replaceChildren(new Option(chapter||'Loading chapters…',chapter));field('examChapter').disabled=true;topics(topic);
    if(!field('examSubject').value){field('examChapter').replaceChildren(new Option('Choose subject first',''));return;}
    try{const url=new URL(window.location.pathname,window.location.origin);url.search=new URLSearchParams({action:'catalog',class_id:field('examClass').value,subject_id:field('examSubject').value});const r=await fetch(url,{headers:{Accept:'application/json'}});if(!r.ok)throw new Error('Catalog unavailable. Reload the page.');const loaded=await r.json();if(current!==version)return;catalog=loaded;field('examChapter').replaceChildren(new Option('Choose chapter',''));loaded.chapters.forEach(c=>field('examChapter').add(new Option(c.name,c.name)));field('examChapter').disabled=false;field('examChapter').value=chapter;topics(topic);}
    catch(e){if(current===version){field('examChapter').replaceChildren(new Option(e.message,''));}}

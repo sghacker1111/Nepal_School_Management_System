@@ -22,7 +22,7 @@ erpEqual($db->query('SELECT credit_hours FROM class_subjects WHERE class_id='.$c
 erpReject(fn()=>saveRoutineRequirements($db,1,$class['id'],[$f['otherClass']+9999=>['weekly'=>5]]),'Cross-class mapping rejected');
 $db->prepare("INSERT INTO subjects(school_id,name_en,code,type,is_hidden) VALUES(1,'Synthetic Optional','SYN-OPT','optional',0)")->execute();$opt=(int)$db->lastInsertId();
 $db->prepare('INSERT INTO class_subjects(school_id,class_id,subject_id,teacher_id,is_optional,is_active) VALUES(1,?,?,?,1,0)')->execute([$class['id'],$opt,$teacher]);
-erpCheck(in_array($opt,array_column(learningSubjects($db,1,$class['id'],'teacher',$teacher),'id')),'Assigned optional appears even when inactive elective mapping');
+erpCheck(!in_array($opt,array_column(learningSubjects($db,1,$class['id'],'teacher',$teacher),'id')),'Inactive school elective is excluded even when its teacher remains assigned');
 erpEqual(learningSubjects($db,1,0,'school_admin',$teacher),[],'Class required before subjects');
 erpReject(fn()=>validateTeacherLearningRequest($db,1,'learning','questions.php',['action_quick_add_class'=>1],[]),'Removed quick class route rejected');
 $other=(int)$db->query('SELECT subject_id FROM class_subjects WHERE class_id='.$class['id'].' AND subject_id<>'.$subject.' AND subject_id<>'.$opt.' LIMIT 1')->fetchColumn();

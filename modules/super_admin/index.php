@@ -8,6 +8,8 @@ require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
 
 Auth::requireRole('super_admin');
+require_once __DIR__.'/../../includes/runtime_security.php';
+$runtimeSecurity = schoolRuntimeSecurity();
 
 $db = getDB();
 
@@ -34,6 +36,20 @@ $activePage = 'super_admin_dashboard';
 
 ob_start();
 ?>
+
+<?php if(!schoolBackupCodes($db,(int)Auth::getUserId())): ?><div class="alert alert-warning" role="status"><strong>Set up administrator recovery.</strong> Generate and save backup codes before you need to recover a locked account. <a href="<?= schoolRouteUrl('modules/auth/security.php') ?>">Open Account security</a></div><?php endif; ?>
+<div class="alert <?= $runtimeSecurity['patched'] ? 'alert-info' : 'alert-danger' ?>" role="status">
+    <strong>PHP security:</strong> this web server reports PHP <?= sanitize($runtimeSecurity['version']) ?>.
+    <?php if ($runtimeSecurity['patched']): ?>
+        Its version meets the October 21, 2026 upstream security baseline.
+    <?php else: ?>
+        The October 21, 2026 critical PHP fixes are not confirmed by this version.
+        Ask your hosting provider to install PHP 8.2.35, 8.3.36, 8.4.27 or 8.5.12 or newer in the same supported branch,
+        or provide confirmation of both CVE-2026-109618 and CVE-2026-109619 backports, and restart all PHP workers.
+        Updating this application does not patch the PHP engine.
+    <?php endif; ?>
+    <a href="<?= sanitize($runtimeSecurity['advisory']) ?>" target="_blank" rel="noopener noreferrer">Official advisory</a>
+</div>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="fas fa-user-shield text-danger"></i> Control Center <small class="fs-6 text-muted">Global Administration</small></h2>

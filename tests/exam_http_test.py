@@ -57,7 +57,7 @@ with tempfile.TemporaryDirectory(prefix='erp-exam-http-') as tmp:
         target=db.execute("SELECT id FROM exams WHERE name='Third Terminal BS'").fetchone()[0]
         assert db.execute('SELECT start_date,end_date,issue_date,date_calendar,date_format FROM exams WHERE id=?',(target,)).fetchone()==('2026-10-10','2026-10-11','2026-10-10','both','ymd')
         body=request('/modules/exams/view.php?id='+str(target),{'initialize_defaults':'1','init_class_id':cid});assert 'Initialized' in body
-        assert db.execute('SELECT COUNT(*) FROM exam_subjects WHERE exam_id=? AND class_id=? AND subject_id=?',(target,cid,optional)).fetchone()[0]==1,'Visible inactive elective must initialize exactly once in the selected class'
+        assert db.execute('SELECT COUNT(*) FROM exam_subjects WHERE exam_id=? AND class_id=? AND subject_id=?',(target,cid,optional)).fetchone()[0]==0,'Unassigned elective must not initialize in an exam'
         assert db.execute('SELECT is_active FROM class_subjects WHERE class_id=? AND subject_id=?',(cid,optional)).fetchone()[0]==0,'Mapping must not certify/activate an offering'
         symbols=f'/modules/exams/symbols.php?exam_id={target}&class_id={cid}'
         request(symbols,{'symbol_mode':'alphabetical','first_symbol':'3001'},expected=419,csrf=False)

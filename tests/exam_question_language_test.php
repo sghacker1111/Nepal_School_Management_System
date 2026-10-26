@@ -11,6 +11,9 @@ langCheck(substr_count($html,'>(a)</span>')===1&&substr_count($html,'>(b)</span>
 langCheck(str_contains($html,'lang="en">(<b>Consider'),'English translation is in parentheses, preserving bold');
 langCheck(substr_count($html,'\\(n(A)\\)')===2,'Both equations remain portable TeX');
 $english=examQuestionRich($en,$ne,'en');$nepali=examQuestionRich($en,$ne,'ne');
+$englishFirst=examQuestionRich($en,$ne,'both_en');
+langCheck(strpos($englishFirst,'Consider')<strpos($englishFirst,'समुच्चय')&&strpos($englishFirst,'Explain')<strpos($englishFirst,'नतिजा'),'English-first also supports legacy questions and model answers');
+langCheck(str_contains($englishFirst,'lang="ne">('),'The second language remains the translation in ordinary prose');
 langCheck(str_contains($english,'Consider')&&!str_contains($english,'समुच्चय'),'English only has no Nepali question');
 langCheck(str_contains($nepali,'समुच्चय')&&!str_contains($nepali,'Consider'),'Nepali only has no English question');
 langCheck(!str_contains($english,'lang="en">('),'Single language has no translation parentheses');

@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__.'/learning_content.php';
 require_once __DIR__.'/question_import.php';
+require_once __DIR__.'/question_parts.php';
+require_once __DIR__.'/password_security.php';
 
 function learningWrite(PDO $db,callable $work):mixed {return curriculumWrite($db,$work);}
 function learningId(mixed $value):int {if(!is_scalar($value)||!preg_match('/^[1-9][0-9]*$/',(string)$value))throw new InvalidArgumentException('Choose a valid record.');return (int)$value;}
@@ -20,9 +22,9 @@ function learningMutableRecord(PDO $db,array $actor,string $kind,int $id,string 
     if(!learningCanEdit($db,$actor,$record))throw new InvalidArgumentException('Only the creator may change this content, while assigned to its subject.');
     return $record;
 }
-function learningSaveQuestion(PDO $db,array $actor,array $input,?int $id=null,string $bankKind='learning',bool $allowCatalogCreate=true):int {
+function learningSaveQuestion(PDO $db,array $actor,array $input,?int $id=null,string $bankKind='learning',bool $allowCatalogCreate=true,bool $importContext=false):int {
     if(!in_array($bankKind,['learning','exam'],true))throw new InvalidArgumentException('Invalid bank.');
-    return learningWrite($db,function()use($db,$actor,$input,$id,$bankKind,$allowCatalogCreate){
+    return learningWrite($db,function()use($db,$actor,$input,$id,$bankKind,$allowCatalogCreate,$importContext){
         if(array_key_exists('bank_kind',$input))throw new InvalidArgumentException('The question bank is determined by its section.');
         if(array_key_exists('school_id',$input)||array_key_exists('created_by_user_id',$input))throw new InvalidArgumentException('Content school and creator are set by your account.');
         if($id){$old=learningMutableRecord($db,$actor,'questions',$id,$bankKind);if($old['archived_at'])throw new InvalidArgumentException('Restore archived content before editing it.');}
@@ -37,8 +39,23 @@ function learningSaveQuestion(PDO $db,array $actor,array $input,?int $id=null,st
             if(!is_array($options))throw new InvalidArgumentException('Invalid MCQ options.');
             foreach(['A','B','C','D'] as $key)$input['option_'.strtolower($key).($field==='options_np'?'_np':'')]=$options[$key]??'';
         }
+        $subjectRow=$db->prepare('SELECT name_en,name_np FROM subjects WHERE id=?');$subjectRow->execute([$subject]);$subjectNames=$subjectRow->fetch(PDO::FETCH_ASSOC);
+        $mathematics=false;foreach($subjectNames as $name)if(in_array(questionImportSubjectKey((string)$name),['mathematics','optional mathematics'],true))$mathematics=true;
+        $layout=$input['question_layout']??'plain';if(!is_string($layout)||!in_array($layout,['plain','structured'],true))throw new InvalidArgumentException('Choose a valid question layout.');
+        $structure=null;$existingStructure=isset($old)?questionPartsRead($old['question_text']??'',$old['question_text_np']??''):null;$allowImportedStructure=$importContext||(($existingStructure['math_rule']??'')==='import');
+        if($layout==='structured'){
+            $structure=questionPartsNormalize(['display'=>$input['part_display']??'both','math_rule'=>$input['mathematics_rule']??'strict','statement_en'=>$input['statement_en']??'','statement_np'=>$input['statement_np']??'','parts'=>$input['subquestions']??null],$mathematics&&$type!=='MCQ',$allowImportedStructure);
+            $input['question_text']=questionPartsEncode($structure,'en');$input['question_text_np']=questionPartsEncode($structure,'np');
+        }else{
+            foreach(['question_text','question_text_np'] as $key)if(isset($input[$key])&&!is_string($input[$key]))throw new InvalidArgumentException('Enter valid question text.');
+            $structure=questionPartsRead($input['question_text']??'',$input['question_text_np']??'',$mathematics&&$type!=='MCQ');
+            if(($structure['math_rule']??'')==='import'&&!$allowImportedStructure)throw new InvalidArgumentException('Imported flexible mathematics structure can only be retained from an existing imported question.');
+        }
+        if($structure){if($type==='MCQ'&&count($structure['parts'])!==1)throw new InvalidArgumentException('A structured MCQ needs one prompt and one set of four options.');$input['marks']=questionPartNumber($structure['total_units']);$input['cognitive_domain']=QUESTION_PART_LEVELS[$structure['parts'][0]['levels'][0]];}
         $get=static function($key)use($input):string {$value=$input[$key]??'';if(!is_scalar($value))throw new InvalidArgumentException('Enter valid question content.');return (string)$value;};
         $content=questionImportRowContent($get,'html');
+        if($structure&&$type!=='MCQ'&&$content['type']==='MCQ')throw new InvalidArgumentException('Written subquestions cannot contain MCQ options.');
+        if($structure){$content['question_text']=questionPartsEncode($structure,'en');$content['question_text_np']=questionPartsEncode($structure,'np');}
         if($bankKind==='exam'||isset($input['marks']))$content['marks']=learningDecimalString(learningDecimalUnits($input['marks']??null,100000,'Question marks'));
         // Exam authoring is chapter-wide. Retain legacy topic links on an edit in
         // the same scope rather than silently detaching historical references.
@@ -47,7 +64,7 @@ function learningSaveQuestion(PDO $db,array $actor,array $input,?int $id=null,st
             if(!$supplied)foreach(['topic_id','catalog_topic_id'] as $key)$input[$key]=$old[$key]??null;
         }
         $catalog=learningCatalogSelection($db,$actor,$class,$subject,$input,$allowCatalogCreate&&learningCanManageCatalog($actor));
-        $domain=$input['cognitive_domain']??'Knowledge';if(!is_string($domain)||!in_array($domain,['Knowledge','Understanding','Application','Higher Ability'],true))throw new InvalidArgumentException('Choose a valid cognitive level.');
+        $domain=$input['cognitive_domain']??'Knowledge';if(!is_string($domain)||!in_array($domain,array_values(QUESTION_PART_LEVELS),true))throw new InvalidArgumentException('Choose a valid cognitive level.');
         $values=$content+['class_id'=>$class,'subject_id'=>$subject,'chapter'=>$catalog['chapter'],'topic_id'=>$catalog['topic_id'],'catalog_chapter_id'=>$catalog['catalog_chapter_id'],'catalog_topic_id'=>$catalog['catalog_topic_id'],'visibility'=>$visibility,'cognitive_domain'=>$domain,'updated_at'=>date('Y-m-d H:i:s')];
         if($bankKind==='learning'){
             if(isset($input['difficulty'])){if(!is_string($input['difficulty'])||!in_array($input['difficulty'],['Easy','Medium','Hard','Challenging'],true))throw new InvalidArgumentException('Choose a valid difficulty.');$values['difficulty']=$input['difficulty'];}
@@ -72,6 +89,30 @@ function learningSetVisibility(PDO $db,array $actor,string $kind,int $id,string 
 }
 function learningSetArchived(PDO $db,array $actor,string $kind,int $id,bool $archived,string $bankKind='learning'):void {
     learningWrite($db,function()use($db,$actor,$kind,$id,$archived,$bankKind){$record=learningMutableRecord($db,$actor,$kind,$id,$bankKind);if(!$archived)curriculumAssertContentRestorable($db,$record);$db->prepare("UPDATE $kind SET archived_at=?,updated_at=CURRENT_TIMESTAMP WHERE id=?")->execute([$archived?date('Y-m-d H:i:s'):null,$id]);learningAudit($db,$actor,$archived?'Archive content':'Restore content',$kind,$id);});
+}
+/** Password failures must remain recorded even when the archive transaction rolls back. */
+function learningBulkArchiveQuestions(PDO $db,array $actor,mixed $selection,mixed $password,string $bankKind='learning',string $section='all'):int {
+    if(!in_array($bankKind,['learning','exam'],true)||!in_array($section,['all','written','mcq'],true))throw new InvalidArgumentException('Choose a valid question section.');
+    if(!is_array($selection)||!array_is_list($selection)||!$selection||count($selection)>100)throw new InvalidArgumentException('Select between 1 and 100 questions on this page.');
+    $ids=array_values(array_unique(array_map('learningId',$selection)));sort($ids,SORT_NUMERIC);
+    $current=learningActor($db,(int)$actor['id'],(int)$actor['school_id'],(bool)$actor['read_only']);
+    if($current['read_only']||$current['role']!==$actor['role']||!in_array($current['role'],['super_admin','school_admin','teacher'],true)||!learningPurposeAllowed($db,$current,$bankKind==='exam'?'exam_bank':'bank'))throw new InvalidArgumentException('Your account cannot delete these questions.');
+    if(!schoolVerifySensitivePassword($db,$current['id'],$password))throw new InvalidArgumentException('Current password is incorrect or verification is temporarily locked. Try again later after repeated failures.');
+    return learningWrite($db,function()use($db,$current,$ids,$bankKind,$section){
+        // Check every selection before changing anything: foreign, shared, stale,
+        // other-bank and other-section IDs cannot cause a partially applied batch.
+        foreach($ids as $id){
+            $record=learningMutableRecord($db,$current,'questions',$id,$bankKind);
+            if($record['archived_at'])throw new InvalidArgumentException('A selected question is already archived. Refresh the list.');
+            if($section!=='all'&&($record['type']==='MCQ')!==($section==='mcq'))throw new InvalidArgumentException('Select questions from this question section only.');
+        }
+        $update=$db->prepare('UPDATE questions SET archived_at=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND archived_at IS NULL');$now=date('Y-m-d H:i:s');
+        foreach($ids as $id){
+            $update->execute([$now,$id]);if($update->rowCount()!==1)throw new InvalidArgumentException('A selected question changed. Refresh and try again.');
+            learningAudit($db,$current,'Bulk archive question','questions',$id);
+        }
+        return count($ids);
+    });
 }
 function learningSaveNote(PDO $db,array $actor,array $input,?int $id=null):int {
     return learningWrite($db,function()use($db,$actor,$input,$id){

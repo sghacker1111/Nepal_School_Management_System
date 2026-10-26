@@ -84,7 +84,7 @@ if ($class_id && $exam_id) {
     $stmt = $db->prepare($query);
     $stmt->execute($params);
     $students = $stmt->fetchAll();
-    $q=$db->prepare('SELECT * FROM exam_subjects WHERE exam_id=? AND class_id=?');$q->execute([$exam_id,$class_id]);$schemes=$q->fetchAll();
+    $q=$db->prepare('SELECT * FROM exam_subjects WHERE exam_id=? AND class_id=?');$q->execute([$exam_id,$class_id]);$schemes=schoolExamOfferingRows($db,(int)$school_id,$selected_exam,$q->fetchAll());
     $q=$db->prepare('SELECT * FROM marks WHERE exam_id=?');$q->execute([$exam_id]);$matrix=[];
     foreach($q as $mark)$matrix[$mark['student_id']][$mark['subject_id']]=$mark;
     foreach($students as &$student) {

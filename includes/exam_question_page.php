@@ -61,7 +61,11 @@ $url=static fn(array $changes=[])=>schoolRouteUrl('modules/learning/'.$route,arr
 $listUrl=$url();
 if($_SERVER['REQUEST_METHOD']==='POST'){
     try{
-        $action=$_POST['action']??'';if(!is_string($action)||!in_array($action,['add','edit','set_visibility','archive','delete','restore','import'],true))throw new InvalidArgumentException('Choose one question action.');
+        $action=$_POST['action']??'';if(!is_string($action)||!in_array($action,['add','edit','set_visibility','archive','delete','restore','import','bulk_delete'],true))throw new InvalidArgumentException('Choose one question action.');
+        if($action==='bulk_delete'){
+            $count=learningBulkArchiveQuestions($db,$actor,$_POST['question_ids']??null,$_POST['current_password']??null,$bankKind,$examSection);
+            redirect($listUrl,$count.' question(s) archived. Restore them using the Deleted / archived status filter.','success');
+        }
         if($action==='import'){
             $view='import';if(!$canCreate)denySchoolRequest('Your account cannot import questions.',403);
             $mode=questionImportFormat($_POST['import_content_mode']??'normal');$kind=examImportKind($_POST['import_kind']??null);
@@ -123,14 +127,14 @@ if($view==='list'){
 }
 $form=$error&&in_array($_POST['action']??'',['add','edit'],true)?$_POST:($edit??[]);
 if($catalogRepairNotice!==''){$form['class_id']=0;$form['subject_id']=0;$form['chapter']='';$form['topic_id']='';$form['catalog_topic_id']='';}
-$form=array_filter($form,static fn($v)=>is_scalar($v)||$v===null);
+$form=array_filter($form,static fn($v,$key)=>is_scalar($v)||$v===null||($key==='subquestions'&&is_array($v)),ARRAY_FILTER_USE_BOTH);
 $formClass=(int)($form['class_id']??$class);$formSubject=(int)($form['subject_id']??$subject);
 $form+=['class_id'=>$formClass,'subject_id'=>$formSubject,'visibility'=>$actor['school_id']===0?'public':'private','type'=>$examSection==='mcq'?'MCQ':'Short'];
 $examImportKinds=$examSection==='all'?['mcq'=>'MCQs','other'=>'Other Questions']:[$importKind=>$examSection==='mcq'?'MCQs':'Other Questions'];
 $pageTitle=($view==='list'?'':ucfirst($view).' ').$sectionTitle;$activePage=$isExamBank?($examSection==='mcq'?'exam_mcqs':'exam_questions'):'questions';ob_start();
 ?>
 <?php $pageStyles[]="/assets/css/exam-question-bank.css"; ?>
-<?php $pageStyles[]="/assets/css/exam-question-language.css"; ?>
+<?php $pageStyles[]='/assets/css/exam-question-language.css?v='.(int)filemtime(__DIR__.'/../assets/css/exam-question-language.css'); ?>
 <?php $pageAssets[]="mathjax"; ?>
 <?php $pageAssets[]="mathjax"; ?>
 <?php if($view==='list')ob_start(); ?>
@@ -152,14 +156,21 @@ $pageTitle=($view==='list'?'':ucfirst($view).' ').$sectionTitle;$activePage=$isE
 <?php if($filters['record_id']!==''): ?><p class="small">Viewing a linked record. <a href="<?= sanitize($url(['record_id'=>''])) ?>">Show all questions</a></p><?php endif; ?>
 <div class="no-print d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3"><p class="text-muted mb-0" id="examQuestionCount"><?= $pagination['total'] ?> visible <?= $examSection==='mcq'?'MCQs':($isExamBank?'exam questions':'questions') ?> · Showing <?= $pagination['total']?($pagination['page']-1)*$pagination['per_page']+1:0 ?>–<?= min($pagination['page']*$pagination['per_page'],$pagination['total']) ?></p><span class="small text-muted">Page <?= $pagination['page'] ?> of <?= $pagination['pages'] ?></span></div>
 <?php if($questions): ?><div class="no-print d-flex flex-wrap align-items-center gap-3 mb-3"><button type="button" class="btn btn-outline-primary" data-exam-print="bank">Print this page</button><span class="small text-muted">Print language: <?= sanitize(examQuestionLanguages()[$questionLanguage]) ?>. Use the Language filter above to change it. Model answers are not printed.</span></div><?php endif; ?>
+<?php $canBulkDelete=!$filters['archived']&&(bool)array_filter($questions,static fn($row)=>$row['can_edit']);if($canBulkDelete): ?>
+<form method="post" id="questionBulkArchive" class="no-print border rounded p-3 mb-3" data-question-bulk-form>
+<input type="hidden" name="bank_ui" value="1"><input type="hidden" name="action" value="bulk_delete">
+<div class="d-flex flex-wrap gap-3 align-items-center"><label><input type="checkbox" data-question-select-all> Select all editable questions on this page</label><span data-question-selection-count role="status">0 selected</span><button type="button" class="btn btn-outline-danger" data-question-bulk-open disabled>Delete selected</button></div>
+<div data-question-bulk-confirm hidden class="mt-3"><p class="alert alert-warning">Selected questions will be removed from lists and paper generation and saved in Deleted / archived for restoration. Enter your current account password to confirm this bulk deletion.</p><label for="questionBulkPassword" class="form-label">Current password</label><input id="questionBulkPassword" type="password" name="current_password" autocomplete="current-password" maxlength="1024" class="form-control w-auto mb-2" required disabled><button type="submit" class="btn btn-danger">Confirm and archive selected questions</button> <button type="button" class="btn btn-outline-secondary" data-question-bulk-cancel>Cancel</button></div>
+</form>
+<?php endif; ?>
 <header class="exam-bank-print-heading"><h2><?= $sectionTitle ?></h2><p><?= sanitize(examQuestionLanguages()[$questionLanguage]) ?> · Page <?= $pagination['page'] ?> of <?= $pagination['pages'] ?></p></header>
 <?php if(!$questions): ?><div class="card card-body text-muted"><?= $isStudent?'No questions have been released for your class in this section yet.':'No eligible questions match these filters.' ?></div><?php endif; ?>
 <section class="exam-question-list" aria-label="<?= $sectionTitle ?> list">
-<?php foreach($questions as $q): ?><article class="card card-body mb-4 exam-question-card" data-question-id="<?= $q['id'] ?>"><div class="d-flex flex-wrap justify-content-between gap-2"><div class="exam-question-meta"><span class="badge bg-primary"><?= sanitize($q['type']) ?></span> <span class="badge bg-secondary"><?= sanitize($q['difficulty']) ?></span> #<?= (int)$q['id'] ?> · <?= sanitize($q['chapter']) ?> · <?= sanitize($q['cognitive_domain']) ?> · <?= sanitize((string)$q['marks']) ?> marks<?= $q['required_minutes']!==null?' · '.sanitize((string)$q['required_minutes']).' min':'' ?> <span class="badge bg-light text-dark"><?= $isExamBank?((int)$q['student_visible']?'Released to students':'Staff-only'):sanitize(ucfirst($q['visibility'])) ?></span></div>
+<?php foreach($questions as $q): ?><article class="card card-body mb-4 exam-question-card" data-question-id="<?= $q['id'] ?>"><div class="d-flex flex-wrap justify-content-between gap-2"><div class="exam-question-meta"><?php if($canBulkDelete&&$q['can_edit']): ?><label class="no-print me-2"><input type="checkbox" name="question_ids[]" value="<?= (int)$q['id'] ?>" form="questionBulkArchive" data-question-select aria-label="Select question <?= (int)$q['id'] ?>"></label><?php endif; ?><span class="badge bg-primary"><?= sanitize($q['type']) ?></span> <span class="badge bg-secondary"><?= sanitize($q['difficulty']) ?></span> #<?= (int)$q['id'] ?> · <?= sanitize($q['chapter']) ?> · <?= sanitize(questionCognitiveSummary($q)) ?> · <?= sanitize((string)$q['marks']) ?> marks<?= $q['required_minutes']!==null?' · '.sanitize((string)$q['required_minutes']).' min':'' ?> <span class="badge bg-light text-dark"><?= $isExamBank?((int)$q['student_visible']?'Released to students':'Staff-only'):sanitize(ucfirst($q['visibility'])) ?></span></div>
 <?php include __DIR__.'/question_bank_actions.php'; ?></div>
 <div class="exam-bank-rich exam-bank-question mt-3"><?= examQuestionRich($q['question_text'],$q['question_text_np']??'',$questionLanguage,true) ?></div>
 <?php if($q['type']==='MCQ'): $options=json_decode($q['options']??'{}',true)?:[];$np=json_decode($q['options_np']??'{}',true)?:[]; ?><div class="row g-3 mt-1"><?php foreach(['A','B','C','D'] as $o): ?><div class="col-lg-6"><div class="exam-bank-option border rounded p-3"><strong><?= $o ?>.</strong><div class="exam-bank-rich"><?= examQuestionRich($options[$o]??'',$np[$o]??'',$questionLanguage) ?></div></div></div><?php endforeach; ?></div><?php endif; ?>
-<details class="exam-bank-answer mt-3"><summary>Model answer<?= $q['type']==='MCQ'?' / correct option':'' ?></summary><?php if($q['type']==='MCQ'): ?><p class="fw-bold mt-2">Correct: <?= sanitize($q['correct_option']) ?></p><?php endif; ?><div class="exam-bank-rich"><?= examQuestionRich($q['answer']??'',$q['answer_np']??'',$questionLanguage) ?></div></details></article><?php endforeach; ?>
+<details class="exam-bank-answer mt-3"><summary>Model answer<?= $q['type']==='MCQ'?' / correct option':'' ?></summary><?php if($q['type']==='MCQ'): ?><p class="fw-bold mt-2">Correct: <?= sanitize($q['correct_option']) ?></p><?php endif; ?><div class="exam-bank-rich"><?= examQuestionRich($q['answer']??'',$q['answer_np']??'',$questionLanguage) ?></div><?= examQuestionAnswerMarks($q) ?></details></article><?php endforeach; ?>
 </section>
 <?php if($pagination['pages']>1): ?><nav aria-label="Question pages" hx-boost="true" hx-target="#questionBankPanel" hx-swap="outerHTML" hx-indicator="#erpProgress" hx-sync="#questionBankPanel:replace"><ul class="pagination flex-wrap gap-1">
 <?php if($pagination['page']>1): ?><li class="page-item"><a class="page-link" href="<?= sanitize($url(['page'=>1])) ?>">First</a></li><li class="page-item"><a class="page-link" rel="prev" href="<?= sanitize($url(['page'=>$pagination['page']-1])) ?>">Previous</a></li><?php endif; ?>

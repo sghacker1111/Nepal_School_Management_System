@@ -12,7 +12,7 @@ function routineTeacherAvailable(PDO $db,int $school,int $class,int $day,int $pe
     return true;
 }
 function routineSubjects(PDO $db,int $school,int $class):array {
-    $q=$db->prepare('SELECT cs.*,s.name_en,s.name_np,sc.name section_name FROM class_subjects cs JOIN subjects s ON s.id=cs.subject_id AND s.school_id=cs.school_id LEFT JOIN sections sc ON sc.id=cs.section_id WHERE cs.school_id=? AND cs.class_id=? AND (cs.is_active=1 OR cs.is_optional=1) AND COALESCE(s.is_hidden,0)=0 ORDER BY CASE WHEN cs.is_optional=1 THEN 1 ELSE 0 END,cs.subject_order,s.id,cs.id');
+    $q=$db->prepare('SELECT cs.*,s.name_en,s.name_np,sc.name section_name FROM class_subjects cs JOIN subjects s ON s.id=cs.subject_id AND s.school_id=cs.school_id LEFT JOIN sections sc ON sc.id=cs.section_id WHERE cs.school_id=? AND cs.class_id=? AND cs.is_active=1 AND COALESCE(s.is_hidden,0)=0 AND '.schoolSubjectAssignedSql('cs.school_id','cs.class_id','cs.subject_id').' ORDER BY CASE WHEN cs.is_optional=1 THEN 1 ELSE 0 END,cs.subject_order,s.id,cs.id');
     $q->execute([$school,$class]);return $q->fetchAll();
 }
 function routineWeeklyPeriods(array $subject):int {

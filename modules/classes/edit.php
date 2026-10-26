@@ -34,9 +34,9 @@ $teachers_list = $stmt_t->fetchAll();
 
 // Handle class update
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $name = sanitize($_POST['name'] ?? '');
-    $name_np = sanitize($_POST['name_np'] ?? '');
-    $level = sanitize($_POST['level'] ?? 'Basic');
+    $name = Auth::hasRole('super_admin')?sanitize($_POST['name'] ?? ''):$class['name'];
+    $name_np = Auth::hasRole('super_admin')?sanitize($_POST['name_np'] ?? ''):$class['name_np'];
+    $level = Auth::hasRole('super_admin')?sanitize($_POST['level'] ?? 'Basic'):$class['level'];
     $grading_type = $class['grading_type'] ?? 'gpa';
     $class_teacher_id = (int)($_POST['class_teacher_id'] ?? 0);
     $class_teacher_name = '';
@@ -113,6 +113,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt = $db->prepare("UPDATE classes SET name = ?, name_np = ?, level = ?, grading_type = ?, class_teacher_name = ?, class_teacher_id = ?, class_teacher_signature = ?, is_grading_teaching = ? WHERE id = ?");
                 $stmt->execute([$name, $name_np, $level, $grading_type, $class_teacher_name, $class_teacher_id ?: null, $class_teacher_signature, $is_grading_teaching, $class_id]);
                 Auth::logActivity(Auth::getUserId(), 'Edit Class Details', 'classes', $class_id);
+                if((int)$school_id===0){require_once __DIR__.'/../../includes/school_offerings.php';syncAllSchoolOfferings($db);}
                 $db->commit();
                 redirect(schoolRouteUrl('modules/classes/index.php'), 'Class updated successfully');
             }
@@ -151,15 +152,15 @@ ob_start();
         <form method="POST" action="" enctype="multipart/form-data" class="needs-validation" novalidate>
             <div class="mb-3">
                 <label for="name" class="form-label">Class Name (English) *</label>
-                <input type="text" class="form-control" id="name" name="name" value="<?= sanitize($class['name']) ?>" required>
+                <input type="text" class="form-control" id="name" name="name" value="<?= sanitize($class['name']) ?>" required <?= Auth::hasRole('super_admin')?'':'readonly' ?>>
             </div>
             <div class="mb-3">
                 <label for="name_np" class="form-label">Class Name (Nepali)</label>
-                <input type="text" class="form-control" id="name_np" name="name_np" value="<?= sanitize($class['name_np'] ?? '') ?>" placeholder="e.g. कक्षा २">
+                <input type="text" class="form-control" id="name_np" name="name_np" value="<?= sanitize($class['name_np'] ?? '') ?>" placeholder="e.g. कक्षा २" <?= Auth::hasRole('super_admin')?'':'readonly' ?>>
             </div>
             <div class="mb-3">
                 <label for="level" class="form-label">Education Level *</label>
-                <select class="form-select" id="level" name="level" required>
+                <select class="form-select" id="level" name="level" required <?= Auth::hasRole('super_admin')?'':'disabled' ?>>
                     <option value="Basic" <?= $class['level'] === 'Basic' ? 'selected' : '' ?>>Basic (Nursery - Class 8)</option>
                     <option value="Secondary" <?= $class['level'] === 'Secondary' ? 'selected' : '' ?>>Secondary (Class 9 - Class 12)</option>
                 </select>

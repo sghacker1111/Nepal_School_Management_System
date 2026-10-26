@@ -47,7 +47,7 @@ def run():
     assert not api(app,{'action':'delete_chapter','id[]':[empty]})['success']
     assert not json.loads(app.request('/modules/super_admin/subjects.php',{'action_chapter':'delete','chapter_id[]':[empty]}))['success']
     app.db.execute("CREATE TRIGGER reject_curriculum_audit BEFORE INSERT ON activity_logs WHEN NEW.action='Delete unused chapter' BEGIN SELECT RAISE(ABORT,'Synthetic audit failure'); END");app.db.commit()
-    assert not api(app,{'action':'delete_chapter','id':empty})['success']
+    assert not api(app,{'action':'delete_chapter','id':empty,'current_password':'TestPassword123!'})['success']
     assert app.db.execute('SELECT archived_at FROM chapters WHERE id=?',(empty,)).fetchone()==(None,),'Audit failure rolls back the deletion'
     app.db.execute('DROP TRIGGER reject_curriculum_audit');app.db.commit()
     denied=api(app,{'action':'delete_topic','id':tid})
@@ -74,14 +74,14 @@ def run():
     app.request('/modules/learning/index.php',{'action_note':'archive','note_id':ids['note']})
     blocked=api(app,{'action':'delete_chapter','id':ch});assert blocked['dependencies']['total']==1 and blocked['dependencies']['groups'][0]['section']=='Exam Paper Grids'
     app.request(GRIDS,{'action':'archive','grid_id':ids['grid'],'class_id':cls,'subject_id':sub})
-    assert api(app,{'action':'delete_topic','id':tid})['success']
+    assert api(app,{'action':'delete_topic','id':tid,'current_password':'TestPassword123!'})['success']
     deleted=json.loads(app.request(CUR+f'?action=get_deleted&class_id={cls}&subject_id={sub}'))
     assert any(i['id']==tid and i['kind']=='topics' for i in deleted['items'])
     assert not api(app,{'action':'add_topic','chapter_id':ch,'class_id':cls,'subject_id':sub,'name':'Deletion demo topic'})['success']
     app.request(EQ,{'action':'restore','question_id':ids['exam']},status=422)
     assert app.db.execute('SELECT archived_at FROM questions WHERE id=?',(ids['exam'],)).fetchone()[0]
     assert api(app,{'action':'restore_topic','id':tid})['success']
-    assert api(app,{'action':'delete_chapter','id':ch})['success']
+    assert api(app,{'action':'delete_chapter','id':ch,'current_password':'TestPassword123!'})['success']
     active=json.loads(app.request(CUR+f'?action=get_chapters&class_id={cls}&subject_id={sub}'))['chapters'];assert all(c['id']!=ch for c in active)
     active=json.loads(app.request(QB+f'?action_get_chapters=1&class_id={cls}&subject_id={sub}'));assert all(c['id']!=ch for c in active)
     deleted=json.loads(app.request(CUR+f'?action=get_deleted&class_id={cls}&subject_id={sub}'))['items'];assert any(c['id']==ch and c['kind']=='chapters' for c in deleted)

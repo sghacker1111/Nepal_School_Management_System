@@ -44,7 +44,7 @@ test('invalid marks retain the exact draft and canceled navigation never submits
  const f=fixture('/results/marks-entry');let requests=0;
  f.root.innerHTML='<form method="post"><input name="marks[1][1][theory]" value="20"><button name="save_marks" value="1">Save</button></form>';
  await mountPage(f.root,{pageId:'results-marks-entry',assets:[],values:{}});
- const form=f.root.querySelector('form'),input=form.querySelector('input');input.value='invalid draft';
+ const form=f.root.querySelector('form'),input=form.querySelector('input');input.value='invalid draft';input.dispatchEvent(new f.dom.window.Event('input',{bubbles:true}));
  const config=JSON.stringify({routeId:'results-marks-entry',pageId:'results-marks-entry',mutation:{outcome:'invalid'}}).replaceAll('"','&quot;');
  const stop=installForms({}, {window:f.win,isEnhancedURL:()=>true,request:async()=>{requests++;return{status:422,text:'<div hidden data-erp-config="'+config+'"></div><div class="alert alert-danger">Marks exceed the maximum.</div>',header:name=>name==='X-ERP-Fragment'?'app-page':name==='Content-Type'?'text/html':null};},applyPageResponse:()=>assert.fail('Invalid draft was replaced'),cancelNavigation(){}});
  f.win.confirm=()=>false;assert.equal(await confirmNavigation(),false);assert.equal(requests,0);

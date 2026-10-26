@@ -11,6 +11,7 @@ function saveExamMapping(PDO $db,int $school,int $examId,array $config,int $mapp
   assertExamConfigurationEditable($exam);
   if($exam['is_locked']||$exam['is_published'])throw new InvalidArgumentException('Reopen this locked or published exam before changing subjects.');
   schoolRecord($db,'classes',(int)$config['class_id'],$school);schoolRecord($db,'subjects',(int)$config['subject_id'],$school);
+  if(!schoolSubjectAssigned($db,$school,(int)$config['class_id'],(int)$config['subject_id']))throw new InvalidArgumentException('Assign this subject to the school class before configuring its exam.');
   $old=null;$marks=[];
   if($mappingId){
    $q=$db->prepare('SELECT * FROM exam_subjects WHERE id=? AND exam_id=?');$q->execute([$mappingId,$examId]);$old=$q->fetch();

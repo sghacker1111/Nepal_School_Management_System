@@ -4,6 +4,7 @@ require_once __DIR__.'/teaching_scope.php';
 require_once __DIR__.'/student_learning.php';
 require_once __DIR__.'/packages.php';
 require_once __DIR__.'/exam_content_policy.php';
+require_once __DIR__.'/question_parts.php';
 
 function learningActor(PDO $db,int $userId,int $school=0,bool $readOnly=false):array {
     $q=$db->prepare('SELECT id,role,school_id FROM users WHERE id=? AND status=1');$q->execute([$userId]);$user=$q->fetch(PDO::FETCH_ASSOC);
@@ -32,7 +33,7 @@ function learningReadClasses(PDO $db,array $actor):array {
 function learningReadSubjects(PDO $db,array $actor,int $class):array {
     if(!in_array($class,array_map('intval',array_column(learningReadClasses($db,$actor),'id')),true))return [];
     // Keep distinct subject identities even if legacy normalization makes labels equal.
-    $q=$db->prepare('SELECT DISTINCT s.*,cs.is_optional mapping_optional FROM subjects s JOIN class_subjects cs ON cs.subject_id=s.id AND cs.school_id=s.school_id JOIN classes c ON c.id=cs.class_id AND c.school_id=cs.school_id WHERE s.school_id=? AND cs.class_id=? AND (cs.is_active=1 OR cs.is_optional=1) AND c.is_active=1 AND COALESCE(s.is_hidden,0)=0 ORDER BY s.name_en,s.code,s.id');$q->execute([$actor['school_id'],$class]);$rows=$q->fetchAll(PDO::FETCH_ASSOC);
+    $q=$db->prepare('SELECT DISTINCT s.*,cs.is_optional mapping_optional FROM subjects s JOIN class_subjects cs ON cs.subject_id=s.id AND cs.school_id=s.school_id JOIN classes c ON c.id=cs.class_id AND c.school_id=cs.school_id WHERE s.school_id=? AND cs.class_id=? AND cs.is_active=1 AND c.is_active=1 AND COALESCE(s.is_hidden,0)=0 AND '.schoolSubjectAssignedSql('cs.school_id','cs.class_id','cs.subject_id').' ORDER BY s.name_en,s.code,s.id');$q->execute([$actor['school_id'],$class]);$rows=$q->fetchAll(PDO::FETCH_ASSOC);
     if($actor['role']==='student'){
         try{$student=studentLearningRecord($db,$actor['school_id'],$actor['id']);}catch(InvalidArgumentException $e){return [];}
         $optional=array_map('intval',array_filter([$student['optional_subject_i'],$student['optional_subject_ii'],$student['optional_subject_iii']]));
@@ -52,7 +53,7 @@ function learningRecordScope(PDO $db,array $actor,array $record):?array {
         foreach(learningReadSubjects($db,$actor,$class) as $r)if((int)$r['id']===$subject)return ['school_id'=>$school,'class_id'=>$class,'subject_id'=>$subject];
         return null;
     }
-    $q=$db->prepare('SELECT cs.id FROM classes c JOIN class_subjects cs ON cs.class_id=c.id AND cs.school_id=0 JOIN subjects s ON s.id=cs.subject_id AND s.school_id=0 WHERE c.school_id=0 AND c.id=? AND s.id=? AND c.is_active=1 AND COALESCE(s.is_hidden,0)=0 AND (cs.is_active=1 OR cs.is_optional=1)');$q->execute([$class,$subject]);if(!$q->fetchColumn())return null;
+    $q=$db->prepare('SELECT cs.id FROM classes c JOIN class_subjects cs ON cs.class_id=c.id AND cs.school_id=0 JOIN subjects s ON s.id=cs.subject_id AND s.school_id=0 WHERE c.school_id=0 AND c.id=? AND s.id=? AND c.is_active=1 AND COALESCE(s.is_hidden,0)=0 AND cs.is_active=1');$q->execute([$class,$subject]);if(!$q->fetchColumn())return null;
     foreach(learningReadClasses($db,$actor) as $c)foreach(learningReadSubjects($db,$actor,(int)$c['id']) as $s){
         try{$scope=learningCatalogScope($db,$actor['school_id'],(int)$c['id'],(int)$s['id']);}catch(InvalidArgumentException $e){continue;}
         if($scope['shared']&&$scope['shared']['class_id']===$class&&$scope['shared']['subject_id']===$subject)return $scope['local'];
@@ -124,7 +125,7 @@ function learningContentList(PDO $db,array $actor,string $kind,array $filters,st
         if($kind!=='questions'||!in_array($filters['question_group'],['mcq','written'],true))throw new InvalidArgumentException('Choose a valid question section.');
         $where[]=$filters['question_group']==='mcq'?"type='MCQ'":"type<>'MCQ'";
     }
-    if(isset($filters['cognitive_domain'])){if(!is_string($filters['cognitive_domain'])||!in_array($filters['cognitive_domain'],['Knowledge','Understanding','Application','Higher Ability'],true))throw new InvalidArgumentException('Choose a valid cognitive level.');$where[]='cognitive_domain=?';$params[]=$filters['cognitive_domain'];}
+    if(isset($filters['cognitive_domain'])){if(!is_string($filters['cognitive_domain'])||!in_array($filters['cognitive_domain'],array_values(QUESTION_PART_LEVELS),true))throw new InvalidArgumentException('Choose a valid cognitive level.');$where[]='((cognitive_domain=? AND question_text NOT LIKE ?) OR question_text LIKE ?)';$params[]=$filters['cognitive_domain'];$params[]='%data-question-structure%';$params[]='%data-part-levels="'.array_search($filters['cognitive_domain'],QUESTION_PART_LEVELS,true).'"%';}
     if(isset($filters['topic_alias_ids'])){
         $aliases=$filters['topic_alias_ids'];if(!is_array($aliases)||!$aliases||count($aliases)>100)throw new InvalidArgumentException('Choose a valid topic.');
         foreach($aliases as $alias)if(!is_scalar($alias)||!preg_match('/^[1-9][0-9]*$/',(string)$alias))throw new InvalidArgumentException('Choose a valid topic.');

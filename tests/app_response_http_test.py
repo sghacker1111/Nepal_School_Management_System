@@ -27,9 +27,9 @@ def run():
     h,b,_=send(app,'/students/add',headers=HX);marked(h,b);assert app.token.encode() in b and b'name="csrf_token"' in b
     for path,status in (('/students?class_id=999999',404),('/admin/users',403)):
         h,b,_=send(app,path,headers=HX,status=status);marked(h,b)
-    h,b,_=send(app,'/classes/add',data={'add_class':'1','name':'App response test class'},headers=HX,status=204)
+    h,b,_=send(app,'/classes/add',data={'add_section':'1','section_name':'App response test section','class_id':app.fixture['class'],'teacher_id':''},headers=HX,status=204)
     location=json.loads(h['HX-Location']);assert location=={'path':app.base+'/classes','target':'#main-content','swap':'innerHTML'} and not b
-    assert app.db.execute("SELECT COUNT(*) FROM classes WHERE name='App response test class'").fetchone()[0]==1
+    assert app.db.execute("SELECT COUNT(*) FROM sections WHERE name='App response test section'").fetchone()[0]==1
     h,b,_=send(app,'/settings/years',data=b'action=add',headers={**HX,'Content-Type':'application/x-www-form-urlencoded'},status=419);marked(h,b)
     h,b,_=send(app,'/students/add',data={'class_id':999999},headers=HX,status=422);marked(h,b)
     # Destructive legacy GETs remain confirmation forms, never mutations.

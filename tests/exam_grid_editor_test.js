@@ -22,7 +22,7 @@ class Element {
     scrollIntoView() { this.scrolled=true; }
 }
 class Option extends Element { constructor(text,value){super('option');this.textContent=String(text);this.value=value;this.selected=false;} }
-const ids=['examGridFull','examGridDuration','examGridRows','examChapterTargets','examGridTotals','examGridPreset','examGridReference','examGridConfig','examGridError','examGridAdd',...['K','U','A','HA'].map(d=>'examCognitive_'+d)];
+const ids=['examGridFull','examGridDuration','examGridRows','examChapterTargets','examGridTotals','examGridPreset','examGridReference','examGridConfig','examGridError','examGridAdd',...['K','U','A','HA','KU'].map(d=>'examCognitive_'+d)];
 const elements=Object.fromEntries(ids.map(id=>[id,new Element()]));
 elements.examGridReference.hidden=true;
 const form=new Element('form');
@@ -44,7 +44,7 @@ form.listeners.submit(event);
 assert.equal(event.prevented,undefined);
 const submitted=JSON.parse(elements.examGridConfig.value);
 assert.equal(submitted.reference_key,'verified');
-assert.deepEqual(submitted.rows[0].domains,{K:'1',U:'1',A:'1',HA:'1'});
+assert.deepEqual(submitted.rows[0].domains,{K:'1',U:'1',A:'1',HA:'1',KU:'0'});
 assert.deepEqual(submitted.chapter_targets,[{chapter_id:10,count:'4',marks:'4'}]);
 elements.examGridFull.value='5'; form.listeners.submit(event);
 assert.equal(event.prevented,true);

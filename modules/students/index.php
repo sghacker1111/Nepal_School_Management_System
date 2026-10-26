@@ -31,7 +31,7 @@ if (isset($_GET['delete']) && Auth::hasRole(['super_admin', 'school_admin'])) {
         if ($db->inTransaction()) {
             $db->rollBack();
         }
-        redirect(schoolRouteUrl('modules/students/index.php'), 'Error archiving student: ' . $e->getMessage(), 'error');
+        redirect(schoolRouteUrl('modules/students/index.php'), schoolPublicError($e), 'error');
     }
 }
 

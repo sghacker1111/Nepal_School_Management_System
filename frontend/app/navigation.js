@@ -1,5 +1,6 @@
 import {readPageMetadata, mountPage, disposePage} from './page-lifecycle.js';
-import {confirmNavigation} from './dirty-forms.js';
+import {confirmNavigation, hasUnsavedChanges} from './dirty-forms.js';
+import {renderFeatureSearch} from './workspace-shell.js';
 let app = null;
 const fileKeys = ['print', 'download', 'export', 'template', 'student_lookup'];
 const nativeActions = ['download_template', 'template', 'export', 'catalog', 'import_catalog'];
@@ -47,7 +48,7 @@ function updateShell(metadata, state) {
     root.dataset.routeId = metadata.routeId; root.dataset.pageId = metadata.pageId;
     root.querySelectorAll('[name="csrf_token"]').forEach(field => field.value = win.CSRF_TOKEN);
     if (metadata.navigation) {
-        const nav = doc.getElementById('sidebar'); nav?.querySelectorAll('.nav-group').forEach(node => node.remove());
+        const nav = doc.getElementById('sidebar'); nav?.querySelectorAll('.nav-group:not(#navigationFeatures)').forEach(node => node.remove());
         for (const [name, items] of Object.entries(metadata.navigation)) {
             if (!Array.isArray(items) || !nav) continue;
             const section = doc.createElement('section'); section.className = 'nav-group';
@@ -59,9 +60,10 @@ function updateShell(metadata, state) {
                 if (/^[a-z0-9-]+$/.test(item.icon || '')) { const icon = doc.createElement('i'); icon.className = 'fa-solid fa-' + item.icon; icon.setAttribute('aria-hidden', 'true'); link.append(icon); }
                 const label = doc.createElement('span'); label.textContent = item.label; link.append(label); row.append(link); list.append(row);
             }
-            section.append(heading, list); nav.append(section);
+            section.append(heading, list); nav.insertBefore(section, doc.getElementById('navigationFeatures'));
         }
     }
+    renderFeatureSearch(doc, metadata.searchFeatures);
     if (metadata.shell) {
         const school = doc.querySelector('.workspace-heading strong'); if (school) school.textContent = metadata.shell.school;
         const year = doc.querySelector('.year-chip'); if (year) { year.hidden = !metadata.shell.year; year.textContent = metadata.shell.year ? `${metadata.shell.year.year_bs} BS · ${metadata.shell.year.year_ad} AD` : ''; }
@@ -118,6 +120,7 @@ export async function navigate(value, options = {}) {
     if (!app || !isEnhancedURL(value)) return false;
     const state = app, url = sameOrigin(value, state.win), id = ++state.sequence;
     if (!await (state.deps.confirmNavigation || confirmNavigation)() || id !== state.sequence) return false;
+    const startedClean = !(state.deps.hasUnsavedChanges || hasUnsavedChanges)();
     const panel=state.doc.getElementById('questionBankPanel');if(panel)state.htmx.trigger?.(panel,'htmx:abort');
     state.abort?.abort(); const controller = new state.win.AbortController(); state.abort = controller;
     state.root.setAttribute('aria-busy', 'true'); state.doc.getElementById('erpProgress')?.classList.add('htmx-request'); state.doc.getElementById('erpRequestError')?.remove();
@@ -132,7 +135,15 @@ export async function navigate(value, options = {}) {
         }
         return await applyPageResponse(result, target, {...options, requestId: id});
     } catch (error) {
-        if (id === state.sequence && !controller.signal.aborted) recoverNavigation('The update could not be loaded. Your current work has not been resubmitted.', url.href);
+        state.win.console?.warn('Page navigation failed:', error);
+        if (id === state.sequence && !controller.signal.aborted) {
+            // Only GET navigation may fall back to a normal page. Never replay a
+            // save, and never discard a draft typed while the request was loading.
+            if (startedClean && !(state.deps.hasUnsavedChanges || hasUnsavedChanges)()) {
+                state.fullNavigate(url.href); return true;
+            }
+            recoverNavigation('The page could not be loaded. Your unsaved work is still here.', url.href);
+        }
         return false;
     } finally {
         if (id === state.sequence) { state.root.removeAttribute('aria-busy'); state.doc.getElementById('erpProgress')?.classList.remove('htmx-request'); }

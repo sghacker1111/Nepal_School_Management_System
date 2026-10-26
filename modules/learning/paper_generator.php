@@ -1,5 +1,5 @@
 <?php
-if(!isset($_POST['action_save_grid'])&&!isset($_POST['action_generate'])&&($_POST['generation_mode']??$_GET['generation_mode']??'rows')==='rows'){
+if(!isset($_POST['action_save_grid'])&&!isset($_POST['action_generate'])&&in_array($_POST['generation_mode']??$_GET['generation_mode']??'rows',['rows','sections'],true)){
     include __DIR__.'/../../includes/learning_test_paper_page.php';return;
 }
 /**
@@ -11,6 +11,8 @@ require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__.'/../../includes/learning_content.php';
 require_once __DIR__.'/../../includes/exam_question_language.php';
+require_once __DIR__.'/../../includes/paper_format.php';
+require_once __DIR__.'/../../includes/exam_paper_groups.php';
 
 Auth::requireRole(['super_admin', 'school_admin', 'principal', 'teacher', 'exam_officer']);
 Auth::requireAccess('paper_generator');
@@ -19,6 +21,7 @@ $db = getDB();
 $school_id = Auth::getSchoolId();
 $is_admin = (Auth::getRole() === 'super_admin');
 try{$questionLanguage=examQuestionLanguage($_POST['language']??$_GET['language']??'both');}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
+try{$paperFormat=paperFormatInput($_POST+$_GET);$legacyTitle=$_POST['paper_title']??'Terminal Examination';if(!is_string($legacyTitle)||trim($legacyTitle)===''||mb_strlen($legacyTitle)>200)throw new InvalidArgumentException('Enter a paper title of at most 200 characters.');$legacyDuration=questionPartNumber(questionPartUnits($_POST['paper_duration']??'180'));if((float)$legacyDuration>600)throw new InvalidArgumentException('Paper duration cannot exceed 600 minutes.');}catch(InvalidArgumentException $e){denySchoolRequest($e->getMessage(),422);}
 
 // Handle Grid Layout Save via AJAX
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_save_grid'])) {
@@ -69,7 +72,7 @@ if ($is_admin && !$school_id) {
 $class_id = $_POST['class_id'] ?? $_GET['class_id'] ?? '';
 $subject_id = $_POST['subject_id'] ?? $_GET['subject_id'] ?? '';
 $exam_id = $_POST['exam_id'] ?? $_GET['exam_id'] ?? '';
-$generation_mode = $_GET['generation_mode'] ?? 'auto';
+$generation_mode = $_POST['generation_mode'] ?? $_GET['generation_mode'] ?? 'auto';
 
 // Fetch school details for logo and print header
 $school = null;
@@ -184,7 +187,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_generate'])) {
                     
                     foreach ($picked as $p) {
                         // Override marks weightage on paper generation as specified by grid
-                        $p['marks'] = $type_marks;
+                        if(!examQuestionHasParts($p))$p['marks'] = $type_marks;
                         $selected_questions[] = $p;
                     }
                 }
@@ -211,7 +214,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_generate'])) {
                     if (in_array($q['id'], $selected_ids)) {
                         // User can specify custom marks for each question in post parameters if they wish
                         $custom_marks_key = 'manual_marks_' . $q['id'];
-                        if (isset($_POST[$custom_marks_key])) {
+                        if (isset($_POST[$custom_marks_key])&&!examQuestionHasParts($q)) {
                             $q['marks'] = (int)$_POST[$custom_marks_key];
                         }
                         $selected_questions[] = $q;
@@ -250,7 +253,7 @@ if ($subject_id) {
 $error=$error_msg;$pageMutationOutcome=$generated?'preview':null;
 $pageTitle = 'Normal Paper Generator';
 $activePage = 'paper_generator';
-$pageStyles=['/assets/css/exam-question-language.css?v='.(int)filemtime(__DIR__.'/../../assets/css/exam-question-language.css')];
+$pageStyles=[];foreach(['exam-paper.css','exam-question-language.css'] as $style)$pageStyles[]='/assets/css/'.$style.'?v='.(int)filemtime(__DIR__.'/../../assets/css/'.$style);
 
 ob_start();
 ?>
@@ -489,6 +492,8 @@ ob_start();
             <label for="legacyPaperLanguage" class="form-label">Question / print language</label><select id="legacyPaperLanguage" name="language" class="form-select mb-3" data-exam-language-control><?php foreach(examQuestionLanguages() as $key=>$label): ?><option value="<?= $key ?>" <?= $questionLanguage===$key?'selected':'' ?>><?= $label ?></option><?php endforeach; ?></select>
             <a class="btn btn-outline-primary mb-3" href="?<?= http_build_query(['class_id'=>$class_id,'subject_id'=>$subject_id,'generation_mode'=>'rows','language'=>$questionLanguage]) ?>">Chapter / topic Test Paper Builder</a>
             <input type="hidden" name="action_generate" value="1">
+            <div class="row g-3 mb-3"><div class="col-md-8"><label for="legacyPaperTitle" class="form-label">Paper title</label><input id="legacyPaperTitle" name="paper_title" maxlength="200" required class="form-control" value="<?= sanitize($legacyTitle) ?>"></div><div class="col-md-4"><label for="legacyDuration" class="form-label">Duration (minutes)</label><input id="legacyDuration" name="paper_duration" type="number" min="0.01" max="600" step="0.01" required class="form-control" value="<?= sanitize($legacyDuration) ?>"></div></div>
+            <?php include __DIR__.'/../../includes/paper_format_form.php'; ?>
 
             <?php if ($generation_mode === 'auto'): ?>
             <!-- CDC NEPAL SPECIFICATION GRID -->
@@ -603,10 +608,7 @@ ob_start();
                                         </td>
                                         <td>
                                             <div class="small">
-                                                <strong>EN:</strong> <?= safeRichHtml($q['question_text']) ?><br>
-                                                <?php if ($q['question_text_np']): ?>
-                                                <strong class="text-muted">NP:</strong> <?= safeRichHtml($q['question_text_np']) ?>
-                                                <?php endif; ?>
+                                                <?= examQuestionRich($q['question_text'],$q['question_text_np']??'',$questionLanguage,true) ?>
                                             </div>
                                         </td>
                                         <td>
@@ -687,8 +689,8 @@ ob_start();
 
 <!-- Generated Exam Paper Preview (Printable Sheet) -->
 <?php if ($generated && !empty($selected_questions)): ?>
-<div class="card generator-card mt-5 no-print">
-    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+<div class="card generator-card mt-5">
+    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center no-print">
         <h5 class="mb-0 text-success fw-bold"><i class="fas fa-print"></i> Printable Paper Preview</h5>
         <div>
             <button class="btn btn-outline-secondary me-2" data-erp-click="learning-paper-generator-action-13" data-erp-click-args="<?= schoolPageActionArgs("learning-paper-generator",[]) ?>"><i class="fas fa-file-word text-primary"></i> Export to Word (.doc)</button>
@@ -699,51 +701,7 @@ ob_start();
         
         <!-- Printable A4 Box -->
         <div class="a4-sheet" id="printArea">
-            <!-- Header Table -->
-            <table class="a4-header-table">
-                <tr>
-                    <td style="width: 80px;">
-                        <?php if ($school && $school['logo']): ?>
-                            <img src="<?= APP_URL ?>/uploads/logo/<?= $school['logo'] ?>" class="school-logo-print" alt="Logo">
-                        <?php else: ?>
-                            <div style="width:80px;height:80px;border:1px solid #ccc;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;">LOGO</div>
-                        <?php endif; ?>
-                    </td>
-                    <td class="text-center">
-                        <span class="school-name-print"><?= $school ? sanitize($school['name_en']) : 'Nepal Model School' ?></span><br>
-                        <span style="font-size:14px;font-weight:bold;"><?= $school ? sanitize($school['address']) : 'Kathmandu, Nepal' ?></span><br>
-                        <span class="paper-title"><?= $selected_exam ? sanitize($selected_exam['name']) : 'Terminal Examination' ?></span>
-                    </td>
-                    <td style="width: 80px;">&nbsp;</td>
-                </tr>
-            </table>
-
-            <!-- Metadata Details Grid -->
-            <?php
-            // Calculate total full marks of generated questions
-            $full_marks = 0;
-            foreach ($selected_questions as $q) {
-                $full_marks += $q['marks'];
-            }
-            $pass_marks = round($full_marks * 0.4); // Standard pass mark is 40%
-            ?>
-            <table class="metadata-table">
-                <tr>
-                    <td style="width: 33%;">Class: <?= $selected_class ? sanitize($selected_class['name']) : 'N/A' ?></td>
-                    <td style="width: 34%; text-align: center;">Subject: <?= $selected_subject ? sanitize($selected_subject['name_en']) : 'N/A' ?></td>
-                    <td style="width: 33%; text-align: right;">Time: 3 Hours</td>
-                </tr>
-                <tr>
-                    <td>Full Marks: <?= $full_marks ?></td>
-                    <td style="text-align: center;">&nbsp;</td>
-                    <td style="text-align: right;">Pass Marks: <?= $pass_marks ?></td>
-                </tr>
-            </table>
-
-            <!-- Standard Instructions -->
-            <div style="font-style: italic; font-size:12px; margin-bottom: 20px;" class="text-center">
-                Candidates are required to give their answers in their own words as far as practicable. The figures in the margin indicate full marks.
-            </div>
+            <?php $legacyPaper=['grid'=>['duration_minutes'=>$legacyDuration],'total_units'=>array_sum(array_map(static fn($question)=>(int)round((float)$question['marks']*100),$selected_questions))];echo paperFormatHeader($paperFormat,$school?:[],$selected_exam?$selected_exam['name']:$legacyTitle,$selected_class['name']??'',$selected_subject['name_en']??'',$legacyPaper); ?>
 
             <!-- Grouped Questions Rendering -->
             <?php
@@ -753,21 +711,19 @@ ob_start();
                 $grouped_questions[$q['type']][] = $q;
             }
             
-            $group_num = 1;
+            $group_num = 1;$legacySerial=1;
             foreach ($grouped_questions as $type => $questions_list):
                 $group_letter = chr(64 + $group_num); // A, B, C...
             ?>
-                <div class="question-group-title">
-                    Group <?= $group_letter ?>: <?= sanitize($types_info[$type]['label'] ?? $type) ?> (<?= count($questions_list) ?> &times; <?= $questions_list[0]['marks'] ?> = <?= count($questions_list) * $questions_list[0]['marks'] ?> Marks)
-                </div>
+                <?php if($paperFormat['heading_style']!=='None'): ?><div class="question-group-title exam-section-title"><?= sanitize($paperFormat['heading_style'].' - '.$group_letter.' — '.($types_info[$type]['label']??$type)) ?><span><?= sanitize(paperGroupCalculation(array_map(static fn($question)=>['marks_units'=>(int)round((float)$question['marks']*100)],$questions_list))) ?></span></div><?php endif; ?>
                 
                 <div class="questions-list">
                     <?php 
-                    $q_idx = 1;
+                    $q_idx = $legacySerial;
                     foreach ($questions_list as $q): 
                     ?>
                         <div class="question-item">
-                            <span class="question-marks">[<?= $q['marks'] ?>]</span>
+                            <?php if(!examQuestionHasParts($q)): ?><span class="question-marks">[<?= $q['marks'] ?>]</span><?php endif; ?>
                             <div style="margin-left: 25px; text-indent: -25px;">
                                 <?= $q_idx ?>. 
                                 <div class="mathjax-render"><?= examQuestionRichVariants($q['question_text'],$q['question_text_np']??'',$questionLanguage,true) ?></div>
@@ -790,7 +746,7 @@ ob_start();
                     ?>
                 </div>
             <?php 
-            $group_num++;
+            $legacySerial=$q_idx;$group_num++;
             endforeach; 
             ?>
         </div>

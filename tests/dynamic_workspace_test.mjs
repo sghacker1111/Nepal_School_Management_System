@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { JSDOM } from 'jsdom';
 function fixture() {
     const dom=new JSDOM('<section id="questionBankPanel"><p id="examQuestionCount">10 questions</p></section><p id="erpUpdateStatus"></p>',{runScripts:'outside-only',url:'https://school.example.test/modules/learning/exam_questions.php'});
-    dom.window.CSRF_TOKEN='test-token';dom.window.eval(readFileSync('assets/js/dynamic-workspace.js','utf8'));
+    dom.window.erpFormState={hasUnsavedChanges:()=>true};dom.window.CSRF_TOKEN='test-token';dom.window.eval(readFileSync('assets/js/dynamic-workspace.js','utf8'));
     const config={};dom.window.erpDynamic.install({config});
     const fire=(name,detail)=>{const event=new dom.window.CustomEvent(name,{detail,bubbles:true,cancelable:true});dom.window.document.dispatchEvent(event);return event;};
     return {dom,config,fire,panel:dom.window.document.getElementById('questionBankPanel')};
@@ -33,7 +33,7 @@ test('hosting challenge or expired-login HTML never replaces school content',()=
 test('valid fragments announce results; errors never link outside this origin',()=>{
     const {dom,fire,panel}=fixture();const detail={target:panel,shouldSwap:true,xhr:{status:200,getResponseHeader:name=>name==='X-ERP-Fragment'?'question-list':'text/html; charset=UTF-8'}};
     fire('htmx:beforeSwap',detail);assert(detail.shouldSwap);fire('htmx:afterSwap',{target:panel});assert.equal(dom.window.document.getElementById('erpUpdateStatus').textContent,'10 questions');
-    fire('htmx:sendError',{requestConfig:{path:'https://attacker.invalid/'}});assert.equal(dom.window.document.querySelector('#erpRequestError a').origin,dom.window.location.origin);dom.window.close();
+    fire('htmx:sendError',{target:panel,requestConfig:{path:'https://attacker.invalid/'}});assert.equal(dom.window.document.querySelector('#erpRequestError a').origin,dom.window.location.origin);dom.window.close();
 });
 test('outerHTML swaps initialize accessible labels and print controls on the live panel',()=>{
     const {dom,fire,panel}=fixture();

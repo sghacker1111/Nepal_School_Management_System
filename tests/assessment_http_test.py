@@ -18,6 +18,12 @@ with ERPHttpFixture() as app:
     app.request(officer_path,payload(officer_body,['terminal']))
     app.login('school_admin')
     path=f'/modules/subjects/internal.php?mapping={mapping}'
+    app.request(path,status=403)
+    super_name=app.db.execute("SELECT username FROM users WHERE role='super_admin'").fetchone()[0];app.login(super_name)
+    source_class=app.db.execute('SELECT source_id FROM classes WHERE id=?',(f['class'],)).fetchone()[0]
+    source_subject=app.db.execute('SELECT source_id FROM subjects WHERE id=?',(f['subject'],)).fetchone()[0]
+    mapping=app.db.execute('SELECT id FROM class_subjects WHERE school_id=0 AND class_id=? AND subject_id=?',(source_class,source_subject)).fetchone()[0]
+    path=f'/modules/subjects/internal.php?mapping={mapping}'
     body=app.request(path);data=payload(body,['terminal','annual'])
     body=app.request(path,data);assert 'Internal assessment saved successfully' in body,body[-3000:]
     before=app.snapshot('class_subjects');body=app.request(path,data)

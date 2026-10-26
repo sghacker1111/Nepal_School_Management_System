@@ -12,6 +12,23 @@ function fixture(request=async()=>result(),extra={}){
  const off=installForms({},deps);
  return{dom,form,deps,dispose(){off();untrack();dom.window.close();},get applied(){return applied;},get toasts(){return toasts;},get gets(){return gets;}};
 }
+test('named action controls cannot replace the destination used by form routing',async()=>{
+ let destination;const f=fixture(async url=>{destination=url;return result();});
+ const action=f.dom.window.document.createElement('input');action.name='action';action.value='edit';f.form.append(action);
+ Object.defineProperty(f.form,'action',{value:action});
+ f.deps.isEnhancedURL=url=>url==='https://school.example/students/add';
+ assert.equal(canHandleForm(f.form,f.form.querySelector('button')),true);
+ await submitForm(f.form,f.form.querySelector('button'));assert.equal(destination,'https://school.example/students/add');f.dispose();
+});
+
+test('read-only paper previews do not invent drafts; document previews retain protection',async()=>{
+ for(const [pageId,expected] of [['learning-paper-generator',0],['accounting-invoice',1]]){
+  const response=result(200,'preview');response.text=response.text.replace('students-add',pageId).replace('students-add',pageId);
+  const f=fixture(async()=>response,{applyPageResponse:async()=>true});let dirty=0;f.form.closest('main').addEventListener('erp:dirty',()=>dirty++);
+  await submitForm(f.form,f.form.querySelector('button'));assert.equal(dirty,expected);f.dispose();
+ }
+});
+
 test('editor sync precedes validation; invalid native constraints send nothing',async()=>{
  let calls=0;const f=fixture(async()=>{calls++;return result();});f.form.elements.name.value='';
  await submitForm(f.form,f.form.querySelector('button'));assert.equal(calls,0);

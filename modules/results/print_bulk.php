@@ -179,7 +179,7 @@ ob_start();
                 
                 // Fetch student marks for this exam with subject weightages
                 $stmt = $db->prepare("
-                    SELECT m.theory_obtained, m.practical_obtained, m.grade, m.grade_point, m.remarks,
+                    SELECT es.id mapping_id,m.theory_obtained, m.practical_obtained, m.grade, m.grade_point, m.remarks,
                            sub.name_en as subject_name, sub.name_np as subject_name_np, sub.code as subject_code, COALESCE(es.is_optional,CASE WHEN sub.type='optional' THEN 1 ELSE 0 END) as is_optional, sub.id as subject_id,
                            es.credit_hours as exam_credit_hours, sub.credit_hours as default_credit_hours,
                            es.theory_full, es.theory_pass, es.practical_full, es.practical_pass,
@@ -190,7 +190,7 @@ ob_start();
                     WHERE es.exam_id = ? AND es.class_id = ?
                 ");
                 $stmt->execute([$student['id'], $exam_id, $class_id]);
-                $marks = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $marks = schoolExamOfferingRows($db,(int)$school_id,$exam,$stmt->fetchAll(PDO::FETCH_ASSOC),(int)$class_id);
                 
                 if (empty($marks)) {
                     continue; // Skip student if no marks are entered

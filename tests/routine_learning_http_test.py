@@ -29,7 +29,7 @@ with ERPHttpFixture() as app:
     routine='/modules/classes/routine.php?class_id='+str(cls)
     body=app.request(routine);assert 'Saturday and Sunday are holidays' in body and 'name="include_sunday"' not in body
     data={'action':'save_requirements','class_id':cls,'password':'TestPassword123!'}
-    for mid,sid in app.db.execute('SELECT cs.id,cs.subject_id FROM class_subjects cs JOIN subjects s ON s.id=cs.subject_id WHERE cs.school_id=1 AND cs.class_id=? AND (cs.is_active=1 OR cs.is_optional=1) AND COALESCE(s.is_hidden,0)=0',(cls,)).fetchall():
+    for mid,sid in app.db.execute('SELECT cs.id,cs.subject_id FROM class_subjects cs JOIN subjects s ON s.id=cs.subject_id WHERE cs.school_id=1 AND cs.class_id=? AND cs.is_active=1 AND COALESCE(s.is_hidden,0)=0',(cls,)).fetchall():
         data[f'requirements[{mid}][weekly]']='5' if sid==own else '0'
         if sid==own:data[f'requirements[{mid}][teachers][]']=[teacher]
     credits=app.db.execute('SELECT id,credit_hours FROM class_subjects WHERE class_id=? ORDER BY id',(cls,)).fetchall()
@@ -53,13 +53,13 @@ with ERPHttpFixture() as app:
     assert 'print-signature-name' in body and 'print-signature-post' in body
     questions='/modules/learning/questions.php'
     body=app.request(questions);assert 'disabled' in select(body,'subject_id') and 'Quick Add Class' not in body and 'quickAddSubject' not in body
-    body=app.request(f'{questions}?class={cls}');assert 'Synthetic Optional' in select(body,'subject_id')
+    body=app.request(f'{questions}?class={cls}');assert 'Synthetic Optional' not in select(body,'subject_id')
     options=select(body,'subject_id');assert len(re.findall(r'<option value="'+str(own)+r'"',options))==1
-    body=app.request(f'/modules/learning/paper_generator.php?class_id={cls}');assert 'Synthetic Optional' in select(body,'subject_id')
+    body=app.request(f'/modules/learning/paper_generator.php?class_id={cls}');assert 'Synthetic Optional' not in select(body,'subject_id')
     app.request(questions,{'action_quick_add_class':1,'class_name':'Forbidden'},status=422)
     app.login('teacher')
     before=app.snapshot('class_routines');app.request(routine,grid,status=403);assert app.snapshot('class_routines')==before
-    body=app.request(f'{questions}?class={cls}');options=select(body,'subject_id');assert str(own) in options and 'Synthetic Optional' in options # Public viewing is separate from assigned-subject creation.
+    body=app.request(f'{questions}?class={cls}');options=select(body,'subject_id');assert str(own) in options and 'Synthetic Optional' not in options # Public viewing is separate from assigned-subject creation.
     other=app.db.execute('SELECT subject_id FROM class_subjects WHERE class_id=? AND subject_id<>? AND subject_id<>? LIMIT 1',(cls,own,opt)).fetchone()[0]
     app.request(f'{questions}?class={cls}&subject={other}')
     app.request('/modules/learning/paper_generator.php',{'action_save_grid':1,'class_id':cls,'subject_id':other,'grid_name':'Forged','grid_data':'{}'},status=422)

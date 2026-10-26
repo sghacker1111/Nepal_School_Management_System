@@ -49,6 +49,13 @@ test('read-only status notices do not falsely announce a saved record',()=>{
     dom.window.schoolNotify('Question saved successfully.');
     assert.equal(dom.window.document.querySelector('#school-notifications>div:last-child strong').textContent,'Saved successfully');dom.window.close();
 });
+
+test('hidden archive confirmations and unopened dialogs do not emit warning toasts',()=>{
+    const dom=fixture('<div hidden><p class="alert alert-warning">Enter your password to archive.</p></div><div class="modal"><p class="alert alert-danger">Dialog only</p></div>');
+    dom.window.fetch=async()=>({ok:true,headers:{get:()=>null}});dom.window.eval(readFileSync('assets/js/notifications.js','utf8'));
+    dom.window.document.dispatchEvent(new dom.window.Event('DOMContentLoaded'));
+    assert.equal(dom.window.document.querySelector('#school-notifications'),null);dom.window.close();
+});
 test('bundled table vendor initializes one matching version without a CDN',()=>{
     const dom=fixture('<table id="sample"><thead><tr><th>Name</th></tr></thead><tbody><tr><td>Nepal</td></tr></tbody></table>');
     dom.window.eval(readFileSync('assets/dist/vendor.js','utf8'));

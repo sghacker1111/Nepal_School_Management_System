@@ -11,6 +11,7 @@ def run():
   before={table:app.snapshot(table) for table in tables}
   app.login('school_admin')
   paths=('/learning',f'/learning?class_id={cls}&subject_id={subject}','/learning/curriculum','/learning/question-bank',f'/learning/question-bank?class_id={cls}&subject_id={subject}&view=add&bank_ui=1',f'/learning/question-bank?class_id={cls}&subject_id={subject}&view=import&bank_ui=1','/exam-questions',f'/exam-questions?class_id={cls}&subject_id={subject}&view=add',f'/exam-questions?class_id={cls}&subject_id={subject}&view=import','/exam-mcqs',f'/exam-mcqs?class_id={cls}&subject_id={subject}&view=add','/exam-paper-generator',f'/exam-paper-generator?class_id={cls}&subject_id={subject}','/exam-paper-grids',f'/exam-paper-grids?class_id={cls}&subject_id={subject}','/learning/paper-generator',f'/learning/paper-generator?class_id={cls}&subject_id={subject}','/learning/specification-grids','/learning/question-grid','/learning/ocr-scanner','/learning/practice-mcqs','/learning/question-corrections')
+  paths+=tuple(f'{route}?class_id={cls}&subject_id={subject}&generation_mode=sections' for route in ('/exam-paper-generator','/learning/paper-generator'))
   for path in paths:
    h,b,_=send(app,path,headers=HX);data=marked(h,b)
    assert data['adapterReady'] is True,(path,data['pageId'])

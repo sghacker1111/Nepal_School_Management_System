@@ -4,6 +4,8 @@
  */
 require_once __DIR__.'/http_security.php';
 require_once __DIR__.'/routes.php';
+require_once __DIR__.'/password_security.php';
+require_once __DIR__.'/account_security.php';
 
 class Auth {
     
@@ -24,30 +26,30 @@ class Auth {
      */
     public static function login($username, $password) {
         self::startSession();
-        if(!is_string($username)||!is_string($password)||strlen($username)>100||strlen($password)>1024)return false;
+        if(!is_string($username)||!is_string($password)||strlen($username)>100||strlen($password)>1024||str_contains($password,"\0"))return false;
+        $username=trim($username);
         
         $db = getDB();
         $identity = hash('sha256', strtolower(trim($username)) . '|' . ($_SERVER['REMOTE_ADDR'] ?? 'local'));
         $accountIdentity=hash('sha256','account|'.strtolower(trim($username)));
         $networkIdentity=hash('sha256','network|'.($_SERVER['REMOTE_ADDR']??'local'));
-        $db->prepare('DELETE FROM login_attempts WHERE attempted_at < ?')->execute([time() - 900]);
-        $attempts = $db->prepare('SELECT COUNT(*) FROM login_attempts WHERE identity_key=?');
-        $attempts->execute([$identity]);
-        if ((int)$attempts->fetchColumn() >= 10) return false;
+        $db->prepare('DELETE FROM login_attempts WHERE attempted_at < ?')->execute([time() - 1800]);
+        $attempts = $db->prepare('SELECT COUNT(*) FROM login_attempts WHERE identity_key=? AND attempted_at>'.(time()-900));
         foreach([$accountIdentity=>25,$networkIdentity=>100] as $key=>$limit){$attempts->execute([$key]);if((int)$attempts->fetchColumn()>=$limit)return false;}
-        $stmt = $db->prepare("SELECT * FROM users WHERE username = ? AND status = 1");
+        $stmt = $db->prepare("SELECT * FROM users WHERE LOWER(username) = LOWER(?) AND status = 1");
         $stmt->execute([$username]);
         $user = $stmt->fetch();
         
-        if ($user && password_verify($password, $user['password'])) {
+        if ($user && ($user=schoolAuthenticateAccount($db,(int)$user['id'],$password))) {
             session_regenerate_id(true);
             $_SESSION = [];
-            $db->prepare('DELETE FROM login_attempts WHERE identity_key=?')->execute([$identity]);
+            $db->prepare('DELETE FROM login_attempts WHERE identity_key IN (?,?)')->execute([$identity,$accountIdentity]);
             $_SESSION['user_id'] = $user['id'];
             $_SESSION['username'] = $user['username'];
             $_SESSION['role'] = $user['role'];
             $_SESSION['full_name'] = $user['full_name'];
             $_SESSION['school_id'] = $user['school_id'];
+            $_SESSION['credential_fingerprint'] = self::credentialFingerprint($user);
             $_SESSION['login_time'] = time();
             
             // Log activity
@@ -158,16 +160,38 @@ class Auth {
             schoolAppUnauthenticated();
         }
         self::checkTimeout();
-        $stmt = getDB()->prepare('SELECT id, role, school_id, full_name, status FROM users WHERE id=?');
+        $stmt = getDB()->prepare('SELECT id, username, password, role, school_id, student_record_id, full_name, status FROM users WHERE id=?');
         $stmt->execute([self::getUserId()]);
         $current = $stmt->fetch();
-        if (!$current || !(int)$current['status']) self::logout();
+        if (!$current || !(int)$current['status'] || schoolAccountLocked(schoolAccountState(getDB(),(int)$current['id']))) self::logout();
+        if (!is_string($_SESSION['credential_fingerprint'] ?? null)
+            || !hash_equals(self::credentialFingerprint($current), $_SESSION['credential_fingerprint'])) self::logout();
         foreach (['role','school_id','full_name'] as $key) $_SESSION[$key] = $current[$key];
         unset($_SESSION['school_subscription_type']);
         require_once __DIR__ . '/request_guard.php';
         guardSchoolRequest();
         schoolRedirectLegacyDocument();
         $checked = true;
+    }
+
+    /** Bind a login to its credentials and authorization context without a schema migration. */
+    private static function credentialFingerprint(array $user): string {
+        return hash('sha256', json_encode([
+            (string)$user['password'], (string)$user['username'], (string)$user['role'],
+            (int)($user['school_id'] ?? 0), (int)($user['student_record_id'] ?? 0),
+            (int)schoolAccountState(getDB(),(int)($user['id']??self::getUserId()))['epoch']
+        ], JSON_THROW_ON_ERROR));
+    }
+
+    /** Keep only the current login after the owner changes their password. */
+    public static function refreshOwnCredentials(): void {
+        $stmt = getDB()->prepare('SELECT username,password,role,school_id,student_record_id FROM users WHERE id=? AND status=1');
+        $stmt->execute([self::getUserId()]);
+        $user = $stmt->fetch();
+        if (!$user) self::logout();
+        session_regenerate_id(true);
+        $_SESSION['credential_fingerprint'] = self::credentialFingerprint($user);
+        unset($_SESSION[CSRF_TOKEN_NAME]);
     }
     
     /**

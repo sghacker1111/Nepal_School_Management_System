@@ -3,6 +3,7 @@
 require_once __DIR__.'/learning_content_service.php';
 require_once __DIR__.'/xlsx_helper.php';
 require_once __DIR__.'/question_import_context.php';
+require_once __DIR__.'/question_parts_import.php';
 
 function examImportKind(mixed $kind):string {
     if(!is_string($kind)||!in_array($kind,['mcq','other'],true))throw new InvalidArgumentException('Choose the MCQs or Other Questions import and its matching sample.');
@@ -11,6 +12,15 @@ function examImportKind(mixed $kind):string {
 
 function examImportSubjects(PDO $db,array $actor,array $classes):array {
     return questionImportWriterSubjects($db,$actor,$classes);
+}
+
+function examImportIsMathematics(array $subjects,int $classId,int $subjectId):bool {
+    foreach($subjects[$classId]??[] as $subject){
+        if((int)$subject['id']!==$subjectId)continue;
+        foreach(['name_en','name_np'] as $field)if(in_array(questionImportSubjectKey((string)($subject[$field]??'')),['mathematics','optional mathematics'],true))return true;
+        return false;
+    }
+    return false;
 }
 
 function examImportHeaders(array $headers,string $mode,?string $kind=null):array {
@@ -32,7 +42,14 @@ function examImportHeaders(array $headers,string $mode,?string $kind=null):array
         'question_text_np'=>['questionnepali','questionnp','qnepali','qtextnp','nepaliquestion','qusnp','qusnepali'],
         'answer'=>['answer','answeren','answerenglish','ans','ansen','ansenglish','answermodelen','modelanswer','modelanswerenglish','expectedanswer','expectedansweren'],
         'answer_np'=>['answernp','answernepali','ansnp','ansnepali','answermodelnp','modelanswernepali','expectedanswernp','expectedanswernepali'],
+        'part_answer'=>['subquestionanswer','subquestionanswerenglish','subquestionansweren','partanswer','partanswerenglish','partansweren','subquestionmodelanswerenglish'],
+        'part_answer_np'=>['subquestionanswernepali','subquestionanswernp','partanswernepali','partanswernp','subquestionmodelanswernepali'],
         'correct_option'=>['correctoption','correct','answerkey','key','correctanswer','correctchoice'],
+        'question_group'=>['questiongroup','group','groupkey','questionreference'],
+        'part_label'=>['subquestionlabel','partlabel','subpartlabel'],
+        'statement_en'=>['statementenglish','statementen','statement','questionstatementenglish'],
+        'statement_np'=>['statementnepali','statementnp','questionstatementnepali'],
+        'part_display'=>['partdisplay','annotationstyle','suffixstyle'],
     ];
     foreach(['a','b','c','d'] as $option){
         $aliases['option_'.$option]=['option'.$option,'option'.$option.'en','option'.$option.'english','choice'.$option,'choice'.$option.'english'];
@@ -42,7 +59,7 @@ function examImportHeaders(array $headers,string $mode,?string $kind=null):array
     foreach($headers as $index=>$header){
         $key=strtolower(preg_replace('/[^a-z0-9]/i','',(string)$header));
         if(in_array($key,['schoolid','createdbyuserid','bankkind','studentvisible','visibility','questionid','id'],true))throw new InvalidArgumentException('Do not include ownership, visibility, student release or ID columns. These are set by your account and this section.');
-        $isSource=(str_contains($key,'html')||str_contains($key,'source'))&&(bool)preg_match('/question|answer|option|choice|qus|ans/',$key);
+        $isSource=(str_contains($key,'html')||str_contains($key,'source'))&&(bool)preg_match('/question|answer|option|choice|qus|ans|statement/',$key);
         if($isSource)$key=str_replace(['html','source'],'',$key);
         foreach($aliases as $field=>$names){
             if(!in_array($key,$names,true))continue;
@@ -132,36 +149,22 @@ function examImportQuestions(PDO $db,array $actor,array $rows,string $mode,strin
     return learningWrite($db,function()use($db,$actor,$rows,$map,$mode,$visibility,$kind,$selection,$classes,$subjects,$bankKind,&$ids,&$errors,&$skipped){
         $context=questionImportContext($db,$actor,$selection,$bankKind==='learning');
         questionImportMatchContext($rows,$map,$context);
-        foreach(array_slice($rows,1) as $offset=>$row){
-            if(!array_filter($row,static fn($v)=>trim((string)$v)!==''))continue;
+        foreach(questionImportGroups($rows,$map) as $group){
             $db->exec('SAVEPOINT exam_import_row');
             try{
-                $get=static fn($field)=>(string)($row[$map[$field]??-1]??'');
+                $row=$group['rows'][0];$get=static fn($field)=>(string)($row[$map[$field]??-1]??'');
                 $class=examImportClassId($classes,$get('class'));
                 $subject=questionImportSubjectId($subjects[$class]??[],$get('subject'));
-                $types=['mcq'=>'MCQ','very short'=>'Very Short','veryshort'=>'Very Short','short'=>'Short','long'=>'Long','reasoning'=>'Reasoning','difference between'=>'Difference Between','differencebetween'=>'Difference Between'];
-                $type=$types[curriculumNameKey($get('type'))]??null;
-                if(!$type)throw new InvalidArgumentException('Type must be MCQ, Very Short, Short, Long, Reasoning or Difference Between.');
-                if($kind==='mcq'&&$type!=='MCQ')throw new InvalidArgumentException('The MCQs import accepts Type MCQ only. Use Other Questions for written-answer questions.');
-                if($kind==='other'&&$type==='MCQ')throw new InvalidArgumentException('Use the MCQs import and its four-option sample for Type MCQ.');
-                $levels=['easy'=>'Easy','medium'=>'Medium','hard'=>'Hard','challenging'=>'Challenging'];$difficulty=$levels[curriculumNameKey($get('difficulty'))]??null;
-                if(!$difficulty)throw new InvalidArgumentException('Difficulty must be Easy, Medium, Hard or Challenging.');
-                $domainKey=strtolower(preg_replace('/[^a-z]/i','',$get('cognitive_domain')));
-                $domains=['k'=>'Knowledge','knowledge'=>'Knowledge','knowledgek'=>'Knowledge','u'=>'Understanding','understanding'=>'Understanding','understandingu'=>'Understanding','a'=>'Application','application'=>'Application','applicationa'=>'Application','ha'=>'Higher Ability','higherability'=>'Higher Ability','higherabilityha'=>'Higher Ability'];
-                $domain=$domains[$domainKey]??null;if(!$domain)throw new InvalidArgumentException('Cognitive Level must be K, U, A or HA.');
-                $source=curriculumNameKey($get('source'));$permitted=$actor['school_id']===0?['shared','shared catalog']:['school','this school'];
+                $input=questionImportGroupInput($group,$map,$mode,$kind);
+                if(($input['question_layout']??'')==='structured'&&($input['type']??'')!=='MCQ'&&examImportIsMathematics($subjects,$class,$subject))$input['mathematics_rule']='import';
+                $source=curriculumNameKey($input['source']);$permitted=$actor['school_id']===0?['shared','shared catalog']:['school','this school'];
                 if($source!==''&&$source!=='auto'&&!in_array($source,$permitted,true))throw new InvalidArgumentException('Source must be Auto or '.($actor['school_id']===0?'Shared':'School').'; the school and creator are assigned by your account.');
-                $marks=learningDecimalString(learningDecimalUnits($get('marks'),100000,'Question marks'));
-                $minutes=learningDecimalString(learningDecimalUnits($get('required_minutes'),60000,'Required minutes'));
-                if(trim($get('chapter'))==='')throw new InvalidArgumentException('Chapter is required.');
-                $content=questionImportRowContent($get,$mode);
-                if($type!=='MCQ'&&$content['type']==='MCQ')throw new InvalidArgumentException('Rows with MCQ options must use Type MCQ.');
-                $content['marks']=$marks;
-                $ids[]=learningSaveQuestion($db,$actor,$content+['class_id'=>$class,'subject_id'=>$subject,'chapter'=>$context['catalog']['chapter'],'topic'=>$context['catalog']['topic']??'','type'=>$type,'difficulty'=>$difficulty,'cognitive_domain'=>$domain,'required_minutes'=>$minutes,'visibility'=>$visibility,'student_visible'=>'0'],null,$bankKind,false);
+                unset($input['source']);if(isset($input['import_marks'])){$input['marks']=$input['import_marks'];unset($input['import_marks']);}
+                $ids[]=learningSaveQuestion($db,$actor,$input+['class_id'=>$class,'subject_id'=>$subject,'chapter'=>$context['catalog']['chapter'],'topic'=>$context['catalog']['topic']??'','visibility'=>$visibility,'student_visible'=>'0'],null,$bankKind,false,true);
                 $db->exec('RELEASE SAVEPOINT exam_import_row');
             }catch(InvalidArgumentException $error){
-                $db->exec('ROLLBACK TO SAVEPOINT exam_import_row');$db->exec('RELEASE SAVEPOINT exam_import_row');$skipped++;
-                if(count($errors)<10)$errors[]='Row '.($offset+2).': '.$error->getMessage();
+                $db->exec('ROLLBACK TO SAVEPOINT exam_import_row');$db->exec('RELEASE SAVEPOINT exam_import_row');$skipped+=count($group['rows']);
+                if(count($errors)<10)$errors[]='Row '.implode(', ',$group['numbers']).': '.$error->getMessage().' The entire question group was skipped.';
             }
         }
         if(!$ids)throw new InvalidArgumentException('No exam questions were imported. '.($errors?$skipped.' row(s) skipped. '.implode(' ',$errors).($skipped>count($errors)?' Only the first 10 errors are shown.':''):'The file contains no question rows.'));
@@ -196,6 +199,26 @@ function examImportSample(PDO $db,array $actor,string $mode,int $class=0,int $su
         $rows[0][10]='<p><strong>What is</strong> \\(1+1\\)?</p>';
         $rows[1][10]=$kind==='mcq'?'<p>What is \\(\\frac{1}{2}+\\frac{1}{2}\\)?</p>':'<p>Explain why \\(\\frac{1}{2}+\\frac{1}{2}=1\\).</p>';
         $rows[1][12]='<p>\\[\\frac{1+1}{2}=1\\]</p>';
+    }
+    $extra=['Question Group','Subquestion Label','Statement (English)','Statement (Nepali)','Part Display','Subquestion Answer (English)','Subquestion Answer (Nepali)'];
+    if($mode==='html')foreach([2,3,5,6] as $i)$extra[$i].=' HTML Source';
+    $extraOffset=count($headers);$headers=[...$headers,...$extra];
+    foreach($rows as &$row)$row=[...$row,'','','','','','',''];unset($row);
+    $rich=static fn($value)=>$mode==='html'?'<p>'.htmlspecialchars($value,ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8').'</p>':$value;
+    if($kind==='other'){
+        $groupRows=[];
+        foreach([
+            ['a','K',1,'State the compound interest formula.','चक्रीय ब्याजको सूत्र लेख्नुहोस्।','CI = P(1 + r/100)^n - P.','CI = P(1 + r/100)^n - P हुन्छ।'],
+            ['b','KU',2,'Find the first year compound interest with annual compounding.','वार्षिक चक्रीय ब्याजमा पहिलो वर्षको ब्याज पत्ता लगाउनुहोस्।','CI = 2,00,000 x 10/100 = Rs. 20,000.','CI = 2,00,000 x 10/100 = रु. 20,000।'],
+            ['c','HA',1,'Compare annual and half-yearly interest for one year.','एक वर्षको वार्षिक र अर्धवार्षिक चक्रीय ब्याज तुलना गर्नुहोस्।','Half-yearly: 2,00,000 x (1.05)^2 - 2,00,000 = Rs. 20,500. This is Rs. 500 more than annual compounding.','अर्धवार्षिक: 2,00,000 x (1.05)^2 - 2,00,000 = रु. 20,500। यो वार्षिकभन्दा रु. 500 बढी हो।']
+        ] as [$label,$category,$marks,$en,$np,$answer,$answerNp]){
+            $row=$rows[2];$row[7]=$category;$row[8]=$marks;$row[9]=8;$row[10]=$rich($en);$row[11]=$rich($np);$row[12]='';$row[13]='';
+            $row[$extraOffset]='WRITTEN-1';$row[$extraOffset+1]=$label;$row[$extraOffset+2]=$rich('A depositor invests Rs. 2,00,000 at 10% p.a. Compare annual and half-yearly compounding.');$row[$extraOffset+3]=$rich('एक व्यक्तिले वार्षिक 10% ब्याजदरमा रु. 2,00,000 जम्मा गरे। वार्षिक र अर्धवार्षिक चक्रीय ब्याज तुलना गर्नुहोस्।');$row[$extraOffset+4]='both';
+            $row[$extraOffset+5]=$rich($answer);$row[$extraOffset+6]=$rich($answerNp);$groupRows[]=$row;
+        }
+        array_splice($rows,2,1,$groupRows);
+    }else{
+        $rows[1][$extraOffset]='MCQ-2';$rows[1][$extraOffset+1]='a';$rows[1][$extraOffset+2]=$rich('Consider two halves of one whole.');$rows[1][$extraOffset+3]=$rich('एक पूर्णका दुई आधालाई विचार गर्नुहोस्।');$rows[1][$extraOffset+4]='both';
     }
     if($bankKind==='exam'){array_splice($headers,3,1);foreach($rows as &$row)array_splice($row,3,1);unset($row);}
     return [$headers,$rows];

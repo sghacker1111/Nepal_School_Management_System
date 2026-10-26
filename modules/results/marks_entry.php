@@ -93,7 +93,7 @@ if ($exam_id && $class_id) {
         WHERE es.exam_id = ? AND es.class_id = ?
     ");
     $stmt->execute([$exam_id, $class_id]);
-    $subjects = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $subjects = schoolExamOfferingRows($db,(int)$school_id,$selected_exam,$stmt->fetchAll(PDO::FETCH_ASSOC));
     if (Auth::getRole()==='teacher') {
         $subjects=teacherResultSubjects($subjects,$teacherResultScope,(int)$section_id);
     }

@@ -25,7 +25,7 @@ function assertExamConfigurationEditable(array $exam):void {
 }
 /** Universal class-subject rows; identifiers are compared exactly, not by substrings. */
 function examTemplateCatalog(PDO $db):array {
-    $rows=$db->query('SELECT cs.*,c.name class_name,s.name_en,s.code,s.id source_subject_id FROM class_subjects cs JOIN classes c ON c.id=cs.class_id AND c.school_id=0 JOIN subjects s ON s.id=cs.subject_id AND s.school_id=0 WHERE cs.school_id=0 AND c.is_active=1 AND (cs.is_active=1 OR cs.is_optional=1) AND COALESCE(s.is_hidden,0)=0 ORDER BY c.id,cs.subject_order,cs.id')->fetchAll();
+    $rows=$db->query('SELECT cs.*,c.name class_name,s.name_en,s.code,s.id source_subject_id FROM class_subjects cs JOIN classes c ON c.id=cs.class_id AND c.school_id=0 JOIN subjects s ON s.id=cs.subject_id AND s.school_id=0 WHERE cs.school_id=0 AND c.is_active=1 AND cs.is_active=1 AND COALESCE(s.is_hidden,0)=0 AND '.schoolSubjectAssignedSql('cs.school_id','cs.class_id','cs.subject_id').' ORDER BY c.id,cs.subject_order,cs.id')->fetchAll();
     $catalog=[];
     foreach($rows as $r){
         $r['class_key']=classNameKey($r['class_name']);
@@ -132,7 +132,7 @@ function examTemplateSchemeForClass(array $rows,array $local):?array {
 function initializeExamTemplateSubjectsInTransaction(PDO $db,int $school,array $exam,int $class):int {
     $snapshot=json_decode($exam['template_snapshot']??'null',true,512,JSON_THROW_ON_ERROR);
     if(!is_array($snapshot)||!is_array($snapshot['subjects']??null))throw new InvalidArgumentException('This exam has no saved default configuration.');
-    $q=$db->prepare('SELECT cs.*,c.name class_name,s.name_en,s.code,s.source_id FROM class_subjects cs JOIN classes c ON c.id=cs.class_id AND c.school_id=cs.school_id JOIN subjects s ON s.id=cs.subject_id AND s.school_id=cs.school_id WHERE cs.school_id=? AND c.is_active=1 AND (cs.is_active=1 OR cs.is_optional=1) AND COALESCE(s.is_hidden,0)=0'.($class?' AND cs.class_id=?':'').' ORDER BY cs.id');$q->execute([$school,...($class?[$class]:[])]);$rows=$q->fetchAll();
+    $q=$db->prepare('SELECT cs.*,c.name class_name,s.name_en,s.code,s.source_id FROM class_subjects cs JOIN classes c ON c.id=cs.class_id AND c.school_id=cs.school_id JOIN subjects s ON s.id=cs.subject_id AND s.school_id=cs.school_id WHERE cs.school_id=? AND c.is_active=1 AND cs.is_active=1 AND COALESCE(s.is_hidden,0)=0 AND '.schoolSubjectAssignedSql('cs.school_id','cs.class_id','cs.subject_id').($class?' AND cs.class_id=?':'').' ORDER BY cs.id');$q->execute([$school,...($class?[$class]:[])]);$rows=$q->fetchAll();
     $count=0;$seen=[];$exists=$db->prepare('SELECT id FROM exam_subjects WHERE exam_id=? AND class_id=? AND subject_id=?');
     $keys=['class_id','subject_id','theory_full','theory_pass','practical_full','practical_pass','credit_hours','external_credit_hours','internal_credit_hours','is_optional','assessment_method','curriculum_version','internal_components'];
     $insert=$db->prepare('INSERT INTO exam_subjects(exam_id,'.implode(',',$keys).') VALUES('.implode(',',array_fill(0,count($keys)+1,'?')).')');
